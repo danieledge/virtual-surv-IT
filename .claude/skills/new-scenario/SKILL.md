@@ -27,7 +27,7 @@ each step to the right agent and chain them in this session:
 1. **business-analyst** - turn "$ARGUMENTS" into a spec using
    `docs/templates/scenario-spec.md` (obligation, data, detection requirements,
    true-positive / false-positive acceptance criteria). **Regulatory citations are ON by
-   default - check the PROJECT preference first**: `.claude/team-preferences.json`'s
+   default - check the PROJECT preference first**: `VSIT/config/preferences.json`'s
    `regulatory_citations` key (absent or `true` = on; only an explicit `false` turns it
    off - set via the installer's "Project preferences" menu, or Morgan may write it
    directly on the user's word, no consent gate on that file). When on, cite the
@@ -55,7 +55,7 @@ each step to the right agent and chain them in this session:
 6. Produce the scenario doc from `docs/templates/scenario-doc.md` (a trade scenario's design
    detail can use `docs/templates/trade-scenario-design.md`; a comms scenario adds
    `comms-surveillance-policy.md` + `lexicon-spec.md`), then render it to `.html`:
-   `<python> -m scripts.render_html artifacts/<scenario>.md` (every artifact ships as `.md` +
+   `<python> -m scripts.render_html VSIT/engagements/<scenario>.md` (every artifact ships as `.md` +
    `.html` - §8 / Definition of Done).
 
 Confirm the **project's test suite** passes (`pytest` in this repo; Pester / JUnit / ScalaTest /

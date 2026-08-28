@@ -22,7 +22,7 @@ at the end.
    cases. Note data handling (synthetic/masked only - §5).
 3. Update the **Requirements Traceability Matrix** (`docs/templates/rtm.md`) linking
    BRD → FSD.
-4. Save `artifacts/<slug>/FSD-<slug>.md` (the engagement workspace, ADR-010) and render to `.html` (`<python> -m scripts.render_html`).
+4. Save `VSIT/engagements/<slug>/FSD-<slug>.md` (the engagement workspace, ADR-010) and render to `.html` (`<python> -m scripts.render_html`).
    (`<python>`: the `INTERPRETER=` word the step-0 probe printed, verbatim, never re-probed; direct invocation and plugin-mode paths: `.claude/skills/.shared/run-mode.md`)
 
 **Close - don't dead-end (CLAUDE.md §6).** Summarise the FSD (functional requirements, the

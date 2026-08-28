@@ -10,7 +10,7 @@ The three guards are `.claude/hooks/guard-raw-data.py` (no agent read of
 `data/raw/` - **always on, in every session**: data protection never follows invocation),
 `guard-code-execution.py` (no execution of the code under review without human consent -
 **armed only in sessions that invoked the team** since 2026-08-17, keyed on the
-`artifacts/.team-session.json` stamp `/engage` step 0 writes; a dormant session runs its
+`VSIT/engagements/.team-session.json` stamp `/engage` step 0 writes; a dormant session runs its
 own tests as plain Claude Code) and `guard-consent-writes.py` (the model cannot grant
 itself consent or edit the harness config - the consent marker, hook files, git execution
 config and the session stamp stay write-protected **in every session**, since a dormant

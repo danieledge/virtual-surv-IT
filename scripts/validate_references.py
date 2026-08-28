@@ -92,6 +92,16 @@ _RUNTIME_PARTS = (
     "INSTRUCTIONS.md",
     "team-preferences.json",
     "team-extensions.md",
+    # VSIT layout (2026-08-28): the same per-project files under their new names. Like
+    # every entry here they live in a WORKING project, never in this repo, so a reference
+    # to one is correct precisely because it does not resolve locally.
+    "preferences.json",
+    "extensions.md",
+    "derived.json",
+    "map.md",
+    "tool-availability",
+    "guard-interpreter",
+    ".team-session.json",
     "engage-probe.json",  # the go-written probe cache (2026-08-18) - runtime, per project
     # The launcher hands a typed request to the session in a file rather than inside the
     # command string (2026-08-25): a quoted value does not survive PowerShell. Written at

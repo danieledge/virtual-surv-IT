@@ -76,7 +76,7 @@ agents). State the token ballpark so the choice is informed. Pick a small, safe 
 7. **performance-reviewer** (static) - will it scale at surveillance volume?
 8. **Compile the delivery** - the PM writes the consolidated **delivery report** (RTM, finding
    dispositions, DoD status, developer handover, **token-usage table**) and renders every artifact to
-   `.md` + `.html` under `artifacts/` (or, for a keepable showcase, `docs/demos/build-artifacts/`).
+   `.md` + `.html` under `VSIT/engagements/` (or, for a keepable showcase, `docs/demos/build-artifacts/`).
 
 **State the gates plainly:** the delivery is *demo-complete* but **say plainly it's NOT deployable**
 until the deploy gates close (re-calibrate on real labelled data, fix any scalability finding, and

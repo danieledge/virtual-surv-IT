@@ -53,13 +53,13 @@ written during the 🔒 closing window.
 6. **Enter the closing window**: `<python> -m scripts.engagement_state set-status closing
    --slug <slug>` - before writing the artifacts below, so they're legitimate close work in
    progress rather than appearing with no matching state transition. Then save under
-   `artifacts/` and render to `.html` (`<python> -m scripts.render_html`). If the
+   `VSIT/engagements/` and render to `.html` (`<python> -m scripts.render_html`). If the
    receiving team runs its own acceptance testing, include a **UAT plan**
    (`docs/templates/uat-plan.md`).
    (`<python>`: the `INTERPRETER=` word the step-0 probe printed, verbatim, never re-probed; direct invocation and plugin-mode paths: `.claude/skills/.shared/run-mode.md`)
 7. **Engagement-summary email** (required closing artifact - Definition of Done): a short
    email-format cover note (`docs/templates/engagement-summary-email.md`) saved as a **`.txt` in
-   `artifacts/`**, **signed off as Morgan** ("Hi," if you don't know the recipient's name). It's an
+   `VSIT/engagements/`**, **signed off as Morgan** ("Hi," if you don't know the recipient's name). It's an
    email, so it stays `.txt` - not rendered to HTML.
 8. **Run the mechanical DoD gate with auto-fix** - `<python> -m scripts.check_artifacts --fix`
    (auto-renders missing `.html` siblings and renames a mis-typed summary email to `.txt`), then act on anything it

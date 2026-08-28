@@ -8,10 +8,10 @@ The domain and spec shorthand used throughout the repo and the team's artifacts.
 | AML | Anti-Money Laundering |
 | ATL/BTL | Above-The-Line / Below-The-Line threshold testing (what a threshold catches vs what it just misses) |
 | BABOK | Business Analysis Body of Knowledge - the standard reference for how to do business analysis, from the International Institute of Business Analysis (IIBA) |
-| Blackboard | A coordination pattern: agents work through shared artifacts (files on a common board) instead of talking to each other - here, the engagement's `artifacts/` workspace is the blackboard |
+| Blackboard | A coordination pattern: agents work through shared artifacts (files on a common board) instead of talking to each other - here, the engagement's `VSIT/engagements/` workspace is the blackboard |
 | BRD / FSD | Business Requirements Document / Functional Specification Document (the plain-language "what we need" and the detailed "how it works") |
 | CI | Continuous Integration - the automated checks (tests, linters, scans) that run on every code change |
-| Codebase map | The team's per-project memory file (`docs/codebase-map.md`, ADR-003/ADR-007) - a bounded, PM-curated, hygiene-gated index of durable code facts, read at every engagement open and updated at every close |
+| Codebase map | The team's per-project memory file (`VSIT/shared/map.md`, ADR-003/ADR-007) - a bounded, PM-curated, hygiene-gated index of durable code facts, read at every engagement open and updated at every close |
 | CWE | Common Weakness Enumeration - the standard catalogue of software weakness types that security reviews cite |
 | DoD | Definition of Done - the checklist a deliverable must pass before it counts as finished |
 | EARS | Easy Approach to Requirements Syntax (unambiguous requirement phrasing) |

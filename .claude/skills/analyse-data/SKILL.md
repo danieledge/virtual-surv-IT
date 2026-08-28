@@ -38,7 +38,7 @@ at the end.
 Output: an **exploratory-analysis report** (`docs/templates/exploratory-analysis.md`) - and where
 relevant a **data dictionary** (`docs/templates/data-dictionary.md`), **data lineage**
 (`data-lineage.md`), **segmentation analysis** (`segmentation-analysis.md`) or **process map**
-(`process-map.md`) - under `artifacts/`, rendered to `.html`.
+(`process-map.md`) - under `VSIT/engagements/`, rendered to `.html`.
 
 **If the engagement escalates from analysing to BUILDING - the build chain applies, no
 exceptions.** A live engagement (2026-07-21) went "phase 1: analyse suitability, phase 2:
@@ -50,7 +50,7 @@ how the engagement started: `code-reviewer` review, **independent `qa-engineer` 
 test scripts**, and the full Definition of Done. Read
 `.claude/skills/build-solution/SKILL.md` and follow it for that phase. **Analysis does not
 exempt code from QA.** The mechanical gate (`check_artifacts`: CODE-NO-QA / CODE-NO-TESTS)
-will fail the close if code sits in `artifacts/` without a QA handover and tests.
+will fail the close if code sits in `VSIT/engagements/` without a QA handover and tests.
 
 **Close - don't dead-end.** State the headline insight + recommendation, then offer the next step
 (tune, validate, escalate a data-quality issue, or hand over).

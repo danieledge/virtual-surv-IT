@@ -32,12 +32,12 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 > **How these gates are enforced (note).** Most items below are **prompt-enforced and
 > eval-sampled**, not CI-enforced: the PM and `compliance-reviewer` attest them, and the eval
 > harness (`/run-evals`) samples for drift - CI cannot see engagement deliverables because
-> `artifacts/` is deliberately git-ignored. The mechanical exceptions: the repo's own code is
+> `VSIT/engagements/` is deliberately git-ignored. The mechanical exceptions: the repo's own code is
 > CI-tested (pytest, lint, secret-scan, no-raw-data), and the **Distributable**,
 > **Engagement-summary email**, **Indexed** and **Stateful** items have a one-command check
 > the PM runs at this gate - and can run at ANY point mid-engagement, since the living index
 > makes the gate meaningful before close: `python -m scripts.check_artifacts --fix`, run per
-> engagement workspace `artifacts/<slug>/` (ADR-008/ADR-010; a legacy flat pack is checked the
+> engagement workspace `VSIT/engagements/<slug>/` (ADR-008/ADR-010; a legacy flat pack is checked the
 > same way). **`--fix`** mechanically resolves the auto-fixable defects (render missing HTML;
 > rename a mis-typed email and sync the state; re-render a stale or hand-edited index from the
 > state, backing the hand-edited text up; render the close-only `REVIEW-<slug>.md` from its
@@ -153,7 +153,7 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       verdicts preserved) and defect lifecycle (raised in pass → routed to → fix evidence →
       verified fixed in pass). A multi-pass engagement whose docs read first-pass-clean fails
       this gate. **QA evidence is preserved, not deleted**: independent test suites and run
-      evidence survive under `artifacts/` (file or content hash) - an independence claim whose
+      evidence survive under `VSIT/engagements/` (file or content hash) - an independence claim whose
       evidence was deleted is unfalsifiable and fails this gate. A **📊 measured** tag needs a
       surviving artifact (output, log, tool cache); where nothing survives, the claim is
       retagged **🧠 inferred** before close (2026-07-25 independent review: "600 randomised
@@ -173,7 +173,7 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       Mechanically checked (`AUTO-NOT-PARTIAL`, `AUTO-LEDGER-MISSING`); the flag itself is
       recorded by the launcher, not by the run. Detail: `.claude/skills/engage/references/auto-mode.md`.
 - [ ] **Critiqued against the named standard** - **opt-in, off by default**
-      (`.claude/team-preferences.json` `standards_critique`, project-wide, configurable via
+      (`VSIT/config/preferences.json` `standards_critique`, project-wide, configurable via
       `/preferences` or the installer - same mechanism as `regulatory_citations`, opposite
       default: this is a full second review pass over an already-finished deliverable, not a
       universal expectation). **When on:** before handover, a critic **who is not the
@@ -222,7 +222,7 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       copy-pastable). `compliance-reviewer` checks usability at this gate, not merely
       existence.
 - [ ] **Indexed - a LIVING, GENERATED START-HERE entry point** - the workspace's
-      `artifacts/<slug>/START-HERE.md` (render shape: `docs/templates/start-here.md`) is
+      `VSIT/engagements/<slug>/START-HERE.md` (render shape: `docs/templates/start-here.md`) is
       **rendered from `engagement-state.json` at engagement open** (`engagement_state init`)
       alongside the brief, gains a row **the moment each artifact is written**
       (`add-artifact`, in the same turn), and is finalised at close: verdict,
@@ -262,7 +262,7 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       and README shipped "final" in a fix-cycle-2 pack, with a struck citation still live.)
 - [ ] **Engagement-summary email** - the PM (**Morgan**) has written a short email-format cover
       note summarising what was done and where it stands, saved as a **`.txt` in the
-      workspace `artifacts/<slug>/`**
+      workspace `VSIT/engagements/<slug>/`**
       (`docs/templates/engagement-summary-email.md`). **Written in the close window only**
       (🔒 closing → ✅) - its existence
       is the signal the engagement is closing/closed, so a blocked/in-progress engagement must
@@ -270,7 +270,7 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       (`SUMMARY-BEFORE-CLOSE`). Address it to the requester **only if the name is known** -
       otherwise open with "Hi,"; sign off as Morgan. (It's an email, so it stays `.txt` and is
       the one artifact not rendered to HTML.)
-- [ ] **Codebase map updated** - the working project's codebase map (`docs/codebase-map.md`,
+- [ ] **Codebase map updated** - the working project's codebase map (`VSIT/shared/map.md`,
       template `docs/templates/codebase-map.md`, decision ADR-003) was **consulted at open**
       (header + §3 history loaded at turn 0; full §2 sections read just-in-time when relied on -
       not pre-loaded, per ADR-003) **and updated at close**: entries added with 📊/🧠 tags, dates

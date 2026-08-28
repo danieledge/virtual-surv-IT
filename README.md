@@ -207,7 +207,7 @@ What the team gives you today, each row tied to where the claim is enforced or d
 |---|---|---|
 | A real engineering team, right-sized | Morgan (PM) + 13 specialist subagents, with domain typology advice as three in-line knowledge packs ([`docs/sme/`](docs/sme/README.md), zero spawn cost); a typical task fires only 2-5 agents, and the PM states the intended count at the gate. | [`docs/agent-design.md`](docs/agent-design.md) · [Meet the team](#-meet-the-team) |
 | Independent review by construction | Advisors and reviewers hold no `Write`/`Edit` tools; QA and validation run as separate agents from the build. More than rules: pipelines/ETL, scripts, ML, reviews and docs all route to their own specialist. | Tool grants in [`.claude/agents/`](.claude/agents/), pinned by [`tests/test_docs_consistency.py`](tests/test_docs_consistency.py) · routing table in [`docs/team-operating-guide.md`](docs/team-operating-guide.md) |
-| Stateful, crash-safe engagement lifecycle | Per-engagement `artifacts/<slug>/` workspaces, a machine-readable state file (⏳ · ⛔ · 🔒 closing · ✅), a close that runs the mechanical gate and refuses on findings, and disk-first resume of state, intake answers and consent outcome. | ADR-008 · ADR-006 · [`docs/releases/0.33.md`](docs/releases/0.33.md) |
+| Stateful, crash-safe engagement lifecycle | Per-engagement `VSIT/engagements/<slug>/` workspaces, a machine-readable state file (⏳ · ⛔ · 🔒 closing · ✅), a close that runs the mechanical gate and refuses on findings, and disk-first resume of state, intake answers and consent outcome. | ADR-008 · ADR-006 · [`docs/releases/0.33.md`](docs/releases/0.33.md) |
 | Safety guards: always-on data wall, session-scoped gates | Raw data under `data/raw/` blocked from the model in EVERY session; the execution gate and settings write-protection arm only in sessions that invoked the team (2026-08-17 - a dormant session is plain Claude Code), while the consent marker, hook files and git execution config stay write-protected everywhere. | [`docs/safety-model.md`](docs/safety-model.md) · the [data-safety demo](docs/demos/data-safety-demo.md) |
 | Document conversion front door | Excel/CSV/PDF/DOCX read via the vendored converter - no pip needed - with a JSON evidence report every run; a PreToolUse hook redirects binary-document reads to it. | [`docs/house-rules.md`](docs/house-rules.md) · [`scripts/convert_file.py`](scripts/convert_file.py) · [`scripts/document_input_redirect.py`](scripts/document_input_redirect.py) |
 | A real review subsystem | Context-routed lenses, the standard analysers per language, schema-validated findings packs rendered to one canonical layout, and a build fingerprint tying the reviewed code to the shipped artifact. | [`docs/code-review-method.md`](docs/code-review-method.md) · [`docs/review/`](docs/review/) · the [review demo](docs/demos/review-demo.md) |
@@ -569,7 +569,7 @@ it won't guess scope, jurisdiction, data or success criteria), packages everythi
 consolidated Delivery Report by default** (standalone documentary artifacts - BRD, FSD, ADRs,
 RTM, audit pack - on request), summarises everything in an Engagement Brief,
 **states how many agents it intends to use and why**, then oversees delivery and **hands back each
-deliverable in both `.md` and `.html`** in the engagement's own `artifacts/<slug>/` workspace
+deliverable in both `.md` and `.html`** in the engagement's own `VSIT/engagements/<slug>/` workspace
 (one folder per engagement, with a generated `START-HERE.md` index and a machine-readable state
 file). Focused commands for each entry point:
 
@@ -711,7 +711,7 @@ removed for):
 | `shfmt` | Bash format | `apt`/`brew install shfmt`, or `go install mvdan.cc/sh/v3/cmd/shfmt@latest` |
 
 Turn any of the seven `on`/`off` per project (`install_helper.py`'s "Project preferences" step,
-or `.claude/team-preferences.json`'s `review_tools` key directly), or set a default for every
+or `VSIT/config/preferences.json`'s `review_tools` key directly), or set a default for every
 project on this machine (same step, "save as default" → `~/.config/virt-surv-it/installer.json`'s
 `default_review_tools`). `auto` (the default) means "use it if present, skip silently if not". A
 security team can disable all seven centrally with the env var `CST_NO_EXTERNAL_TOOLS=1`.
@@ -972,11 +972,11 @@ engagements. Descriptions are taken from each script's own docstring.
 | `scripts/validate_masking.py` | Proves a masking config is safe and useful (residual-PII, detection fidelity, k-anonymity); `--in` scans an actual masked file | model, consent-free |
 | `scripts/validate_manifest.py` | Asserts every agent/skill/hook declared in the plugin manifest exists on disk | model, consent-free |
 | `scripts/check_citations.py` | Grounds regulatory citations against the register (ADR-001): retrieve via `lookup()`, mechanically flag unregistered pinpoints | model, consent-free |
-| `scripts/check_artifacts.py` | The mechanical Definition-of-Done check over an engagement's artifacts - the gate CI can never see because `artifacts/` is git-ignored | model, consent-free |
+| `scripts/check_artifacts.py` | The mechanical Definition-of-Done check over an engagement's artifacts - the gate CI can never see because `VSIT/engagements/` is git-ignored | model, consent-free |
 | `scripts/engagement_state.py` | Reads/writes the machine-readable engagement state (`engagement-state.json`, ADR-006); `START-HERE.md` is a rendered view of it | model, consent-free |
 | `scripts/eval_score.py` | Deterministic scorer for the eval harness: matches team findings against each golden case's ground truth | model, consent-free |
 | `scripts/calibrate_spoofing.py` | Measured FP/FN evidence for the spoofing rule on a labelled synthetic corpus (precision/recall per segment) | model, consent-free |
-| `scripts/extensions.py` | Parses and surfaces the company-extensions contract from a working project's `docs/team-extensions.md` (ADR-009) | model, consent-free |
+| `scripts/extensions.py` | Parses and surfaces the company-extensions contract from a working project's `VSIT/config/extensions.md` (ADR-009) | model, consent-free |
 | `scripts/convert_sarif.py` | Converts SARIF analyser output to the team's findings-pack JSONL so company-tool findings keep 📊 measured status | model, consent-free |
 | `scripts/virt_team_launcher.py` | `virt-surv go`'s decision engine, run before Claude Code starts: settings table, resume-or-new menu (arrow keys/mouse via vendored prompt_toolkit, plain fallback), inline settings editor and archiving, cache pre-warm; stdout carries only the pre-seeded prompt | human, pre-session |
 | `scripts/repo_skeleton.py` | Deterministic, token-budgeted codebase skeleton (inventory, tiered symbols, PageRank importance) - the mechanical layer under `/map-codebase` and the sanctioned whole-repo inventory during engagements | model, consent-free |
@@ -1133,7 +1133,7 @@ agents now self-verify against their brief and flag gaps before returning; stand
   calibrate the judge against human scores over time.
 
 - ✅ **Multi-engagement workspaces: SHIPPED (0.31.0, ADR-008)**. Several engagements per project
-  at independent states: per-engagement `artifacts/<slug>/` workspaces, a derived root registry,
+  at independent states: per-engagement `VSIT/engagements/<slug>/` workspaces, a derived root registry,
   resume-or-new selection at the front door, and the stop-gate arming only on gated workspaces
   (a ⛔ parked sibling stays silent). Hardened in 0.33.0 (fail-safe gates, the 🔒 closing window,
   disk-first resume, the ADR-010 placement rule - see
@@ -1141,7 +1141,7 @@ agents now self-verify against their brief and flag gaps before returning; stand
 - ✅ **Codebase map evolution: SHIPPED (0.33.28, ADR-007, Phase 1+2)**. Staleness detection
   (strict anchor validation, per-entry As-of/SHA checks, a `MAP-STALE` budget against HEAD) plus
   the generative layer: a deterministic `repo_skeleton` (inventory, tiered symbols, PageRank,
-  Mermaid, churn), `docs/codebase-map.d/` per-area detail files, the `/map-codebase` skill, and
+  Mermaid, churn), `VSIT/shared/map.d/` per-area detail files, the `/map-codebase` skill, and
   content-fingerprint drift stamps (`MAP-DRIFT`/`MAP-DEAD-POINTER`). The first-contact-on-
   large-codebase need the ADR parked this behind materialised; it's now gated by the
   `map_skeleton` project/machine preference (off by default - zero behaviour change unless
@@ -1207,7 +1207,7 @@ agents now self-verify against their brief and flag gaps before returning; stand
 
 ## ❓ FAQ
 
-Measured vs inferred, the hallucination question, what the `artifacts/` folder is, who
+Measured vs inferred, the hallucination question, what the `VSIT/engagements/` folder is, who
 Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FAQ.md)**.
 
 <sub>[↑ Back to top](#readme-top)</sub>
@@ -1301,7 +1301,7 @@ Both were found by an audit on 2026-08-01 and are **pending**, not done:
 **First `/engage` of a session can take ~2-3 minutes before the first Morgan message (under
 investigation).** Tester feedback: the **initial** engagement is slow to produce the opening banner;
 later turns are fast. The path is already optimised to a **single** step-0 probe (no probe-per-turn),
-and the tooling probe is cached after first use (`.claude/.tool-availability`, 7-day TTL) - so this
+and the tooling probe is cached after first use (`VSIT/local/tool-availability`, 7-day TTL) - so this
 is a **cold-start** cost that hits once per session: the prompt cache is cold (`docs/agent-design.md`
 §7), the tool probe isn't cached yet, and turn 0 loads a large payload (the ~490-line operating guide
 + codebase-map + CHANGELOG) into the orchestrator before it emits a word. **Not yet confirmed**
@@ -1431,7 +1431,7 @@ transcripts show the team behaving *correctly* - the eval harness itself has the
   and refused, then Morgan explicitly right-sized itself - *"no fan-out... no workspace opened, no
   agents spawned"* - for a two-line YAML review. It's scored against `process-discipline.md`, which
   weights closing-artifact/dual-artifact dimensions (0.30 + 0.20) that assume a formal
-  `artifacts/<slug>/` workspace exists. Neither that rubric nor its light variant
+  `VSIT/engagements/<slug>/` workspace exists. Neither that rubric nor its light variant
   (`process-discipline-light.md`) has a category for a genuinely tiny, correctly self-handled,
   zero-workspace response - the exact right-sizing behaviour the team's own principles reward.
 Fix direction: script the sim-user to follow up after an async defer, and add a rubric variant (or

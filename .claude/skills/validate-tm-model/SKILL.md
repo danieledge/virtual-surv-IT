@@ -47,7 +47,7 @@ verdict; the `docs/sme/tm-monitoring.md` pack for typology coverage):**
 statistical/ML model outside TM uses `docs/templates/model-validation-report.md`) - findings by
 severity, evidence, the **applicable obligations**, and a verdict (✅ fit / ⚠️ conditional / ❌
 revalidate). Each finding carries a **disposition** (fixed / open / accepted / 🔴 open-needs-human).
-Save under `artifacts/`, render to `.html`.
+Save under `VSIT/engagements/`, render to `.html`.
 
 **4. Close - don't dead-end.** State the verdict + disposition, then offer: a `/tune-thresholds`
 loop on the weak scenarios, route fixes to `rules-developer`, or a handover pack. Independent

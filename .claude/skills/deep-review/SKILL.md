@@ -88,7 +88,7 @@ rather than silently absorbing the cost difference.
 **Deep reads a MAP, not the repo:** widen scope beyond the diff only via a targeted
 related-file map built once up front - importers of the changed files, their imports, and
 their test files - and read only what the map names (turingmind's Phase-1C pattern). Never
-browse the codebase breadth-first from inside a review pass. **When `docs/codebase-map.md`
+browse the codebase breadth-first from inside a review pass. **When `VSIT/shared/map.md`
 exists, it is that map already** (dispatched reviewers have re-crawled a mapped repo - live
 2026-08-17; incident-log #16): the dispatch brief carries the in-scope FILE LIST plus the
 map's PATH with "read it for wider context - do not enumerate the repo" - **point, never paste**
@@ -192,7 +192,7 @@ the target directories with `git ls-files <dir>` - never a whole-repo walk.
 
 **4. Present - findings pack → rendered report → scoreboard** (`docs/review/output-format.md`):
    1. `code-reviewer` already **wrote** the structured pack itself, directly, to
-      `artifacts/<slug>/data/findings-<slug>.jsonl` (schema `docs/review/findings-schema.json`,
+      `VSIT/engagements/<slug>/data/findings-<slug>.jsonl` (schema `docs/review/findings-schema.json`,
       exemplar `docs/review/gold-findings.jsonl` - it holds a Write grant scoped to exactly this
       path, mechanically enforced) - read it back for your challenge pass (step 6) rather than
       re-authoring it. **In a component-split review** (step 3.3) each pass instead wrote its own
@@ -207,7 +207,7 @@ the target directories with `git ls-files <dir>` - never a whole-repo walk.
       written.
    2. Run **`<python> -m scripts.check_artifacts --fix`** (allow-listed - no consent needed): it
       **validates** the pack (a missing field is `FINDINGS-INVALID` → fix the pack and re-run) and
-      **renders** the canonical `artifacts/<slug>/REVIEW-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status closing` first). The renderer owns the layout,
+      **renders** the canonical `VSIT/engagements/<slug>/REVIEW-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status closing` first). The renderer owns the layout,
       so the report can't drift (no "5C"/C-word/inline). *(`<python>`: the `INTERPRETER=` word the step-0 probe printed, verbatim, never re-probed; direct invocation and plugin-mode paths: `.claude/skills/.shared/run-mode.md`)*
    3. Present a glanceable traffic-light **scoreboard to the console** from the rendered report; 🔵
       style & form is a non-blocking "consider in future" lane. (Fold into the consolidated

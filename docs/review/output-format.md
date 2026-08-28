@@ -13,7 +13,7 @@ The single canonical format for every team review (`code-reviewer`, the dimensio
 
 - **Console** → a clean, glanceable **scoreboard** (below). Never a wall of tables.
 - **Artifact** → the full findings, diffs and evidence, written to
-  `artifacts/<slug>/REVIEW-<slug>.md` (the engagement workspace, ADR-010) and rendered to `.html`. **Artifact-first**: detail goes to the
+  `VSIT/engagements/<slug>/REVIEW-<slug>.md` (the engagement workspace, ADR-010) and rendered to `.html`. **Artifact-first**: detail goes to the
   file, the terminal gets the scoreboard + a pointer.
 
 ## Console scoreboard (the ONLY thing shown by default)
@@ -32,7 +32,7 @@ Review - <target>            (deep · audit mode)
 Found 21 · Reported 14 · Filtered 7
 Disposition: ✅ 4 fixed · 🔴 2 open · ⚖️ 1 accepted    ← only after a fix/re-review loop
 Verdict: ❌ not yet - 2 criticals still OPEN (see artifact)
-→ Full findings + fixes: artifacts/<slug>/REVIEW-<slug>.md  (.html rendered)
+→ Full findings + fixes: VSIT/engagements/<slug>/REVIEW-<slug>.md  (.html rendered)
 ```
 
 Then **offer to expand, don't dump** - via the question tool: *"Show full findings inline, the
@@ -81,11 +81,11 @@ the terminal only ever sees the scoreboard.)
 ## Artifact sections
 
 > **Findings are structured data, rendered - not hand-authored (0.23.0+).** The source of truth is a
-> **findings pack** (`artifacts/data/findings-<slug>.jsonl`, schema `docs/review/findings-schema.json`,
+> **findings pack** (`VSIT/engagements/data/findings-<slug>.jsonl`, schema `docs/review/findings-schema.json`,
 > exemplar `gold-findings.jsonl`); the canonical `REVIEW-<slug>.md` is produced from it by
 > `render_findings` - the layout below is what that renderer emits, and the field descriptions here
 > are the pack's fields. **`code-reviewer` returns findings in the pack's JSON shape**; the PM writes
-> the pack (post-challenge) to `artifacts/data/` and runs **`<python> -m scripts.check_artifacts --fix`**
+> the pack (post-challenge) to `VSIT/engagements/data/` and runs **`<python> -m scripts.check_artifacts --fix`**
 > (allow-listed; it validates the pack → `FINDINGS-INVALID` if a field is missing, then renders the
 > report + `.html`). This is what makes format drift impossible - the model supplies field *values*,
 > the renderer owns the *format*. Do not hand-author a findings report when a pack can be produced.

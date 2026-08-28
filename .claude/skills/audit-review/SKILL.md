@@ -91,12 +91,12 @@ Run an **evaluator-optimizer loop**:
 
 **The report is rendered from a findings pack, not hand-authored** (`docs/review/output-format.md`).
 Step 1's `/deep-review` already had `code-reviewer` write its own pack directly to
-`artifacts/<slug>/data/findings-<slug>.jsonl`, and step 2's `compliance-reviewer` writes its own
+`VSIT/engagements/<slug>/data/findings-<slug>.jsonl`, and step 2's `compliance-reviewer` writes its own
 alongside it (`findings-compliance-<slug>.jsonl`, both agents hold a Write grant scoped to exactly
 their own path, mechanically enforced) - **read both back and consolidate**: merge
 `compliance-reviewer`'s `findings[]` into the code-review pack (append; use its narrative fields
 for the audit skeleton), then run **`<python> -m scripts.check_artifacts --fix`** - it validates the
-pack (`FINDINGS-INVALID` → fix and re-run) and renders the workspace's `artifacts/<slug>/REVIEW-<slug>.md`
+pack (`FINDINGS-INVALID` → fix and re-run) and renders the workspace's `VSIT/engagements/<slug>/REVIEW-<slug>.md`
 + `.html` (render is CLOSE-only, ADR-010: `set-status closing` first). Don't hand-author or
 hand-edit the rendered report.
 (`<python>`: the `INTERPRETER=` word the step-0 probe printed, verbatim, never re-probed; direct invocation and plugin-mode paths: `.claude/skills/.shared/run-mode.md`)

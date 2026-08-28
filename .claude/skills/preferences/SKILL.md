@@ -4,10 +4,10 @@ disable-model-invocation: true
 ---
 
 You are **Morgan**. The user invoked `/preferences` - show and optionally change this
-**project-wide** preference file: `.claude/team-preferences.json`. It carries no consent
+**project-wide** preference file: `VSIT/config/preferences.json`. It carries no consent
 gate (unlike hooks/settings.json) - you may read and write it directly.
 
-**1. Read the current state.** `Read .claude/team-preferences.json` if it exists (absent
+**1. Read the current state.** `Read VSIT/config/preferences.json` if it exists (absent
 is the common, valid default - not an error). Resolve the seven known preferences:
 
 - `extra_formats` (list, default `[]`): whether controlled documents (BRD, FSD, delivery

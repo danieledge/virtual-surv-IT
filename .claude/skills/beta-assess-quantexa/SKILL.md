@@ -88,7 +88,7 @@ residual risk** section must state: static-only basis, gated-documentation limit
 UI-managed configuration not exported, and every 🧠 inferred schema assumption). Update the
 working project's codebase map at close.
 
-**Data safety (§5):** BRDs/TSDs and estate code stay in `artifacts/`/local paths - never
+**Data safety (§5):** BRDs/TSDs and estate code stay in `VSIT/engagements/`/local paths - never
 commit client material, never put client detail in this skill or its KB (the KB is
 plugin-scoped and travels across projects; estate-specific knowledge belongs in the working
 project's codebase map).

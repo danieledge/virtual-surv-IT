@@ -155,7 +155,7 @@ When invoked:
    context skips bookkeeping only - never the reading of the files under review.
    **Never enumerate the repository yourself** (no `ls`/Glob sweeps, no breadth-first
    browsing): the brief's file list IS your scope, and for wider context read the codebase
-   map at the path the brief names (`docs/codebase-map.md` when the project has one) instead
+   map at the path the brief names (`VSIT/shared/map.md` when the project has one) instead
    of walking directories (live 2026-08-17; incident-log #16). In a git repo with no list
    and no map, `git ls-files <dir>` (bounded to the target) is the inventory of last resort. Search discipline (2026-08-18, evidence-based): orientation FIRST - the brief's list, the map, or one `repo_skeleton` call - never an opening grep on a concept word; read small files WHOLE (one read beats three greps) - small means under ~150 lines, and above ~400 take ONE symbol with `<python> -m scripts.repo_skeleton --slice FILE:SYMBOL` (typically ~1% of a whole-file read) or a Grep window instead; count before content (`output_mode: "count"`, or set head_limit) on anything that might hit a repeated key; batch independent lookups into a single call; after 2-3 search misses read the skeleton or the likeliest file instead of guessing synonyms - grep is pinpoint symbol lookup, never exploration and never coverage proof.
 2. **Run the available analysers ONCE, up front - before any lens pass.** Only the tools the
@@ -185,7 +185,7 @@ When invoked:
    either way. Tag each with its
    **evidence basis** (📊 measured / 🧠 inferred - never present an inference as a measurement).
 5. Report in the shared `docs/review/output-format.md`: a clean **console scoreboard**, with the
-   full findings written to the **clean artifact** (`artifacts/REVIEW-<slug>.md` → `.html`).
+   full findings written to the **clean artifact** (`VSIT/engagements/REVIEW-<slug>.md` → `.html`).
 6. **Write the `## 🔵 Developer guidance - improving future code` section - ALWAYS, no
    exceptions.** 2-4 constructive points on the author's coding style and what to improve in
    future work (or what's done well, if it's strong), even on a clean pass. **The review is
@@ -205,8 +205,8 @@ analysers) routes to a cheaper-tier agent instead.
 ## Output
 
 Follow **`docs/review/output-format.md`** exactly - it is the single canonical format:
-- **Write the STRUCTURED findings-pack JSONL yourself** to `artifacts/<slug>/data/findings-<slug>.jsonl`
-  (or `artifacts/data/findings-<slug>.jsonl` for a flat pack - schema `docs/review/findings-schema.json`,
+- **Write the STRUCTURED findings-pack JSONL yourself** to `VSIT/engagements/<slug>/data/findings-<slug>.jsonl`
+  (or `VSIT/engagements/data/findings-<slug>.jsonl` for a flat pack - schema `docs/review/findings-schema.json`,
   exemplar `docs/review/gold-findings.jsonl`) - each finding an object with the five required fields
   (`standard`, `problem`, `likely_cause`, `impact`, `fix`{`diff`,`why`}) plus `id`/`title`/`severity`/
   `location`/`basis`/`disposition`. **You author the DATA and write it - never the report layout** -

@@ -46,8 +46,8 @@ When validating a detection model:
    missed alerts. Flag the absence of drift monitoring as a finding in its own right.
 
 **Write the validation as the structured findings-pack JSONL yourself**, to
-`artifacts/<slug>/data/findings-model-validation-<slug>.jsonl` (or
-`artifacts/data/findings-model-validation-<slug>.jsonl` for a flat pack - schema
+`VSIT/engagements/<slug>/data/findings-model-validation-<slug>.jsonl` (or
+`VSIT/engagements/data/findings-model-validation-<slug>.jsonl` for a flat pack - schema
 `docs/review/findings-schema.json`, `"kind": "model-validation"`, `slug` prefixed
 `model-validation-`): the Pass / Pass-with-conditions / Fail call goes in `verdict`, the method and
 data reviewed in `methodology`, residual model risk in `limitations`. Each finding takes `id`/

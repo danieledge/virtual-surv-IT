@@ -38,7 +38,7 @@ These run on EVERY session in the project, engagement or not. Draw each as: trig
    the filename) are allowed; every write path (redirect, touch, cp, sed -i, command
    substitution) blocks.
 5. **persona_anchor.py** (UserPromptSubmit): ◇ is the engagement live? State-first (ADR-006),
-   per pack - each workspace `artifacts/<slug>/engagement-state.json` plus the legacy flat
+   per pack - each workspace `VSIT/engagements/<slug>/engagement-state.json` plus the legacy flat
    pack: a parseable state file is authoritative
    (`in_progress`/`blocked`/`closing` arms even before START-HERE is rendered; `closed`
    silences even
@@ -48,7 +48,7 @@ These run on EVERY session in the project, engagement or not. Draw each as: trig
    compaction); no: silent. Anchored to the session's project root, never the shell's
    wandering cwd.
 6. **dod_stop_gate.py** (Stop hook, warn-first): fires when the model tries to end its turn.
-   ◇ same state-first liveness check → run the mechanical DoD checker over `artifacts/` →
+   ◇ same state-first liveness check → run the mechanical DoD checker over `VSIT/engagements/` →
    ◇ findings? → yes: block the stop ONCE with the finding list framed as a FIX-LIST (auto-fix
    the deterministic ones, escalate judgement calls, or end plainly saying "NOT closed -
    outstanding: ..."); the nudge does not re-fire in the same stop cycle. No open engagement or
@@ -141,7 +141,7 @@ Claude Code (only Layer 0 stays armed). → YES: activate Morgan and enter Phase
    ships `.md` + `.html`.
 2. 📄 **Engagement Brief** written (decisions, assumptions, open questions, routing plan) and
    📄 **the machine-readable state opened in the same breath** (ADR-006):
-   `engagement_state init` creates the workspace `artifacts/<slug>/engagement-state.json`
+   `engagement_state init` creates the workspace `VSIT/engagements/<slug>/engagement-state.json`
    (status ⏳, ACTIVE marker written at the root,
    ⚠️-outstanding pre-seeded with the gates ahead: independent QA, DoD) and renders
    📄 **START-HERE.md** + `.html` from it. The state file is authoritative; START-HERE is its
@@ -179,7 +179,7 @@ Claude Code (only Layer 0 stays armed). → YES: activate Morgan and enter Phase
 5. **Code chain (no exemptions)**: deliverable code → tests (project's own framework, exact
    command recorded) → code review ⟲ (fix cycles per Q3) → INDEPENDENT QA by Linh ⟲ (test
    cycles append-only, failed verdicts preserved as-found; QA evidence and suites PRESERVED
-   under artifacts/, never deleted) → DoD. ◇ Execution consent withheld → static-only path:
+   under VSIT/engagements/, never deleted) → DoD. ◇ Execution consent withheld → static-only path:
    QA verdict stays 🧠, DoD marked PARTIAL, untested code named as residual risk, close offers
    "grant consent → suite runs → verdict upgrades". No hard limit exists on QA/fix cycle
    count - the brakes are the user at each gate (interactive) or budget/turn caps (harness).
@@ -244,7 +244,7 @@ Ordered close checklist:
    the close is recorded on disk, so the close artifacts written next are legitimate work in
    progress, never "premature" to the gate or a resumed session). Then 📄 **Delivery
    Report** (close-only, consolidated by default) and 📄 **engagement-summary
-   email**: `.txt` in the workspace `artifacts/<slug>/` (the one artifact never rendered to
+   email**: `.txt` in the workspace `VSIT/engagements/<slug>/` (the one artifact never rendered to
    HTML), signed as Morgan,
    "Hi," when the requester's name is unknown, states the engagement footprint (approx tokens
    + agent count), repeats the execution/data responsibility notes, NEVER offers a call or
@@ -274,15 +274,15 @@ residual risk when execution consent was withheld.
 
 ## Artifact inventory (what exists on disk, by phase)
 
-Open: the engagement's WORKSPACE `artifacts/<slug>/` (ADR-008; several engagements may
+Open: the engagement's WORKSPACE `VSIT/engagements/<slug>/` (ADR-008; several engagements may
 coexist at independent states - root `engagements.json`/`ENGAGEMENTS.md` is the derived
 registry) containing engagement-brief.md/.html · engagement-state.json (authoritative
 lifecycle state, ADR-006) · START-HERE.md/.html (rendered from the state on every mutation).
 Delivery (as routed): fsd.md · rtm.md · review-pass-N.md · qa-cycle-N/qa-handover.md ·
 interim-*.md · the deliverable code + tests + QA suites · analysis packs - each with .html.
 Close: delivery-report.md/.html · developer-handover.md/.html (if chosen) ·
-engagement-summary-<slug>.txt · docs/codebase-map.md (working project) · finalised
-START-HERE. All artifacts/ content is git-ignored by the team repo's own hygiene.
+engagement-summary-<slug>.txt · VSIT/shared/map.md (working project) · finalised
+START-HERE. All VSIT/engagements/ content is git-ignored by the team repo's own hygiene.
 
 ## Sub-workflow index (all 23 commands; each re-enters this flow at the matching phase)
 

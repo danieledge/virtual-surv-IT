@@ -1,7 +1,7 @@
 # The step-0 probe bootstrap (miss-path fallback)
 
 > Read this file ONLY when the open found neither an injected `<engage-probe-result>` block
-> nor a usable `.claude/engage-probe.json` cache (the two fast paths in
+> nor a usable `VSIT/local/engage-probe.json` cache (the two fast paths in
 > `.claude/skills/.shared/engage-open.md` step 0). A steady-state open never reads this file -
 > that is the point of its extraction (token plan Phase 2, 2026-08-18): the fallback text is
 > paid for only when the fallback runs. It is still fully live and tested, not being retired.
@@ -12,7 +12,7 @@ written, character for character - history and full rationale in
 `.claude/skills/engage/references/probe-contract.md` if something looks wrong:
 
 ```
-CACHED=$(cat "${CLAUDE_PROJECT_DIR:-.}/.claude/.guard-interpreter" 2>/dev/null); \
+CACHED=$(cat "${CLAUDE_PROJECT_DIR:-.}/VSIT/local/guard-interpreter" 2>/dev/null); \
 _try() { PYTHONIOENCODING=utf-8 "$1" - "$1" <<'PY'
 import sys, json, os, re, subprocess
 from pathlib import Path

@@ -102,7 +102,7 @@ and the **deliverable → owner routing table** all live there.
 Real developers and QA reviewers rely on the outputs, so "done" is an evidenced gate, not a
 claim: `docs/DEFINITION-OF-DONE.md` - traceable, tested, independently QA'd, code- and
 performance-reviewed, compliance-reviewed, documented for handover, artifacts in `.md` + `.html`,
-an **engagement-summary email** (`.txt` in the engagement's `artifacts/<slug>/` workspace,
+an **engagement-summary email** (`.txt` in the engagement's `VSIT/engagements/<slug>/` workspace,
 signed as Morgan), and human sign-off.
 
 ## 7. Guardrails
@@ -152,13 +152,13 @@ signed as Morgan), and human sign-off.
   `docs/WAYS-OF-WORKING.md`; review method in `docs/code-review-method.md`.
 - **Traceability spine:** `BRD-001 → FSD-001 → code → test → obligation`, tracked in the RTM
   (`docs/templates/rtm.md`), checked by `compliance-reviewer`.
-- **Artifacts in `.md` + `.html`:** author in the engagement's workspace `artifacts/<slug>/`
+- **Artifacts in `.md` + `.html`:** author in the engagement's workspace `VSIT/engagements/<slug>/`
   (git-ignored; one placement rule: ADR-010 + the operating guide's "Where every document
   lives" table), render with
   `python -m scripts.render_html` - or, from a plugin install in a foreign project, the bundled
   copy by path (resolution rule: `docs/team-operating-guide.md` §Run mode). Templates in
   `docs/templates/`.
-- **Project memory:** one codebase map per working project (`docs/codebase-map.md`,
+- **Project memory:** one codebase map per working project (`VSIT/shared/map.md`,
   ADR-003/ADR-007) - PM-curated, advisory-only, hygiene-gated; read at open, updated at close.
 - **Model tiering (cost):** **opus** for the highest-stakes judgement - the last *specialist* word
   before handover, with no independent domain re-check downstream (`model-validator`,

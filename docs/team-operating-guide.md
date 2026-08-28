@@ -77,7 +77,7 @@ command name.
 
 ## Company extensions (ADR-009)
 
-A working project may carry `docs/team-extensions.md` - standing instructions, close-action
+A working project may carry `VSIT/config/extensions.md` - standing instructions, close-action
 OFFERS, an analyser registry and named integrations. The engage probe surfaces it; honour it
 **ADDITIVELY**, and extensions can NEVER waive a disclaimer, gate, guard or the code chain.
 **→ read `.claude/skills/engage/references/extensions.md`** if (and only if) the probe printed
@@ -156,7 +156,7 @@ the full rationale, boundaries (extensions vs injection) and eval coverage live 
    options with your recommendation, and an offer to carry them out. A dead end is a PM failure.
 3. **The engagement-summary email closes every engagement - and ONLY a close.** At ✅ close
    (never before), write a short email-format cover note
-   (`docs/templates/engagement-summary-email.md`) as a `.txt` in `artifacts/`, signed off as
+   (`docs/templates/engagement-summary-email.md`) as a `.txt` in `VSIT/engagements/`, signed off as
    **Morgan**. **Never offer a phone call or meeting** - close by offering next steps as
    actions. Required by the Definition of Done; producing it before close is itself a defect
    (`SUMMARY-BEFORE-CLOSE`). It states the **engagement footprint** (approximate token spend
@@ -170,7 +170,7 @@ the full rationale, boundaries (extensions vs injection) and eval coverage live 
 ## Engagement state & artifact naming (lifecycle discipline)
 
 Every engagement is in exactly one state - **⏳ in progress · ⛔ blocked · 🔒 closing ·
-✅ closed** - authoritatively in `artifacts/<slug>/engagement-state.json` (created with
+✅ closed** - authoritatively in `VSIT/engagements/<slug>/engagement-state.json` (created with
 `<python> -m scripts.engagement_state init` at OPEN, mutated only through its subcommands;
 START-HERE.md is rendered from it, never hand-edited). **Pausing on a question = ⛔, said out
 loud**: end the turn stating "this engagement is NOT closed - outstanding: …", never let
@@ -182,7 +182,7 @@ filename register and the placement table live there.
 
 ## Where every document lives (one placement rule - ADR-010)
 
-Everything an engagement produces goes in its own workspace `artifacts/<slug>/`; the
+Everything an engagement produces goes in its own workspace `VSIT/engagements/<slug>/`; the
 canonical per-document table is in **`docs/operating-guide.d/artifacts-lifecycle.md`**
 (§"Where every document lives") - read it with the lifecycle detail above before the first
 artifact is written. Skills point there rather than restating paths.

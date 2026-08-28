@@ -89,7 +89,7 @@ fix) · **medium** / **style** (suggestions) - plus a **Definition-of-Done statu
 DoD item, met / not met with the evidence (artifact, test, traceability link) you relied on.
 
 **Write the findings as the structured findings-pack JSONL yourself**, to
-`artifacts/<slug>/data/findings-compliance-<slug>.jsonl` (or `artifacts/data/findings-compliance-<slug>.jsonl`
+`VSIT/engagements/<slug>/data/findings-compliance-<slug>.jsonl` (or `VSIT/engagements/data/findings-compliance-<slug>.jsonl`
 for a flat pack - schema `docs/review/findings-schema.json`, `"kind": "compliance"`, `slug`
 prefixed `compliance-` so it cannot collide with a code-review pack of the same engagement). Each
 finding takes `id`/`title`/`severity`/`location`/`basis`/`disposition` plus the five required

@@ -48,7 +48,7 @@ Output: a **surveillance coverage assessment** (`docs/templates/surveillance-cov
 a standalone obligation→control map uses `docs/templates/control-mapping.md`)
 - the typology→scenario→feed map, feed health, and gaps by severity with the obligation each
 serves and a remediation owner (`platform-engineer` for feeds, `rules-developer` for new scenarios,
-`business-analyst` for spec). Save under `artifacts/`, render to `.html`.
+`business-analyst` for spec). Save under `VSIT/engagements/`, render to `.html`.
 
 **Close - don't dead-end.** State the coverage verdict + the gaps, then offer to remediate
 (wire a feed, build a missing scenario, `/tune-thresholds` the weak ones) or produce a handover.

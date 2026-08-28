@@ -114,13 +114,13 @@ Run an **evaluator-optimizer loop** (same shape as `/audit-review`, security-foc
 
 **The report is rendered from a findings pack, not hand-authored** (`docs/review/output-format.md`,
 schema `docs/review/findings-schema.json`). Tell `code-reviewer` (step 2) to write its own pack
-directly to `artifacts/<slug>/data/findings-<slug>.jsonl` with **`"kind": "security-audit"`** (each
+directly to `VSIT/engagements/<slug>/data/findings-<slug>.jsonl` with **`"kind": "security-audit"`** (each
 finding the five named fields - `standard` = the CWE/OWASP ASVS ref - + severity/basis/disposition -
 it holds a Write grant scoped to exactly this path, mechanically enforced); `compliance-reviewer`
 (step 3) writes its own alongside it (`findings-compliance-<slug>.jsonl`). **Read both back and
 consolidate** - merge `compliance-reviewer`'s `findings[]` into the security pack - then run
 **`<python> -m scripts.check_artifacts --fix`** (allow-listed): it validates the pack
-(`FINDINGS-INVALID` → fix and re-run) and renders the workspace's `artifacts/<slug>/SECURITY-AUDIT-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status closing` first)
+(`FINDINGS-INVALID` → fix and re-run) and renders the workspace's `VSIT/engagements/<slug>/SECURITY-AUDIT-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status closing` first)
 (the `kind` drives the `SECURITY-AUDIT-` prefix). Don't hand-author or hand-edit the report.
 (`<python>`: the `INTERPRETER=` word the step-0 probe printed, verbatim, never re-probed; direct invocation and plugin-mode paths: `.claude/skills/.shared/run-mode.md`).
 

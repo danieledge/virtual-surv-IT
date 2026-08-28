@@ -20,7 +20,7 @@ happens - state must be visible **between** gates.
   **✅ closed**. Only the close flips to ✅, and the close is where the DoD runs -
   mechanically: `set-status closed` runs the full gate itself and refuses on findings.
 - **The state is machine-readable first (ADR-006).** The workspace's
-  `artifacts/<slug>/engagement-state.json` is the authoritative lifecycle record (status,
+  `VSIT/engagements/<slug>/engagement-state.json` is the authoritative lifecycle record (status,
   phase, outstanding, artifact inventory, decisions, gate answers, runtime probe,
   footprint) and **START-HERE.md is rendered from it** - never hand-edited (the render
   embeds a content hash; a hand-edit is an `INDEX-HAND-EDITED` finding, auto-fixed by
@@ -55,7 +55,7 @@ happens - state must be visible **between** gates.
   so a stale render can neither arm nor silence them. The state file must **never** carry a
   consent-like key - execution consent lives only in the human-created marker (ADR-002); the
   schema rejects it. Legacy engagements without a state file remain valid.
-- **Engagements live in workspaces (ADR-008).** Each engagement owns `artifacts/<slug>/`
+- **Engagements live in workspaces (ADR-008).** Each engagement owns `VSIT/engagements/<slug>/`
   (its state, index and artifacts); the root `ENGAGEMENTS.md`/`engagements.json` is a DERIVED
   registry regenerated on every mutation - never hand-edit it (`REGISTRY-STALE`). Several
   **Archiving (0.33.2):** a `.archive` marker file excludes any directory from every
@@ -65,7 +65,7 @@ happens - state must be visible **between** gates.
   `ARCHIVED-OPEN`, warned not silent). Closed packs also store a scan fingerprint at
   close, so unchanged ones are skipped even without archiving. Several
   engagements may coexist at independent states: one is ACTIVE per session, recorded **on
-  disk** in `artifacts/.active-engagement.json` (written by `init`, switched with
+  disk** in `VSIT/engagements/.active-engagement.json` (written by `init`, switched with
   `set-active`, cleared at close; ambiguous commands resolve to it) - name it in the
   banner and target it with `--slug`; a ⛔ parked sibling's stop-gate stays silent. Legacy
   flat packs keep working; `migrate` moves them into a workspace. In workspace mode
@@ -119,11 +119,11 @@ happens - state must be visible **between** gates.
 
 ## Where every document lives (one placement rule - ADR-010)
 
-Everything an engagement produces goes in **its own workspace `artifacts/<slug>/`** - flat
+Everything an engagement produces goes in **its own workspace `VSIT/engagements/<slug>/`** - flat
 at the workspace root, plus one machine-readable lane. This table is the single reference;
 skills point here rather than restating paths. Filenames are workspace-relative.
 
-| Document / output | Canonical address in `artifacts/<slug>/` |
+| Document / output | Canonical address in `VSIT/engagements/<slug>/` |
 |---|---|
 | Living index (generated - never hand-edit) | `START-HERE.md` + `.html` |
 | Machine-readable state | `engagement-state.json` |
@@ -141,16 +141,16 @@ skills point here rather than restating paths. Filenames are workspace-relative.
 | Delivery report (close-only) | `delivery-report.md` |
 | Engagement-summary email (close-only) | `engagement-summary-<slug>.txt` (never rendered to HTML) |
 | Findings packs / machine-readable source | `data/findings-*.jsonl` (validated recursively; excluded from the .html-sibling and index checks) |
-| Standalone `/prepare-data` output (no engagement open) | `artifacts/data-prep/` (root lane, outside any workspace) |
+| Standalone `/prepare-data` output (no engagement open) | `VSIT/engagements/data-prep/` (root lane, outside any workspace) |
 
-Project-level (never per-engagement): the codebase map at `docs/codebase-map.md` or
-`CODEBASE-MAP.md` (ADR-003), and the derived registry `artifacts/ENGAGEMENTS.md` /
+Project-level (never per-engagement): the codebase map at `VSIT/shared/map.md` or
+`CODEBASE-MAP.md` (ADR-003), and the derived registry `VSIT/engagements/ENGAGEMENTS.md` /
 `engagements.json`.
 
 ## The codebase map (project memory, curation rules)
 
 **The codebase map is the working project's durable engagement memory** (ADR-003; template
-`docs/templates/codebase-map.md`; default location `docs/codebase-map.md` in the working
+`docs/templates/codebase-map.md`; default location `VSIT/shared/map.md` in the working
 project). Read at every engagement open, then added-to, corrected and deprecated at every
 close (a DoD gate). **It maps the CODE, not the team's activity:** each entry is a durable
 fact about how the codebase is built (architecture, data flow, decisions, quirks) that stays

@@ -8,15 +8,15 @@ You are the **Project Manager and orchestrator** (Morgan, CLAUDE.md §6) running
 LIGHT engagement** whose deliverable is the codebase map itself, not a review or a build - the
 user chose this command specifically. **What this is for**: first contact with an unfamiliar
 or large codebase, or refreshing a map that's drifted. **What it is not**: a substitute for
-`docs/codebase-map.md`'s own curation discipline (ADR-003) - this produces the SKELETON and a
+`VSIT/shared/map.md`'s own curation discipline (ADR-003) - this produces the SKELETON and a
 first-pass CURATED layer; humans and later engagements still correct and deprecate entries as
 they learn more.
 
 **Never confuse the two layers (ADR-007's own framing):** the mechanical skeleton
 (`scripts/repo_skeleton.py` - inventory, tiered symbol extraction, PageRank-ranked importance, a
 Mermaid dependency graph, git-churn) is a **regenerated, disposable** orientation aid - it is
-never itself written into the codebase map. The curated map (`docs/codebase-map.md` §2, and
-`docs/codebase-map.d/<area>.md` files) holds only what the skeleton *can't* give you:
+never itself written into the codebase map. The curated map (`VSIT/shared/map.md` §2, and
+`VSIT/shared/map.d/<area>.md` files) holds only what the skeleton *can't* give you:
 invariants, gotchas, risk areas, decisions and their rationale - the durable facts a specialist
 would want next time, not prose summaries or symbol inventories the skeleton already provides
 on demand.
@@ -80,15 +80,15 @@ what the skeleton already shows is a valid, complete outcome - don't manufacture
 justify the pass.
 
 **6. Write the map.** For each area with synthesized entries:
-- **New/updated area file** at `docs/codebase-map.d/<area>.md`, from
+- **New/updated area file** at `VSIT/shared/map.d/<area>.md`, from
   `docs/templates/codebase-map-area.md` (plugin mode:
   `$PLUGIN_ROOT/docs/templates/codebase-map-area.md`) - same doc-control header discipline as
   the root map, entry IDs for citation, an optional per-entry `Paths` glob.
-- **Root map** (`docs/codebase-map.md`, from `docs/templates/codebase-map.md` if it doesn't
+- **Root map** (`VSIT/shared/map.md`, from `docs/templates/codebase-map.md` if it doesn't
   exist yet): update the Index section with a load-trigger line per area file ("read this
   when: ..."), and keep §2 to what genuinely belongs at the root (cross-cutting facts, or a
   project small enough that no area file is warranted at all - an empty
-  `docs/codebase-map.d/` is a legitimate outcome for a well-documented or small repo, per
+  `VSIT/shared/map.d/` is a legitimate outcome for a well-documented or small repo, per
   ADR-007's own framing).
 - **Fingerprint what you wrote**: `<python> -m scripts.repo_skeleton --fingerprint <map or
   area file path>` for the root map and each area file that has a `Paths` column - this is

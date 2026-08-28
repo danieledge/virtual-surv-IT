@@ -101,7 +101,7 @@ only types, counts, pattern-hit tallies, and proposed roles.
 
 ```
 python -m scripts.profile_schema --in data/raw/<file> [--adapter auto] \
-    --out config/<file>.schema.yaml --report artifacts/data-prep/profile-<file>.json
+    --out config/<file>.schema.yaml --report VSIT/engagements/data-prep/profile-<file>.json
 ```
 
 **Inference rules (field → proposed role):**
@@ -125,7 +125,7 @@ human owns*, and the profiler says so in a header comment it writes into the YAM
   (not value), regex-pattern **hit counts**, proposed role + confidence.
 - ❌ forbidden in the report: any field value, any sample row, any example of a matched PII string,
   min/max of a *value* column, top-N frequent values.
-- The report is JSON, written to `artifacts/` (git-ignored), and is the only profiler output an
+- The report is JSON, written to `VSIT/engagements/` (git-ignored), and is the only profiler output an
   agent could ever be shown. It must be safe to paste into a prompt. A **unit test asserts no raw
   value leaks** into it (§9, test P-1).
 

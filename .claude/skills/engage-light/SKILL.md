@@ -44,7 +44,7 @@ access, external I/O, crypto, secrets, or PII/data handling), fold the same secu
 offer standard `/engage` makes into this exchange (header `Security`, single-select: *review
 only* · *review + a dedicated security audit* (`/security-audit`)) - never a separate
 round-trip; light stays low-ceremony, not lower-safety. Open the state with the profile recorded (this creates the engagement's own workspace
-`artifacts/<slug>/`; if other engagements already exist - check the `RESUME_MENU` field of
+`VSIT/engagements/<slug>/`; if other engagements already exist - check the `RESUME_MENU` field of
 an already-injected `<engage-probe-result>` block first, same as `/engage`'s own step 0b;
 only run `<python> -m scripts.engagement_state list --menu` yourself when that's absent -
 and, if `open` is non-empty, read
@@ -98,7 +98,7 @@ close) - then `<python> -m scripts.check_artifacts --fix` and fix the list; then
 `set-team`, `finalise-artifacts`, `set-footprint`, and `set-status closed --verdict "..."` -
 the close runs the DoD gate itself and refuses on findings (register R6).
 **No delivery report** - but the **engagement-summary email stays, kept SHORT**
-(`engagement-summary-<slug>.txt` in artifacts/, signed as Morgan, "Hi," if the requester's
+(`engagement-summary-<slug>.txt` in VSIT/engagements/, signed as Morgan, "Hi," if the requester's
 name is unknown): a few lines covering what was done, the evidence in one line (test counts,
 verdict), residual risk, and ONE concrete next step - never a call or meeting. Every close
 ends with Morgan's email, whatever the profile. **The codebase map update is NOT waived**

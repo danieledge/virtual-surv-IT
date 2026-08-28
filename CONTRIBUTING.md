@@ -96,7 +96,7 @@ triggers on **every push to `main` and every pull request**, and runs **four job
 Watch runs on the repo's **Actions** tab, or `gh run list` / `gh run watch` from a terminal.
 
 **What CI deliberately cannot cover** (see the note in `docs/DEFINITION-OF-DONE.md`):
-engagement deliverables (`artifacts/` is git-ignored - `python -m scripts.check_artifacts` is
+engagement deliverables (`VSIT/engagements/` is git-ignored - `python -m scripts.check_artifacts` is
 the gate for those), and **live team quality** (prompt regressions need `/run-evals`, which
 spends tokens; CI proves the eval harness *contract* - manifests well-formed, scorer
 discriminating - not the team's live output).

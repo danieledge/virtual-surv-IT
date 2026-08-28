@@ -202,7 +202,7 @@ def test_jira_comments_carry_a_summary_and_say_where_results_are_when_attaching_
     ).read_text(encoding="utf-8")
     assert "summary from Morgan" in ref
     assert "could not be uploaded" in ref or "could-not-attach" in ref
-    assert "absolute" in ref and "artifacts/<slug>/" in ref
+    assert "absolute" in ref and "VSIT/engagements/<slug>/" in ref
     assert "Do not dump the report body" in ref, "the anti-paste rule is gone"
 
 

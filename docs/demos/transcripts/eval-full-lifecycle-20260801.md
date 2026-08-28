@@ -79,7 +79,7 @@ Workspace open. Now writing the Engagement Brief.
 
 [tool] Bash Render brief, record artifact + decisions + runtime in state
 Good, all recorded. Now the go-ahead check before I brief the team.
-[gate] Go-ahead: The Engagement Brief is drafted (artifacts/alert-dedup-utility/engagement-brief.md) - routing: Kenji builds → Linh QA's → Ravi reviews → Layla compliance-reviews → Delivery Report. Ready to proceed?
+[gate] Go-ahead: The Engagement Brief is drafted (VSIT/engagements/alert-dedup-utility/engagement-brief.md) - routing: Kenji builds → Linh QA's → Ravi reviews → Layla compliance-reviews → Delivery Report. Ready to proceed?
 [user] Proceed as briefed
 
 [tool] Bash Record go-ahead decision and move to delivery phase
@@ -633,7 +633,7 @@ Engagement closed cleanly. Let me mark the tasks done and give you the wrap-up.
 [tool] TaskUpdate 
 🎩 Closed and delivered. Here's where it landed:
 
-**Engagement: alert-dedup-utility — ✅ closed, verdict: Ready** (workspace: `artifacts/alert-dedup-utility/`)
+**Engagement: alert-dedup-utility — ✅ closed, verdict: Ready** (workspace: `VSIT/engagements/alert-dedup-utility/`)
 
 The utility does exactly what you asked — drops exact `alert_id` duplicates (latest wins), flags near-duplicates within your 10-minute window with a traceable audit column, writes a cleaned CSV + run summary. The boundary you specifically wanted evidenced is nailed down by two independent test suites: exactly 9:59 suppresses, exactly 10:00/600s suppresses (inclusive), exactly 10:01/601s doesn't.
 
@@ -644,4 +644,4 @@ It wasn't clean on the first pass, and I want to be upfront about that rather th
 **Everything's in the workspace:** `delivery-report.md`/`.html` (full evidence + iteration history), `developer-handover.md` (build/run/extend), `qa-handover.md` (independent test evidence, 2 cycles), and the summary email at `engagement-summary-alert-dedup-utility.txt`.
 [gate] Next step: What would you like next?
 [user] Nothing more - I'll take it from here
-🎩 Sounds good — it's all yours. Everything's in `artifacts/alert-dedup-utility/` if you need to revisit anything (the Delivery Report is the best single starting point). Good luck with the rollout, and if you want another pass — the runbook, a real-export smoke test review, or anything else — just start a new `/engage` whenever.
+🎩 Sounds good — it's all yours. Everything's in `VSIT/engagements/alert-dedup-utility/` if you need to revisit anything (the Delivery Report is the best single starting point). Good luck with the rollout, and if you want another pass — the runbook, a real-export smoke test review, or anything else — just start a new `/engage` whenever.

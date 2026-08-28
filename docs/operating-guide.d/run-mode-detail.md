@@ -9,7 +9,7 @@
 
 **Interpreter re-resolution** is only for a direct skill invocation with no probe in session,
 and then in the platform-aware order `run-guard.sh` itself uses: an existing
-`.claude/.guard-interpreter` cache first, then `python`, `py`, `python3` on Windows (where a
+`VSIT/local/guard-interpreter` cache first, then `python`, `py`, `python3` on Windows (where a
 `python3` that resolves to the Microsoft Store stub costs a multi-second hang) and `python3`,
 `python`, `py` everywhere else.
 

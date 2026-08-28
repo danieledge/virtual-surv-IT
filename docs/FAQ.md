@@ -125,10 +125,10 @@ checked, not just a convention: the DoD gate flags an unmarked persona attributi
 fabricated or wrong-role reviewer names are caught by the roster gate
 (`ROSTER-UNKNOWN` / `ROSTER-ROLE-MISMATCH`).
 
-**What's the `artifacts/` folder that appeared in my project?**
+**What's the `VSIT/engagements/` folder that appeared in my project?**
 That's the engagement's paper trail - everything the team produces lands there, each document
 in both `.md` (source) and `.html` (readable render). Each engagement gets its **own
-workspace subfolder**, `artifacts/<slug>/`, so several engagements can coexist at
+workspace subfolder**, `VSIT/engagements/<slug>/`, so several engagements can coexist at
 independent states; the root holds a generated registry (`ENGAGEMENTS.md`) listing them.
 The key files inside a workspace: **`START-HERE.md`** is exactly what it sounds like, the
 index to read first - what this engagement is, whether it's finished (⏳ in progress /
@@ -142,12 +142,12 @@ the **`engagement-summary-*.txt`** email only appear once the close window opens
 closing) - if they're absent, the engagement isn't done, on purpose - and the flip to ✅ is
 gate-verified: the close runs the full mechanical check and refuses on any finding. Treat
 the folder as the audit trail: it's the evidence behind every claim, so archive it rather
-than delete it, and add `artifacts/` to your `.gitignore` if you don't want it in version
+than delete it, and add `VSIT/engagements/` to your `.gitignore` if you don't want it in version
 control.
 
 **What is the codebase map?**
 
-The team's memory of YOUR project: `docs/codebase-map.md` (created at the first close),
+The team's memory of YOUR project: `VSIT/shared/map.md` (created at the first close),
 a short PM-curated index of durable facts about how your code is built - read at every
 engagement open so the team never starts cold, corrected/deprecated at every close, and
 mechanically hygiene-checked (size, provenance anchors, staleness, no secrets). Advisory
@@ -197,7 +197,7 @@ with every artifact write), with a human-readable START-HERE generated from it. 
 session reads those, picks up the outstanding list and carries on, this has been proven live,
 twice in one day, including once after the session hit its budget cap mid-delivery. Since
 0.33.0 the resume is disk-first end to end: which engagement was active is recorded on disk
-(`artifacts/.active-engagement.json`), your intake answers (go-ahead, fix-cycle, the data
+(`VSIT/engagements/.active-engagement.json`), your intake answers (go-ahead, fix-cycle, the data
 attestation) persist as decisions, the phase and run-mode probe are cached, and a "no" to
 execution consent is recorded so a resumed session never re-asks its way into a yes.
 
@@ -227,8 +227,8 @@ Yes, two ways (0.33.2):
    `python -m scripts.engagement_state archive --all-closed` yourself). That drops a
    `.archive` marker file into each closed pack - nothing moves, links keep working,
    and every scanner (DoD checker, end-of-turn gate, registry, status line, resume
-   menu) skips the folder from then on. Works on any directory under `artifacts/`,
-   not just engagement packs - `touch artifacts/legacy-stuff/.archive` excludes a
+   menu) skips the folder from then on. Works on any directory under `VSIT/engagements/`,
+   not just engagement packs - `touch VSIT/engagements/legacy-stuff/.archive` excludes a
    folder by hand. `unarchive <slug>` brings one back.
 2. **Nothing at all.** Engagements closed on 0.33.2+ store a fingerprint at close;
    unchanged closed packs are skipped automatically. Packs closed on older versions

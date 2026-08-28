@@ -37,7 +37,7 @@
   identity stated, never on a shared line with a human name.
 - **Attachment failed? Say so, and say WHERE** (2026-08-21). Post a comment stating plainly
   that the artifacts could not be uploaded, naming them, and giving the **resolved absolute
-  path** of `artifacts/<slug>/`. Do not dump the report body in instead - unprompted, that
+  path** of `VSIT/engagements/<slug>/`. Do not dump the report body in instead - unprompted, that
   is noise and an uncontrolled copy; inline is a request the reader can make. Applies
   wherever an attachment was intended.
 - **Never put secrets, real data or the consent marker's path into any outward text.**
@@ -49,7 +49,7 @@
 
 **At open** - after the go-ahead gate approves a plan that names it: create one issue in
 `<KEY>` via the `<prefix>` tools (summary = engagement title; description = the brief's
-summary section plus a link line naming the workspace `artifacts/<slug>/`). Record the
+summary section plus a link line naming the workspace `VSIT/engagements/<slug>/`). Record the
 key (rule above). `key=UNSET` means the config is missing `project_key`: say so at the
 gate and skip issue creation rather than guessing a project.
 

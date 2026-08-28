@@ -9,7 +9,7 @@ work; the team never starts driving one just because it exists.
 
 ## Where and how to enable
 
-Add an `integrations` block to the **working project's** `.claude/team-preferences.json`
+Add an `integrations` block to the **working project's** `VSIT/config/preferences.json`
 (the same file `virt-surv configure` manages; project-scoped on purpose - which tracker,
 which project key and which MCP tools are facts about the project, never about your
 machine, so there is no machine-default tier):
@@ -161,7 +161,7 @@ configured MCP tools, with the same preview-then-approve step as close actions.
 - **Not credential handling.** The team never sees or stores tracker credentials; your
   MCP server owns authentication (the secrets standard in the repo root `CLAUDE.md`
   applies as always).
-- **Not a replacement for `docs/team-extensions.md`.** Free-form standing instructions,
+- **Not a replacement for `VSIT/config/extensions.md`.** Free-form standing instructions,
   company analysers and bespoke close actions still live in the ADR-009 extensions
   contract; this page covers only the first-class, mechanically-validated tracker/PR
   config.

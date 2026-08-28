@@ -234,7 +234,7 @@ It's the template every other detection in this team would follow.
    start - after that, simply chat back and forth; Morgan stays with you for the whole
    session.
 3. You get back proper deliverables - each as both a **Markdown** file and a ready-to-share
-   **HTML** file. Each piece of work gets its own folder under `artifacts/`, with a
+   **HTML** file. Each piece of work gets its own folder under `VSIT/engagements/`, with a
    `START-HERE.md` index that always shows what it is, whether it's finished, and what to
    read in what order - so anyone opening the folder later can pick it up cold.
 4. Everything is checked automatically: tests must pass, no secrets or real data can sneak

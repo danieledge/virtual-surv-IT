@@ -14,7 +14,7 @@ waive a disclaimer, gate, guard or the code chain; close actions are offers you 
 
 ```bash
 mkdir -p docs
-cp <plugin>/docs/templates/team-extensions.md docs/team-extensions.md   # or copy from GitHub
+cp <plugin>/docs/templates/team-extensions.md VSIT/config/extensions.md   # or copy from GitHub
 ```
 
 Open it and delete every section you don't need yet. A minimal useful start:
@@ -55,7 +55,7 @@ python3 -m scripts.extensions add-tool --name cx \
 
 It upserts by name (rerun to update), refuses unsafe commands, and immediately tells you
 whether the binary resolves on PATH. Or hand-edit the same thing into
-`docs/team-extensions.md`:
+`VSIT/config/extensions.md`:
 
 ````markdown
 ## Analyser registry
@@ -90,8 +90,8 @@ During reviews the team now runs your tool for the security lens, and `replaces`
 findings are NOT degraded because bandit is absent. SARIF output flows through:
 
 ```bash
-python3 -m scripts.convert_sarif artifacts/<ws>/data/cx.sarif --slug <slug> --scope "src/"
-python3 -m scripts.validate_findings artifacts/<ws>/data/findings-<slug>.jsonl
+python3 -m scripts.convert_sarif VSIT/engagements/<ws>/data/cx.sarif --slug <slug> --scope "src/"
+python3 -m scripts.validate_findings VSIT/engagements/<ws>/data/findings-<slug>.jsonl
 ```
 
 Expected: a schema-valid findings pack, 📊 measured, rendered into the standard review.
@@ -123,7 +123,7 @@ Wire your MCP server once, in the project's `.mcp.json`:
 { "mcpServers": { "atlassian": { "command": "npx", "args": ["-y", "@atlassian/mcp-server"] } } }
 ```
 
-Then declare the steps as close actions in `docs/team-extensions.md`:
+Then declare the steps as close actions in `VSIT/config/extensions.md`:
 
 ```markdown
 ## Close actions
@@ -163,7 +163,7 @@ travel with it).
 
 | Symptom | Cause / fix |
 |---|---|
-| Extensions not mentioned at engage open | File must be `docs/team-extensions.md` in the WORKING project; run the Step 1 verify |
+| Extensions not mentioned at engage open | File must be `VSIT/config/extensions.md` in the WORKING project; run the Step 1 verify |
 | `EXTENSIONS-INVALID: ... metacharacters - REFUSED` | Registry command contains `; \| & $` etc. - make it plain argv; chain nothing |
 | Tool shows `MISSING on PATH` | Install it, or fix `probe` to the actual binary name |
 | Wrapper blocked by the execution gate | It's interpreter-wrapped: grant consent at intake, or add a `CST_COMPANY_ALLOW` prefix (Step 3) |

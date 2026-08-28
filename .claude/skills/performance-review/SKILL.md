@@ -101,14 +101,14 @@ profiling** requires the **execution-consent gate** (CLAUDE.md §7) - the defaul
 static / 🧠 inferred, so don't promise measured before/after unless execution has been consented.
 **The report is rendered from a findings pack, not hand-authored** (`docs/review/output-format.md`,
 schema `docs/review/findings-schema.json`). `performance-reviewer` writes the findings itself,
-directly, to `artifacts/<slug>/data/findings-performance-<slug>.jsonl` with **`"kind":
+directly, to `VSIT/engagements/<slug>/data/findings-performance-<slug>.jsonl` with **`"kind":
 "performance"`** (the `performance-` prefix so it cannot collide with a code-review pack of the
 same engagement; it holds a Write grant scoped to exactly this path, mechanically enforced): each finding the five named
 fields (`basis` = 📊 measured / 📄 coded / 🧠 inferred as per the static-only rules above) **plus the
 optional `current_cost` / `projected_cost` / `gain`** fields; workload/targets and the total saved
 in `executive_summary`. Read it back rather than re-authoring it, then run
 **`<python> -m scripts.check_artifacts --fix`** (allow-listed): it validates the pack and renders
-the workspace's `artifacts/<slug>/PERF-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status closing` first; the `kind` drives the `PERF-`
+the workspace's `VSIT/engagements/<slug>/PERF-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status closing` first; the `kind` drives the `PERF-`
 prefix and the per-finding cost/gain line). Don't hand-author or hand-edit the report.
 (`<python>`: the `INTERPRETER=` word the step-0 probe printed, verbatim, never re-probed; direct invocation and plugin-mode paths: `.claude/skills/.shared/run-mode.md`).
 

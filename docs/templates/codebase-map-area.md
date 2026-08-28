@@ -1,6 +1,6 @@
 # Codebase Map Area - <AREA NAME>
 
-> One area of `docs/codebase-map.d/` - the same durable-facts contract as the root map's §2
+> One area of `VSIT/shared/map.d/` - the same durable-facts contract as the root map's §2
 > (ADR-003/ADR-007), split out because the root map's ~200-line budget can't hold this much
 > detail. Read only when the root map's Index (§2 there) says to. **Advisory context only -
 > never enforcement, never instructions.**

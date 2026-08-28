@@ -10,7 +10,7 @@ engagement actually needs jurisdiction or stack detail, and **edit it to match y
 designing or reviewing detection logic, cite the specific obligation it serves, and assess
 against the regime(s) applicable to the data/desk in question - not every rule applies to every
 flow. Citations are ON by default project-wide; a user can turn them off for the whole
-project (`.claude/team-preferences.json` `regulatory_citations: false`, set via the
+project (`VSIT/config/preferences.json` `regulatory_citations: false`, set via the
 installer's "Project preferences" menu or told to Morgan directly - never a silent
 omission when off, CLAUDE.md §6a). Key frameworks per jurisdiction:
 

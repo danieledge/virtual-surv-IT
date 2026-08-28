@@ -33,7 +33,7 @@ bookend at the end.
    a target date.
 
 Output: a **reg-change impact assessment** (`docs/templates/reg-change-impact.md`) - change,
-affected items (traced), gaps, and the prioritised change plan with owners. Under `artifacts/`,
+affected items (traced), gaps, and the prioritised change plan with owners. Under `VSIT/engagements/`,
 rendered to `.html`.
 
 **Close - don't dead-end.** State the impact + the plan, then offer to kick off the highest-

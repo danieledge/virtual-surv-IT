@@ -283,7 +283,7 @@ clarifications?" round by default. **Fold** any remaining material unknown (juri
 criteria) **into the batched calls above**, or ask a single targeted question **only if**
 something material is genuinely missing. Never assume scope, jurisdiction, data availability or
 success criteria - but don't manufacture a question to fill a step. **Regulatory citations are a
-PROJECT-WIDE preference** (`.claude/team-preferences.json` `regulatory_citations`, on unless
+PROJECT-WIDE preference** (`VSIT/config/preferences.json` `regulatory_citations`, on unless
 explicitly `false`), not something to ask per engagement: set once via the installer's "Project
 preferences" menu, or Morgan writes it directly on the user's word at any point (no consent gate
 on that file).
@@ -315,13 +315,13 @@ assumptions, the selected artifacts and the routing plan. Render it to HTML. **A
 open the machine-readable state** (ADR-006/ADR-008):
 
 `<python> -m scripts.engagement_state init --title "<title>" --slug <slug> --team-version <ver>`
-creates the engagement's own WORKSPACE `artifacts/<slug>/` with its `engagement-state.json`
+creates the engagement's own WORKSPACE `VSIT/engagements/<slug>/` with its `engagement-state.json`
 (Status ⏳, the ⚠️-outstanding list pre-seeded with the gates ahead) **and renders that
 workspace's `START-HERE.md` + `.html` from it** (the derived root registry
-`artifacts/ENGAGEMENTS.md` lists every engagement). Every artifact path from here on is
+`VSIT/engagements/ENGAGEMENTS.md` lists every engagement). Every artifact path from here on is
 WORKSPACE-relative, and when several engagements exist target yours with `--slug <slug>`; then
 `add-artifact engagement-brief.md --title "..."` lists the brief. **Order: `init` (from the project
-root - it resolves `artifacts/` from the CURRENT DIRECTORY), then write the brief and render
+root - it resolves `VSIT/engagements/` from the CURRENT DIRECTORY), then write the brief and render
 its HTML, then `add-artifact`.** The brief cannot exist before `init`; what must not happen is
 registering it before writing it - that leaves
 `added_before_file_existed: true` on the entry, which the DoD backstop correctly flags as
@@ -404,7 +404,7 @@ interim banner (`> ⏳ INTERIM - engagement not closed; DoD checks have not run.
 answers, flip ⛔ back to ⏳, log the answer, and continue to a real close. A stalled engagement's
 interim report must never be readable as the delivery (lifecycle discipline, operating guide).
 
-**6. Deliver.** Produce the selected artifacts under `artifacts/` as Markdown, then render each
+**6. Deliver.** Produce the selected artifacts under `VSIT/engagements/` as Markdown, then render each
 with `<python> -m scripts.render_html <file>.md` so every deliverable exists in `.md` and `.html`,
 **recording each with `<python> -m scripts.engagement_state add-artifact <file> --title "..."` as
 it lands** (the index re-renders itself); nothing in the folder goes unlisted.
@@ -434,7 +434,7 @@ handover pack?"*). Always leave the user with a clear, actionable choice.
 
 **Also write the engagement-summary email** (required closing artifact - Definition of Done): a
 short email-format cover note (`docs/templates/engagement-summary-email.md`) saved as the
-workspace's `artifacts/<slug>/engagement-summary-<slug>.txt`, **signed off as Morgan**. Address
+workspace's `VSIT/engagements/<slug>/engagement-summary-<slug>.txt`, **signed off as Morgan**. Address
 the requester only if you know their name, otherwise open with "Hi,". It's an email, so keep it
 `.txt` (the one artifact not rendered to `.html`).
 

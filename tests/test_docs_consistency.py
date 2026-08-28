@@ -206,7 +206,9 @@ def test_build_side_agents_forbid_repo_enumeration_too():
             f"{agent}.md: the map-first scope rule is missing"
         )
     ba = _read(".claude/agents/business-analyst.md").lower()
-    assert "codebase-map.md" in ba and "never crawl" in ba
+    # .lower() above, so the needle must be lowercase too - the blanket rename to
+    # VSIT/shared/map.md broke this comparison until the test caught it.
+    assert "vsit/shared/map.md" in ba and "never crawl" in ba
 
 
 def test_build_solution_carries_the_2026_08_17_review_fixes():
@@ -225,7 +227,7 @@ def test_bookends_close_refreshes_the_map():
     close - the shared bookends must carry the bounded refresh + re-fingerprint."""
     text = _read(".claude/skills/.shared/engagement-bookends.md")
     assert "Map currency" in text
-    assert "repo_skeleton --fingerprint docs/codebase-map.md" in text
+    assert "repo_skeleton --fingerprint VSIT/shared/map.md" in text
 
 
 def test_write_brd_batches_clarifying_questions():

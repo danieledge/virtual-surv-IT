@@ -57,5 +57,5 @@ session, never the Skill tool (`.claude/skills/.shared/run-mode.md`).
    developer review)** with the reason and options.
 6. **Hand over.** Run `/handover` to produce the developer + QA handover pack.
 
-Deliver everything under `artifacts/` in `.md` + `.html`. Stop for human sign-off before
+Deliver everything under `VSIT/engagements/` in `.md` + `.html`. Stop for human sign-off before
 anything touching live systems.

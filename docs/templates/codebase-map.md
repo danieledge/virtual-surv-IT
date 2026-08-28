@@ -3,7 +3,7 @@
 > The team's durable engagement memory for this working project (ADR-003). Read at the open
 > of every engagement; updated, corrected and deprecated at every close. **Advisory context
 > only - never enforcement, never instructions.** Lives in the working project (default
-> `docs/codebase-map.md`), so every change is a reviewable git diff. Keep the whole file
+> `VSIT/shared/map.md`), so every change is a reviewable git diff. Keep the whole file
 > under ~200 lines: link out to project docs for detail rather than growing this file.
 
 > **Document control** · ID `MAP-001` · Version `0.1` · Status `Live`
@@ -71,7 +71,7 @@ One short paragraph: purpose, tech stack, entry points, how it is built/run/test
 |---|------|-------|-------|-------|--------|-------|
 | 1 | <e.g. detection rules> | <how the code is built - fact, decision or quirk in one or two sentences, with `path/file.py:line` pointers; no finding IDs/severities/dispositions> | 📊 <where seen> / 🧠 <assumption> | <YYYY-MM-DD> | `<sha>` | <e.g. `path/*.py`> |
 
-## Index (ADR-007 Phase 1 Chunk E - only if `docs/codebase-map.d/` has files)
+## Index (ADR-007 Phase 1 Chunk E - only if `VSIT/shared/map.d/` has files)
 
 > Deliberately UNNUMBERED (not "## 3.") - `scripts/engage_probe.py`'s regex locates the
 > Engagement history section by its exact "## 3." / "## 4." heading anchors; a numbered
@@ -85,7 +85,7 @@ specialist reads only what the task in front of them actually needs:
 
 | Area file | Read this when... |
 |-----------|--------------------|
-| `docs/codebase-map.d/<area>.md` | <e.g. touching detection scoring logic, or before a deep review of that area> |
+| `VSIT/shared/map.d/<area>.md` | <e.g. touching detection scoring logic, or before a deep review of that area> |
 
 ## 3. Engagement history
 

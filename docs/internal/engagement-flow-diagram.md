@@ -139,7 +139,7 @@ flowchart TD
     REV --> FIXQ{"Findings?<br/>per Q3 fix-cycle"}
     FIXQ -- "Fix, re-review<br/>(loop until no Criticals<br/>or user stops)" --> REV
     FIXQ -- "Clean or report-only" --> QA{"Execution consent<br/>marker present?"}
-    QA -- "Yes" --> QAI["INDEPENDENT QA (Linh):<br/>append-only test cycles,<br/>failed verdicts preserved as-found,<br/>QA suites RETAINED under artifacts/"]
+    QA -- "Yes" --> QAI["INDEPENDENT QA (Linh):<br/>append-only test cycles,<br/>failed verdicts preserved as-found,<br/>QA suites RETAINED under VSIT/engagements/"]
     QAI --> QAV{"QA verdict"}
     QAV -- "Fail: route fix,<br/>new cycle" --> TESTS
     QAV -- "Pass" --> INDEX

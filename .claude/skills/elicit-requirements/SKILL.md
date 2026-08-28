@@ -32,7 +32,7 @@ at the end.
    SME/`tuning-analyst` decisions - flag them, don't invent.
 
 Output: an **elicitation/requirements doc** (`docs/templates/elicitation-requirements.md`) +
-stakeholder analysis, under `artifacts/`, rendered to `.html`. Where the elicitation calls for
+stakeholder analysis, under `VSIT/engagements/`, rendered to `.html`. Where the elicitation calls for
 them: **user stories** (`docs/templates/user-stories.md`), a **decision log**
 (`decision-log.md`) for the dispositioned open questions, a **process map** (`process-map.md`).
 

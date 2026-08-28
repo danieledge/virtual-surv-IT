@@ -112,8 +112,8 @@ once the scorer's numbers are applied; "self-scored: ..." until then) - the DoD 
 leaves the gate armed until the caller runs `review-scorer` over the pack.
 
 **Write it as the structured findings-pack JSONL yourself**, to
-`artifacts/<slug>/data/findings-performance-<slug>.jsonl` (or
-`artifacts/data/findings-performance-<slug>.jsonl` for a flat pack - schema
+`VSIT/engagements/<slug>/data/findings-performance-<slug>.jsonl` (or
+`VSIT/engagements/data/findings-performance-<slug>.jsonl` for a flat pack - schema
 `docs/review/findings-schema.json`, `"kind": "performance"`, `slug` prefixed `performance-` so it
 cannot collide with a code-review pack of the same engagement): each finding takes
 `id`/`title`/`severity`/`location`/`basis`/`disposition` plus the five required fields

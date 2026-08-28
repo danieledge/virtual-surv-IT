@@ -1,7 +1,7 @@
 # Team extensions - <COMPANY / PROJECT NAME>
 
 > **The company extensions contract (ADR-009).** Place a copy of this file at
-> `docs/team-extensions.md` IN YOUR WORKING PROJECT and the team reads it at every engage
+> `VSIT/config/extensions.md` IN YOUR WORKING PROJECT and the team reads it at every engage
 > open (`python -m scripts.extensions show` in the step-0 probe). Everything here is
 > **additive**: extensions can add instructions, tools and steps - they can never waive a
 > disclaimer, skip the code chain, weaken a guard or self-grant consent. Outward-facing

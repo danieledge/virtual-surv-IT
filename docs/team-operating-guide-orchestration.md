@@ -156,7 +156,7 @@
   above describes - dispatch them per that rule (the Workflow path when on and available,
   otherwise one message, multiple Task calls - never one per turn). **Each component-scoped
   reviewer call writes its own findings pack directly**, to its own component-qualified path
-  (`artifacts/<slug>/data/findings-<slug>-<component>.jsonl`, e.g. `findings-<slug>-backend.jsonl`
+  (`VSIT/engagements/<slug>/data/findings-<slug>-<component>.jsonl`, e.g. `findings-<slug>-backend.jsonl`
   - never the shared canonical name), and returns only a short confirmation (finding counts +
   its own pack path), not its findings as prose text. This used to be the other way round
   ("returns findings as text, never writes directly") specifically to stop multiple calls
@@ -283,7 +283,7 @@ Grep with no `head_limit`, is redirected once with the cheap alternatives named;
 the same call proceeds. That mechanism exists because these rules were already written,
 copied verbatim into `code-reviewer.md`, and a live review still spent an estimated 25k
 tokens doing exactly what they forbid. Advisory tier: dormant sessions are untouched, and
-`read_nudge_lines: 0` in `.claude/team-preferences.json` opts a project out.
+`read_nudge_lines: 0` in `VSIT/config/preferences.json` opts a project out.
 
 Briefs remain the sharing mechanism: exploration results travel as file lists with
 one-line roles, so downstream agents read named files instead of re-searching

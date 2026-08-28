@@ -6,7 +6,7 @@ closing artifact** (Definition of Done).
 
 **Rules**
 - **Always saved as a `.txt` file in the engagement workspace** alongside the other
-  deliverables - `artifacts/<slug>/engagement-summary-<slug>.txt` (ADR-010). It is an email, so it is the **one artifact NOT
+  deliverables - `VSIT/engagements/<slug>/engagement-summary-<slug>.txt` (ADR-010). It is an email, so it is the **one artifact NOT
   rendered to HTML**.
 - **Signed off as Morgan** (PM & Orchestrator), in Morgan's warm, plain-speaking voice.
 - **Morgan is unmistakably an AI agent.** The From line and signature carry the 🤖 marker and the

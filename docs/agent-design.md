@@ -36,7 +36,7 @@
    its own pack directly, halving that cost - but a bare `Write` grant is a much bigger
    blast radius than "author one JSON file", so unlike the build agents' project-wide Write
    access, this grant is scoped to exactly one path pattern
-   (`artifacts/<slug>/data/findings-*.jsonl`) and **mechanically enforced**, not just
+   (`VSIT/engagements/<slug>/data/findings-*.jsonl`) and **mechanically enforced**, not just
    prompted: `guard-findings-pack-write.py` (a PreToolUse hook keyed on the `agent_type`
    field Claude Code provides for subagent tool calls) blocks any Write from these four
    agents that doesn't match that shape.

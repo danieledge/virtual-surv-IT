@@ -27,7 +27,7 @@ brief, and work outside that brief gets its own `init` (new slug) even in the sa
 
 ## One ACTIVE engagement per session
 
-The active slug is recorded ON DISK in `artifacts/.active-engagement.json`: written by `init`,
+The active slug is recorded ON DISK in `VSIT/engagements/.active-engagement.json`: written by `init`,
 switched with `set-active <slug>`, cleared at close. `list` marks it, so offer it as the default
 resume target rather than guessing. Name the active slug in your banner line and target its
 workspace in every state command (`--slug <slug>`).

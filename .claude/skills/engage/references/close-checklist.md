@@ -83,7 +83,7 @@ comments), and verify each against the FINAL state:
   `Draft`/`In review`. Set a closed status, or state explicitly "pending human sign-off" where
   the human act is the only gap (never leave the machinery contradicting the index).
 - **QA evidence retention** - independent QA test suites and evidence are PRESERVED under
-  `artifacts/` (file or content hash), never deleted: an independence claim with no surviving
+  `VSIT/engagements/` (file or content hash), never deleted: an independence claim with no surviving
   evidence is unfalsifiable. A 📊 measured tag needs a surviving artifact (output, log, cache) -
   downgrade to 🧠 inferred if nothing survives.
 
@@ -95,7 +95,7 @@ register, decisions, residual risk, SHA-256 manifest). Run it **after the delive
 summary email exist, before `finalise-artifacts`** so its manifest covers the finished pack:
 
 ```
-<python> -m scripts.render_evidence_room artifacts/<slug>
+<python> -m scripts.render_evidence_room VSIT/engagements/<slug>
 ```
 
 Allow-listed, so no consent prompt. It is **derived, never authored** - do not hand-write or
@@ -135,7 +135,7 @@ enough; no question, no pause, just narration so the user knows the map write is
 isn't a surprise entry in the diff.
 
 Before the engagement closes, **update the working project's codebase map**
-(`docs/codebase-map.md`; create from `docs/templates/codebase-map.md` on a first engagement):
+(`VSIT/shared/map.md`; create from `docs/templates/codebase-map.md` on a first engagement):
 **add** the **durable architecture** this engagement taught you about the code - how it is built,
 its load-bearing decisions, its quirks and sharp edges (with 📊/🧠 tags, as-of dates and fresh SHA
 anchors), **correct or deprecate** anything found wrong or stale (to the Deprecated section,
@@ -153,7 +153,7 @@ say so and check harder.
 
 ## Company extension close actions (ADR-009)
 
-If the working project carries `docs/team-extensions.md` with a **Close actions** section,
+If the working project carries `VSIT/config/extensions.md` with a **Close actions** section,
 offer each action via the question tool AFTER the summary email is written (they were
 previewed at the go-ahead gate). Outward-facing actions (raise a Jira, upload/publish the
 pack) run only on approval and only against the ✅ closed pack - never interim artifacts,

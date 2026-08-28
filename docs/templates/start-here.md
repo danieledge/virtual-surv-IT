@@ -1,7 +1,7 @@
 # START HERE - <ENGAGEMENT TITLE>
 
 > **Since v0.29 this file is GENERATED (ADR-006)** - the authoritative record is
-> the workspace's `artifacts/<slug>/engagement-state.json`, and `python -m scripts.engagement_state` renders this
+> the workspace's `VSIT/engagements/<slug>/engagement-state.json`, and `python -m scripts.engagement_state` renders this
 > index from it on every mutation (`init` / `set-status` / `add-artifact` / ...). Do not
 > hand-edit a generated index (`STATE-STALE-RENDER`); this template documents the render's
 > shape and remains the authoring guide for legacy/hand-maintained engagements only.

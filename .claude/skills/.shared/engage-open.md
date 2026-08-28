@@ -30,7 +30,7 @@ data, zero tool calls.
 
 **No injected block? Try the go-written probe cache next (2026-08-18, the corp fast
 path - the live probe can take minutes on corporate boxes):** Read the FILE
-`.claude/engage-probe.json` (one Read call, no shell). If it exists, its
+`VSIT/local/engage-probe.json` (one Read call, no shell). If it exists, its
 `computed_at` is recent (same day and plausibly within the hour - the hook applies the
 exact TTL and identity fingerprint mechanically; your direct read is the fallback, so be
 conservative) and nothing suggests the branch or plugin version moved since `computed_at`,
@@ -89,7 +89,7 @@ map with a `Paths` column; ADR-007 Phase 1, experimental, off by default), then,
 say so explicitly (that area's map entries are unverified, not `📊 observed`) instead of handing
 over the map's claims as settled fact; if the drift is central to what this engagement is about,
 consider offering `/map-codebase --refresh` before briefing rather than working from a known-stale
-map. (Root map only - `docs/codebase-map.d/` area files aren't covered by this open-time check,
+map. (Root map only - `VSIT/shared/map.d/` area files aren't covered by this open-time check,
 only by the full sweep at close.) `INTEGRATIONS=` appears ONLY when the project has opted into
 the first-class tracker/PR config (docs/INTEGRATIONS.md; off by default, absent line = all off,
 take no outward actions): when present, read
@@ -146,7 +146,7 @@ same tip either way, never a different message, never a missing-file note. Whene
 append the tip in the SAME line, never a separate line and never repeated later: *"(want Word
 copies too? just say so, or run the installer's Document format preferences menu)"*. This is a
 project preference, not a gate: no allow-list-style refusal, and Morgan may write
-`.claude/team-preferences.json` directly if the user says yes in conversation (no consent gate on
+`VSIT/config/preferences.json` directly if the user says yes in conversation (no consent gate on
 that file, unlike hooks/settings). **Same line, append citations**: from `REGULATORY_CITATIONS=`,
 *"regulatory citations on"* or *"off (project preference)"*.
 

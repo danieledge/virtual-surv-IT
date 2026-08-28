@@ -49,7 +49,7 @@ the workflow into the brief instead of asking the subagent to invoke it:
 
 **3. Scoreboard (console, clean).** One line per case: ✅/❌ · case · recall · score · any
 must-find-missed or traps. Then the headline: **N/total passed, mean recall, mean score**. Put the
-per-case detail in an artifact (`artifacts/evals/EVAL-<date>.md`, rendered to `.html` - a root lane, outside engagement workspaces), not a console wall.
+per-case detail in an artifact (`VSIT/engagements/evals/EVAL-<date>.md`, rendered to `.html` - a root lane, outside engagement workspaces), not a console wall.
 
 **4. Close - flag regressions, don't dead-end.** Call out any case that **fails or dropped vs a prior
 run** as a likely regression from a recent prompt change, with the specific miss (e.g. "review missed

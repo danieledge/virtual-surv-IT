@@ -24,7 +24,7 @@ at the end.
    invent an article/section/rule; mark unsupported pinpoints as to-verify (ADR-001).
    (`<python>`: the `INTERPRETER=` word the step-0 probe printed, verbatim, never re-probed; direct invocation and plugin-mode paths: `.claude/skills/.shared/run-mode.md`)
 4. List open questions for the PM to raise with the user.
-5. Save `artifacts/<slug>/BRD-<slug>.md` (the engagement workspace, ADR-010) and render: `<python> -m scripts.render_html artifacts/<slug>/BRD-<slug>.md`.
+5. Save `VSIT/engagements/<slug>/BRD-<slug>.md` (the engagement workspace, ADR-010) and render: `<python> -m scripts.render_html VSIT/engagements/<slug>/BRD-<slug>.md`.
 
 **Close - don't dead-end (CLAUDE.md §6).** Summarise the BRD (what it covers, the key
 requirements, any open questions for the user), then offer the next step with a

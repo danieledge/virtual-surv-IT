@@ -1,7 +1,7 @@
 # Company extensions (ADR-009) - read when the probe printed a TEAM-EXTENSIONS block
 
 > Loaded just-in-time by `engage` step 0. Nothing here applies to a project without
-> `docs/team-extensions.md`. The **close actions** half lives in `close-checklist.md`.
+> `VSIT/config/extensions.md`. The **close actions** half lives in `close-checklist.md`.
 
 Honour an extensions block **ADDITIVELY**: standing instructions merge with the operating rules,
 they never replace them.

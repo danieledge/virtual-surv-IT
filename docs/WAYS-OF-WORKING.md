@@ -74,11 +74,11 @@ that holds review, performance, compliance, QA evidence, handover and change/ops
 of a single file - easier to read and distribute than many separate documents. Ask for
 **separate artifacts** only when a control needs a standalone (e.g. a change request to attach
 to a ticket); the templates below are the building blocks. Everything is produced in **`.md`
-and `.html`** (via `scripts/render_html.py`). An optional third format, **`.docx`** (via `scripts/render_docx.py`, python-docx), is available for non-technical reviewers who redline in Word - opt-in per project (`.claude/team-preferences.json` - set by the installer's re-runnable "Document format preferences" menu option any time, or just tell Morgan to turn it on/off - the file carries no gate) or on request; `.md` stays the one authored source either way. The **one exception** to .md+.html is the engagement-summary
+and `.html`** (via `scripts/render_html.py`). An optional third format, **`.docx`** (via `scripts/render_docx.py`, python-docx), is available for non-technical reviewers who redline in Word - opt-in per project (`VSIT/config/preferences.json` - set by the installer's re-runnable "Document format preferences" menu option any time, or just tell Morgan to turn it on/off - the file carries no gate) or on request; `.md` stays the one authored source either way. The **one exception** to .md+.html is the engagement-summary
 email, which is an email and stays a `.txt` (see the last row).
 
 > **Where each artifact lives:** everything an engagement produces goes in its own workspace
-> `artifacts/<slug>/` (one placement rule, ADR-010); the full document-type address table is in
+> `VSIT/engagements/<slug>/` (one placement rule, ADR-010); the full document-type address table is in
 > `docs/team-operating-guide.md` ("Where every document lives").
 
 > **This catalogue is the canonical template index.** The skills reference their common domain
@@ -125,7 +125,7 @@ email, which is an email and stays a `.txt` (see the last row).
 | Tuning decision register | `tuning-decision-register.md` | **SR 11-7**/FFIEC model-change-management (running log) |
 | Control mapping | `control-mapping.md` | scenario -> obligation -> internal control -> effectiveness |
 | Data lineage | `data-lineage.md` | feed -> field -> transform -> scenario (+ RTS 25, reconciliation) |
-| **Engagement summary email** (always, at close) | `engagement-summary-email.md` | PM cover note - **`.txt` in the workspace `artifacts/<slug>/`**, signed as Morgan ("Hi," if recipient unknown) |
+| **Engagement summary email** (always, at close) | `engagement-summary-email.md` | PM cover note - **`.txt` in the workspace `VSIT/engagements/<slug>/`**, signed as Morgan ("Hi," if recipient unknown) |
 
 > **Generic vs domain-specific templates.** Some artifacts have a **generic** and a **domain**
 > variant - use the domain one when it applies, the generic one otherwise (they are *not*

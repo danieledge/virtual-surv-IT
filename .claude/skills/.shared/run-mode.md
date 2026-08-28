@@ -16,7 +16,7 @@ session.
   including in a skill entered later in the same session, and including after a compaction (a
   resumed engagement's `runtime.interpreter` in `engagement-state.json` holds the same word).
 - **Invoked directly, with no probe result in this session**: resolve once, then reuse. Prefer the
-  cached word in `.claude/.guard-interpreter` (written by the safety-guard hooks) when it exists
+  cached word in `VSIT/local/guard-interpreter` (written by the safety-guard hooks) when it exists
   and runs; otherwise try `python`, then `py`, then `python3` on Windows (`OS=Windows_NT`), and
   `python3`, then `python`, then `py` elsewhere. Windows commonly has no `python3` at all, and an
   unconditional `python3` attempt there can hang on the Microsoft Store alias stub.
@@ -43,8 +43,8 @@ flag that the template was unavailable.
 ## Reading team docs vs. writing the user's own deliverables - never the same root
 
 The rule above is about **reading** the team's own docs/templates/skills (`$PLUGIN_ROOT` in
-installed-plugin mode). **Writing `artifacts/...` is a completely different concern and never
-uses `$PLUGIN_ROOT`** - every deliverable (`artifacts/<slug>/...`, `engagement-state.json`,
+installed-plugin mode). **Writing `VSIT/engagements/...` is a completely different concern and never
+uses `$PLUGIN_ROOT`** - every deliverable (`VSIT/engagements/<slug>/...`, `engagement-state.json`,
 `START-HERE.md`, findings packs) is **always relative to the current working directory** - the
 user's actual project, whatever that is this session - **regardless of run mode.**
 
@@ -53,7 +53,7 @@ session):** with no `pwd`/shell to confirm the actual working directory, and hav
 successfully read team docs from an absolute path under `$PLUGIN_ROOT`, real deliverable files
 were written to that SAME absolute path instead of the working directory - landing inside the
 team's own plugin source tree rather than the user's project. The fix is mechanical, not
-judgement: **use a relative path (`artifacts/...`) for every deliverable write, always** - never
+judgement: **use a relative path (`VSIT/engagements/...`) for every deliverable write, always** - never
 an absolute path built from `$PLUGIN_ROOT`, and never an absolute path recycled from a team-doc
 `Read` call, no matter how confident the session is about its own location. A relative path
 resolves correctly against the real working directory by construction; an absolute path
