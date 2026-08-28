@@ -8248,3 +8248,54 @@ def test_a_real_cli_error_is_still_a_real_error():
     assert cli_unusable_reason("No such plugin: nonexistent") == ""
     assert cli_unusable_reason("marketplace already exists") == ""
     assert cli_unusable_reason("") == ""
+
+
+def test_a_broken_shim_on_PATH_no_longer_hides_a_working_install(tmp_path, monkeypatch):
+    """The fall-through the doubled-separator clue pointed at.
+
+    A package-manager shim survives the removal of the binary it points at. `which`
+    answers, so discovery reported a tick and stopped looking - and a perfectly good
+    native install one tier down was never tried. Existence was the only test being
+    applied, and existence is not the property that matters."""
+    import install_helper as ih
+
+    broken = tmp_path / "onpath" / "claude.cmd"
+    working = tmp_path / ".local" / "bin" / ("claude.exe" if sys.platform == "win32" else "claude")
+    for f in (broken, working):
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("", encoding="utf-8")
+
+    monkeypatch.setattr(ih.shutil, "which", lambda n: str(broken) if n == "claude" else None)
+    monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(ih, "_claude_via_npm_prefix", lambda: None)
+    monkeypatch.setattr(ih, "_windows_registry_path_dirs", lambda: [])
+    # No node/cli.js anywhere here, so argv resolution cannot take the node route and
+    # every candidate is judged on its own.
+    monkeypatch.setattr(ih, "node_launch_for", lambda resolved: None)
+
+    # find_claude still answers with the PATH hit - it reports where claude WAS FOUND.
+    monkeypatch.setattr(ih, "_claude_cache", None, raising=False)
+    assert ih.find_claude(refresh=True)[0] == str(broken)
+
+    # find_working_claude walks past it to the one that runs.
+    found, how = ih.find_working_claude(lambda argv: str(broken) not in " ".join(argv))
+    assert found == str(working)
+    assert how == "known-location"
+
+
+def test_a_verified_claude_beats_whatever_which_says(tmp_path, monkeypatch):
+    """Finding a working copy is no use if every later launch still resolves the broken
+    one. command_argv asked `which` first, unconditionally."""
+    import install_helper as ih
+
+    good = tmp_path / "good-claude"
+    good.write_text("", encoding="utf-8")
+    monkeypatch.setattr(ih.shutil, "which", lambda n: "/somewhere/broken/claude")
+    monkeypatch.setattr(ih, "node_launch_for", lambda resolved: None)
+    monkeypatch.setattr(ih, "_claude_verified", None, raising=False)
+    assert "broken" in " ".join(ih.command_argv("claude"))
+    try:
+        ih.remember_working_claude(good)
+        assert ih.command_argv("claude") == [str(good)]
+    finally:
+        ih.remember_working_claude(None)

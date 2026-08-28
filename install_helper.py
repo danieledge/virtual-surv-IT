@@ -965,62 +965,120 @@ def _claude_via_npm_prefix() -> Optional[str]:
 _claude_cache: Optional[tuple] = None  # memo for find_claude (registry reads once per run)
 
 
+# Set only by a caller that has launched a candidate and seen it work. Distinct from
+# _claude_cache, which records where claude WAS FOUND - a weaker claim, and the one that
+# turned out not to be enough.
+_claude_verified: Optional[str] = None
+
+
+def remember_working_claude(path) -> None:
+    """Pin the CLI that ran, so every later launch uses it."""
+    global _claude_verified, _claude_cache
+    _claude_verified = str(path) if path else None
+    if path:
+        _claude_cache = None  # force re-resolution against the verified path
+
+
+def _claude_candidates():
+    """Every place claude might be, best first, as (path, how) - lazily.
+
+    A GENERATOR because the later tiers cost real time on Windows (a registry PATH read,
+    an `npm prefix` subprocess) and are only worth paying for when the earlier ones did
+    not produce something that works. Callers that want one answer take the first;
+    callers that need a WORKING one keep pulling.
+
+    Splitting this out of find_claude is what makes falling through possible at all: a
+    PATH hit used to short-circuit the entire search, so a package-manager shim left
+    behind by a half-removed install hid a perfectly good native install sitting in the
+    next tier down (live report 2026-08-28). Never raises."""
+    seen = set()
+
+    def _offer(path, how):
+        key = str(path).lower()
+        if key in seen:
+            return None
+        seen.add(key)
+        return (str(path), how)
+
+    hit = shutil.which("claude")
+    if hit:
+        got = _offer(hit, "path")
+        if got:
+            yield got
+    home = Path.home()
+    if sys.platform == "win32":
+        names = ("claude.exe", "claude.cmd", "claude.bat")
+        candidates = [home / ".local" / "bin" / "claude.exe"]
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            npm_dir = Path(appdata) / "npm"
+            candidates += [npm_dir / n for n in ("claude.cmd", "claude.bat")]
+            # Seen on corporate devices: the npm shims are absent/blocked and only
+            # the package's own bin dir is reachable (npm\node_modules\...\bin).
+            pkg_bin = npm_dir / "node_modules" / "@anthropic-ai" / "claude-code" / "bin"
+            candidates += [pkg_bin / n for n in names]
+    else:
+        names = ("claude",)
+        candidates = [
+            home / ".local" / "bin" / "claude",
+            home / ".claude" / "local" / "claude",
+            home / ".npm-global" / "bin" / "claude",
+            Path("/usr/local/bin/claude"),
+            Path("/opt/homebrew/bin/claude"),
+        ]
+    for c in candidates:
+        if _is_file_safe(c):
+            got = _offer(c, "known-location")
+            if got:
+                yield got
+    npm_hit = _claude_via_npm_prefix()
+    if npm_hit:
+        got = _offer(npm_hit, "npm-prefix")
+        if got:
+            yield got
+    if sys.platform == "win32":
+        for d in _windows_registry_path_dirs():
+            found = next((p for n in names if (p := Path(d) / n) and _is_file_safe(p)), None)
+            if found:
+                got = _offer(found, "registry")
+                if got:
+                    yield got
+
+
 def find_claude(refresh: bool = False) -> tuple:
     """Locate the Claude CLI even when this session's PATH is stale.
 
     Returns (absolute_path_or_None, how) with how in "path" | "known-location" |
-    "registry" | "". Order: the live PATH, then the documented install locations
-    (native installer, npm global), then - Windows only - directories from a fresh
-    registry PATH read (catches 'installed a minute ago, terminal opened an hour
-    ago'). Never raises."""
+    "npm-prefix" | "registry" | "". The FIRST candidate, which is the live PATH when
+    there is one - existence only, no check that it runs. find_working_claude is the
+    one that verifies. Never raises."""
     global _claude_cache
     if _claude_cache is not None and not refresh:
         return _claude_cache
-    result: tuple = (None, "")
-    hit = shutil.which("claude")
-    if hit:
-        result = (hit, "path")
-    else:
-        home = Path.home()
-        if sys.platform == "win32":
-            names = ("claude.exe", "claude.cmd", "claude.bat")
-            candidates = [home / ".local" / "bin" / "claude.exe"]
-            appdata = os.environ.get("APPDATA")
-            if appdata:
-                npm_dir = Path(appdata) / "npm"
-                candidates += [npm_dir / n for n in ("claude.cmd", "claude.bat")]
-                # Seen on corporate devices: the npm shims are absent/blocked and only
-                # the package's own bin dir is reachable (npm\node_modules\...\bin).
-                pkg_bin = npm_dir / "node_modules" / "@anthropic-ai" / "claude-code" / "bin"
-                candidates += [pkg_bin / n for n in names]
-        else:
-            names = ("claude",)
-            candidates = [
-                home / ".local" / "bin" / "claude",
-                home / ".claude" / "local" / "claude",
-                home / ".npm-global" / "bin" / "claude",
-                Path("/usr/local/bin/claude"),
-                Path("/opt/homebrew/bin/claude"),
-            ]
-        for c in candidates:
-            try:
-                if c.is_file():
-                    result = (str(c), "known-location")
-                    break
-            except OSError:
-                continue
-        if result[0] is None:
-            npm_hit = _claude_via_npm_prefix()
-            if npm_hit:
-                result = (npm_hit, "npm-prefix")
-        if result[0] is None and sys.platform == "win32":
-            for d in _windows_registry_path_dirs():
-                found = next((p for n in names if (p := Path(d) / n) and _is_file_safe(p)), None)
-                if found:
-                    result = (str(found), "registry")
-                    break
-    _claude_cache = result
-    return result
+    _claude_cache = next(_claude_candidates(), (None, ""))
+    return _claude_cache
+
+
+def find_working_claude(probe) -> tuple:
+    """The first candidate that actually RUNS, as (path, how) - (None, "") if none do.
+
+    `probe` takes an argv and returns True when it worked, so the caller owns the
+    subprocess policy (timeouts, capture) and this stays testable without launching
+    anything.
+
+    Existence is not the test that matters. A package-manager shim survives the removal
+    of the binary it points at, so `which` answers, discovery reports a tick, and the
+    first real call fails - the shim's own `%~dp0\...` line reaching a file that is no
+    longer there (which is why the failing path in the report carried a doubled
+    separator: %~dp0 already ends in one). Walking on to the next candidate turns that
+    from a dead end into a different install being used."""
+    for path, how in _claude_candidates():
+        try:
+            if probe(command_argv("claude", resolved=path)):
+                return (path, how)
+        except Exception:
+            continue
+    return (None, "")
 
 
 def _is_file_safe(p: Path) -> bool:
@@ -1099,9 +1157,15 @@ def command_argv(name: str, resolved: Optional[str] = None) -> list:
     executables) the resolved absolute path is used directly. `claude` gets the
     find_claude fallback so a stale corporate PATH still launches it by full path."""
     if resolved is None:
-        resolved = shutil.which(name)
-        if resolved is None and name == "claude":
-            resolved = find_claude()[0]
+        if name == "claude" and _claude_verified:
+            # A candidate the preflight actually RAN beats whatever `which` answers.
+            # Without this, a broken shim on PATH keeps winning even after a working
+            # install has been found further down the list (2026-08-28).
+            resolved = _claude_verified
+        else:
+            resolved = shutil.which(name)
+            if resolved is None and name == "claude":
+                resolved = find_claude()[0]
         resolved = resolved or name
     if name == "claude" or str(resolved).lower().endswith((".cmd", ".bat", ".js")):
         # Prefer node + cli.js for npm layouts: no cmd.exe, no executable under
@@ -1689,19 +1753,26 @@ class Installer:
         # still change the plan, instead of three steps later where it read as an error.
         self.cli_runs = True
         if claude_path:
-            try:
-                probe = run_cmd(["claude", "--version"], timeout=60)
-            except OSError as exc:
-                self.cli_runs = False
-                self.step_skip("claude CLI runnable", f"could not be launched: {exc}")
-            else:
-                if probe.returncode != 0:
-                    detail = (probe.stderr.strip() or probe.stdout.strip() or "").splitlines()
+            first = self._claude_version_error(["claude", "--version"])
+            if first:
+                # The one on PATH does not run. Before concluding the CLI is unusable,
+                # try the OTHER places it installs to - a leftover shim on PATH hides a
+                # working install in the next tier down, and existence was all discovery
+                # ever checked (2026-08-28).
+                better, how = find_working_claude(
+                    lambda argv: not self._claude_version_error(argv + ["--version"])
+                )
+                if better:
+                    remember_working_claude(better)
+                    self.step_ok(
+                        f"claude CLI runnable at {better}",
+                        f"the one on PATH does not run; using this {how} copy instead",
+                    )
+                else:
                     self.cli_runs = False
                     self.step_skip(
                         "claude CLI runnable",
-                        (detail[0] if detail else "it did not run")
-                        + " - registering the plugin directly instead",
+                        f"{first} - registering the plugin directly instead",
                     )
         try:
             proc = run_cmd(["git", "ls-remote", "--heads", REPO_URL, "main"], timeout=30)
@@ -2499,6 +2570,18 @@ class Installer:
             return run_cmd([sys.executable, "-c", probe], timeout=120).returncode == 0
         except Exception:
             return False
+
+    def _claude_version_error(self, argv) -> str:
+        """ "" if this argv runs, otherwise one line saying why not. Never raises: an
+        unlaunchable CLI is a fact to route on, not an exception to escape through."""
+        try:
+            proc = run_cmd(argv, timeout=60)
+        except OSError as exc:
+            return f"could not be launched: {exc}"
+        if proc.returncode == 0:
+            return ""
+        lines = (proc.stderr.strip() or proc.stdout.strip() or "").splitlines()
+        return lines[0] if lines else "it did not run"
 
     def say_claude_launch_trace(self) -> None:
         """One dim line naming exactly how claude is being launched - the difference
