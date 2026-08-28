@@ -8299,3 +8299,60 @@ def test_a_verified_claude_beats_whatever_which_says(tmp_path, monkeypatch):
         assert ih.command_argv("claude") == [str(good)]
     finally:
         ih.remember_working_claude(None)
+
+
+def test_a_path_the_user_gives_is_only_accepted_once_it_RUNS(tmp_path, monkeypatch, capsys):
+    """Asking is the right last resort; believing the answer is not.
+
+    Accepting a typed path on trust would rebuild the exact defect this whole path exists
+    to fix - a claude that is present and does not work - one prompt further along. So the
+    prompt probes what it is given, and a path that does not run is refused with the
+    reason, not stored."""
+    import install_helper as ih
+
+    dud = tmp_path / "claude"
+    dud.write_text("", encoding="utf-8")
+    monkeypatch.setattr(ih, "config_path", lambda: tmp_path / "installer.json")
+    monkeypatch.setattr(ih, "node_launch_for", lambda resolved: None)
+    monkeypatch.setattr(ih.sys.stdin, "isatty", lambda: True, raising=False)
+    monkeypatch.setattr("builtins.input", lambda prompt="": str(dud))
+
+    inst = ih.Installer(_args(), ih.Style(False), ih.marks())
+    monkeypatch.setattr(inst, "_claude_version_error", lambda argv: "it did not run")
+    assert inst._ask_for_claude_path("nothing ran") == ""
+    assert "does not run either" in capsys.readouterr().out
+    assert not (tmp_path / "installer.json").exists(), "a path that failed must not be stored"
+
+
+def test_a_working_path_is_stored_so_it_is_asked_once(tmp_path, monkeypatch):
+    """Same contract as the `virt-surv go` launch command it mirrors: asked once, then
+    silent. A question re-asked every run is a question that gets answered wrongly."""
+    import install_helper as ih
+
+    good = tmp_path / "claude"
+    good.write_text("", encoding="utf-8")
+    monkeypatch.setattr(ih, "config_path", lambda: tmp_path / "installer.json")
+    monkeypatch.setattr(ih, "node_launch_for", lambda resolved: None)
+    monkeypatch.setattr(ih.sys.stdin, "isatty", lambda: True, raising=False)
+    monkeypatch.setattr("builtins.input", lambda prompt="": str(good))
+
+    inst = ih.Installer(_args(), ih.Style(False), ih.marks())
+    monkeypatch.setattr(inst, "_claude_version_error", lambda argv: "")
+    assert inst._ask_for_claude_path("nothing ran") == str(good)
+    stored = json.loads((tmp_path / "installer.json").read_text())
+    assert stored[ih._CLAUDE_CLI_PATH_KEY] == str(good)
+
+    # Second run: no prompt at all - input() would raise if it were called.
+    monkeypatch.setattr("builtins.input", lambda prompt="": (_ for _ in ()).throw(AssertionError))
+    assert inst._ask_for_claude_path("nothing ran") == str(good)
+
+
+def test_the_question_is_never_asked_when_nobody_can_answer_it(tmp_path, monkeypatch):
+    """Direct registration completes the install without the CLI, so an unanswerable
+    question must never be the thing that stops a --yes or piped run."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "config_path", lambda: tmp_path / "installer.json")
+    monkeypatch.setattr("builtins.input", lambda prompt="": (_ for _ in ()).throw(AssertionError))
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    assert inst._ask_for_claude_path("nothing ran") == ""

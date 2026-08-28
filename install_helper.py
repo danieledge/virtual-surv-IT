@@ -1769,11 +1769,16 @@ class Installer:
                         f"the one on PATH does not run; using this {how} copy instead",
                     )
                 else:
-                    self.cli_runs = False
-                    self.step_skip(
-                        "claude CLI runnable",
-                        f"{first} - registering the plugin directly instead",
-                    )
+                    asked = self._ask_for_claude_path(first)
+                    if asked:
+                        remember_working_claude(asked)
+                        self.step_ok(f"claude CLI runnable at {asked}", "as you told me")
+                    else:
+                        self.cli_runs = False
+                        self.step_skip(
+                            "claude CLI runnable",
+                            f"{first} - registering the plugin directly instead",
+                        )
         try:
             proc = run_cmd(["git", "ls-remote", "--heads", REPO_URL, "main"], timeout=30)
             if proc.returncode == 0:
@@ -2570,6 +2575,53 @@ class Installer:
             return run_cmd([sys.executable, "-c", probe], timeout=120).returncode == 0
         except Exception:
             return False
+
+    def _ask_for_claude_path(self, why: str) -> str:
+        """Ask where the CLI is, when every place we know to look failed to produce one
+        that runs. Returns a VERIFIED path, or "" to carry on without the CLI.
+
+        Asked once and stored (installer.json), the same contract as the `virt-surv go`
+        launch command: a corporate image can put the CLI somewhere no amount of
+        searching would guess, and the human knows where it is. But a path is only
+        accepted once it has RUN - taking someone's word for it would rebuild the exact
+        bug this whole path exists to fix, one prompt further along.
+
+        Silent on a non-interactive run: direct registration completes the install
+        anyway, so an unanswerable question must never be the thing that stops it."""
+        cfg = load_config(config_path())
+        stored = cfg.get(_CLAUDE_CLI_PATH_KEY)
+        if (
+            isinstance(stored, str)
+            and stored
+            and not self._claude_version_error(
+                command_argv("claude", resolved=stored) + ["--version"]
+            )
+        ):
+            return stored
+        if self.demo or getattr(self.args, "yes", False) or not sys.stdin.isatty():
+            return ""
+        self.say(self.style.dim(f"    ({why})"))
+        self.say(
+            self.style.dim(
+                "    I looked on PATH and in the usual install locations. If you know where"
+                " the Claude Code CLI is on this machine, give me the full path - otherwise"
+                " press Enter and I will register the plugin directly, which works too."
+            )
+        )
+        given = ask("  Full path to the claude CLI", "", False, style=self.style).strip()
+        given = given.strip('"').strip("'")
+        if not given:
+            return ""
+        if not _is_file_safe(Path(given)):
+            self.say(self.style.yellow(f"    no file there: {given}"))
+            return ""
+        problem = self._claude_version_error(command_argv("claude", resolved=given) + ["--version"])
+        if problem:
+            self.say(self.style.yellow(f"    that one does not run either: {problem}"))
+            return ""
+        cfg[_CLAUDE_CLI_PATH_KEY] = given
+        save_config(config_path(), cfg)
+        return given
 
     def _claude_version_error(self, argv) -> str:
         """ "" if this argv runs, otherwise one line saying why not. Never raises: an
@@ -5652,6 +5704,10 @@ def run_setup_alias(
 
 
 _CLAUDE_LAUNCH_CMD_KEY = "claude_launch_command"
+# Where the human told us the CLI actually is, when nothing we search could run one.
+# Distinct from claude_launch_command, which is what `virt-surv go` execs to start an
+# interactive session and may be a shell alias that is not a path at all.
+_CLAUDE_CLI_PATH_KEY = "claude_cli_path"
 
 
 _GITBASH_PERF_MARKER = "# --gitbash-perf: Claude Code completion unload v1"
