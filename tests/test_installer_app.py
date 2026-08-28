@@ -122,7 +122,7 @@ def test_a_destructive_option_says_so_before_the_keypress(ptk):
     marker is on the ROW, not only in the pane: someone arrowing quickly past should not
     have to read to notice."""
     _chosen, rendered = _run(ptk, "\x1b[B\x1b[B\r")
-    assert "DELETES cached plugin copies" in rendered
+    assert "Deletes cached plugin copies" in rendered
     assert "writes outside this project" in rendered  # the legend explains the marker
 
 
@@ -138,7 +138,11 @@ def test_the_write_marker_is_not_the_off_marker(ptk):
     # have been "fixed" by deleting it.
     chooser = source[source.index("def chooser_screen(") : source.index("def grid_screen(")]
     assert "g['off']" not in chooser and 'g["off"]' not in chooser
-    assert installer_app._WRITES["cleanplugincache"].startswith("DELETES")
+    assert installer_app._marker_kind(installer_app._WRITES["cleanplugincache"]) == "deletes"
+    # And a read-only row carries no write marker at all - otherwise the marker means
+    # nothing on a screen where most rows have one.
+    assert installer_app._marker_kind("reads only - explains the plugin") == ""
+    assert installer_app._marker_kind("opens a submenu; each item states its own") == ""
 
 
 def test_it_returns_None_rather_than_starting_an_app_without_a_terminal(monkeypatch):
@@ -180,3 +184,54 @@ def test_the_host_probes_the_stream_the_chrome_actually_draws_on():
     finally:
         ih._can_encode = original
     assert asked == [sys.stderr], f"probed {asked}, but the chrome draws on stderr"
+
+
+def test_a_rows_consequence_comes_from_ITS_menus_table_not_a_guess(ptk):
+    """Key "1" is a full install at the top level, environment-setup-only under Advanced,
+    and check-for-updates under Diagnostics. _writes used to scan the three tables in a
+    fixed order and take the first hit, so the most prominent option on the most-seen
+    screen showed the consequence of a different action entirely (seen on screen,
+    2026-08-28)."""
+    import install_helper as ih
+    import installer_app
+
+    top = installer_app._writes("1", ih, ih.MENU_ACTIONS)
+    advanced = installer_app._writes("1", ih, ih._ADVANCED_ACTIONS)
+    assert top != advanced, "the same key in two menus must not share one consequence"
+    assert "registers the plugin" in top
+    assert "installs requirements" in advanced
+
+
+def test_the_top_level_menu_goes_through_the_picker_too(monkeypatch, tmp_path):
+    """The submenus were wired first, which left the one screen everybody sees on every
+    run exactly as it was - so the change was invisible unless you went three levels deep
+    (owner report: "the menu system still feels ugly")."""
+    for extra in (REPO_ROOT / "scripts", REPO_ROOT):
+        if str(extra) not in sys.path:
+            sys.path.insert(0, str(extra))
+    import install_helper as ih
+
+    seen = {}
+
+    def _fake(style, title, options, actions):
+        seen["title"] = title
+        seen["actions"] = actions
+        return "q"
+
+    monkeypatch.setattr(ih, "_submenu_screen", _fake)
+    assert ih.choose_action(ih.Style(False)) == "quit"
+    assert seen["title"] == "What can I do for you?"
+    assert seen["actions"] is ih.MENU_ACTIONS, "the top menu must pass its OWN table"
+
+
+def test_escape_at_the_top_level_quits_rather_than_installing(monkeypatch):
+    """Blank-is-a-full-install is a fine default for a typed prompt, where the keypress is
+    deliberate. It is a bad one for a full-screen app, where Esc is how people leave - and
+    would start a thirteen-step install for someone trying to back out of one."""
+    for extra in (REPO_ROOT / "scripts", REPO_ROOT):
+        if str(extra) not in sys.path:
+            sys.path.insert(0, str(extra))
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "_submenu_screen", lambda *a, **k: "")  # Esc
+    assert ih.choose_action(ih.Style(False)) == "quit"

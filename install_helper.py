@@ -1537,7 +1537,16 @@ def _submenu_screen(style: Style, title: str, options: tuple, actions: dict):
         installer_app = _import_from_scripts("installer_app")
         if installer_app is None:
             return None
-        return installer_app.chooser_screen(options, _this_module(), title=title, repo=_repo_hint())
+        return installer_app.chooser_screen(
+            options,
+            _this_module(),
+            title=title,
+            # The caller's OWN table, never guessed: the same key means different things
+            # in different menus, and guessing showed the wrong consequence for the most
+            # prominent option on the most-seen screen (2026-08-28).
+            actions=actions,
+            repo=_repo_hint(),
+        )
     except Exception:
         return None
 
@@ -1640,24 +1649,45 @@ def choose_action(style: Style) -> str:
             ("u", "Update only (quick - new code + plugin, keeps every setting)"),
             ("q", "Quit"),
         )
-        for key, text in options:
-            print(f"  {s.cyan(key + ')')} {text}")
-        # Redraws the menu on entering/re-entering this loop (fresh session, or back from
-        # a submenu) but NOT on a simple invalid keystroke - an inner retry loop just
-        # re-asks (2026-08-04 user request: "don't reprint entire menu, just the item
-        # that the user is on"), matching how _choose_submenu already behaved.
-        while True:
-            try:
-                answer = input(f"{s.cyan('  What shall it be?')} {s.bold('[1]')}: ").strip().lower()
-            except EOFError:
-                return "full"
-            if not answer:
-                return "full"
-            if answer in MENU_ACTIONS:
-                break
-            # Derived, not typed out: "u" (update) is a real key and was missing from
-            # this line, so the one option a user most needs to find was named nowhere.
-            print(f"  {_menu_key_hint()}, please.")
+        # THE TOP-LEVEL MENU GOES THROUGH THE PICKER TOO (2026-08-28). The submenus were
+        # wired to it first, which left the one screen everybody sees on every run - the
+        # first impression of the whole product - exactly as it was. The change was
+        # invisible unless you went three levels deep. Owner report: "the menu system
+        # still feels ugly", and it was right.
+        #
+        # It only supplies the ANSWER. Everything below - the diagnostics and advanced
+        # submenus, looping back on "back" - is the code that was already here, so the two
+        # tiers cannot disagree about what a key does.
+        picked = _submenu_screen(style, "What can I do for you?", options, MENU_ACTIONS)
+        if picked is not None:
+            # Esc means quit, not "full run". Blank-is-a-full-install is a fine default
+            # for a typed prompt, where the keypress is deliberate. It is a bad one for a
+            # full-screen app, where Esc is how people leave a screen - and would start a
+            # thirteen-step install for someone trying to back out of one.
+            if not picked:
+                return "quit"
+            answer = picked
+        else:
+            for key, text in options:
+                print(f"  {s.cyan(key + ')')} {text}")
+            # Redraws the menu on entering/re-entering this loop (fresh session, or back
+            # from a submenu) but NOT on a simple invalid keystroke - an inner retry loop
+            # just re-asks (2026-08-04 user request: "don't reprint entire menu, just the
+            # item that the user is on"), matching how _choose_submenu already behaved.
+            while True:
+                try:
+                    answer = (
+                        input(f"{s.cyan('  What shall it be?')} {s.bold('[1]')}: ").strip().lower()
+                    )
+                except EOFError:
+                    return "full"
+                if not answer:
+                    return "full"
+                if answer in MENU_ACTIONS:
+                    break
+                # Derived, not typed out: "u" (update) is a real key and was missing from
+                # this line, so the one option a user most needs to find was named nowhere.
+                print(f"  {_menu_key_hint()}, please.")
         action = MENU_ACTIONS[answer]
         if action == "diagnostics":
             resolved = _choose_submenu(

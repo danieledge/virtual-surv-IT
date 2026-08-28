@@ -104,18 +104,24 @@ def _wrap(text: str, width: int = 30, indent: str = "  ") -> str:
     return "\n".join(out)
 
 
-def _rows(options, ih):
+def _rows(options, ih, actions=None):
     """[(key, label, blurb, writes)] from the menu tables install_helper already has.
 
     The tables carry `key, text` where text is "label (explanation)". Split on the first
     " (" so the label stays short enough for a column and the explanation goes to the
-    pane - which is the whole point of having a pane."""
+    pane - which is the whole point of having a pane.
+
+    `actions` is the caller's OWN key->action mapping and matters more than it looks: the
+    same key means different things in different menus ("1" is a full install at the top
+    level, environment-setup-only under Advanced, check-for-updates under Diagnostics).
+    Guessing which table a key belongs to showed the wrong consequence for the most
+    prominent option on the most-seen screen (found on screen, 2026-08-28)."""
     out = []
     for key, text in options:
         if not key:  # a divider row in the source table
             continue
         label, _, blurb = text.partition(" (")
-        out.append((key, label.strip(), blurb.rstrip(")").strip(), _writes(key, ih)))
+        out.append((key, label.strip(), blurb.rstrip(")").strip(), _writes(key, ih, actions)))
     return out
 
 
@@ -130,25 +136,58 @@ _WRITES = {
     "machinedefaults": "writes this machine's installer.json",
     "fixbashrc": "edits your shell startup file",
     "aliasmanage": "edits your shell startup file",
-    "cleanplugincache": "DELETES cached plugin copies from ~/.claude",
+    "cleanplugincache": "Deletes cached plugin copies from the user Claude directory",
     "relocate": "moves files in the working project",
     "codeintel": "installs a Python package",
     "setup": "installs requirements and may write ~/.claude",
     "extensions": "writes this machine's org extensions file",
+    # Top-level actions. They had no notes at all while only the submenus used this
+    # screen, which made the one menu everybody sees the least informative of the three.
+    "full": "installs dependencies, updates the clone, and registers the plugin",
+    "configure": "writes settings into the project you choose",
+    "update": "pulls new code and refreshes the plugin; keeps every setting",
+    "howto": "reads only - explains the plugin, changes nothing",
+    "diagnostics": "reads only, except the two prototype items that start a daemon",
+    "advanced": "opens a submenu; each item states its own consequence",
+    "quit": "",
 }
 
 
-def _writes(key: str, ih) -> str:
+def _writes(key: str, ih, actions=None) -> str:
+    """The consequence note for one row, resolved through the caller's own action table.
+
+    The fallback scan is only for a caller that did not pass one, and it is a guess: keys
+    collide across the three menus, so it can and did answer for the wrong action."""
     action = None
-    for table in ("_ADVANCED_ACTIONS", "MENU_ACTIONS", "_DIAGNOSTICS_ACTIONS"):
-        mapping = getattr(ih, table, None)
-        if isinstance(mapping, dict) and key in mapping:
-            action = mapping[key]
-            break
+    if isinstance(actions, dict) and key in actions:
+        action = actions[key]
+    else:
+        for table in ("MENU_ACTIONS", "_ADVANCED_ACTIONS", "_DIAGNOSTICS_ACTIONS"):
+            mapping = getattr(ih, table, None)
+            if isinstance(mapping, dict) and key in mapping:
+                action = mapping[key]
+                break
     return _WRITES.get(action or "", "")
 
 
-def chooser_screen(options, ih, *, title: str, repo: Path | None = None, output=None):
+def _marker_kind(note: str) -> str:
+    """ "deletes", "writes", or "" - what to put beside the row.
+
+    Driven off the note rather than a second table, so a note and its marker cannot
+    disagree. A note that opens with "reads only" or "opens a submenu" describes something
+    that changes nothing here, and marking it as a write would make the marker meaningless
+    on the screen where most rows carry one."""
+    lowered = (note or "").lower()
+    if not note:
+        return ""
+    if lowered.startswith("deletes"):
+        return "deletes"
+    if lowered.startswith(("reads only", "opens a submenu")):
+        return ""
+    return "writes"
+
+
+def chooser_screen(options, ih, *, title: str, actions=None, repo: Path | None = None, output=None):
     """One menu as a full-screen picker. Returns the chosen key, "" for back/Esc, or
     **None when the screen could not run at all** - the caller then prints its numbered
     menu exactly as before.
@@ -171,7 +210,7 @@ def chooser_screen(options, ih, *, title: str, repo: Path | None = None, output=
             return None
 
     host = InstallerHost(ih, repo)
-    rows = _rows(options, ih)
+    rows = _rows(options, ih, actions)
     if not rows:
         return None
     g = chrome.glyphs(host)
@@ -194,12 +233,13 @@ def chooser_screen(options, ih, *, title: str, repo: Path | None = None, output=
             # The consequence marker rides on the ROW, not only in the pane: someone
             # arrowing quickly past a destructive option should not have to read to
             # notice it.
+            kind = _marker_kind(writes)
             mark = ""
-            if writes.startswith("DELETES"):
+            if kind == "deletes":
                 mark = f"  {mark_deletes}"
-            elif writes:
+            elif kind == "writes":
                 mark = f"  {mark_writes}"
-            out.append(("class:warn" if writes.startswith("DELETES") else "class:dim", mark))
+            out.append(("class:warn" if kind == "deletes" else "class:dim", mark))
             out.append(("", "\n"))
         return out
 
@@ -209,18 +249,19 @@ def chooser_screen(options, ih, *, title: str, repo: Path | None = None, output=
         if blurb:
             out.append(("class:dim", _wrap(blurb) + "\n\n"))
         if writes:
-            style = "class:warn" if writes.startswith("DELETES") else "class:dim"
+            style = "class:warn" if _marker_kind(writes) == "deletes" else "class:dim"
             out.append((style, _wrap(writes) + "\n"))
         else:
             out.append(("class:dim", _wrap("Nothing outside this project.") + "\n"))
         return out
 
     def _footer():
+        kinds = {_marker_kind(w) for _k, _l, _b, w in rows}
         legend = ""
-        if any(w for _k, _l, _b, w in rows):
+        if "writes" in kinds:
             legend = f"   {mark_writes} writes outside this project"
-            if any(w.startswith("DELETES") for _k, _l, _b, w in rows):
-                legend += f" · {mark_deletes} deletes"
+        if "deletes" in kinds:
+            legend += f"{' · ' if legend else '   '}{mark_deletes} deletes"
         return [
             (
                 "class:hint",
