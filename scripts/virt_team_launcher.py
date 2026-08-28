@@ -3122,6 +3122,47 @@ def _brand_banner_lines() -> list:
         return []
 
 
+def _progress(label: str) -> None:
+    """One overwritable status line on stderr while `go` warms its caches.
+
+    WHY (2026-08-28 owner report). The banner and the defaults table print instantly, then
+    FIVE steps run in silence before the menu appears - the probe cache, the tool inventory,
+    the interpreter prewarm and two smaller ones. On this box that is imperceptible because
+    every cache is warm. On a corporate Windows box with a cold cache it is the slow part of
+    the whole launch: run_tool_probe alone spawns ~17 processes, each AV-scanned, and the
+    probe cache exists precisely because that work "takes minutes per in-session probe".
+    So the user got a finished-looking screen and then a dead terminal, with nothing saying
+    the launcher was still working.
+
+    Carriage return, not a newline, so the line is REPLACED rather than accumulating a log
+    nobody asked for. stderr only - stdout carries the launch decision and must stay clean,
+    a rule this file already enforces everywhere else.
+
+    Silent when stderr is not a tty: \r into a pipe or a CI log produces one unreadable
+    smeared line, and the tests that capture this output would have to strip it."""
+    try:
+        if not sys.stderr.isatty():
+            return
+        sys.stderr.write("\r  " + label.ljust(_PROGRESS_WIDTH)[:_PROGRESS_WIDTH])
+        sys.stderr.flush()
+    except Exception:
+        pass  # cosmetic tier: a progress line must never cost a launch
+
+
+def _progress_done() -> None:
+    """Wipe the status line, leaving the cursor where the menu will start."""
+    try:
+        if not sys.stderr.isatty():
+            return
+        sys.stderr.write("\r" + " " * (_PROGRESS_WIDTH + 2) + "\r")
+        sys.stderr.flush()
+    except Exception:
+        pass
+
+
+_PROGRESS_WIDTH = 58
+
+
 def _print_banner(project_dir: Path) -> None:
     """The header: brand banner, then one dim identity line (project · version · branch).
 
@@ -3895,26 +3936,32 @@ def main() -> int:
     except Exception:
         pass  # never let gate hygiene cost a launch
     try:
+        _progress("remembering this project...")
         _remember_project(project_dir)  # feeds the explorer's recent list
     except Exception:
         pass  # machine config is advisory - never costs a launch
     try:
+        _progress("warming the guard interpreter...")
         _prewarm_guard_interpreter(project_dir)
     except Exception:
         pass
     try:
+        _progress("clearing any stale request...")
         _clear_request_handoff(project_dir)  # never carry a previous go's request forward
     except Exception:
         pass
     try:
+        _progress("pre-computing the engagement probe...")
         _write_probe_cache(project_dir)
     except Exception:
         pass
     try:
+        _progress("checking installed tools...")
         _refresh_tool_cache(project_dir)
     except Exception:
         pass  # belt-and-braces, same as _refresh_tool_cache's own internal try/except -
         # a failure here must cost only the cache refresh, never the resume decision below.
+    _progress_done()
     try:
         decision = _resume_decision(project_dir)
     except Exception:

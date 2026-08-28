@@ -1508,3 +1508,86 @@ def test_a_clean_tree_says_nothing(tmp_path, monkeypatch):
 
     monkeypatch.setattr(mod.subprocess, "run", _fake)
     assert mod._suggestion_line(tmp_path, {"shown": []}) == ""
+
+
+def test_progress_is_silent_when_stderr_is_not_a_tty(monkeypatch, capsys):
+    """A \\r into a pipe or a CI log produces one unreadable smeared line, and every test
+    that captures this launcher's stderr would have to strip it."""
+    mod = _load()
+    monkeypatch.setattr(mod.sys.stderr, "isatty", lambda: False, raising=False)
+    mod._progress("doing a slow thing...")
+    mod._progress_done()
+    assert capsys.readouterr().err == ""
+
+
+def test_progress_overwrites_rather_than_accumulating(monkeypatch):
+    """Live report: "there's text displayed before it's done - needs a loading / progress."
+    The banner and defaults table print instantly, then five cache-warming steps run in
+    silence; on a corporate box run_tool_probe alone spawns ~17 AV-scanned processes, so
+    the user got a finished-looking screen and a dead terminal.
+
+    Carriage return, not newline: the point is one replaced line, not a log nobody asked
+    for."""
+    mod = _load()
+    written = []
+
+    class _Tty:
+        @staticmethod
+        def isatty():
+            return True
+
+        @staticmethod
+        def write(text):
+            written.append(text)
+
+        @staticmethod
+        def flush():
+            return None
+
+    monkeypatch.setattr(mod.sys, "stderr", _Tty)
+    mod._progress("first step...")
+    mod._progress("second step...")
+    joined = "".join(written)
+    assert joined.count("\n") == 0, "progress must not accumulate lines"
+    assert joined.count("\r") == 2, "each update replaces the previous one"
+    assert "first step" in joined and "second step" in joined
+
+
+def test_progress_done_wipes_the_line(monkeypatch):
+    """The menu starts where the status line was, so it must be cleared - not just
+    overwritten by something shorter, which would leave the tail of the old label."""
+    mod = _load()
+    written = []
+
+    class _Tty:
+        @staticmethod
+        def isatty():
+            return True
+
+        @staticmethod
+        def write(text):
+            written.append(text)
+
+        @staticmethod
+        def flush():
+            return None
+
+    monkeypatch.setattr(mod.sys, "stderr", _Tty)
+    mod._progress("a rather long status label that must be fully erased...")
+    mod._progress_done()
+    assert written[-1].strip() == "", "the final write must leave the line blank"
+    assert written[-1].startswith("\r") and written[-1].endswith("\r")
+
+
+def test_the_slow_steps_all_announce_themselves():
+    """A silent step is the bug. If a cache-warming call is added later without a label,
+    this fails and says so."""
+    source = (REPO_ROOT / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
+    for call in (
+        "_write_probe_cache(project_dir)",
+        "_refresh_tool_cache(project_dir)",
+        "_prewarm_guard_interpreter(project_dir)",
+    ):
+        index = source.index(call)
+        preceding = source[max(0, index - 200) : index]
+        assert "_progress(" in preceding, f"{call} runs without telling the user"
