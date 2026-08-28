@@ -210,7 +210,7 @@ def read_tool_probe(project: Path) -> dict | None:
     check-review-tools.sh) - a plain-text report, parsed defensively by regex against its
     own known header lines rather than assuming a stricter format. None when no cache
     exists yet (never probed) - distinct from a 0/N cache, which means probed-and-empty."""
-    p = project / ".claude" / ".tool-availability"
+    p = _vsit_paths().local_file("tool_availability", project)
     try:
         text = p.read_text(encoding="utf-8", errors="replace")
         age_days = (_dt.datetime.now().timestamp() - p.stat().st_mtime) / 86400

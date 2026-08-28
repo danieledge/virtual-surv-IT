@@ -106,7 +106,7 @@ def _read_cache(project_dir: Path) -> str:
     cache degrades to the cold-cache path (no injected block, live probe runs normally)
     instead of poisoning the open."""
     try:
-        raw = (project_dir / ".claude" / ".guard-interpreter").read_text(encoding="utf-8")
+        raw = _vsit_paths().local_file("guard_interpreter", project_dir).read_text(encoding="utf-8")
     except OSError:
         return ""
     interp = raw.strip()
@@ -284,7 +284,7 @@ def _cached_block(project_dir: Path, data: dict, prompt: str) -> str | None:
     before - a plain `claude` + manual /engage is never broken by this."""
     try:
         raw = json.loads(
-            (project_dir / ".claude" / "engage-probe.json").read_text(encoding="utf-8")
+            _vsit_paths().local_file("engage_probe", project_dir).read_text(encoding="utf-8")
         )
         import time
 

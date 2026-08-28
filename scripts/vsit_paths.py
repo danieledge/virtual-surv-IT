@@ -177,6 +177,31 @@ def extensions_file(project: Path | str | None = None) -> Path:
     return config / "extensions.md"
 
 
+# Machine-local caches: their legacy name, and the name they take inside VSIT/local/.
+# The dot prefix goes: it existed to hide these among Claude Code's own files, and inside a
+# folder whose whole purpose is machine-local scratch there is nothing to hide from.
+_LOCAL_FILES = {
+    "tool_availability": (".tool-availability", "tool-availability"),
+    "engage_probe": ("engage-probe.json", "engage-probe.json"),
+    "guard_interpreter": (".guard-interpreter", "guard-interpreter"),
+    "map_fingerprint": (".map-fingerprint-probe-cache.json", "map-fingerprint-cache.json"),
+    "guard_coldstart": (".guard-coldstart-ms", "guard-coldstart-ms"),
+    "raw_data_present": (".raw-data-present", "raw-data-present"),
+}
+
+
+def local_file(name: str, project: Path | str | None = None) -> Path:
+    """One machine-local cache file, by its key in _LOCAL_FILES.
+
+    Never committed: these derive from THIS checkout - file timestamps, a resolved
+    interpreter path, which tools are on this machine's PATH - and are wrong everywhere
+    else. Git does not preserve mtimes, so a shared copy would miss on every lookup and
+    conflict on every regeneration."""
+    legacy, new_name = _LOCAL_FILES[name]
+    folder = local_dir(project)
+    return folder / (legacy if folder.name == ".claude" else new_name)
+
+
 def engagement_dir(slug: str, project: Path | str | None = None) -> Path:
     """One engagement's workspace."""
     return engagements_dir(project) / slug

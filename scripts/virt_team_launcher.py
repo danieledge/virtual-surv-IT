@@ -56,6 +56,25 @@ import sys
 from pathlib import Path
 
 
+def _vsit_paths():
+    """The layout resolver (VSIT migration), imported lazily.
+
+    Lazy because this file may run standalone from a bare clone where `scripts/` is not yet
+    on sys.path. Searches its own directory AND a sibling `scripts/`, because several of
+    these files also exist as staged copies under `scripts/staged_hooks/`."""
+    import sys as _sys
+
+    _here = Path(__file__).resolve().parent
+    for _candidate in (_here, _here.parent, _here.parent / "scripts"):
+        if (_candidate / "vsit_paths.py").is_file():
+            if str(_candidate) not in _sys.path:
+                _sys.path.insert(0, str(_candidate))
+            break
+    import vsit_paths
+
+    return vsit_paths
+
+
 def _scripts_dir() -> Path:
     """This script always lives directly in scripts/ (never staged/dual-copy like the
     UserPromptSubmit hook) - its siblings are simply its own directory."""
@@ -555,7 +574,9 @@ def _editor_rows(project_dir: Path):
     for label, key, values, default in _CHOICE_PREFS:
         stored = _choice_read(prefs, key)
         current = stored if stored in values else default
-        rows.append((label, current + ("" if stored in values else "  (default)"), current != default))
+        rows.append(
+            (label, current + ("" if stored in values else "  (default)"), current != default)
+        )
     return rows
 
 
@@ -598,8 +619,12 @@ def _editor_apply(project_dir: Path, action) -> str:
             )
         except OSError:
             return "could not write team-preferences.json - unchanged"
-        return f"{label}: {nxt}" if label != "qa depth" or nxt == "auto" else (
-            f"qa depth: {nxt} - QA still runs and stays independent; this changes its breadth"
+        return (
+            f"{label}: {nxt}"
+            if label != "qa depth" or nxt == "auto"
+            else (
+                f"qa depth: {nxt} - QA still runs and stays independent; this changes its breadth"
+            )
         )
     if action == jira_i:
         # Jira integration toggle (2026-08-18 user report: the [c] editor was missing
@@ -1167,7 +1192,9 @@ def _remember_project(project_dir: Path) -> None:
     except Exception:
         cfg = {}
     existing = [e for e in (cfg.get("recent_projects") or []) if isinstance(e, str)]
-    cfg["recent_projects"] = [resolved] + [e for e in existing if e != resolved][: _RECENT_LIMIT - 1]
+    cfg["recent_projects"] = [resolved] + [e for e in existing if e != resolved][
+        : _RECENT_LIMIT - 1
+    ]
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -1195,11 +1222,13 @@ def _engagement_artifacts(project_dir: Path, slug: str) -> list:
         if f.suffix == ".md" and f.stem in html:
             continue  # the rendered twin is already listed
         found.append(f)
+
     def rank(path):
         for i, name in enumerate(preferred):
             if path.stem.lower().startswith(name.lower()):
                 return i
         return len(preferred)
+
     found.sort(key=rank)
     return [(f.name, f) for f in found]
 
@@ -1602,18 +1631,24 @@ def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> s
             encoding="utf-8",
         )
     except OSError:
-        print(ink.warn("    could not record the unattended flag - the DoD gates may not fire"),
-              file=err)
+        print(
+            ink.warn("    could not record the unattended flag - the DoD gates may not fire"),
+            file=err,
+        )
     cap = answers.get("engagement_usd")
     if cap:
         enforced = answers.get("hard_cap_usd")
-        how = "STOPS there (enforced)" if enforced else (
-            f"it will {answers.get('on_budget', 'park')}"
+        how = (
+            "STOPS there (enforced)"
+            if enforced
+            else (f"it will {answers.get('on_budget', 'park')}")
         )
         print(ink.dim(f"    ceiling ${cap} - at the cap {how}"), file=err)
     if answers.get("run_mode") == "headless":
         print(ink.dim("    headless - no window; watch it from here"), file=err)
-    print(ink.good(f"    -> unattended run on {slug}; it will close PARTIAL for sign-off"), file=err)
+    print(
+        ink.good(f"    -> unattended run on {slug}; it will close PARTIAL for sign-off"), file=err
+    )
     if request_text:
         return _new_command(project_dir, request_text, auto=True)
     return _jira_command(project_dir, ref, auto=True)
@@ -2712,7 +2747,7 @@ def _write_probe_cache(project_dir: Path) -> None:
             return  # toggled off ([c] item 7) - the live probe is the only path
         import time
 
-        out = project_dir / ".claude" / "engage-probe.json"
+        out = _vsit_paths().local_file("engage_probe", project_dir)
         prefs = project_dir / ".claude" / "team-preferences.json"
         prefs_mtime = int(prefs.stat().st_mtime) if prefs.is_file() else 0
         # Identity fingerprint (2026-08-18, external token-review finding 2) - stamped
@@ -2803,7 +2838,7 @@ def _prewarm_guard_interpreter(project_dir: Path) -> None:
     prefetch. Never overwrites an existing value (run-guard's probe result wins);
     forward slashes so the heredoc's `command -v` accepts it in Git Bash on Windows."""
     try:
-        cache = project_dir / ".claude" / ".guard-interpreter"
+        cache = _vsit_paths().local_file("guard_interpreter", project_dir)
         if cache.is_file() or not cache.parent.is_dir():
             return
         cache.write_text(Path(sys.executable).as_posix() + "\n", encoding="utf-8")
@@ -3262,7 +3297,7 @@ def _tool_inventory_line(project_dir: Path) -> str:
     Returns "" when there is no cache yet, which is honest: the first `go` in a project
     genuinely does not know, and inventing a number would be worse than a blank row."""
     try:
-        cache = project_dir / ".claude" / ".tool-availability"
+        cache = _vsit_paths().local_file("tool_availability", project_dir)
         if not cache.is_file():
             return ""
         text = cache.read_text(encoding="utf-8", errors="replace")
@@ -3342,9 +3377,7 @@ def _print_project_defaults(project_dir: Path) -> None:
         rows.append(("tools detected", inventory))
     jira = integrations.get("jira") or {}
     if jira.get("enabled"):
-        rows.append(
-            (_JIRA_ROW_LABEL, f"on ({jira['mirror']}, {jira['project_key'] or 'UNSET'})")
-        )
+        rows.append((_JIRA_ROW_LABEL, f"on ({jira['mirror']}, {jira['project_key'] or 'UNSET'})"))
     else:
         rows.append((_JIRA_ROW_LABEL, "off"))
     pr = integrations.get("pr_comments") or {}
@@ -3635,8 +3668,10 @@ def _start_headless(project_dir: Path, decision: str, pending: dict) -> bool:
         )
     except (OSError, ValueError) as exc:
         print(
-            ink.warn(f"    could not start headless ({exc.__class__.__name__}) - "
-                     "opening a session instead"),
+            ink.warn(
+                f"    could not start headless ({exc.__class__.__name__}) - "
+                "opening a session instead"
+            ),
             file=err,
         )
         return False
