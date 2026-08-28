@@ -5,6 +5,7 @@ parsing - the pieces where prose reproduction previously stood in for a mechanic
 
 from __future__ import annotations
 
+import os
 import json
 from pathlib import Path
 
@@ -680,7 +681,16 @@ def test_map_drift_summary_cache_invalidates_on_mtime_change(tmp_path, monkeypat
     first = ep.map_drift_summary(tmp_path, map_skeleton_on=True)
     assert calls["n"] == 1
 
-    f.write_text("threshold = 2\n", encoding="utf-8")  # real write - mtime moves forward
+    # The mtime is set EXPLICITLY rather than trusted to move on its own. The cache
+    # signature is (path, mtime, size) and these two contents are the same length, so
+    # invalidation here rides entirely on mtime - and two writes this close together can
+    # land on the same one, depending on the filesystem's timestamp granularity and how
+    # busy the machine is. That made this test fail roughly once per full-suite run and
+    # pass every time it was run alone (2026-08-28), which is the worst kind of red:
+    # it teaches you to re-run rather than to look.
+    f.write_text("threshold = 2\n", encoding="utf-8")
+    later = f.stat().st_mtime + 10
+    os.utime(f, (later, later))
     second = ep.map_drift_summary(tmp_path, map_skeleton_on=True)
     assert calls["n"] == 2, "a changed file must invalidate the cache and recompute for real"
     assert first == second == "1 of 1 area(s): rules"  # never fingerprinted -> always drifted

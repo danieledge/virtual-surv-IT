@@ -4946,55 +4946,93 @@ def run_configure(
         assume_yes=assume_yes,
         style=style,
     )
-    split_wanted = confirm(
-        "  Split large, multi-component reviews by component from the start (useful "
-        "behind a corporate proxy that times out on large requests)?",
-        default=split_current,
+    # EIGHT blocking confirms used to run here, unconditionally, during a first install.
+    # Two of them are genuinely first-run decisions - what the team produces, and whether
+    # it cites obligations. The other six have sensible defaults, are per-project tuning
+    # rather than setup, and are all editable at any time from `virt-surv go` -> [c],
+    # which is a grid showing every value at once rather than a fixed interrogation with
+    # no way to skip forward or go back.
+    #
+    # That length is also where the drift came from: this list and the settings screen
+    # both write team-preferences.json and asked DIFFERENT questions about it - this one
+    # asks about statusline_show_map, which the screen has no row for; the screen covers
+    # seven settings this never mentions. Two question sets over one file is exactly what
+    # _editor_rows was written to prevent, reappearing across the entry-point boundary
+    # (2026-08-28 UX review, owner decision: shrink the wizard).
+    #
+    # Not REMOVED, gated: an opt-in keeps every question reachable in place for anyone who
+    # wants to answer them now, and defaults to no because a first run is the worst moment
+    # to be asked about evidence rooms and daemon latencies.
+    tune_now = confirm(
+        "  Set up the finer preferences now (review splitting, parallel dispatch, "
+        "standards critique, map drift, guard daemon, review tools)? You can change "
+        "these any time from 'virt-surv go' -> [c], which shows them all at once",
+        default=False,
         assume_yes=assume_yes,
         style=style,
     )
-    workflow_dispatch_wanted = confirm(
-        "  Dispatch independent review passes via the Claude Code Workflow tool when "
-        "available (guaranteed concurrent execution; runs in the background and reports "
-        "back when done)?",
-        default=workflow_dispatch_current,
-        assume_yes=assume_yes,
-        style=style,
-    )
-    standards_critique_wanted = confirm(
-        "  Run the independent standards-critique pass (a second agent checking a "
-        "finished review against its profession's named criteria) - off by default, "
-        "since it is a full extra review pass on top of the review itself?",
-        default=standards_critique_current,
-        assume_yes=assume_yes,
-        style=style,
-    )
-    map_skeleton_wanted = confirm(
-        "  Enable codebase-skeleton drift checking for a codebase map with a Paths "
-        "column - flags when the map docs go stale (a mapped area's code changed since "
-        "it was last verified, or a cited file:line no longer exists), useful if the "
-        "team relies on the map to brief new work accurately. Experimental, ADR-007 "
-        "Phase 1, off by default?",
-        default=map_skeleton_current,
-        assume_yes=assume_yes,
-        style=style,
-    )
-    statusline_show_map_wanted = confirm(
-        "  Show map-skeleton status (map:on/off) in the statusline too - off by default, "
-        "keeps the line short unless you want it?",
-        default=statusline_show_map_current,
-        assume_yes=assume_yes,
-        style=style,
-    )
-    guard_daemon_wanted = confirm(
-        "  Route the safety guards through the persistent ADR-014 daemon instead of a "
-        "fresh interpreter per call, once its files are applied (measured ~12ms "
-        "daemon-backed vs. ~300ms cold-start median) - on by default?",
-        default=guard_daemon_current,
-        assume_yes=assume_yes,
-        style=style,
-    )
-    review_tools_wanted = _ask_review_tool_overrides(style, assume_yes, review_tools_current)
+    if not tune_now:
+        style_note = style.dim(
+            "    keeping the current values for those - 'virt-surv go' then [c] to change them"
+        )
+        print(style_note)
+        split_wanted = split_current
+        workflow_dispatch_wanted = workflow_dispatch_current
+        standards_critique_wanted = standards_critique_current
+        map_skeleton_wanted = map_skeleton_current
+        statusline_show_map_wanted = statusline_show_map_current
+        guard_daemon_wanted = guard_daemon_current
+        review_tools_wanted = review_tools_current
+    else:
+        split_wanted = confirm(
+            "  Split large, multi-component reviews by component from the start (useful "
+            "behind a corporate proxy that times out on large requests)?",
+            default=split_current,
+            assume_yes=assume_yes,
+            style=style,
+        )
+        workflow_dispatch_wanted = confirm(
+            "  Dispatch independent review passes via the Claude Code Workflow tool when "
+            "available (guaranteed concurrent execution; runs in the background and reports "
+            "back when done)?",
+            default=workflow_dispatch_current,
+            assume_yes=assume_yes,
+            style=style,
+        )
+        standards_critique_wanted = confirm(
+            "  Run the independent standards-critique pass (a second agent checking a "
+            "finished review against its profession's named criteria) - off by default, "
+            "since it is a full extra review pass on top of the review itself?",
+            default=standards_critique_current,
+            assume_yes=assume_yes,
+            style=style,
+        )
+        map_skeleton_wanted = confirm(
+            "  Enable codebase-skeleton drift checking for a codebase map with a Paths "
+            "column - flags when the map docs go stale (a mapped area's code changed since "
+            "it was last verified, or a cited file:line no longer exists), useful if the "
+            "team relies on the map to brief new work accurately. Experimental, ADR-007 "
+            "Phase 1, off by default?",
+            default=map_skeleton_current,
+            assume_yes=assume_yes,
+            style=style,
+        )
+        statusline_show_map_wanted = confirm(
+            "  Show map-skeleton status (map:on/off) in the statusline too - off by default, "
+            "keeps the line short unless you want it?",
+            default=statusline_show_map_current,
+            assume_yes=assume_yes,
+            style=style,
+        )
+        guard_daemon_wanted = confirm(
+            "  Route the safety guards through the persistent ADR-014 daemon instead of a "
+            "fresh interpreter per call, once its files are applied (measured ~12ms "
+            "daemon-backed vs. ~300ms cold-start median) - on by default?",
+            default=guard_daemon_current,
+            assume_yes=assume_yes,
+            style=style,
+        )
+        review_tools_wanted = _ask_review_tool_overrides(style, assume_yes, review_tools_current)
     # Live-validates every newly forced-"on" tool even in demo mode - read-only against a
     # throwaway synthetic file, nothing project-related is touched, and the whole point is
     # to catch a hanging/network-blocked tool (the semgrep/pip-audit shape) BEFORE it is

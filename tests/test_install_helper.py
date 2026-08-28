@@ -6865,10 +6865,12 @@ def test_run_configure_writes_review_tool_overrides(tmp_path, monkeypatch):
     # "n" to "use recommended settings?" (blank there would default to Yes and skip
     # every prompt below via assume_yes, defeating this test), "" enable-permissions
     # default(Y), "" env-tuning default(Y), "" beta-fields-workaround default(Y), ""
-    # docx, "" citations, "" split, "" workflow-dispatch, "" standards-critique, ""
-    # map-skeleton, "" statusline-map, "" guard_daemon (added 2026-08-12), "mypy=off"
-    # review-tools override, "" model.
-    answers = iter(["n", "", "", "", "", "", "", "", "", "", "", "", "mypy=off", ""])
+    # docx, "" citations, then "y" to the finer-preferences gate added 2026-08-28 - the
+    # six tuning questions and the review-tools override live behind it now, so a first
+    # install is two questions rather than eight. Then "" split, "" workflow-dispatch,
+    # "" standards-critique, "" map-skeleton, "" statusline-map, "" guard_daemon,
+    # "mypy=off" review-tools override, "" model.
+    answers = iter(["n", "", "", "", "", "", "y", "", "", "", "", "", "", "mypy=off", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
@@ -8458,3 +8460,36 @@ def test_windows_consoles_that_cannot_read_escapes_get_none(monkeypatch):
     assert ih.supports_color(_Tty, env={"WT_SESSION": "1"})  # Windows Terminal
     monkeypatch.setattr(ih.os, "name", "posix")
     assert ih.supports_color(_Tty, env={})  # unchanged everywhere else
+
+
+def test_a_first_install_asks_two_preference_questions_not_eight(tmp_path, monkeypatch, capsys):
+    """Owner decision, 2026-08-28: shrink the wizard.
+
+    Eight blocking confirms ran here unconditionally during a first install, one of them
+    three lines long quoting millisecond benchmarks. Two are genuinely first-run decisions
+    - what the team produces, and whether it cites obligations. The rest are per-project
+    tuning with sensible defaults, editable at any time from a grid that shows every value
+    at once instead of a fixed interrogation with no way to skip forward or go back.
+
+    Declining the gate must leave the existing values EXACTLY as they were - a shortcut
+    that quietly reset settings would be worse than the questions."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())
+    (tmp_path / ".claude").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"standards_critique": True, "map_skeleton": True}), encoding="utf-8"
+    )
+    # n(recommended) "" "" "" (permissions/env/betas) "" docx "" citations
+    # n -> decline the finer preferences, "" model. No further prompts may be needed.
+    answers = iter(["n", "", "", "", "", "", "n", ""])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
+    assert rc == 0, capsys.readouterr().out
+
+    prefs = json.loads((tmp_path / ".claude" / "team-preferences.json").read_text())
+    assert prefs["standards_critique"] is True, "declining must not reset what was set"
+    assert prefs["map_skeleton"] is True
+    assert "virt-surv go" in capsys.readouterr().out, "and must say where to change them"
