@@ -9,6 +9,7 @@ exercised, and this file exists so the installer's two do not repeat it.
 from __future__ import annotations
 
 import io
+import subprocess
 import sys
 from pathlib import Path
 
@@ -235,3 +236,36 @@ def test_escape_at_the_top_level_quits_rather_than_installing(monkeypatch):
 
     monkeypatch.setattr(ih, "_submenu_screen", lambda *a, **k: "")  # Esc
     assert ih.choose_action(ih.Style(False)) == "quit"
+
+
+def test_the_screens_work_with_only_the_VENDORED_prompt_toolkit():
+    """Why the new menus did not appear on a real machine.
+
+    installer_app never put vendor/ on sys.path, so `import prompt_toolkit` failed on any
+    box without a pip-installed copy - which is the normal case, since vendoring it exists
+    precisely because a locked-down machine cannot pip-install. The `except Exception`
+    turned that into "this console cannot host an app" and the numbered menu returned,
+    looking like a graceful fallback.
+
+    Invisible from a dev machine twice over: this one HAS prompt_toolkit installed, and
+    the fixture in this very file puts vendor/ on the path by hand - so every other test
+    here exercises a path production never takes. Reported from a container with neither
+    (2026-08-28: "I don't see the better interface").
+
+    A SUBPROCESS with -S, therefore: no site-packages, no test-fixture path edits, nothing
+    but what the installer itself arranges."""
+    code = (
+        "import sys\n"
+        f"sys.path.insert(0, {str(REPO_ROOT)!r})\n"
+        f"sys.path.insert(0, {str(REPO_ROOT / 'scripts')!r})\n"
+        "import installer_app\n"
+        "installer_app._vendor_on_path()\n"
+        "import prompt_toolkit\n"
+        "from prompt_toolkit.key_binding import KeyBindings\n"
+        "print(prompt_toolkit.__file__)\n"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-S", "-c", code], capture_output=True, text=True, timeout=60
+    )
+    assert proc.returncode == 0, f"the screens cannot import prompt_toolkit:\n{proc.stderr}"
+    assert "vendor" in proc.stdout, f"resolved a non-vendored copy: {proc.stdout.strip()}"

@@ -29,6 +29,30 @@ import sys
 from pathlib import Path
 
 
+def _vendor_on_path() -> None:
+    """Make the VENDORED prompt_toolkit importable.
+
+    Without this the screens are dead on any machine that has not pip-installed
+    prompt_toolkit - which is the normal case, since the whole point of vendoring it was
+    that a locked-down corporate box cannot pip-install anything. The import failed, the
+    `except Exception` turned that into "this console cannot host an app", and the
+    numbered menu came back looking like a graceful fallback.
+
+    It was invisible from here because this development machine HAS prompt_toolkit
+    installed, and the test fixture put vendor/ on the path by hand - so both the manual
+    render and the whole test file exercised a path production never takes. Reported from
+    a container that has neither (2026-08-28: "I don't see the better interface").
+
+    virt_team_launcher._ptk_ui has done exactly this since the app tier was written; this
+    is the same three lines, in the file that also needed them."""
+    here = Path(__file__).resolve().parent
+    for candidate in (here.parent / "vendor", here.parent.parent / "vendor"):
+        if (candidate / "prompt_toolkit").is_dir():
+            if str(candidate) not in sys.path:
+                sys.path.insert(0, str(candidate))
+            return
+
+
 def _chrome():
     """tui_chrome, found from this file's own directory.
 
@@ -197,6 +221,7 @@ def chooser_screen(options, ih, *, title: str, actions=None, repo: Path | None =
     cancel is a decision, not an unavailability."""
     try:
         chrome = _chrome()
+        _vendor_on_path()
         from prompt_toolkit.key_binding import KeyBindings
     except Exception:
         return None
@@ -346,6 +371,7 @@ def grid_screen(rows_fn, apply_fn, help_fn, ih, *, title, repo=None, output=None
     """
     try:
         chrome = _chrome()
+        _vendor_on_path()
         from prompt_toolkit.key_binding import KeyBindings
     except Exception:
         return None
