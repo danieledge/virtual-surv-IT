@@ -29,6 +29,7 @@ def _screen_position(mod, project, label):
     labels = [row[0] for row in mod._editor_rows(project)]
     return labels.index(label) + 1
 
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -1783,3 +1784,43 @@ def test_group_headers_appear_once_per_group(tmp_path):
     headers = [title for title, _l, _v, _o in layout if title]
     assert len(headers) == len(set(headers)), "a group header repeated"
     assert len(headers) >= 5, "the screen should be grouped, not one long list"
+
+
+def test_a_toggle_goes_BOTH_ways(tmp_path):
+    """Pressing a toggle twice must return it to where it started.
+
+    test_toggling_a_row_changes_THAT_row pins WHICH row moves, and passed throughout - so
+    it did not catch that the row moved only one way. _editor_apply read the current state
+    as rows[action-1], positional, while _editor_rows had become grouped; the state it
+    inverted therefore belonged to some other row, and when that row was on, `not current`
+    was False every time. Every press wrote off. Live report 2026-08-28: "I can turn off
+    but not on."
+
+    Starting from a MIXED state on purpose - with everything off, the misread row is off
+    too and the wrong answer and the right one agree."""
+    mod = _load()
+    project = tmp_path
+    (project / ".claude").mkdir()
+    # extra_formats stores a LIST of formats, not a bool, so it is seeded in its own shape.
+    prefs = {
+        label_key: True
+        for _label, label_key in mod._TOGGLE_PREFS[::2]
+        if label_key != "extra_formats"
+    }
+    prefs["extra_formats"] = ["docx"]
+    (project / ".claude" / "team-preferences.json").write_text(json.dumps(prefs), encoding="utf-8")
+    # A two-state row returns after 2 presses; a choice row cycles, so it returns after
+    # one full lap of its values. Same property either way: a row you can change is a row
+    # you can change back.
+    lap = {key: len(values) for _label, key, values, _default in mod._CHOICE_PREFS}
+    for position, key in enumerate(mod._editor_keys(project)):
+        start = mod._editor_rows(project)[position]
+        mod._editor_apply_key(project, key)
+        once = mod._editor_rows(project)[position]
+        assert once[1] != start[1], f"{start[0]!r} did not change when toggled"
+        for _ in range(lap.get(key, 2) - 1):
+            mod._editor_apply_key(project, key)
+        back = mod._editor_rows(project)[position]
+        assert back[2] == start[2], (
+            f"{start[0]!r} would not go back: {start[1]} -> {once[1]} -> {back[1]}"
+        )

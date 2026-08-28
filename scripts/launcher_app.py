@@ -446,6 +446,22 @@ def settings_screen(project_dir: Path, mod, output=None):
         return None  # cannot render a settings screen without settings
     idx = [0]
     notes: list[str] = []
+
+    def _note(text: str, label: str = "") -> None:
+        """Record a "Just changed" line, ONE PER SETTING.
+
+        Toggling a row on and then off appended two lines for the same setting - the
+        panel showed it twice, which reads as the display duplicating rather than as two
+        edits (live report 2026-08-28). A setting has one current state, so it gets one
+        line: any earlier line for the same label is dropped and the new one appended, so
+        the list stays newest-last and never repeats a name."""
+        if label:
+            prefix = f"{label}: "
+            notes[:] = [n for n in notes if not n.startswith(prefix)]
+        elif text in notes:
+            notes.remove(text)
+        notes.append(text)
+
     changed = [False]
 
     def _refresh():
@@ -547,9 +563,9 @@ def settings_screen(project_dir: Path, mod, output=None):
             changed[0] = True
             for (label, value, _on), (b_label, b_value, _b) in zip(rows, before):
                 if value != b_value:
-                    notes.append(f"{label}: {b_value} -> {value}")
+                    _note(f"{label}: {b_value} -> {value}", label)
         if note:
-            notes.append(note.strip().lstrip("-> ").strip())
+            _note(note.strip().lstrip("-> ").strip())
 
     @kb.add("enter")
     @kb.add(" ")

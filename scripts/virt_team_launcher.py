@@ -844,8 +844,15 @@ def _editor_apply(project_dir: Path, action) -> str:
             label, key = _TOGGLE_PREFS[int(action) - 1]
         except (ValueError, IndexError, TypeError):
             return f"1-{last_i}, d or b, please."
+        # Read the CURRENT state by label, not by position. `action` indexes
+        # _TOGGLE_PREFS, while _editor_rows is ordered by _SETTING_GROUPS - the two
+        # agreed only for as long as the screen was unsorted. Reading rows[action-1]
+        # after the grouping landed meant a toggle inverted some OTHER row's state:
+        # if that row happened to be on, `not current` was always False, so every
+        # press turned the setting off and none ever turned it back on (live report,
+        # 2026-08-28: "I can turn off but not on").
         rows = _editor_rows(project_dir) or []
-        current = bool(rows[int(action) - 1][2]) if rows else False
+        current = next((on for row_label, _value, on in rows if row_label == label), False)
         if key == "extra_formats":
             formats = [f for f in (prefs.get("extra_formats") or []) if f != "docx"]
             prefs["extra_formats"] = formats if current else formats + ["docx"]
