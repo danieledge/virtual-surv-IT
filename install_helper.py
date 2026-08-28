@@ -1552,17 +1552,36 @@ def _submenu_screen(style: Style, title: str, options: tuple, actions: dict):
 
 
 def _import_from_scripts(name: str):
-    """Import a module out of this clone's scripts/ directory, or None.
+    """Import a module out of the real clone's scripts/ directory, or None.
 
     EXPLICIT, not a bare `import name` inside a try. This helper sits at the clone root
     and scripts/ is a sibling, so a bare import raises ImportError - which the caller's
     `except Exception` would swallow, leaving the feature permanently and silently off.
-    That exact shape was found in the launcher on 2026-08-28, where thirteen screens were
-    unreachable and it looked like a console that could not host them."""
+
+    AND NOT FROM __file__, which is the mistake that made this whole tier invisible.
+    _relocate_if_running_inside_target_repo copies this file to a bare temp directory and
+    re-execs from there for the REST of the session, so that git checkout can overwrite
+    the original safely. From that point `Path(__file__).parent` is
+    /tmp/virt-surv-it-installer-XXXX, which contains one .py file and no scripts/ sibling.
+    Every candidate missed, this returned None, and the new screens silently never ran
+    on any real installation - only in a checkout being developed in place (found by
+    instrumenting the actual container, 2026-08-28, after two wrong guesses).
+
+    _resolve_repo_root already documents this hazard in its own docstring and already
+    handles it: the re-exec passes the real clone through as --repo precisely so callers
+    do not have to trust __file__ afterwards. Asking it is the whole fix."""
     import importlib
 
+    roots = []
+    try:
+        resolved = _resolve_repo_root(None)
+        if resolved:
+            roots.append(resolved / "scripts")
+    except Exception:
+        pass  # config unreadable - the __file__ candidates below still cover a dev run
     here = Path(__file__).resolve().parent
-    for candidate in (here / "scripts", here, here.parent / "scripts"):
+    roots += [here / "scripts", here, here.parent / "scripts"]
+    for candidate in roots:
         if (candidate / f"{name}.py").is_file():
             if str(candidate) not in sys.path:
                 sys.path.insert(0, str(candidate))

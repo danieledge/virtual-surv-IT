@@ -269,3 +269,48 @@ def test_the_screens_work_with_only_the_VENDORED_prompt_toolkit():
     )
     assert proc.returncode == 0, f"the screens cannot import prompt_toolkit:\n{proc.stderr}"
     assert "vendor" in proc.stdout, f"resolved a non-vendored copy: {proc.stdout.strip()}"
+
+
+def test_scripts_resolve_when_the_installer_runs_from_its_TEMP_COPY(tmp_path, monkeypatch):
+    """The reason the new screens never appeared on a real installation.
+
+    _relocate_if_running_inside_target_repo copies install_helper.py to a bare temp
+    directory and re-execs from there for the REST of the session, so a git checkout can
+    safely overwrite the original. From that moment `Path(__file__).parent` is
+    /tmp/virt-surv-it-installer-XXXX - one .py file, no scripts/ sibling. Every candidate
+    missed, _import_from_scripts returned None, and the caller read that as "this console
+    cannot host an app".
+
+    So it worked in a checkout being developed in place and nowhere else. Two remote
+    guesses failed to find it; instrumenting the actual container did, by printing
+    __file__ and watching it point at a temp directory.
+
+    _resolve_repo_root documents this hazard in its own docstring and already solves it -
+    the re-exec passes the real clone through as --repo. This test pins that it is asked."""
+    import install_helper as ih
+
+    clone = tmp_path / "clone"
+    (clone / "scripts").mkdir(parents=True)
+    (clone / "scripts" / "fakemod.py").write_text("VALUE = 'from the clone'\n", encoding="utf-8")
+    relocated = tmp_path / "virt-surv-it-installer-abc123"
+    relocated.mkdir()
+
+    monkeypatch.setattr(ih, "__file__", str(relocated / "install_helper.py"))
+    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: clone)
+    module = ih._import_from_scripts("fakemod")
+    assert module is not None, "a relocated installer must still find its own scripts/"
+    assert module.VALUE == "from the clone"
+
+
+def test_it_still_resolves_when_there_is_no_configured_clone(tmp_path, monkeypatch):
+    """The __file__ candidates remain the fallback - a checkout run in place, or a machine
+    whose installer.json has not been written yet, must keep working."""
+    import install_helper as ih
+
+    here = tmp_path / "inplace"
+    (here / "scripts").mkdir(parents=True)
+    (here / "scripts" / "fakemod2.py").write_text("VALUE = 'in place'\n", encoding="utf-8")
+    monkeypatch.setattr(ih, "__file__", str(here / "install_helper.py"))
+    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: None)
+    module = ih._import_from_scripts("fakemod2")
+    assert module is not None and module.VALUE == "in place"
