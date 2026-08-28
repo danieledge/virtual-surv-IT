@@ -463,7 +463,10 @@ def test_a_long_path_keeps_its_tail_not_its_head():
     line = app.project_line(deep, launcher, width=40)
     assert line.endswith("the-actual-project")
     assert len(line) <= 40
-    assert line.startswith("..")
+    # An ellipsis where the console can encode one, three periods where it cannot. The
+    # probe used to be handed "..." - three ASCII periods, which encode everywhere - so it
+    # could only ever answer yes and the fallback branch was unreachable.
+    assert line.startswith("\u2026") or line.startswith("...")
 
 
 def test_the_settings_and_jira_screens_show_it_too(ptk, tmp_path):
@@ -744,8 +747,12 @@ def test_escape_drives_main_to_the_abort_exit_code(ptk, tmp_path, monkeypatch, c
 
     mod = _load("virt_team_launcher")
     for name in (
-        "_print_banner", "_check_plugin_cache_lag", "_print_project_defaults",
-        "_prewarm_guard_interpreter", "_write_probe_cache", "_refresh_tool_cache",
+        "_print_banner",
+        "_check_plugin_cache_lag",
+        "_print_project_defaults",
+        "_prewarm_guard_interpreter",
+        "_write_probe_cache",
+        "_refresh_tool_cache",
         "_heal_stale_alias_once",
     ):
         if hasattr(mod, name):
@@ -776,6 +783,7 @@ def _compose(ptk, keys: str, project, auto_on=True):
     buf = io.StringIO()
     out = PlainTextOutput(buf)
     import unittest.mock as m
+
     with m.patch.object(launcher, "_auto_offered", lambda _p: auto_on):
         with create_pipe_input() as pipe:
             pipe.send_text(keys)
@@ -803,9 +811,11 @@ def test_escape_is_never_shadowed_by_a_second_send_key(ptk, tmp_path):
 def test_a_long_brief_survives_whole(ptk, tmp_path):
     """Longer than the visible window, across several lines - display wrapping must never
     reach the value."""
-    typed = ("Review the Q3 alert extract for temporal gaps and stability.\r"
-             "Then propose threshold changes with evidence.\r"
-             "Flag anything that looks like a feed outage rather than real behaviour.")
+    typed = (
+        "Review the Q3 alert extract for temporal gaps and stability.\r"
+        "Then propose threshold changes with evidence.\r"
+        "Flag anything that looks like a feed outage rather than real behaviour."
+    )
     res, _ = _compose(ptk, typed + "\x04", tmp_path)
     assert isinstance(res, tuple)
     assert res[0] == " ".join(typed.replace("\r", " ").split())
@@ -863,6 +873,6 @@ def test_the_pane_divider_degrades_to_whitespace_not_a_pipe_ladder():
     source = (Path(__file__).resolve().parents[1] / "scripts" / "launcher_app.py").read_text(
         encoding="utf-8"
     )
-    split = source[source.index("VSplit("):source.index("VSplit(") + 1400]
+    split = source[source.index("VSplit(") : source.index("VSplit(") + 1400]
     assert 'char="|"' not in split, "an ASCII pipe column reads as disconnected marks"
     assert 'char="│" if mod._can_encode("│") else " "' in split

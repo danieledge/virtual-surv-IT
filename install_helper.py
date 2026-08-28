@@ -315,7 +315,16 @@ def supports_color(stream=None, env: Optional[dict] = None) -> bool:
         return False
     if env.get("TERM") == "dumb":
         return False
-    return bool(getattr(stream, "isatty", lambda: False)())
+    if not bool(getattr(stream, "isatty", lambda: False)()):
+        return False
+    if os.name == "nt":
+        # A Windows console can be a tty and still not interpret ANSI: legacy conhost
+        # renders the escapes literally, so `virt-surv` printed raw ←[36m over its whole
+        # menu on exactly the boxes this plugin targets. The launcher has always checked
+        # this (virt_team_launcher._color_enabled); the installer did not, so the same
+        # product disagreed with itself about the same console.
+        return any(env.get(v) for v in ("WT_SESSION", "TERM", "TERM_PROGRAM", "ANSICON"))
+    return True
 
 
 class Style:
@@ -1386,7 +1395,13 @@ def check_for_update_upfront(cfg: dict, style: Style, args) -> None:
     remote = preview.get("remote_version")
     if not remote or not local_version or remote == local_version:
         return
-    print(style.yellow(f"📦 A newer version is available: {local_version} -> {remote}"))
+    # PROBED, like every other non-ASCII glyph in this file (marks(), box_chars(), the
+    # hat). This one was not, and it prints from check_for_update_upfront - before the
+    # menu, guarded by nothing but `except KeyboardInterrupt`. On a cp1252 console with
+    # an update waiting, `virt-surv` tracebacked instead of drawing a menu, and the more
+    # up to date the user kept the plugin the more often they hit it.
+    box = "📦 " if _can_encode("📦", sys.stdout) else ""
+    print(style.yellow(f"{box}A newer version is available: {local_version} -> {remote}"))
     headline = (preview.get("headlines") or [None])[0]
     if headline:
         print(f"   {headline}")
@@ -1450,6 +1465,15 @@ def confirm(prompt: str, default: bool, assume_yes: bool, style: Optional[Style]
 # (its jobs live on as the folder subcommands - virt-surv list-engagements / archive -
 # and run_manage_engagements stays for them); the alias item moved under Advanced as a
 # two-option manager (register/update, or change the 'go' launch command).
+def _menu_key_hint() -> str:
+    """The valid keys, read from MENU_ACTIONS so the hint cannot fall behind the menu."""
+    keys = list(MENU_ACTIONS)
+    digits = [k for k in keys if k.isdigit()]
+    letters = [k for k in keys if not k.isdigit()]
+    span = f"{digits[0]}-{digits[-1]}" if len(digits) > 1 else "".join(digits)
+    return ", ".join(x for x in [span] + letters if x)
+
+
 MENU_ACTIONS = {
     "1": "full",
     "2": "configure",
@@ -1566,7 +1590,9 @@ def choose_action(style: Style) -> str:
                 return "full"
             if answer in MENU_ACTIONS:
                 break
-            print("  1-5 or q, please.")
+            # Derived, not typed out: "u" (update) is a real key and was missing from
+            # this line, so the one option a user most needs to find was named nowhere.
+            print(f"  {_menu_key_hint()}, please.")
         action = MENU_ACTIONS[answer]
         if action == "diagnostics":
             resolved = _choose_submenu(

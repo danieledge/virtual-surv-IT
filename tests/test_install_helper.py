@@ -6615,7 +6615,10 @@ def test_invalid_menu_choice_reprompts_without_redrawing_menu(monkeypatch, tmp_p
     ih.main([])
     out = capsys.readouterr().out
     assert out.count("What can I do for you?") == 1  # drawn once, not once per bad keystroke
-    assert out.count("1-5 or q, please.") == 2  # one error per invalid attempt
+    # Derived from MENU_ACTIONS now, so it names every valid key - "u" (update) was a
+    # real option this line had never mentioned.
+    assert out.count("1-5, u, q, please.") == 2  # one error per invalid attempt
+    assert "u" in ih._menu_key_hint()
 
 
 # --- --demo must cover the WHOLE menu session, every action, not just one path ---------------
@@ -8409,3 +8412,49 @@ def test_every_advanced_menu_item_can_actually_be_PICKED(monkeypatch, tmp_path, 
     _menu_session(monkeypatch, tmp_path, ["4", key, "", "", "", "q", "q"])
     rc = ih.main([])
     assert rc == 0, f"advanced item {key} exited {rc}\n{capsys.readouterr().out}"
+
+
+def test_no_unprobed_non_ascii_reaches_a_cp1252_console(monkeypatch, capsys):
+    """A live crash, and the one glyph in the file nobody had probed.
+
+    check_for_update_upfront printed a package emoji straight to stdout, before the menu,
+    guarded by nothing but `except KeyboardInterrupt`. On a cp1252 console with an update
+    waiting, `virt-surv` tracebacked instead of drawing a menu - so the more diligently
+    someone kept the plugin up to date, the more often they hit it.
+
+    Asserted by ENCODING the output rather than by looking for the emoji: the point is
+    not which character is used, it is that whatever is used survives the console this
+    plugin is aimed at."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "_can_encode", lambda text, stream=None: False)
+    monkeypatch.setattr(ih, "looks_like_repo", lambda p: True)
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _proc(returncode=0))
+    monkeypatch.setattr(ih, "installed_version", lambda repo: "0.36.0")
+    monkeypatch.setattr(
+        ih,
+        "gather_update_preview",
+        lambda *a, **k: {"remote_version": "0.37.0", "headlines": []},
+    )
+    ih.check_for_update_upfront({"branch": "dev"}, ih.Style(False), _args(yes=True, repo="."))
+    out = capsys.readouterr().out
+    assert "A newer version is available" in out
+    out.encode("cp1252")  # raises UnicodeEncodeError if anything unprobed slipped in
+
+
+def test_windows_consoles_that_cannot_read_escapes_get_none(monkeypatch):
+    """`virt-surv` printed raw ANSI over its whole menu on legacy conhost. The launcher
+    had always checked this; the installer had not, so one product disagreed with itself
+    about the same console."""
+    import install_helper as ih
+
+    class _Tty:
+        @staticmethod
+        def isatty():
+            return True
+
+    monkeypatch.setattr(ih.os, "name", "nt")
+    assert not ih.supports_color(_Tty, env={})  # legacy conhost: tty, no VT
+    assert ih.supports_color(_Tty, env={"WT_SESSION": "1"})  # Windows Terminal
+    monkeypatch.setattr(ih.os, "name", "posix")
+    assert ih.supports_color(_Tty, env={})  # unchanged everywhere else

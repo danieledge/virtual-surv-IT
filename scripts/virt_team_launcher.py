@@ -3393,7 +3393,15 @@ def _progress(label: str) -> None:
         # kept its tail and the two texts appeared spliced together - which is exactly
         # what a photo of the corporate console showed (2026-08-28), the probe's own
         # message still readable to the right of the progress line.
-        sys.stderr.write("\r  " + label[:_PROGRESS_WIDTH] + "\x1b[K")
+        # CSI K only where escapes are actually interpreted. A Windows console can be a
+        # tty and still render them literally - which is the console _progress was added
+        # for on 2026-08-28, so the erase would have printed a visible <-[K after each of
+        # the five warm-up steps. Padding is the fallback: it cannot clear a longer line
+        # already on screen, but it is never worse than the tail it fails to remove.
+        if _color_enabled():
+            sys.stderr.write("\r  " + label[:_PROGRESS_WIDTH] + "\x1b[K")
+        else:
+            sys.stderr.write("\r  " + label.ljust(_PROGRESS_WIDTH)[:_PROGRESS_WIDTH])
         sys.stderr.flush()
     except Exception:
         pass  # cosmetic tier: a progress line must never cost a launch
@@ -3404,7 +3412,10 @@ def _progress_done() -> None:
     try:
         if not sys.stderr.isatty():
             return
-        sys.stderr.write("\r\x1b[K")
+        if _color_enabled():
+            sys.stderr.write("\r\x1b[K")
+        else:
+            sys.stderr.write("\r" + " " * (_PROGRESS_WIDTH + 2) + "\r")
         sys.stderr.flush()
     except Exception:
         pass

@@ -131,7 +131,10 @@ def project_line(project_dir: Path, mod, width=72):
     except Exception:
         text = str(project_dir)
     if len(text) > width:
-        lead = "..." if mod._can_encode("...") else ".."
+        # An ellipsis, which is what the probe was there to test: three ASCII periods
+        # encode everywhere, so the old check could only ever answer yes and the "fallback"
+        # was unreachable.
+        lead = "\u2026" if mod._can_encode("\u2026") else "..."
         text = lead + text[-(width - len(lead)) :]
     return text
 
