@@ -1218,6 +1218,14 @@ def _fake_clone(tmp_path):
     return clone
 
 
+def _adv_keys():
+    """The advanced-menu keys, read from the map itself so a new item is covered the day
+    it is added rather than the day someone remembers to extend a list here."""
+    import install_helper as ih
+
+    return list(ih._ADVANCED_ACTIONS)
+
+
 def _menu_session(monkeypatch, tmp_path, answers):
     """Fake a tty with scripted answers. Exhausted answers feed "q" (quit), not "" -
     2026-08-04: the top-level menu now loops back after every action instead of exiting
@@ -8356,3 +8364,48 @@ def test_the_question_is_never_asked_when_nobody_can_answer_it(tmp_path, monkeyp
     monkeypatch.setattr("builtins.input", lambda prompt="": (_ for _ in ()).throw(AssertionError))
     inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
     assert inst._ask_for_claude_path("nothing ran") == ""
+
+
+@pytest.mark.parametrize("key", sorted(k for k in _adv_keys() if k != "b"))
+def test_every_advanced_menu_item_can_actually_be_PICKED(monkeypatch, tmp_path, capsys, key):
+    """The test that was missing, and its absence let a crash reach a user.
+
+    Three items called their function as `rc = max(rc, ...)` - the name the
+    non-interactive flag block uses, where it IS initialised. Inside the menu loop it is
+    not, so picking any of them raised UnboundLocalError before the function it was
+    guarding even ran. Nothing failed: 500-odd installer tests exercised the FUNCTIONS
+    directly and never went through the menu that reaches them.
+
+    So this drives the real menu, once per item, with the work stubbed. It asserts only
+    that picking the item dispatches without raising - what each action then does is its
+    own test's business."""
+    import install_helper as ih
+
+    called = []
+    for name in (
+        "run_extensions_editor",
+        "run_tool_reprobe",
+        "run_relocate_to_vsit",
+        "run_alias_manage",
+        "run_gitbash_perf",
+        "run_howto",
+        "run_configure",
+        "run_statusline",
+        "run_formats",
+        "run_orchestrator_model_default",
+        "run_machine_defaults",
+        "run_dashboard",
+        "run_fix_bashrc",
+        "run_clean_plugin_cache",
+    ):
+        if hasattr(ih, name):
+            monkeypatch.setattr(
+                ih, name, lambda *a, _n=name, **k: (called.append(_n), 0)[1], raising=False
+            )
+    monkeypatch.setattr(ih, "find_claude", lambda refresh=False: ("/usr/bin/claude", "path"))
+    monkeypatch.setattr(ih, "check_for_update_upfront", lambda *a, **k: None)
+    monkeypatch.setattr(ih.Installer, "run", lambda self: 0)
+
+    _menu_session(monkeypatch, tmp_path, ["4", key, "", "", "", "q", "q"])
+    rc = ih.main([])
+    assert rc == 0, f"advanced item {key} exited {rc}\n{capsys.readouterr().out}"

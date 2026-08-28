@@ -9351,6 +9351,13 @@ def _main(argv=None) -> int:
         # "demo" preview or a session-wide --demo run, both of which genuinely write
         # nothing regardless of which action was picked.
         did_anything = False
+        # The worst status any action in this loop returned. The three actions that report
+        # one used `rc` - the name the NON-INTERACTIVE flag block above uses, where it is
+        # initialised - and inside this loop it is not, so picking any of them raised
+        # UnboundLocalError before their function was even called (live report 2026-08-28,
+        # against the Org extensions item). Named differently on purpose, so the two
+        # scopes cannot be confused again.
+        menu_rc = 0
         while True:
             action = choose_action(style)
             if action == "quit":
@@ -9358,7 +9365,7 @@ def _main(argv=None) -> int:
                     print("See you next time.")
                 else:
                     print("No problem - nothing changed. See you next time.")
-                return 0
+                return menu_rc
             if action == "configure":
                 # Free-function flow with no need for Installer's clone-management
                 # state - handled directly here rather than added as an Installer subset.
@@ -9371,11 +9378,14 @@ def _main(argv=None) -> int:
             elif action == "howto":
                 run_howto(style)  # read-only narrative - never counts as "did anything"
             elif action == "extensions":
-                rc = max(rc, run_extensions_editor(style, marks()))
+                menu_rc = max(menu_rc, run_extensions_editor(style, marks()) or 0)
+                did_anything = did_anything or not args.demo
             elif action == "reprobe":
-                rc = max(rc, run_tool_reprobe(style, marks()))
+                menu_rc = max(menu_rc, run_tool_reprobe(style, marks()) or 0)
+                did_anything = did_anything or not args.demo
             elif action == "relocate":
-                rc = max(rc, run_relocate_to_vsit(style, marks()))
+                menu_rc = max(menu_rc, run_relocate_to_vsit(style, marks()) or 0)
+                did_anything = did_anything or not args.demo
             elif action == "gitbashperf":
                 run_gitbash_perf(style, marks(), args.yes, args.demo)
                 did_anything = did_anything or not args.demo
