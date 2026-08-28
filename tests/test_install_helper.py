@@ -543,7 +543,9 @@ def test_run_tool_cache_refresh_success(tmp_path, monkeypatch, capsys):
     # is correct for a test image - added an issue the assertion never allowed for
     # (2026-08-25). A test that counts issues has to control every source of them.
     monkeypatch.setattr(
-        ih, "_check_runtime_dependencies", lambda: [("git", "OK", "found"), ("claude CLI", "OK", "found")]
+        ih,
+        "_check_runtime_dependencies",
+        lambda: [("git", "OK", "found"), ("claude CLI", "OK", "found")],
     )
     rc = ih.run_tool_cache_refresh(tmp_path, ih.Style(False), ih.marks())
     assert rc == 0
@@ -578,7 +580,9 @@ def test_run_tool_cache_refresh_nonzero_exit_reported(tmp_path, monkeypatch, cap
     # is correct for a test image - added an issue the assertion never allowed for
     # (2026-08-25). A test that counts issues has to control every source of them.
     monkeypatch.setattr(
-        ih, "_check_runtime_dependencies", lambda: [("git", "OK", "found"), ("claude CLI", "OK", "found")]
+        ih,
+        "_check_runtime_dependencies",
+        lambda: [("git", "OK", "found"), ("claude CLI", "OK", "found")],
     )
     rc = ih.run_tool_cache_refresh(tmp_path, ih.Style(False), ih.marks())
     assert rc == 1
@@ -598,7 +602,9 @@ def test_run_tool_cache_refresh_demo_writes_nothing(tmp_path, monkeypatch, capsy
     # is correct for a test image - added an issue the assertion never allowed for
     # (2026-08-25). A test that counts issues has to control every source of them.
     monkeypatch.setattr(
-        ih, "_check_runtime_dependencies", lambda: [("git", "OK", "found"), ("claude CLI", "OK", "found")]
+        ih,
+        "_check_runtime_dependencies",
+        lambda: [("git", "OK", "found"), ("claude CLI", "OK", "found")],
     )
     rc = ih.run_tool_cache_refresh(tmp_path, ih.Style(False), ih.marks(), demo=True)
     assert rc == 0
@@ -2269,9 +2275,7 @@ def test_run_go_passes_the_launcher_decision_through_verbatim(tmp_path, monkeypa
     calls = []
     monkeypatch.setattr(ih.os, "execvp", lambda cmd, argv: calls.append((cmd, argv)))
     ih._run_go(tmp_path, ih.Style(False), ih.marks(), "🎩 ", demo=False)
-    assert calls == [
-        ("/usr/bin/claude", ["claude", "/compliance-surveillance-team:engage --new"])
-    ]
+    assert calls == [("/usr/bin/claude", ["claude", "/compliance-surveillance-team:engage --new"])]
 
 
 def test_quick_setup_choice_real_tty_defaults_to_quick(monkeypatch):
@@ -2480,7 +2484,9 @@ def test_statusline_step_auto_enabled_when_quick_defaults_chosen(monkeypatch, tm
     # is correct for a test image - added an issue the assertion never allowed for
     # (2026-08-25). A test that counts issues has to control every source of them.
     monkeypatch.setattr(
-        ih, "_check_runtime_dependencies", lambda: [("git", "OK", "found"), ("claude CLI", "OK", "found")]
+        ih,
+        "_check_runtime_dependencies",
+        lambda: [("git", "OK", "found"), ("claude CLI", "OK", "found")],
     )
 
     def boom(*a, **k):
@@ -3481,9 +3487,10 @@ def test_run_enable_project_pre_seeds_the_guard_cache(tmp_path):
         runner=lambda argv, **kw: _proc(returncode=0),
     )
     cache = project / ".claude" / ".guard-interpreter"
-    assert cache.is_file() and cache.read_text(
-        encoding="utf-8"
-    ) == PureWindowsPath(sys.executable).as_posix()
+    assert (
+        cache.is_file()
+        and cache.read_text(encoding="utf-8") == PureWindowsPath(sys.executable).as_posix()
+    )
 
 
 def test_demo_project_enablement_never_calls_the_real_writer(tmp_path, monkeypatch):
@@ -4707,7 +4714,9 @@ def test_run_env_check_aggregates_and_reports_clean(capsys, monkeypatch):
     # is correct for a test image - added an issue the assertion never allowed for
     # (2026-08-25). A test that counts issues has to control every source of them.
     monkeypatch.setattr(
-        ih, "_check_runtime_dependencies", lambda: [("git", "OK", "found"), ("claude CLI", "OK", "found")]
+        ih,
+        "_check_runtime_dependencies",
+        lambda: [("git", "OK", "found"), ("claude CLI", "OK", "found")],
     )
     monkeypatch.setattr(ih, "_check_encoding_roundtrip", lambda interp: ("OK", "clean"))
     monkeypatch.setattr(ih, "_check_plugin_root_bootstrap", lambda root: ("OK", "resolves"))
@@ -6018,8 +6027,13 @@ def test_adding_a_menu_entry_never_renumbers_the_existing_ones():
     documentation, and in a user's muscle memory. New entries take letters."""
     from install_helper import MENU_ACTIONS
 
-    for key, action in (("1", "full"), ("2", "configure"), ("3", "diagnostics"),
-                        ("4", "advanced"), ("5", "howto")):
+    for key, action in (
+        ("1", "full"),
+        ("2", "configure"),
+        ("3", "diagnostics"),
+        ("4", "advanced"),
+        ("5", "howto"),
+    ):
         assert MENU_ACTIONS[key] == action, f"option {key} moved - that breaks stored keystrokes"
 
 
@@ -7677,9 +7691,7 @@ def test_clean_plugin_cache_surfaces_and_removes_ghost_registry_installs(
     registry = tmp_path / ".claude" / "plugins" / "installed_plugins.json"
     registry.parent.mkdir(parents=True, exist_ok=True)
     registry.write_text(
-        json.dumps(
-            {"plugins": [{"installPath": str(active)}, {"installPath": str(ghost)}]}
-        ),
+        json.dumps({"plugins": [{"installPath": str(active)}, {"installPath": str(ghost)}]}),
         encoding="utf-8",
     )
     rc = ih.run_clean_plugin_cache(ih.Style(False), ih.marks(), assume_yes=True)
@@ -7817,9 +7829,7 @@ def test_cleaner_repairs_dead_registry_entries(tmp_path, monkeypatch, capsys):
     )
     reg = reg_dir / "installed_plugins.json"
     reg.write_text(
-        json.dumps(
-            {"plugins": [{"installPath": dead}, {"installPath": str(alive_dir)}]}
-        ),
+        json.dumps({"plugins": [{"installPath": dead}, {"installPath": str(alive_dir)}]}),
         encoding="utf-8",
     )
     monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
@@ -8006,9 +8016,7 @@ def test_the_update_notice_points_at_the_real_diagnostics_option():
     # CODE only. The comment above the fix quotes the old wrong string to explain itself, and
     # a naive substring check flags that explanation as the defect - the same trap that
     # produced a false "security hole" earlier today.
-    code = "\n".join(
-        line for line in chunk.splitlines() if not line.lstrip().startswith("#")
-    )
+    code = "\n".join(line for line in chunk.splitlines() if not line.lstrip().startswith("#"))
     assert "Diagnostics (5)" not in code
     assert "MENU_ACTIONS" in code, "the option number must be derived, not typed"
     key = next(k for k, v in install_helper.MENU_ACTIONS.items() if v == "diagnostics")
@@ -8196,10 +8204,47 @@ def test_the_skill_no_longer_tells_the_session_to_delete_the_handoff():
     in the allow-list - so the attempt was simply refused, twice, in one live run. Creating
     the workspace consumes that file and the launcher clears any leftover, so the deletion
     was a doomed action the mechanism had already handled."""
-    skill = (Path(__file__).resolve().parents[1] / ".claude" / "skills" / "engage"
-             / "SKILL.md").read_text(encoding="utf-8")
+    skill = (
+        Path(__file__).resolve().parents[1] / ".claude" / "skills" / "engage" / "SKILL.md"
+    ).read_text(encoding="utf-8")
     # The BULLET, not the first mention - `--request-pending` also appears in the --auto
     # bullet above it, and splitting on the first hit reads the wrong block entirely.
     block = skill.split("- **`--request-pending`", 1)[1].split("\n- **", 1)[0]
     assert "Do not delete it" in block
     assert "Delete the file once you have read it" not in block
+
+
+# --- a CLI that is on PATH but cannot be executed (2026-08-28) ------------------------
+
+
+def test_a_shim_whose_target_is_gone_is_read_as_unusable_not_as_a_bad_request():
+    """The failure that aborted a real install.
+
+    A package-manager shim stays on PATH after the binary it points at has gone, so
+    discovery ticked "claude CLI found" and the first real call came back with the shell's
+    own "is not recognized as an internal or external command". That matched neither
+    "group policy" nor "blocked", so the run took the fatal branch - on a box where
+    direct registration would have completed the install without the CLI at all.
+
+    The distinction the classifier draws: the binary never ran, so nothing can be
+    concluded about the request that was made to it."""
+    from install_helper import cli_unusable_reason
+
+    shell_says = (
+        "'\"...\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe\"' is not "
+        "recognized as an internal or external command, operable program or batch file."
+    )
+    assert cli_unusable_reason(shell_says)
+    assert cli_unusable_reason("[WinError 1260] This program is blocked by group policy")
+    assert cli_unusable_reason("The system cannot find the file specified")
+    assert cli_unusable_reason("claude: command not found")
+
+
+def test_a_real_cli_error_is_still_a_real_error():
+    """The fallback must not swallow answers the CLI actually gave. A CLI that RAN and
+    said no is reporting on the request; only a CLI that never ran says nothing about it."""
+    from install_helper import cli_unusable_reason
+
+    assert cli_unusable_reason("No such plugin: nonexistent") == ""
+    assert cli_unusable_reason("marketplace already exists") == ""
+    assert cli_unusable_reason("") == ""

@@ -796,6 +796,48 @@ def _write_json_backup(path: Path, data: dict) -> None:
     _atomic_write_text(path, json.dumps(data, indent=2) + "\n")
 
 
+# A claude CLI that is ON PATH but cannot actually be executed, in the words the OS
+# uses to say so. Live report 2026-08-28, from a locked-down corporate Windows box: an
+# npm shim resolved on PATH (so discovery reported "claude CLI found"), but the shim's
+# own target no longer existed, and cmd answered "is not recognized as an internal or
+# external command". That matched neither "group policy" nor "blocked", so the run took
+# the fatal branch and ABORTED - on a box where direct registration would have finished
+# the install without the CLI at all.
+#
+# Matched against the CLI's stderr, lower-cased. Every entry means the same thing: the
+# binary never ran, so nothing can be concluded about the request that was made to it.
+_CLI_UNUSABLE_MARKERS = (
+    "group policy",
+    "blocked",
+    "is not recognized as an internal or external command",
+    "operable program or batch file",
+    "the system cannot find the file specified",
+    "the system cannot find the path specified",
+    "cannot find the path specified",
+    "command not found",
+    "no such file or directory",
+    "access is denied",
+    "permission denied",
+    "winerror 1260",
+    "winerror 2",
+)
+
+
+def cli_unusable_reason(err: str) -> str:
+    """Why the claude CLI could not run, or "" if it ran and simply returned an error.
+
+    The distinction decides between falling back to direct registration (the CLI is the
+    route, not the goal) and reporting a real failure - so it is one function both
+    callers share rather than two drifting lists of substrings."""
+    lowered = (err or "").lower()
+    if "group policy" in lowered:
+        return "the claude CLI launch is blocked by policy"
+    for marker in _CLI_UNUSABLE_MARKERS:
+        if marker in lowered:
+            return "the claude CLI is on PATH but could not be executed"
+    return ""
+
+
 def register_plugin_directly(repo: Path, claude_dir: Path, version: Optional[str]) -> list:
     """Register the marketplace + plugin by writing the same JSON the claude CLI
     writes, for boxes where group policy blocks launching the CLI at all (the
@@ -1640,6 +1682,27 @@ class Installer:
                 "not on PATH and not in the usual install locations - install it first"
                 f" ({CLAUDE_DOCS_URL}), then open a NEW terminal and re-run me",
             )
+        # FOUND is not the same as WORKS. A package-manager shim stays on PATH after the
+        # binary it points at has gone, so discovery reports a tick and the first real
+        # call fails - which is how a run reached "Add marketplace" before finding out
+        # (live report 2026-08-28). One cheap call settles it here, where the answer can
+        # still change the plan, instead of three steps later where it read as an error.
+        self.cli_runs = True
+        if claude_path:
+            try:
+                probe = run_cmd(["claude", "--version"], timeout=60)
+            except OSError as exc:
+                self.cli_runs = False
+                self.step_skip("claude CLI runnable", f"could not be launched: {exc}")
+            else:
+                if probe.returncode != 0:
+                    detail = (probe.stderr.strip() or probe.stdout.strip() or "").splitlines()
+                    self.cli_runs = False
+                    self.step_skip(
+                        "claude CLI runnable",
+                        (detail[0] if detail else "it did not run")
+                        + " - registering the plugin directly instead",
+                    )
         try:
             proc = run_cmd(["git", "ls-remote", "--heads", REPO_URL, "main"], timeout=30)
             if proc.returncode == 0:
@@ -2471,6 +2534,11 @@ class Installer:
     def marketplace(self) -> None:
         self.step_intro("Pointing Claude Code's marketplace at your clone.")
         self.direct_registered = False
+        if not getattr(self, "cli_runs", True):
+            # Already established in the preflight - do not spend two more timeouts
+            # rediscovering it, and do not report it as a failure of this step.
+            self.register_directly("the claude CLI is present but cannot be executed")
+            return
         try:
             if self.mode == "update":
                 proc = run_cmd(
@@ -2492,11 +2560,11 @@ class Installer:
             return
         if proc.returncode != 0:
             err = proc.stderr.strip() or proc.stdout.strip()
-            if "group policy" in err.lower() or "blocked" in err.lower():
-                self.say_claude_launch_trace()
-                self.register_directly("the claude CLI launch is blocked by policy")
-                return
             self.say_claude_launch_trace()
+            reason = cli_unusable_reason(err)
+            if reason:
+                self.register_directly(reason)
+                return
             self.step_fail("Add marketplace", err or "claude plugin marketplace add failed")
         self.step_ok(
             f"Marketplace {MARKETPLACE} " + self.did("->", "would point at") + f" {self.repo}"
@@ -2533,9 +2601,10 @@ class Installer:
         if proc.returncode != 0:
             err = proc.stderr.strip() or proc.stdout.strip()
             lowered = err.lower()
-            if "group policy" in lowered or "blocked" in lowered:
+            reason = cli_unusable_reason(err)
+            if reason:
                 self.say_claude_launch_trace()
-                self.register_directly("the claude CLI launch is blocked by policy")
+                self.register_directly(reason)
                 return
             if "already installed" in lowered:
                 # Already at the desired end state - informational, not a failure
