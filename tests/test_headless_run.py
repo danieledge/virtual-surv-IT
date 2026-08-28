@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+import scripts.vsit_paths as _vsit
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -37,32 +39,60 @@ SESSION = "38f27013-c5e7-468e-8053-f3b3fe73054b"
 
 
 def _init():
-    return {"type": "system", "subtype": "init", "session_id": SESSION,
-            "model": "claude-opus-5[1m]", "claude_code_version": "2.1.243"}
+    return {
+        "type": "system",
+        "subtype": "init",
+        "session_id": SESSION,
+        "model": "claude-opus-5[1m]",
+        "claude_code_version": "2.1.243",
+    }
 
 
 def _result_ok():
     return {
-        "type": "result", "subtype": "success", "is_error": False,
-        "session_id": SESSION, "result": "ok", "num_turns": 1, "duration_ms": 8734,
-        "terminal_reason": "completed", "stop_reason": "end_turn",
+        "type": "result",
+        "subtype": "success",
+        "is_error": False,
+        "session_id": SESSION,
+        "result": "ok",
+        "num_turns": 1,
+        "duration_ms": 8734,
+        "terminal_reason": "completed",
+        "stop_reason": "end_turn",
         "total_cost_usd": 0.108862,
-        "usage": {"input_tokens": 2, "output_tokens": 4,
-                  "cache_creation_input_tokens": 10074, "cache_read_input_tokens": 16024},
-        "modelUsage": {"claude-opus-5[1m]": {
-            "inputTokens": 2, "outputTokens": 4, "cacheReadInputTokens": 16024,
-            "cacheCreationInputTokens": 10074, "costUSD": 0.108862,
-            "canonicalModel": "claude-opus-5"}},
+        "usage": {
+            "input_tokens": 2,
+            "output_tokens": 4,
+            "cache_creation_input_tokens": 10074,
+            "cache_read_input_tokens": 16024,
+        },
+        "modelUsage": {
+            "claude-opus-5[1m]": {
+                "inputTokens": 2,
+                "outputTokens": 4,
+                "cacheReadInputTokens": 16024,
+                "cacheCreationInputTokens": 10074,
+                "costUSD": 0.108862,
+                "canonicalModel": "claude-opus-5",
+            }
+        },
     }
 
 
 def _result_failed():
     """A REAL failure shape: subtype says success, is_error says otherwise."""
     return {
-        "type": "result", "subtype": "success", "is_error": True,
-        "session_id": SESSION, "result": "Credit balance is too low",
-        "api_error_status": 400, "num_turns": 1, "duration_ms": 1734,
-        "terminal_reason": "api_error", "total_cost_usd": 0, "modelUsage": {},
+        "type": "result",
+        "subtype": "success",
+        "is_error": True,
+        "session_id": SESSION,
+        "result": "Credit balance is too low",
+        "api_error_status": 400,
+        "num_turns": 1,
+        "duration_ms": 1734,
+        "terminal_reason": "api_error",
+        "total_cost_usd": 0,
+        "modelUsage": {},
     }
 
 
@@ -169,10 +199,16 @@ def test_a_rate_limit_event_is_a_status_report_not_a_block():
     rolling windows. Treating its presence as "rate limited" flagged every healthy run,
     which is a false alarm that teaches you to ignore the field."""
     hr = _load()
-    allowed = {"type": "rate_limit_event", "rate_limit_info": {
-        "status": "allowed",
-        "unifiedWindows": {"five_hour": {"utilization": 0.08},
-                           "seven_day": {"utilization": 0.15}}}}
+    allowed = {
+        "type": "rate_limit_event",
+        "rate_limit_info": {
+            "status": "allowed",
+            "unifiedWindows": {
+                "five_hour": {"utilization": 0.08},
+                "seven_day": {"utilization": 0.15},
+            },
+        },
+    }
     state = hr.read_stream(_lines(_init(), allowed))
     assert state["rate_limited"] is False
     assert state["rate_limit_use"] == {"five_hour": 0.08, "seven_day": 0.15}
@@ -185,12 +221,34 @@ def test_subagent_stages_are_tracked_with_their_parent():
     """parent_tool_use_id is what makes the stage tree exact at any nesting depth - the
     thing the deleted transcript reader could never see."""
     hr = _load()
-    spawn = {"type": "assistant", "parent_tool_use_id": None, "message": {"content": [
-        {"type": "tool_use", "id": "tu_1", "name": "Agent",
-         "input": {"subagent_type": "code-reviewer"}}]}}
-    nested = {"type": "assistant", "parent_tool_use_id": "tu_1", "message": {"content": [
-        {"type": "tool_use", "id": "tu_2", "name": "Agent",
-         "input": {"subagent_type": "qa-engineer"}}]}}
+    spawn = {
+        "type": "assistant",
+        "parent_tool_use_id": None,
+        "message": {
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "tu_1",
+                    "name": "Agent",
+                    "input": {"subagent_type": "code-reviewer"},
+                }
+            ]
+        },
+    }
+    nested = {
+        "type": "assistant",
+        "parent_tool_use_id": "tu_1",
+        "message": {
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "tu_2",
+                    "name": "Agent",
+                    "input": {"subagent_type": "qa-engineer"},
+                }
+            ]
+        },
+    }
     state = hr.read_stream(_lines(_init(), spawn, nested))
     assert [s["agent"] for s in state["stages"]] == ["code-reviewer", "qa-engineer"]
     assert state["stages"][1]["parent"] == "tu_1", "nesting must be recoverable"
@@ -201,8 +259,14 @@ def test_retries_are_surfaced():
     """The difference between "slow" and "stuck", which is the question a watcher of an
     unattended run is actually asking."""
     hr = _load()
-    retry = {"type": "system", "subtype": "api_retry", "attempt": 2,
-             "error": "overloaded", "error_status": 529, "retry_delay_ms": 1000}
+    retry = {
+        "type": "system",
+        "subtype": "api_retry",
+        "attempt": 2,
+        "error": "overloaded",
+        "error_status": 529,
+        "retry_delay_ms": 1000,
+    }
     state = hr.read_stream(_lines(_init(), retry))
     assert state["retries"][0]["error"] == "overloaded"
     assert state["retries"][0]["attempt"] == 2
@@ -212,8 +276,11 @@ def test_a_synthetic_error_message_is_not_counted_as_work():
     """A billing failure arrives as an assistant message with model "<synthetic>" and an
     error field. It is not a turn and must not be priced."""
     hr = _load()
-    synthetic = {"type": "assistant", "error": "billing_error",
-                 "message": {"model": "<synthetic>", "content": []}}
+    synthetic = {
+        "type": "assistant",
+        "error": "billing_error",
+        "message": {"model": "<synthetic>", "content": []},
+    }
     state = hr.read_stream(_lines(_init(), synthetic))
     assert state["tool_calls"] == 0
     assert state["outcome"] == "billing_error"
@@ -364,6 +431,7 @@ def test_a_silent_run_is_eventually_reported_as_gone(tmp_path, monkeypatch):
     _fake_argv(hr, monkeypatch, _fake_claude(tmp_path, [_init()]))
     record = hr.start(project, "x")
     import time as _t
+
     _t.sleep(0.6)
     assert hr.status(record)["live"] is True
     monkeypatch.setattr(hr, "_STALE_AFTER", 0.0)
@@ -378,6 +446,7 @@ def test_runs_are_listed_newest_first_and_filtered_by_engagement(tmp_path, monke
     _fake_argv(hr, monkeypatch, _fake_claude(tmp_path, [_init()]))
     first = hr.start(project, "x", slug="alpha")
     import time as _t
+
     _t.sleep(0.05)
     second = hr.start(project, "y", slug="beta")
     assert hr.latest(project)["session_id"] == second["session_id"]
@@ -411,7 +480,6 @@ def test_a_stop_waits_for_the_process_to_actually_go(tmp_path, monkeypatch):
     assert "is_alive" in body, "and confirm the process actually went"
 
 
-
 # --- the launcher's headless path (2026-08-25) ----------------------------------------------
 
 
@@ -428,14 +496,19 @@ def _launcher():
 
 
 def _pending(tmp_path: Path, **over) -> dict:
-    payload = {"ref": "x", "slug": "alpha", "auto": True, "run_mode": "headless",
-               "engagement_usd": 35, "on_budget": "stop", "hard_cap_usd": 35,
-               "session_id": SESSION}
+    payload = {
+        "ref": "x",
+        "slug": "alpha",
+        "auto": True,
+        "run_mode": "headless",
+        "engagement_usd": 35,
+        "on_budget": "stop",
+        "hard_cap_usd": 35,
+        "session_id": SESSION,
+    }
     payload.update(over)
     (tmp_path / ".claude").mkdir(parents=True, exist_ok=True)
-    (tmp_path / ".claude" / ".auto-pending.json").write_text(
-        json.dumps(payload), encoding="utf-8"
-    )
+    (tmp_path / ".claude" / ".auto-pending.json").write_text(json.dumps(payload), encoding="utf-8")
     return payload
 
 
@@ -447,12 +520,13 @@ def test_a_headless_run_uses_the_session_id_chosen_before_it_started(tmp_path, m
     launcher = _launcher()
     project = _project(tmp_path)
     seen = {}
-    monkeypatch.setattr(
-        launcher, "_configured_launch_command", lambda: "claude", raising=False
-    )
+    monkeypatch.setattr(launcher, "_configured_launch_command", lambda: "claude", raising=False)
     monkeypatch.setattr(launcher, "_watch_after_launch", lambda p, s: None)
-    monkeypatch.setattr(hr, "start", lambda *a, **k: seen.update(k) or {
-        "session_id": k.get("session_id") or "generated"})
+    monkeypatch.setattr(
+        hr,
+        "start",
+        lambda *a, **k: seen.update(k) or {"session_id": k.get("session_id") or "generated"},
+    )
     monkeypatch.setitem(sys.modules, "headless_run", hr)
     assert launcher._start_headless(project, "/engage --new --auto", _pending(tmp_path)) is True
     assert seen["session_id"] == SESSION
@@ -503,9 +577,16 @@ def test_a_windowed_run_never_takes_the_headless_path(tmp_path, monkeypatch):
     monkeypatch.setattr(launcher, "_launch_in_window", lambda *a: False)
     monkeypatch.setattr(launcher, "_new_window_wanted", lambda p: False)
     monkeypatch.setattr(launcher, "_resume_decision", lambda d: "/engage --new --auto")
-    for name in ("_print_banner", "_check_plugin_cache_lag", "_print_project_defaults",
-                 "_prewarm_guard_interpreter", "_write_probe_cache", "_refresh_tool_cache",
-                 "_heal_stale_alias_once", "_clear_request_handoff"):
+    for name in (
+        "_print_banner",
+        "_check_plugin_cache_lag",
+        "_print_project_defaults",
+        "_prewarm_guard_interpreter",
+        "_write_probe_cache",
+        "_refresh_tool_cache",
+        "_heal_stale_alias_once",
+        "_clear_request_handoff",
+    ):
         if hasattr(launcher, name):
             monkeypatch.setattr(launcher, name, lambda *a, **k: None)
     _pending(tmp_path, run_mode="window")
@@ -632,8 +713,12 @@ def test_a_run_that_died_without_writing_is_not_reported_as_live(tmp_path, monke
     The stream stays the authority for FINISHED. The pid is consulted for one thing only,
     and never to declare a run alive: catching a process that died without a word."""
     hr = _load()
-    record = {"session_id": SESSION, "slug": "x", "pid": 999999,
-              "stream": str(tmp_path / "empty.jsonl")}
+    record = {
+        "session_id": SESSION,
+        "slug": "x",
+        "pid": 999999,
+        "stream": str(tmp_path / "empty.jsonl"),
+    }
     (tmp_path / "empty.jsonl").write_text("", encoding="utf-8")
     state = hr.status(record)
     assert state["live"] is False
@@ -730,13 +815,24 @@ def test_init_records_the_request_on_the_pack(tmp_path):
         "review the spoofing thresholds for Q3\n", encoding="utf-8"
     )
     proc = subprocess.run(
-        [sys.executable, "-m", "scripts.engagement_state", "init",
-         "--title", "Spoofing review", "--slug", "spoof-q3"],
-        cwd=str(project), capture_output=True, text=True, timeout=120,
+        [
+            sys.executable,
+            "-m",
+            "scripts.engagement_state",
+            "init",
+            "--title",
+            "Spoofing review",
+            "--slug",
+            "spoof-q3",
+        ],
+        cwd=str(project),
+        capture_output=True,
+        text=True,
+        timeout=120,
         env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
     )
     assert proc.returncode == 0, proc.stderr[-400:]
     pack = json.loads(
-        (project / "artifacts" / "spoof-q3" / "engagement-state.json").read_text("utf-8")
+        (_vsit.engagements_dir(project) / "spoof-q3" / "engagement-state.json").read_text("utf-8")
     )
     assert pack["request"] == "review the spoofing thresholds for Q3"

@@ -32,6 +32,8 @@ from scripts.engagement_state import (
     validate_state,
 )
 
+import scripts.vsit_paths as _vsit
+
 
 def _run(art, *argv) -> int:
     return main(["--dir", str(art), *argv])
@@ -47,7 +49,7 @@ def _run_env(monkeypatch, project, *argv) -> int:
 
 def test_workspaced_init_sets_active_marker(tmp_path, monkeypatch):
     _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
-    art = tmp_path / "artifacts"
+    art = _vsit.engagements_dir(tmp_path)
     assert read_active(art) == "audit"
     _run_env(monkeypatch, tmp_path, "init", "--title", "B", "--slug", "scoping")
     assert read_active(art) == "scoping"  # the newest engagement becomes ACTIVE
@@ -59,8 +61,8 @@ def test_resolution_targets_active_when_ambiguous(tmp_path, monkeypatch):
     _run_env(monkeypatch, tmp_path, "set-active", "audit")
     # No --slug, two open workspaces: pre-R1 this was a hard error; now the marker decides.
     assert _run_env(monkeypatch, tmp_path, "add-outstanding", "waiting on spec") == 0
-    audit = load_state(tmp_path / "artifacts" / "audit")
-    scoping = load_state(tmp_path / "artifacts" / "scoping")
+    audit = load_state(_vsit.engagements_dir(tmp_path) / "audit")
+    scoping = load_state(_vsit.engagements_dir(tmp_path) / "scoping")
     assert any("waiting on spec" in i for i in audit["outstanding"])
     assert not any("waiting on spec" in i for i in scoping["outstanding"])
 
@@ -72,7 +74,7 @@ def test_set_active_unknown_slug_is_an_error(tmp_path, monkeypatch):
 
 def test_close_clears_the_active_marker(tmp_path, monkeypatch):
     _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
-    art = tmp_path / "artifacts"
+    art = _vsit.engagements_dir(tmp_path)
     ws = art / "audit"
     (ws / "engagement-summary-audit.txt").write_text(
         "Done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
@@ -86,7 +88,7 @@ def test_close_clears_the_active_marker(tmp_path, monkeypatch):
 
 def test_refused_close_keeps_the_active_marker(tmp_path, monkeypatch):
     _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
-    art = tmp_path / "artifacts"
+    art = _vsit.engagements_dir(tmp_path)
     ws = art / "audit"
     _run(ws, "set-team", "Ana (analysis)")
     assert _run(ws, "set-status", "closed", "--verdict", "done") == 1  # no email -> refused
@@ -186,7 +188,7 @@ def test_cold_resume_recovers_everything_from_disk(tmp_path, monkeypatch):
     """The phase 2 exit criterion: a fresh session against a mid-flight workspace recovers
     the ACTIVE slug, phase, run mode and the gate answers WITHOUT any conversation state."""
     _run_env(monkeypatch, tmp_path, "init", "--title", "Spoofing review", "--slug", "spoof")
-    art = tmp_path / "artifacts"
+    art = _vsit.engagements_dir(tmp_path)
     ws = art / "spoof"
     _run(ws, "set-phase", "delivery")
     _run(ws, "set-runtime", "--mode", "repo", "--interpreter", "python3")
@@ -242,7 +244,7 @@ def test_init_from_inside_workspace_lands_at_root(monkeypatch, tmp_path):
 def test_init_refuses_explicit_nested_dir(tmp_path, capsys):
     from scripts.engagement_state import main as es_main
 
-    root = tmp_path / "artifacts"
+    root = _vsit.engagements_dir(tmp_path)
     assert es_main(["--dir", str(root / "old"), "init", "--title", "Old", "--slug", "old"]) == 0
     nested = root / "old" / "artifacts" / "new"
     rc = es_main(["--dir", str(nested), "init", "--title", "New", "--slug", "new"])
@@ -257,7 +259,7 @@ def test_checker_flags_existing_nested_pack(tmp_path):
     from scripts.check_artifacts import check_registry
     from scripts.engagement_state import main as es_main, render_registry
 
-    root = tmp_path / "artifacts"
+    root = _vsit.engagements_dir(tmp_path)
     assert es_main(["--dir", str(root / "old"), "init", "--title", "Old", "--slug", "old"]) == 0
     # simulate pre-fix damage: a pack nested inside old
     nested = root / "old" / "artifacts" / "new"

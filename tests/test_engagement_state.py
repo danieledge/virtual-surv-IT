@@ -28,6 +28,22 @@ from scripts.engagement_state import (
     validate_state,
 )
 
+import scripts.vsit_paths as _vsit
+
+
+def _write_prefs(project, payload, **kwargs):
+    """Write team preferences where the resolver says they live.
+
+    Was `project / ".claude" / "team-preferences.json"` inline; after the VSIT flip a fresh
+    project's preferences live in VSIT/config/, so a fixture writing the legacy path was
+    setting up a file the code no longer reads - the settings snapshot then recorded
+    defaults and the assertion failed on two flipped booleans."""
+    target = _vsit.preferences_file(project)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(payload, **kwargs)
+    return target
+
+
 _STATE = {
     "schema": 1,
     "engagement": {
@@ -441,14 +457,14 @@ def _run_env(monkeypatch, root, *argv) -> int:
 
 def test_init_default_creates_workspace_and_registry(tmp_path, monkeypatch):
     assert _run_env(monkeypatch, tmp_path, "init", "--title", "Audit", "--slug", "audit") == 0
-    ws = tmp_path / "artifacts" / "audit"
+    ws = _vsit.engagements_dir(tmp_path) / "audit"
     assert (ws / "engagement-state.json").is_file()
     assert (ws / "START-HERE.md").is_file()
-    reg = tmp_path / "artifacts" / "engagements.json"
+    reg = _vsit.engagements_dir(tmp_path) / "engagements.json"
     assert reg.is_file()
     rows = json.loads(reg.read_text(encoding="utf-8"))["engagements"]
     assert rows[0]["slug"] == "audit" and rows[0]["status"] == "in_progress"
-    assert "audit/START-HERE.md" in (tmp_path / "artifacts" / "ENGAGEMENTS.md").read_text(
+    assert "audit/START-HERE.md" in (_vsit.engagements_dir(tmp_path) / "ENGAGEMENTS.md").read_text(
         encoding="utf-8"
     )
 
@@ -456,7 +472,7 @@ def test_init_default_creates_workspace_and_registry(tmp_path, monkeypatch):
 def test_single_workspace_auto_resolves_without_slug(tmp_path, monkeypatch):
     _run_env(monkeypatch, tmp_path, "init", "--title", "Audit", "--slug", "audit")
     assert _run_env(monkeypatch, tmp_path, "set-status", "blocked") == 0
-    assert load_state(tmp_path / "artifacts" / "audit")["status"] == "blocked"
+    assert load_state(_vsit.engagements_dir(tmp_path) / "audit")["status"] == "blocked"
 
 
 # ------------------------------------------------------------- concurrent mutation (2026-08 audit, C5)
@@ -526,12 +542,14 @@ def test_default_artifacts_dir_trusts_claude_project_dir_even_named_artifacts(
     must be trusted directly, never walked past."""
     from scripts.engagement_state import _default_artifacts_dir
 
-    project = tmp_path / "artifacts" / "myproject"
+    project = _vsit.engagements_dir(tmp_path) / "myproject"
     project.mkdir(parents=True)
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
     result = _default_artifacts_dir()
-    assert result == project / "artifacts"
-    assert result != tmp_path / "artifacts"  # the unrelated ancestor - must never be chosen
+    assert result == _vsit.engagements_dir(project)
+    assert result != _vsit.engagements_dir(
+        tmp_path
+    )  # the unrelated ancestor - must never be chosen
 
 
 def test_default_artifacts_dir_cwd_fallback_finds_nearest_enclosing_workspace(
@@ -543,10 +561,10 @@ def test_default_artifacts_dir_cwd_fallback_finds_nearest_enclosing_workspace(
     from scripts.engagement_state import _default_artifacts_dir
 
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
-    pack = tmp_path / "artifacts" / "old-slug"
+    pack = _vsit.engagements_dir(tmp_path) / "old-slug"
     pack.mkdir(parents=True)
     monkeypatch.chdir(pack)
-    assert _default_artifacts_dir() == tmp_path / "artifacts"
+    assert _default_artifacts_dir() == _vsit.engagements_dir(tmp_path)
 
 
 def test_default_artifacts_dir_cwd_fallback_picks_nearest_not_outermost(tmp_path, monkeypatch):
@@ -556,7 +574,7 @@ def test_default_artifacts_dir_cwd_fallback_picks_nearest_not_outermost(tmp_path
     from scripts.engagement_state import _default_artifacts_dir
 
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
-    outer_artifacts = tmp_path / "artifacts"
+    outer_artifacts = _vsit.engagements_dir(tmp_path)
     real_project = outer_artifacts / "myproject"
     pack = real_project / "artifacts" / "old-slug"
     pack.mkdir(parents=True)
@@ -571,7 +589,7 @@ def test_project_root_for_picks_nearest_artifacts_ancestor(tmp_path):
     outermost, for the identical reason."""
     from scripts.engagement_state import _project_root_for
 
-    outer_artifacts = tmp_path / "artifacts"
+    outer_artifacts = _vsit.engagements_dir(tmp_path)
     real_project = outer_artifacts / "myproject"
     pack = real_project / "artifacts" / "my-slug"
     pack.mkdir(parents=True)
@@ -583,12 +601,13 @@ def test_project_root_for_picks_nearest_artifacts_ancestor(tmp_path):
 
 def test_init_captures_settings_snapshot_from_team_preferences(tmp_path, monkeypatch):
     (tmp_path / ".claude").mkdir()
-    (tmp_path / ".claude" / "team-preferences.json").write_text(
+    _write_prefs(
+        tmp_path,
         json.dumps({"regulatory_citations": False, "large_context_review_split": True}),
         encoding="utf-8",
     )
     _run_env(monkeypatch, tmp_path, "init", "--title", "Audit", "--slug", "audit")
-    state = load_state(tmp_path / "artifacts" / "audit")
+    state = load_state(_vsit.engagements_dir(tmp_path) / "audit")
     assert state["settings_snapshot"] == {
         "extra_formats": [],
         "regulatory_citations": False,
@@ -611,7 +630,7 @@ def test_init_captures_settings_snapshot_from_team_preferences(tmp_path, monkeyp
 
 def test_init_settings_snapshot_builtin_defaults_when_no_preferences_file(tmp_path, monkeypatch):
     _run_env(monkeypatch, tmp_path, "init", "--title", "Audit", "--slug", "audit")
-    state = load_state(tmp_path / "artifacts" / "audit")
+    state = load_state(_vsit.engagements_dir(tmp_path) / "audit")
     assert state["settings_snapshot"] == {
         "extra_formats": [],
         "regulatory_citations": True,
@@ -635,13 +654,11 @@ def test_settings_snapshot_is_a_point_in_time_record_not_relive_resolved(tmp_pat
     """Changing team-preferences.json AFTER init must not retroactively change an already-
     recorded snapshot - it is a record of what was true when the engagement opened."""
     _run_env(monkeypatch, tmp_path, "init", "--title", "Audit", "--slug", "audit")
-    before = load_state(tmp_path / "artifacts" / "audit")["settings_snapshot"]
+    before = load_state(_vsit.engagements_dir(tmp_path) / "audit")["settings_snapshot"]
     (tmp_path / ".claude").mkdir()
-    (tmp_path / ".claude" / "team-preferences.json").write_text(
-        json.dumps({"regulatory_citations": False}), encoding="utf-8"
-    )
+    _write_prefs(tmp_path, json.dumps({"regulatory_citations": False}), encoding="utf-8")
     _run_env(monkeypatch, tmp_path, "log-note", "unrelated mutation")
-    after = load_state(tmp_path / "artifacts" / "audit")["settings_snapshot"]
+    after = load_state(_vsit.engagements_dir(tmp_path) / "audit")["settings_snapshot"]
     assert before == after
     assert after["regulatory_citations"] is True  # unchanged despite the later preference edit
 
@@ -765,7 +782,7 @@ def test_init_legitimate_slug_with_dots_still_works(tmp_path, monkeypatch):
     merely contains a single dot (not a traversal sequence) must still work fine."""
     rc = _run_env(monkeypatch, tmp_path, "init", "--title", "T", "--slug", "release-0.33")
     assert rc == 0
-    assert (tmp_path / "artifacts" / "release-0.33" / "engagement-state.json").is_file()
+    assert (_vsit.engagements_dir(tmp_path) / "release-0.33" / "engagement-state.json").is_file()
 
 
 def test_set_active_absolute_path_slug_is_refused(tmp_path, monkeypatch):
@@ -813,8 +830,8 @@ def test_multiple_workspaces_require_slug_without_active_marker(tmp_path, monkey
     with pytest.raises(SystemExit):
         _run_env(monkeypatch, tmp_path, "set-status", "blocked")  # ambiguous, no marker
     assert _run_env(monkeypatch, tmp_path, "--slug", "audit", "set-status", "blocked") == 0
-    assert load_state(tmp_path / "artifacts" / "audit")["status"] == "blocked"
-    assert load_state(tmp_path / "artifacts" / "scoping")["status"] == "in_progress"
+    assert load_state(_vsit.engagements_dir(tmp_path) / "audit")["status"] == "blocked"
+    assert load_state(_vsit.engagements_dir(tmp_path) / "scoping")["status"] == "in_progress"
 
 
 def test_standalone_flat_pack_writes_no_registry_anywhere(tmp_path, monkeypatch):
@@ -824,7 +841,7 @@ def test_standalone_flat_pack_writes_no_registry_anywhere(tmp_path, monkeypatch)
     engagements.json/ENGAGEMENTS.md/.html into the user's own git-tracked project
     directory. Fixed: no registry needed for a standalone flat pack at all - none
     should appear at the project root OR the artifacts dir."""
-    art = tmp_path / "artifacts"
+    art = _vsit.engagements_dir(tmp_path)
     _run(art, "init", "--title", "Solo", "--slug", "solo-job")  # flat via --dir
     assert not (tmp_path / "engagements.json").is_file(), (
         "registry leaked into the project root - the exact regression this guards"
@@ -837,7 +854,7 @@ def test_flat_pack_with_genuine_sibling_workspace_gets_a_registry(tmp_path, monk
     workspace under the same artifacts root must still get a registry - at the
     artifacts root (the parent both share), not the project root above it. Proves
     the fix didn't just make registry creation never fire for flat packs."""
-    art = tmp_path / "artifacts"
+    art = _vsit.engagements_dir(tmp_path)
     _run(art, "init", "--title", "Flat", "--slug", "flat-job")  # flat via --dir
     _run_env(monkeypatch, tmp_path, "init", "--title", "Workspace", "--slug", "ws-job")
     reg = art / "engagements.json"
@@ -854,14 +871,14 @@ def test_registry_tracks_independent_states(tmp_path, monkeypatch):
     rows = {
         r["slug"]: r["status"]
         for r in json.loads(
-            (tmp_path / "artifacts" / "engagements.json").read_text(encoding="utf-8")
+            (_vsit.engagements_dir(tmp_path) / "engagements.json").read_text(encoding="utf-8")
         )["engagements"]
     }
     assert rows == {"audit": "blocked", "scoping": "in_progress"}
 
 
 def test_migrate_moves_flat_pack_into_workspace(tmp_path, monkeypatch):
-    art = tmp_path / "artifacts"
+    art = _vsit.engagements_dir(tmp_path)
     _run(art, "init", "--title", "Legacy", "--slug", "legacy-job")  # flat via --dir
     (art / "report.md").write_text("x", encoding="utf-8")
     assert _run_env(monkeypatch, tmp_path, "migrate") == 0
@@ -881,7 +898,7 @@ def test_migrate_leaves_root_active_marker_in_place(tmp_path, monkeypatch):
     into the newly migrated pack's directory instead of staying at the root it describes -
     read_active(root) silently went back to None after a migrate that had nothing to do
     with the active engagement at all."""
-    art = tmp_path / "artifacts"
+    art = _vsit.engagements_dir(tmp_path)
     _run(art, "init", "--title", "Legacy", "--slug", "legacy-job")  # flat via --dir
     _run_env(monkeypatch, tmp_path, "init", "--title", "WS", "--slug", "ws-job")  # workspaced
     assert read_active(art) == "ws-job"  # workspaced init marks itself ACTIVE
@@ -897,7 +914,7 @@ def test_old_flat_engagement_then_new_workspace_and_migrate(tmp_path, monkeypatc
     """User scenario: an old (closed, pre-workspaces) flat engagement exists; a new session
     starts a new engagement beside it, then tidies via migrate. Nothing of the old pack is
     lost and both end up as registered workspaces."""
-    art = tmp_path / "artifacts"
+    art = _vsit.engagements_dir(tmp_path)
     _run(art, "init", "--title", "Old review", "--slug", "old-review")  # flat (pre-0.31)
     _run(art, "set-team", "Ravi (review)")
     # A pre-workspaces legacy close: hand-mint the closed state (the R6 close gate would
@@ -943,7 +960,7 @@ def test_no_limit_on_engagement_count(tmp_path, monkeypatch):
     rows = {
         r["slug"]: r["status"]
         for r in json.loads(
-            (tmp_path / "artifacts" / "engagements.json").read_text(encoding="utf-8")
+            (_vsit.engagements_dir(tmp_path) / "engagements.json").read_text(encoding="utf-8")
         )["engagements"]
     }
     assert rows == statuses
@@ -958,7 +975,7 @@ def test_slug_flag_accepted_before_or_after_subcommand(tmp_path, monkeypatch):
     _run_env(monkeypatch, tmp_path, "init", "--title", "B", "--slug", "eng-b")
     assert _run_env(monkeypatch, tmp_path, "--slug", "eng-a", "log-note", "before") == 0
     assert _run_env(monkeypatch, tmp_path, "log-note", "--slug", "eng-a", "after") == 0
-    state = load_state(tmp_path / "artifacts" / "eng-a")
+    state = load_state(_vsit.engagements_dir(tmp_path) / "eng-a")
     assert any("before" in entry for entry in state["log"])
     assert any("after" in entry for entry in state["log"])
 
@@ -967,7 +984,7 @@ def test_archive_force_excludes_stateless_directory(tmp_path, monkeypatch):
     """Live corp report 2026-07-31: `archive <name> --force` on a directory with no
     engagement-state.json (a legacy/non-workspace directory the DoD scan still walks)
     exited 2 with no way to exclude it - only a hand-written .archive marker worked."""
-    art = tmp_path / "artifacts"
+    art = _vsit.engagements_dir(tmp_path)
     (art / "legacy").mkdir(parents=True)
     (art / "legacy" / "notes.md").write_text("old", encoding="utf-8")
     assert _run_env(monkeypatch, tmp_path, "archive", "legacy") == 2
@@ -985,7 +1002,7 @@ def test_show_prints_state_and_always_exits_0(tmp_path, monkeypatch, capsys):
     capsys.readouterr()
     assert _run_env(monkeypatch, tmp_path, "--slug", "t", "show") == 0
     shown = json.loads(capsys.readouterr().out)
-    assert shown == load_state(tmp_path / "artifacts" / "t")
+    assert shown == load_state(_vsit.engagements_dir(tmp_path) / "t")
     assert _run_env(monkeypatch, tmp_path, "--slug", "nosuch", "show") == 2
 
 
@@ -999,7 +1016,7 @@ def test_render_exits_nonzero_when_html_sibling_skipped(tmp_path, monkeypatch):
     assert _run_env(monkeypatch, tmp_path, "--slug", "t", "render") == 0
     monkeypatch.setattr(es_module, "_load_render_html_module", lambda: None)
     assert _run_env(monkeypatch, tmp_path, "--slug", "t", "render") == 2
-    assert (tmp_path / "artifacts" / "t" / "START-HERE.md").is_file()
+    assert (_vsit.engagements_dir(tmp_path) / "t" / "START-HERE.md").is_file()
 
 
 # ------------------------------------------------ module-loader memoization (2026-08-03 perf audit)
@@ -1097,7 +1114,7 @@ def test_write_state_does_not_reread_the_pack_it_just_wrote(tmp_path, monkeypatc
     import scripts.engagement_state as es_module
 
     _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
-    art = tmp_path / "artifacts"
+    art = _vsit.engagements_dir(tmp_path)
     pack = art / "audit"
 
     orig_load_state = es_module.load_state
@@ -1121,7 +1138,7 @@ def test_write_state_still_reads_every_other_pack_fresh(tmp_path, monkeypatch):
     sibling pack that changed between renders (e.g. edited by a different session)."""
     _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
     _run_env(monkeypatch, tmp_path, "init", "--title", "B", "--slug", "scoping")
-    art = tmp_path / "artifacts"
+    art = _vsit.engagements_dir(tmp_path)
 
     # Simulate a sibling pack changing on disk without going through this process.
     sibling_state = json.loads(state_path(art / "scoping").read_text(encoding="utf-8"))
@@ -1147,7 +1164,7 @@ def test_known_pack_substitution_matches_full_rescan_output(tmp_path, monkeypatc
 
     _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
     _run_env(monkeypatch, tmp_path, "init", "--title", "B", "--slug", "scoping")
-    art = tmp_path / "artifacts"
+    art = _vsit.engagements_dir(tmp_path)
     pack = art / "audit"
     state = load_state(pack)
 
@@ -1163,7 +1180,7 @@ def test_scan_engagements_known_ignored_when_pack_does_not_match(tmp_path, monke
     import scripts.engagement_state as es_module
 
     _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
-    art = tmp_path / "artifacts"
+    art = _vsit.engagements_dir(tmp_path)
 
     rows = es_module.scan_engagements(art, known=(tmp_path / "nowhere", {"status": "bogus"}))
     assert rows[0]["status"] == "in_progress"
@@ -1177,7 +1194,7 @@ def test_render_files_reuses_known_state_instead_of_rereading(tmp_path, monkeypa
     import scripts.engagement_state as es_module
 
     _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
-    art = tmp_path / "artifacts"
+    art = _vsit.engagements_dir(tmp_path)
     pack = art / "audit"
 
     orig_load_state = es_module.load_state
@@ -1202,7 +1219,7 @@ def test_standalone_render_command_still_reads_from_disk(tmp_path, monkeypatch):
     import scripts.engagement_state as es_module
 
     _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
-    art = tmp_path / "artifacts"
+    art = _vsit.engagements_dir(tmp_path)
     pack = art / "audit"
 
     orig_load_state = es_module.load_state
@@ -1227,7 +1244,7 @@ def test_render_registry_with_no_known_reads_every_pack_fresh(tmp_path, monkeypa
     import scripts.engagement_state as es_module
 
     _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
-    art = tmp_path / "artifacts"
+    art = _vsit.engagements_dir(tmp_path)
     pack = art / "audit"
 
     orig_load_state = es_module.load_state
@@ -1252,7 +1269,7 @@ def test_resume_menu_json_slims_open_to_slugs_but_resume_menu_keeps_rows(tmp_pat
     from scripts.engagement_state import main as es_main
     from scripts.engagement_state import resume_menu, resume_menu_json
 
-    art = tmp_path / "artifacts"
+    art = _vsit.engagements_dir(tmp_path)
     assert es_main(["--dir", str(art / "pack"), "init", "--title", "Pack", "--slug", "pack"]) == 0
 
     rows_menu = resume_menu(art)
@@ -1270,7 +1287,7 @@ def test_set_qa_depth_records_a_typed_level(tmp_path):
     from scripts.engagement_state import load_state
     from scripts.engagement_state import main as es_main
 
-    art = tmp_path / "artifacts"
+    art = _vsit.engagements_dir(tmp_path)
     assert es_main(["--dir", str(art / "e"), "init", "--title", "E", "--slug", "e"]) == 0
     assert load_state(art / "e").get("qa_depth") is None  # absence is never "quick"
     assert es_main(["--dir", str(art / "e"), "set-qa-depth", "quick"]) == 0
@@ -1282,7 +1299,7 @@ def test_qa_depth_rejects_an_unknown_level(tmp_path):
     breadth - and a typo must not silently become a reduced level."""
     from scripts.engagement_state import main as es_main, validate_state
 
-    art = tmp_path / "artifacts"
+    art = _vsit.engagements_dir(tmp_path)
     assert es_main(["--dir", str(art / "e"), "init", "--title", "E", "--slug", "e"]) == 0
     import pytest
 

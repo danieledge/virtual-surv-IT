@@ -44,15 +44,17 @@ ROOT_NAME = "VSIT"
 
 # THE FLIP (plan-project-footprint-2026-08-27, stage 2).
 #
-# While False, a project with NEITHER layout present resolves to the legacy locations - so
-# routing 70+ call sites through this module (stage 1) changes no behaviour anywhere, and a
-# green suite across that refactor actually means something. Flipping it to True is stage 2:
-# one line, one reviewable change, and the tests that encode the layout get updated
-# deliberately rather than as collateral of a large refactor.
+# FLIPPED 2026-08-28 (stage 2). While it was False, routing 70+ call sites through this
+# module changed no behaviour anywhere, so a green suite across that refactor meant
+# something. Now True: a project with NEITHER layout present gets VSIT/.
+#
+# What this does NOT do: touch any existing project. An existing legacy directory still
+# wins over a non-existent new one, so a project carrying artifacts/ keeps using it until
+# someone deliberately migrates. The flip only decides what a project with nothing gets.
 #
 # Projects that ALREADY have VSIT/ are unaffected either way - an existing new-layout
 # directory always wins, at both settings.
-PREFER_NEW_LAYOUT = False
+PREFER_NEW_LAYOUT = True
 
 # New layout, relative to the project root.
 _SHARED = (ROOT_NAME, "shared")

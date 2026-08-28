@@ -226,9 +226,15 @@ def _project_root_for(pack_dir: Path) -> Path:
     won't be found there, which resolve_preferences() already treats as "no project
     preferences set" (built-in defaults)."""
     resolved = pack_dir.resolve()
-    tops = [p for p in (resolved, *resolved.parents) if p.name == "artifacts"]
-    if tops:
-        return tops[0].parent
+    # BOTH layouts (VSIT migration). Under the new one the workspace root is
+    # VSIT/engagements, so the project root is TWO levels up, not one - getting that wrong
+    # returns VSIT/ as the project and the preferences lookup silently finds nothing, which
+    # is how a settings snapshot ends up recording defaults nobody chose.
+    for candidate in (resolved, *resolved.parents):
+        if candidate.name == "artifacts":
+            return candidate.parent
+        if candidate.name == "engagements" and candidate.parent.name == "VSIT":
+            return candidate.parent.parent
     return resolved.parent
 
 
@@ -1469,14 +1475,25 @@ def _cmd_init(args: argparse.Namespace) -> int:
         args.dir = safe
     else:
         # Explicit --dir: refuse a target nested inside another engagement pack or a
-        # second artifacts level (artifacts/<old>/artifacts/<new> - the 2026-07-30
-        # live defect). Legal shapes stay legal: a flat pack at the artifacts root,
-        # a workspace at artifacts/<slug>, any standalone dir (tests, custom layouts).
+        # second workspace-root level (artifacts/<old>/artifacts/<new> - the 2026-07-30
+        # live defect). Legal shapes stay legal: a flat pack at the workspace root,
+        # a workspace at <root>/<slug>, any standalone dir (tests, custom layouts).
+        #
+        # Recognises BOTH layouts (VSIT migration): the legacy `artifacts` name and
+        # `VSIT/engagements`. Without the second, the identical nesting bug would be
+        # reachable again the moment a project moved - the guard would be looking for a
+        # directory name that no longer exists.
         d = Path(args.dir).resolve()
         chain = (d, *d.parents)
+
+        def _is_root(candidate: Path) -> bool:
+            return candidate.name == "artifacts" or (
+                candidate.name == "engagements" and candidate.parent.name == "VSIT"
+            )
+
         parent = d.parent
-        nested_in_pack = state_path(parent).is_file() and parent.name != "artifacts"
-        if sum(1 for p in chain if p.name == "artifacts") > 1 or nested_in_pack:
+        nested_in_pack = state_path(parent).is_file() and not _is_root(parent)
+        if sum(1 for p in chain if _is_root(p)) > 1 or nested_in_pack:
             print(
                 f"refusing to init inside another engagement pack: {d} - workspaces "
                 "live at <project>/artifacts/<slug>/ only (run init from the project "

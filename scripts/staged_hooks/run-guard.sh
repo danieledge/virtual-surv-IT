@@ -293,7 +293,12 @@ DAEMON_CLIENT="$_root/scripts/guard_daemon_client.py"
 # preserves the same "only the trailing newline is stripped" behavior $(cat ...) had
 # (a bare `read` would otherwise also trim leading/trailing whitespace via word-splitting).
 if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
-	_fastcache="$_project_root/.claude/.guard-interpreter"
+	# Same two-location rule as CACHE below; resolved here too because this fast path
+	# runs before CACHE is set (it exits before reaching it on a hit).
+	_fastcache="$_project_root/VSIT/local/guard-interpreter"
+	if [ ! -f "$_fastcache" ]; then
+		_fastcache="$_project_root/.claude/.guard-interpreter"
+	fi
 	if [ -f "$_fastcache" ]; then
 		IFS= read -r _fastcached <"$_fastcache" 2>/dev/null
 		if [ -n "$_fastcached" ] && command -v "$_fastcached" >/dev/null 2>&1; then
@@ -309,7 +314,20 @@ LOCK_STAMP="$LOCK_DIR/acquired-at"
 # later point of use, so the cold-start probe below and the real interpreter-cache lookup
 # further down read and write the exact same path instead of two independently-computed
 # variables that could silently diverge the same way LOCK_DIR/LOCK_STAMP just did.
-CACHE="$_project_root/.claude/.guard-interpreter"
+#
+# VSIT LAYOUT (2026-08-28). Two locations, and this file has to know both by hand: it runs
+# BEFORE any interpreter is chosen - finding one is its whole job - so it cannot import
+# scripts/vsit_paths.py to be told where its own cache lives. Read whichever EXISTS,
+# preferring the new one; write to the new one only when that directory is already there,
+# so this launcher never creates VSIT/ as a side effect of a hook call. Keep in step with
+# vsit_paths.local_file("guard_interpreter") - the duplication is unavoidable, so it is
+# flagged rather than hidden.
+CACHE="$_project_root/VSIT/local/guard-interpreter"
+if [ ! -f "$CACHE" ]; then
+	if [ -f "$_project_root/.claude/.guard-interpreter" ] || [ ! -d "$_project_root/VSIT/local" ]; then
+		CACHE="$_project_root/.claude/.guard-interpreter"
+	fi
+fi
 LOCK_MAX_AGE_SECONDS=10  # generous upper bound for one interpreter start + guard check;
 # older means the holder is gone, not genuinely still working.
 

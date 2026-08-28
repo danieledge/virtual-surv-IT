@@ -27,6 +27,22 @@ import os
 import sys
 from pathlib import Path
 
+
+def _vsit_paths():
+    """The layout resolver (VSIT migration), imported lazily."""
+    import sys as _sys
+
+    _here = Path(__file__).resolve().parent
+    for _candidate in (_here, _here.parent, _here.parent / "scripts"):
+        if (_candidate / "vsit_paths.py").is_file():
+            if str(_candidate) not in _sys.path:
+                _sys.path.insert(0, str(_candidate))
+            break
+    import vsit_paths
+
+    return vsit_paths
+
+
 _LIVE = ("in_progress", "blocked", "closing")
 _MARKS = {"in_progress": "⏳", "blocked": "⛔", "closing": "🔒"}
 
@@ -68,7 +84,7 @@ def main() -> int:
     if data.get("source") not in ("compact", "resume"):
         return 0  # matcher backstop: never touch startup/clear sessions
     root = Path(os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or Path.cwd())
-    artifacts = root / "artifacts"
+    artifacts = _vsit_paths().engagements_dir(root)
     if not artifacts.is_dir():
         return 0
     try:

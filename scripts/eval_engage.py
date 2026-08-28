@@ -66,6 +66,27 @@ import yaml
 
 from scripts.eval_score import score
 
+
+def _vsit_paths():
+    """The layout resolver (VSIT migration), imported lazily.
+
+    eval_engage builds a SANDBOX that a real engagement then runs inside, so the directory
+    it creates must be the one the engagement itself will resolve to. That is why this file
+    was held back from the mechanical stage-1 pass: getting it wrong yields a green suite
+    and broken evals."""
+    import sys as _sys
+
+    _here = Path(__file__).resolve().parent
+    for _candidate in (_here, _here.parent, _here.parent / "scripts"):
+        if (_candidate / "vsit_paths.py").is_file():
+            if str(_candidate) not in _sys.path:
+                _sys.path.insert(0, str(_candidate))
+            break
+    import vsit_paths
+
+    return vsit_paths
+
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CASES_ROOT = REPO_ROOT / "evals" / "cases"
 RUNS_ROOT = REPO_ROOT / "evals" / "runs"
@@ -275,7 +296,7 @@ def build_sandbox(dest: Path) -> None:
     # Fixed argv, no shell.
     subprocess.run(args, check=True, capture_output=True)  # nosec B603
     (dest / "data" / "raw").mkdir(parents=True, exist_ok=True)
-    (dest / "artifacts").mkdir(exist_ok=True)
+    _vsit_paths().engagements_dir(dest).mkdir(parents=True, exist_ok=True)
     env_git = [
         "git",
         "-C",
@@ -765,7 +786,7 @@ async def run_engage_session(
 def probe_artifacts(sandbox: Path) -> list[dict]:
     """Deterministic, code-level findings from what the run actually left on disk."""
     findings: list[dict] = []
-    art = sandbox / "artifacts"
+    art = _vsit_paths().engagements_dir(sandbox)
     if not art.is_dir():
         return findings
 
@@ -936,7 +957,7 @@ def _artifact_listing(
     so the judge can tell "short" from "cut". Non-text artifacts (.html renders, data
     files) stay path-only. Unreadable files are listed with their error, never raised.
     """
-    art = sandbox / "artifacts"
+    art = _vsit_paths().engagements_dir(sandbox)
     if not art.is_dir():
         return "(no artifacts/ directory)"
     files = [p for p in sorted(art.rglob("*")) if p.is_file()]
@@ -1351,7 +1372,7 @@ def fixture_baseline(sandbox: Path) -> dict[str, str]:
     harness itself wrote, so a run that does literally nothing passes.
     """
     out: dict[str, str] = {}
-    artifacts = sandbox / "artifacts"
+    artifacts = _vsit_paths().engagements_dir(sandbox)
     if not artifacts.is_dir():
         return out
     for path in sorted(artifacts.rglob("*")):
@@ -1405,7 +1426,7 @@ def raw_evidence_findings(
     # transcript chunks, silently reintroducing the very blindness this function exists to fix.
     _add(_chunk_text(transcript)[:_RAW_TRANSCRIPT_QUOTA], "", "prose")
 
-    artifacts = sandbox / "artifacts"
+    artifacts = _vsit_paths().engagements_dir(sandbox)
     if artifacts.is_dir():
         for path in sorted(artifacts.rglob("*")):
             if not path.is_file() or path.suffix.lower() not in (".md", ".txt", ".json"):

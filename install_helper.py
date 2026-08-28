@@ -1229,7 +1229,9 @@ def gather_update_preview(repo: Path, branch: str, local_version: Optional[str],
             pass
     if info["behind"] is None:
         info["notes"].append("could not count new commits (shallow clone or detached HEAD?)")
-    proc = probe(["git", "-C", repo.as_posix(), "show", f"origin/{branch}:.claude-plugin/plugin.json"])
+    proc = probe(
+        ["git", "-C", repo.as_posix(), "show", f"origin/{branch}:.claude-plugin/plugin.json"]
+    )
     if proc is not None:
         info["remote_version"] = parse_manifest_version(proc.stdout)
     if info["remote_version"] is None:
@@ -1836,7 +1838,9 @@ class Installer:
             ):
                 self.step_fail("Local commits", detail + " - left in place, aborting")
 
-        proc = run_cmd(["git", "-C", repo.as_posix(), "checkout", "-B", self.branch, f"origin/{self.branch}"])
+        proc = run_cmd(
+            ["git", "-C", repo.as_posix(), "checkout", "-B", self.branch, f"origin/{self.branch}"]
+        )
         if proc.returncode != 0:
             self.step_fail("Checkout branch", proc.stderr.strip() or "git checkout failed")
         head = run_cmd(["git", "-C", repo.as_posix(), "rev-parse", "--short", "HEAD"])
@@ -1915,7 +1919,7 @@ class Installer:
         if not launcher.is_file():
             self.step_skip("Guard interpreter cache", "launcher not found in this clone")
             return
-        cache = self.repo / ".claude" / ".guard-interpreter"
+        cache = _guard_interpreter_cache(self.repo)
         if self.demo:
             self.step_ok(f"Would warm {cache}", "demo")
             return
@@ -2420,8 +2424,7 @@ class Installer:
         success on a machine where the DLL fails to load, which is the one case worth
         distinguishing."""
         probe = (
-            "from tree_sitter_language_pack import get_parser;"
-            "get_parser('python').parse(b'x = 1')"
+            "from tree_sitter_language_pack import get_parser;get_parser('python').parse(b'x = 1')"
         )
         try:
             return run_cmd([sys.executable, "-c", probe], timeout=120).returncode == 0
@@ -2650,9 +2653,7 @@ class Installer:
                 "already decided."
             )
             self.say(s.dim(f"  No alias yet? Use: {fallback}"))
-            self.say(
-                s.dim("  A Claude Code session already open elsewhere needs a restart.")
-            )
+            self.say(s.dim("  A Claude Code session already open elsewhere needs a restart."))
         self.say("")
         # The celebratory "summon the team" close is only accurate for a full/setup run
         # that actually finished clean - live-caught (fable UX review, 2026-08-05): a
@@ -4323,7 +4324,7 @@ def write_guard_interpreter_cache(project: Path) -> None:
     "this path resolves" and "this path silently doesn't" between a plain Python
     process and a POSIX shell's own path handling."""
     try:
-        cache = project / ".claude" / ".guard-interpreter"
+        cache = _guard_interpreter_cache(project)
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(PureWindowsPath(sys.executable).as_posix(), encoding="utf-8")
     except OSError:
@@ -5072,7 +5073,7 @@ def _alias_line_for(rc_path: Path, interpreter: str, launcher_path, script_path)
         f'[ -n "$__vt_c" ] || __vt_c=claude; '
         f'__vt_f="$(mktemp 2>/dev/null || echo "${{TMPDIR:-/tmp}}/virt-surv-cd.$$")"; '
         f'__vt_d="$(VIRT_SURV_CD_FILE="$__vt_f" "{interpreter}" "{launcher_path}")"; '
-        f'__vt_r=$?; '
+        f"__vt_r=$?; "
         f'if [ -s "$__vt_f" ]; then cd "$(cat "$__vt_f")" || true; fi; '
         f'rm -f "$__vt_f"; '
         f'if [ "$__vt_r" -ne 97 ]; then $__vt_c ${{__vt_d:+"$__vt_d"}} "$@"; fi; '
@@ -5433,7 +5434,9 @@ def run_setup_alias(
                 # Removal means a full rewrite of the rc: stripped content + the new
                 # definition. Plain append everywhere else, same as always.
                 rc_path.write_text(stripped + addition, encoding="utf-8")
-                print(f"{ok} removed {len(removed_lines)} outdated definition(s), added to {rc_path}")
+                print(
+                    f"{ok} removed {len(removed_lines)} outdated definition(s), added to {rc_path}"
+                )
             else:
                 with rc_path.open("a", encoding="utf-8") as fh:
                     if existing and not existing.endswith("\n"):
@@ -5511,7 +5514,11 @@ _GITBASH_PERF_SNIPPET = (
 
 # Per-repo git settings that speed the git subprocesses everything here spawns (probe
 # branch/log reads, statusline) - all long-documented Windows performance flags.
-_GIT_PERF_SETTINGS = (("core.fscache", "true"), ("core.preloadindex", "true"), ("core.untrackedcache", "true"))
+_GIT_PERF_SETTINGS = (
+    ("core.fscache", "true"),
+    ("core.preloadindex", "true"),
+    ("core.untrackedcache", "true"),
+)
 
 
 def run_gitbash_perf(
@@ -5555,7 +5562,7 @@ def run_gitbash_perf(
             try:
                 with profile.open("a", encoding="utf-8") as fh:
                     if create_new:
-                        fh.write('[ -f ~/.profile ] && . ~/.profile\n')
+                        fh.write("[ -f ~/.profile ] && . ~/.profile\n")
                     fh.write(_GITBASH_PERF_SNIPPET)
                 print(f"{ok} appended to {profile} - new Claude Code sessions get fast Bash calls")
             except OSError as exc:
@@ -5563,7 +5570,11 @@ def run_gitbash_perf(
     repo = Path.cwd()
     if (repo / ".git").exists():
         if demo:
-            print(s.dim(f"    would set git perf flags on {repo} (fscache/preloadindex/untrackedcache)"))
+            print(
+                s.dim(
+                    f"    would set git perf flags on {repo} (fscache/preloadindex/untrackedcache)"
+                )
+            )
         elif confirm(
             f"  Also set git performance flags on this repo ({repo.name})?",
             default=True,
@@ -6039,9 +6050,7 @@ def _offer_registry_repair(
         style=style,
     ):
         print(
-            style.dim(
-                "  - left as-is. Manual fix: reinstall (option 1) or /plugin in Claude Code."
-            )
+            style.dim("  - left as-is. Manual fix: reinstall (option 1) or /plugin in Claude Code.")
         )
         return
     results = _purge_stale_registry_entries(home, stale_entries)
@@ -6049,7 +6058,9 @@ def _offer_registry_repair(
         print(style.yellow("  nothing matched in the registry files - no changes made"))
         return
     for path, removed in results:
-        print(f"{ok} {path.name}: removed {removed} dead entr{'y' if removed == 1 else 'ies'} (backup: {path.name}.bak)")
+        print(
+            f"{ok} {path.name}: removed {removed} dead entr{'y' if removed == 1 else 'ies'} (backup: {path.name}.bak)"
+        )
     print(
         style.dim(
             "  Restart Claude Code. If the plugin should still be installed here, run a "
@@ -7514,6 +7525,43 @@ _MINIMAL_ORG = """# Team extensions - <YOUR ORGANISATION>
 """
 
 
+def _guard_interpreter_cache(project: Path) -> Path:
+    """Where run-guard.sh looks for the interpreter cache.
+
+    MUST AGREE WITH scripts/staged_hooks/run-guard.sh, which resolves the same two
+    locations in shell because it runs before any interpreter is chosen and cannot import
+    a Python resolver. Both prefer VSIT/local/, fall back to .claude/, and neither creates
+    VSIT/ as a side effect: a cache written where the launcher does not look is worse than
+    no cache, because the launcher then pays a cold start on every hook call and nothing
+    reports it."""
+    new = project / "VSIT" / "local" / "guard-interpreter"
+    if new.is_file():
+        return new
+    legacy = project / ".claude" / ".guard-interpreter"
+    if legacy.is_file() or not (project / "VSIT" / "local").is_dir():
+        return legacy
+    return new
+
+
+def _vsit_engagements(project: Path) -> Path:
+    """Engagement workspaces for a project, via the shared resolver when reachable.
+
+    install_helper is also distributed as a lone curl-bootstrapped file with no scripts/
+    sibling, so a missing resolver falls back to the legacy path rather than failing - the
+    same posture as its other lazy imports."""
+    try:
+        import sys as _sys
+
+        _here = Path(__file__).resolve().parent / "scripts"
+        if str(_here) not in _sys.path:
+            _sys.path.insert(0, str(_here))
+        import vsit_paths
+
+        return vsit_paths.engagements_dir(project)
+    except Exception:
+        return project / "artifacts"
+
+
 def run_install_extensions(source: str, style: Style, mark_map: dict) -> int:
     """Install an org extensions contract for this machine, or report the current one.
 
@@ -8016,7 +8064,7 @@ def _selftest_engagement_probe(repo_root: Path, interpreter: str):
                 installed_version(repo_root) or "0.0.0",
             ],
         )
-        data_dir = project / "artifacts" / "data"
+        data_dir = _vsit_engagements(project) / "data"
         data_dir.mkdir(parents=True, exist_ok=True)
         pack_path = data_dir / f"findings-{slug}.jsonl"
         pack = _selftest_findings_pack(slug)
@@ -8492,7 +8540,7 @@ def _run_evidence_room(target: Path, style: Style, mark_map: dict) -> int:
     project = target.expanduser().resolve()
     workspace = project
     if not (workspace / "engagement-state.json").is_file():
-        marker = project / "artifacts" / ".active-engagement.json"
+        marker = _vsit_engagements(project) / ".active-engagement.json"
         slug = ""
         try:
             slug = json.loads(marker.read_text(encoding="utf-8")).get("slug") or ""
@@ -8504,7 +8552,7 @@ def _run_evidence_room(target: Path, style: Style, mark_map: dict) -> int:
                 "active engagement, or pass the workspace: virt-surv evidence artifacts/<slug>"
             )
             return 1
-        workspace = project / "artifacts" / slug
+        workspace = _vsit_engagements(project) / slug
     repo = _resolve_repo_root(None)
     scripts_dir = (repo / "scripts") if repo else Path(__file__).resolve().parent / "scripts"
     renderer = scripts_dir / "render_evidence_room.py"

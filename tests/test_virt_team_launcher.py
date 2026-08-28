@@ -16,6 +16,8 @@ import json
 import sys
 from pathlib import Path
 
+import scripts.vsit_paths as _vsit
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -41,7 +43,7 @@ def _plugin_enabled_project(tmp_path: Path) -> Path:
 
 
 def _ws(project: Path, slug: str, status: str = "in_progress", title: str = "", opened: str = ""):
-    art = project / "artifacts" / slug
+    art = _vsit.engagements_dir(project) / slug
     art.mkdir(parents=True, exist_ok=True)
     state = {"schema": 2, "status": status, "engagement": {"slug": slug, "title": title}}
     if opened:
@@ -53,7 +55,7 @@ def _flat_ws(project: Path, slug: str, status: str = "in_progress", title: str =
     """A FLAT-layout pack: the state file sits directly in artifacts/, no per-slug
     subfolder - the pre-ADR-008 single-engagement shape resume_menu() still supports
     and reports with dir "(flat)"."""
-    art = project / "artifacts"
+    art = _vsit.engagements_dir(project)
     art.mkdir(parents=True, exist_ok=True)
     state = {"schema": 2, "status": status, "engagement": {"slug": slug, "title": title}}
     (art / "engagement-state.json").write_text(json.dumps(state), encoding="utf-8")
@@ -507,7 +509,7 @@ def test_menu_a_archives_and_falls_through_to_plain_when_empty(tmp_path, monkeyp
     import scripts.engagement_state as es
 
     project = _plugin_enabled_project(tmp_path)
-    art = project / "artifacts"
+    art = _vsit.engagements_dir(project)
     assert es.main(["--dir", str(art / "old"), "init", "--title", "Old", "--slug", "old"]) == 0
     capsys.readouterr()  # drain the SETUP's own init output - the assertion below is
     # about the LAUNCHER's stdout purity, not the fixture's
@@ -531,7 +533,7 @@ def test_archive_all_covers_every_open_pack_not_just_the_shown_cap(tmp_path, mon
     import scripts.engagement_state as es
 
     project = _plugin_enabled_project(tmp_path)
-    art = project / "artifacts"
+    art = _vsit.engagements_dir(project)
     slugs = [f"pack-{i}" for i in range(5)]
     for slug in slugs:
         assert es.main(["--dir", str(art / slug), "init", "--title", slug, "--slug", slug]) == 0
@@ -673,7 +675,7 @@ def test_go_prewarms_the_guard_interpreter_cache(tmp_path, monkeypatch, capsys):
     mod = _load()
     monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
     assert mod.main() == 0
-    cache = project / ".claude" / ".guard-interpreter"
+    cache = _vsit.local_file("guard_interpreter", project)
     assert cache.read_text(encoding="utf-8").strip() == Path(_sys.executable).as_posix()
     cache.write_text("my-own-python\n", encoding="utf-8")
     assert mod.main() == 0
@@ -1075,7 +1077,7 @@ def test_write_probe_cache_runs_on_a_brand_new_project(tmp_path, monkeypatch, ca
     project = _cold_project(tmp_path)
     monkeypatch.setattr(sys, "stdin", _TtyStdin())
     mod._write_probe_cache(project)
-    cache = project / ".claude" / "engage-probe.json"
+    cache = _vsit.local_file("engage_probe", project)
     assert cache.is_file(), "no probe cache written for a cold project"
     data = json.loads(cache.read_text(encoding="utf-8"))
     assert data["report"], "cached report is empty"
@@ -1091,7 +1093,7 @@ def test_write_probe_cache_declines_without_a_tty(tmp_path, monkeypatch):
     project = _cold_project(tmp_path)
     monkeypatch.setattr(sys, "stdin", io.StringIO())  # isatty() is False
     mod._write_probe_cache(project)
-    assert not (project / ".claude" / "engage-probe.json").exists()
+    assert not _vsit.local_file("engage_probe", project).exists()
 
 
 def test_write_probe_cache_honours_the_probe_cache_preference(tmp_path, monkeypatch):
@@ -1104,7 +1106,7 @@ def test_write_probe_cache_honours_the_probe_cache_preference(tmp_path, monkeypa
     )
     monkeypatch.setattr(sys, "stdin", _TtyStdin())
     mod._write_probe_cache(project)
-    assert not (project / ".claude" / "engage-probe.json").exists()
+    assert not _vsit.local_file("engage_probe", project).exists()
 
 
 def test_greeting_rotates_by_time_of_day():
@@ -1154,15 +1156,23 @@ def test_escape_returns_to_the_terminal_instead_of_launching():
     assert mod._decision_from_pick(("launch",), Path("."), None, {}, []) == ""
 
 
-def test_abort_writes_nothing_to_stdout_and_exits_with_the_wrapper_code(tmp_path, monkeypatch, capsys):
+def test_abort_writes_nothing_to_stdout_and_exits_with_the_wrapper_code(
+    tmp_path, monkeypatch, capsys
+):
     """The wrapper skips the launch on this exit code, so it has to be the code AND a
     clean stdout - a stray character would become the session's opening prompt."""
     mod = _load()
     project = _plugin_enabled_project(tmp_path)
     monkeypatch.chdir(project)
     monkeypatch.setattr(mod, "_resume_decision", lambda _d: mod._ABORT)
-    for name in ("_print_banner", "_check_plugin_cache_lag", "_print_project_defaults",
-                 "_prewarm_guard_interpreter", "_write_probe_cache", "_refresh_tool_cache"):
+    for name in (
+        "_print_banner",
+        "_check_plugin_cache_lag",
+        "_print_project_defaults",
+        "_prewarm_guard_interpreter",
+        "_write_probe_cache",
+        "_refresh_tool_cache",
+    ):
         monkeypatch.setattr(mod, name, lambda *a, **k: None)
     rc = mod.main()
     assert rc == mod._ABORT_EXIT_CODE == 97
@@ -1261,7 +1271,7 @@ def test_the_menu_no_longer_caps_the_engagement_list(tmp_path):
     )
     es = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(es)
-    menu = es.resume_menu(project / "artifacts", max_shown=mod._FULL_MENU)
+    menu = es.resume_menu(_vsit.engagements_dir(project), max_shown=mod._FULL_MENU)
     assert len(menu["shown"]) == 7 and menu["more"] == 0
 
 
@@ -1302,7 +1312,7 @@ def test_recent_projects_never_grow_without_bound(tmp_path, monkeypatch):
 def test_artifacts_prefer_rendered_html_over_its_markdown_twin(tmp_path):
     """Listing both is noise: the .html IS the shareable artifact."""
     mod = _load()
-    ws = tmp_path / "artifacts" / "demo"
+    ws = _vsit.engagements_dir(tmp_path) / "demo"
     ws.mkdir(parents=True)
     for name in ("START-HERE.md", "START-HERE.html", "notes.md", "delivery-report.html"):
         (ws / name).write_text("x", encoding="utf-8")
@@ -1325,7 +1335,7 @@ def test_menu_b_reviews_a_finished_engagement_stdout_pure(tmp_path, monkeypatch,
     import scripts.engagement_state as es
 
     project = _plugin_enabled_project(tmp_path)
-    art = project / "artifacts"
+    art = _vsit.engagements_dir(project)
     assert es.main(["--dir", str(art / "old"), "init", "--title", "Old", "--slug", "old"]) == 0
     assert es.main(["--dir", str(art), "archive", "old", "--force"]) == 0
     capsys.readouterr()  # drain fixture output
@@ -1348,7 +1358,7 @@ def test_menu_b_backing_out_returns_to_the_menu_not_a_launch(tmp_path, monkeypat
     import scripts.engagement_state as es
 
     project = _plugin_enabled_project(tmp_path)
-    art = project / "artifacts"
+    art = _vsit.engagements_dir(project)
     assert es.main(["--dir", str(art / "old"), "init", "--title", "Old", "--slug", "old"]) == 0
     assert es.main(["--dir", str(art), "archive", "old", "--force"]) == 0
     capsys.readouterr()
@@ -1414,13 +1424,16 @@ def test_the_heal_stamp_does_not_block_a_forced_heal(tmp_path, monkeypatch):
     current - so the abort path must be able to force past it."""
     mod = _load()
     cfg = tmp_path / "installer.json"
-    cfg.write_text(json.dumps({"alias_heal_checked": mod._EXPECTED_ALIAS_VERSION}), encoding="utf-8")
+    cfg.write_text(
+        json.dumps({"alias_heal_checked": mod._EXPECTED_ALIAS_VERSION}), encoding="utf-8"
+    )
     monkeypatch.setattr(mod, "_installer_config_path", lambda: cfg)
     ran = []
     import types
+
     fake = types.SimpleNamespace(heal_stale_aliases=lambda: ran.append(1) or [], _ALIAS_VERSION=7)
     monkeypatch.setitem(sys.modules, "install_helper_heal", fake)
-    mod._heal_stale_alias_once()          # stamped: must no-op
+    mod._heal_stale_alias_once()  # stamped: must no-op
     assert ran == []
 
 
@@ -1431,5 +1444,7 @@ def test_alias_detection_reads_real_rc_files(tmp_path, monkeypatch):
     assert mod._alias_installed_anywhere() is False
     (tmp_path / ".bashrc").write_text("export FOO=1\n", encoding="utf-8")
     assert mod._alias_installed_anywhere() is False
-    (tmp_path / ".bashrc").write_text("virt-surv() { :; } # virt-surv-it-alias-v6\n", encoding="utf-8")
+    (tmp_path / ".bashrc").write_text(
+        "virt-surv() { :; } # virt-surv-it-alias-v6\n", encoding="utf-8"
+    )
     assert mod._alias_installed_anywhere() is True

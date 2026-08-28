@@ -29,14 +29,15 @@ def flipped(monkeypatch):
 # ------------------------------------------------------------------ fresh project
 
 
-def test_a_fresh_project_stays_on_the_old_layout_until_the_flip(tmp_path):
-    """STAGE 1 behaviour, and the property that makes the 70-call-site refactor safe:
-    routing everything through this module changes nothing, so a green suite means
-    something. Stage 2 flips one constant."""
-    assert vp.PREFER_NEW_LAYOUT is False, "stage 2 has landed - update these expectations"
-    assert vp.engagements_dir(tmp_path) == tmp_path / "artifacts"
-    assert vp.config_dir(tmp_path) == tmp_path / ".claude"
-    assert vp.local_dir(tmp_path) == tmp_path / ".claude"
+def test_the_flip_has_landed_and_a_fresh_project_gets_vsit(tmp_path):
+    """Stage 2 landed 2026-08-28. While the flip was pending this test asserted the
+    opposite and carried a tripwire that fired the moment the constant moved - which is
+    exactly what it did, rather than the change slipping through as collateral of a large
+    refactor."""
+    assert vp.PREFER_NEW_LAYOUT is True
+    assert vp.engagements_dir(tmp_path) == tmp_path / "VSIT" / "engagements"
+    assert vp.config_dir(tmp_path) == tmp_path / "VSIT" / "config"
+    assert vp.local_dir(tmp_path) == tmp_path / "VSIT" / "local"
 
 
 def test_a_fresh_project_gets_the_new_layout_after_the_flip(tmp_path, flipped):

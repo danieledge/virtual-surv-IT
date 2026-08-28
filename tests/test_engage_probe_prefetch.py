@@ -18,6 +18,8 @@ import json
 import sys
 from pathlib import Path
 
+import scripts.vsit_paths as _vsit
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -52,8 +54,8 @@ def _warm_cache(project: Path, interp: str = sys.executable) -> None:
     """Default to sys.executable, not a plausible-looking fake path - _read_cache now
     validates via shutil.which() (Fable review W2 fix), so a fixture using a fake path
     would silently exercise the garbage-cache path instead of the warm-cache path."""
-    (project / ".claude").mkdir(parents=True, exist_ok=True)
-    (project / ".claude" / ".guard-interpreter").write_text(interp, encoding="utf-8")
+    _vsit.local_dir(project).mkdir(parents=True, exist_ok=True)
+    _vsit.local_file("guard_interpreter", project).write_text(interp, encoding="utf-8")
 
 
 def test_non_engage_prompt_is_zero_cost(tmp_path, monkeypatch, capsys):
@@ -148,8 +150,8 @@ def test_multiline_cache_declines_silently(tmp_path, monkeypatch, capsys):
     """A cache file is meant to hold one token/path - multi-line content (corruption, or a
     concurrent writer interleaving) must not be treated as a valid single interpreter."""
     _repo_as_project(tmp_path)
-    (tmp_path / ".claude").mkdir(parents=True, exist_ok=True)
-    (tmp_path / ".claude" / ".guard-interpreter").write_text(
+    _vsit.local_dir(tmp_path).mkdir(parents=True, exist_ok=True)
+    _vsit.local_file("guard_interpreter", tmp_path).write_text(
         f"{sys.executable}\nsome garbage second line\n", encoding="utf-8"
     )
     rc, out = _run(monkeypatch, capsys, {"prompt": "/engage"}, tmp_path)
@@ -221,9 +223,7 @@ def test_resume_flag_keeps_the_menu_for_slug_validation(tmp_path, monkeypatch, c
     wrapper's view could be stale)."""
     _repo_as_project(tmp_path)
     _warm_cache(tmp_path)
-    rc, out = _run(
-        monkeypatch, capsys, {"prompt": "/engage --resume my-pack"}, tmp_path
-    )
+    rc, out = _run(monkeypatch, capsys, {"prompt": "/engage --resume my-pack"}, tmp_path)
     assert rc == 0
     assert "ENGAGE_FLAG=--resume my-pack" in out
     assert "RESUME_MENU" in out
@@ -293,10 +293,8 @@ def _probe_cache(project: Path, **overrides) -> None:
         "report": _SENTINEL + "\nPLUGIN_ROOT=\nOS=POSIX\n",
     }
     payload.update(overrides)
-    (project / ".claude").mkdir(parents=True, exist_ok=True)
-    (project / ".claude" / "engage-probe.json").write_text(
-        json.dumps(payload), encoding="utf-8"
-    )
+    _vsit.local_dir(project).mkdir(parents=True, exist_ok=True)
+    _vsit.local_file("engage_probe", project).write_text(json.dumps(payload), encoding="utf-8")
 
 
 def test_probe_cache_fresh_and_matching_is_served(tmp_path, monkeypatch, capsys):
@@ -330,7 +328,9 @@ def test_probe_cache_prefs_change_invalidates(tmp_path, monkeypatch, capsys):
     _repo_as_project(tmp_path)
     _warm_cache(tmp_path)
     _probe_cache(tmp_path)  # stamped prefs_mtime=0 (no prefs file at compute time)
-    (tmp_path / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+    _prefs = _vsit.preferences_file(tmp_path)
+    _prefs.parent.mkdir(parents=True, exist_ok=True)
+    _prefs.write_text("{}", encoding="utf-8")
     rc, out = _run(monkeypatch, capsys, {"prompt": "/engage"}, tmp_path)
     assert rc == 0 and _SENTINEL not in out
 
@@ -356,8 +356,8 @@ def test_probe_cache_git_identity_drift_invalidates(tmp_path, monkeypatch, capsy
 def test_probe_cache_malformed_json_declines(tmp_path, monkeypatch, capsys):
     _repo_as_project(tmp_path)
     _warm_cache(tmp_path)
-    (tmp_path / ".claude").mkdir(parents=True, exist_ok=True)
-    (tmp_path / ".claude" / "engage-probe.json").write_text("{not json", encoding="utf-8")
+    _vsit.local_dir(tmp_path).mkdir(parents=True, exist_ok=True)
+    _vsit.local_file("engage_probe", tmp_path).write_text("{not json", encoding="utf-8")
     rc, out = _run(monkeypatch, capsys, {"prompt": "/engage"}, tmp_path)
     assert rc == 0 and _SENTINEL not in out
 
@@ -375,8 +375,8 @@ def test_probe_cache_pre_fingerprint_cache_declines_in_a_git_repo(tmp_path, monk
         "interpreter": sys.executable,
         "report": _SENTINEL,
     }
-    probe_file = tmp_path / ".claude" / "engage-probe.json"
-    probe_file.parent.mkdir(parents=True)
+    probe_file = _vsit.local_file("engage_probe", tmp_path)
+    probe_file.parent.mkdir(parents=True, exist_ok=True)
     probe_file.write_text(json.dumps(cache), encoding="utf-8")
     # Point the block at a project dir that IS a git repo (this one) but whose cache file
     # we control via a monkeypatched read - simpler: call _git_identity directly to prove

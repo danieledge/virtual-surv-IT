@@ -923,7 +923,7 @@ def _finished_menu(project_dir: Path, es) -> str:
     err = sys.stderr
     ink = _Ink()
     try:
-        rows = es.finished_engagements(project_dir / "artifacts")
+        rows = es.finished_engagements(_vsit_paths().engagements_dir(project_dir))
     except Exception:
         rows = []
     if not rows:
@@ -1077,7 +1077,9 @@ def _resume_decision(project_dir: Path) -> str:
             # shown" with no way to reach them, and resuming an older one meant knowing
             # its slug. The app tier scrolls the full list; the plain tiers still show
             # three and offer [m].
-            menu = engagement_state.resume_menu(project_dir / "artifacts", max_shown=_FULL_MENU)
+            menu = engagement_state.resume_menu(
+                _vsit_paths().engagements_dir(project_dir), max_shown=_FULL_MENU
+            )
         except Exception:
             return ""
         shown = menu.get("shown") or []
@@ -1206,7 +1208,7 @@ def _engagement_artifacts(project_dir: Path, slug: str) -> list:
     """(label, path) for what an engagement actually produced, newest-looking first.
     Rendered .html is preferred over its .md twin - the HTML is the shareable artifact and
     the one a person means when they say "open the report"."""
-    workspace = project_dir / "artifacts" / slug
+    workspace = _vsit_paths().engagement_dir(slug, project_dir)
     if not workspace.is_dir():
         return []
     preferred = ("START-HERE", "delivery-report", "evidence-room", "engagement-summary")
@@ -1655,7 +1657,7 @@ def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> s
 
 
 def _pack_dir(project_dir: Path, slug: str) -> Path:
-    return project_dir / "artifacts" / slug
+    return _vsit_paths().engagement_dir(slug, project_dir)
 
 
 def _sign_off_state(project_dir: Path, slug: str) -> str:
@@ -2748,7 +2750,7 @@ def _write_probe_cache(project_dir: Path) -> None:
         import time
 
         out = _vsit_paths().local_file("engage_probe", project_dir)
-        prefs = project_dir / ".claude" / "team-preferences.json"
+        prefs = _vsit_paths().preferences_file(project_dir)
         prefs_mtime = int(prefs.stat().st_mtime) if prefs.is_file() else 0
         # Identity fingerprint (2026-08-18, external token-review finding 2) - stamped
         # here, validated by the prefetch hook's _git_identity/_live_plugin_version, so a
@@ -2839,8 +2841,18 @@ def _prewarm_guard_interpreter(project_dir: Path) -> None:
     forward slashes so the heredoc's `command -v` accepts it in Git Bash on Windows."""
     try:
         cache = _vsit_paths().local_file("guard_interpreter", project_dir)
-        if cache.is_file() or not cache.parent.is_dir():
+        if cache.is_file():
             return
+        # The "don't create the parent" rule was about .claude/, which belongs to Claude
+        # Code - creating it as a side effect of warming a cache would put our directory
+        # into a project that had not opted in. VSIT/local/ is OURS, so we may create it;
+        # without this the cache is never warmed on a fresh project and every first
+        # /engage pays the cold-start it exists to avoid (VSIT migration, 2026-08-28).
+        if cache.parent.name == ".claude":
+            if not cache.parent.is_dir():
+                return
+        else:
+            cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(Path(sys.executable).as_posix() + "\n", encoding="utf-8")
     except Exception:
         pass  # cosmetic tier - the fallback heredoc still works without it
