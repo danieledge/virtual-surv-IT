@@ -970,7 +970,7 @@ def test_banner_and_defaults_render_without_rich(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr()
     assert rc == 0
     assert "AI TEAM FOR COMPLIANCE & SURVEILLANCE IT" in out.err  # the brand banner
-    assert "HUMAN CONTROLLED" in out.err
+    assert "human controlled" in out.err  # lowercased with the 2026-08-28 redesign
     assert "Project defaults" in out.err
     assert "at defaults" in out.err  # folded default rows (2026-08-19 UX pass)
     assert out.out == ""

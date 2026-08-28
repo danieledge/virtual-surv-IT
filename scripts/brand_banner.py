@@ -34,77 +34,61 @@ from __future__ import annotations
 ROLES = ("plain", "dim", "cyan", "violet", "green", "amber", "bold")
 
 # ------------------------------------------------------------------ the art
-# The mascot: antenna dot, rounded head, two eyes, side ears, a smile, and the
-# shield-with-a-tick as (v) on the chin. Five rows so it sits level with the wordmark.
+#
+# WHY THIS IS NOT BLOCK-GLYPH LETTERING (2026-08-28). The first version drew VSIT as
+# five-row segmented letterforms in `- . ' |`, matching the source image's dotted style.
+# A live photo of a corporate PowerShell console settled it: the letters do not read. A
+# terminal cell is roughly twice as tall as it is wide, so a five-row V's diagonals never
+# visually connect - they land as scattered apostrophes - and the S, I and T become
+# columns of punctuation. Owner's verdict on the screenshot: "looks a bit ugly."
+#
+# That vindicates a 2026-08-19 comment the first version overrode, which said in terms:
+# "NOT block-glyph ASCII art - hand-drawn art at this width reads as amateur and
+# illegible." It was right. The wordmark is spaced caps again, which is legible at any
+# width, in any font, on any console.
+#
+# What survives from the source image: the mascot (antenna, eyes, ears, smile, and the
+# shield-with-tick as `(v)`), the gradient across the letters, and the two coloured domain
+# words. What went: five-row letterforms, and the dashed box - the box was pure noise
+# around content that reads perfectly well without it, and it cost four of the nine lines.
 _ROBOT = (
-    "    .o.    ",
-    "  .-----.  ",
-    " -|o   o|- ",
-    "  | \\_/ |  ",
-    "  '-(v)-'  ",
+    "     .o.    ",
+    "   .-----.  ",
+    "  -|o   o|- ",
+    "   '-(v)-'  ",
 )
-_ROBOT_INK = ("cyan", "cyan", "cyan", "violet", "violet")
+_ROBOT_INK = ("cyan", "cyan", "cyan", "violet")
 
-# The wordmark. V is drawn as two dotted diagonals; S, I and T are segment strokes - the
-# same construction as the source image's segmented letterforms. Widths vary per letter
-# (a narrow I, a wide V) because uniform cells read as a grid, not as type.
-_GLYPHS = {
-    "V": ("'.       .'", " '.     .' ", "  '.   .'  ", "   '. .'   ", "    '-'    "),
-    "S": (".-------.", "|        ", "'-------.", "        |", "'-------'"),
-    "I": (".---.", "  |  ", "  |  ", "  |  ", "'---'"),
-    "T": (".-------.", "    |    ", "    |    ", "    |    ", "    |    "),
-}
-# cyan -> violet -> green across the wordmark, matching the source gradient.
+# The wordmark: spaced caps, cyan -> violet -> green, as in the source gradient.
 _WORDMARK = (("V", "cyan"), ("S", "violet"), ("I", "violet"), ("T", "green"))
-_LETTER_GAP = "  "
-_ART_ROWS = 5
+_ART_ROWS = 4
 
 TAGLINE = "AI TEAM FOR COMPLIANCE & SURVEILLANCE IT"
-FOOTER = "SPECIALIST AI TEAM | INDEPENDENT REVIEW | HUMAN CONTROLLED"
+FOOTER = "specialist | independent review | human controlled"
 
-# Inner width of the box, sized to the footer (the widest element) plus one column of
-# slack so the dashed rule can start AND end on a dash (it needs an odd span).
-CONTENT_WIDTH = 59
-BOX_WIDTH = CONTENT_WIDTH + 4  # ':' + ' ' + content + ' ' + ':'
 INDENT = "  "
-FULL_WIDTH = BOX_WIDTH + len(INDENT)
-# Width below which the box is dropped, then below which the tagline is dropped.
+# The widest row, computed rather than estimated: every row is indent + a mascot row + one
+# space + its text, and the longest text is the footer, not the tagline. Getting this wrong
+# by one column let the full tier render at 64 columns while needing 65 - which is the exact
+# class of bug the width tiers exist to prevent.
+FULL_WIDTH = len(INDENT) + max(len(row) for row in _ROBOT) + 1 + max(len(TAGLINE), len(FOOTER))
+# Below this the mascot is dropped and only the two text lines remain.
 COMPACT_WIDTH = len(INDENT) + 3 + len(TAGLINE)
-
-# ':' rather than '|' for the box sides: it reads as the dashed vertical the source image
-# has, and it does not collide with the '|' separators inside the footer text.
-_SIDE = ":"
-_CORNER = "+"
 _MINIMAL_TAG = "compliance surveillance IT"
-
-
-def _rule() -> str:
-    """The dashed horizontal: a dash on every even column so both ends land on a dash."""
-    span = CONTENT_WIDTH + 2
-    return "".join("-" if i % 2 == 0 else " " for i in range(span))
 
 
 def _plain(segments) -> str:
     return "".join(text for _role, text in segments)
 
 
-def _centre(segments, width: int) -> list:
-    """Pad `segments` to `width`, centred, using unpainted spaces."""
-    slack = width - len(_plain(segments))
-    if slack <= 0:
-        return list(segments)
-    left = slack // 2
-    return [("plain", " " * left), *segments, ("plain", " " * (slack - left))]
-
-
-def _art_row(index: int) -> list:
-    """One row of mascot + wordmark, as coloured segments."""
-    segments = [(_ROBOT_INK[index], _ROBOT[index]), ("plain", " ")]
+def _wordmark_segments() -> list:
+    """V S I T, spaced, each letter carrying its own colour."""
+    out: list = []
     for position, (letter, role) in enumerate(_WORDMARK):
         if position:
-            segments.append(("plain", _LETTER_GAP))
-        segments.append((role, _GLYPHS[letter][index]))
-    return segments
+            out.append(("plain", " "))
+        out.append((role, letter))
+    return out
 
 
 def _tagline_segments() -> list:
@@ -119,29 +103,28 @@ def _tagline_segments() -> list:
 
 
 def _footer_segments() -> list:
-    """The strapline; "HUMAN CONTROLLED" is the amber one, as in the source image."""
+    """The strapline; "human controlled" is the amber one, as in the source image."""
     return [
-        ("plain", "SPECIALIST AI TEAM"),
+        ("dim", "specialist"),
         ("dim", " | "),
-        ("plain", "INDEPENDENT REVIEW"),
+        ("dim", "independent review"),
         ("dim", " | "),
-        ("amber", "HUMAN CONTROLLED"),
+        ("amber", "human controlled"),
     ]
 
 
-def _boxed_line(segments) -> list:
-    side = [("dim", _SIDE)]
-    return [*side, ("plain", " "), *_centre(segments, CONTENT_WIDTH), ("plain", " "), *side]
-
-
 def _full_banner() -> list:
-    rule = [("dim", _CORNER + _rule() + _CORNER)]
-    rows = [rule]
-    rows += [_boxed_line(_art_row(i)) for i in range(_ART_ROWS)]
-    rows.append(_boxed_line(_tagline_segments()))
-    rows.append(_boxed_line(_footer_segments()))
-    rows.append(rule)
-    return [[("plain", INDENT), *row] for row in rows]
+    """Four rows: the mascot on the left, the three text lines beside it.
+
+    Blank text rows are deliberate - the mascot is four rows tall and the text is three, so
+    the antenna row carries no text rather than the mascot being cropped to fit."""
+    beside = [[], _wordmark_segments(), _tagline_segments(), _footer_segments()]
+    rows = []
+    for index in range(_ART_ROWS):
+        row = [("plain", INDENT), (_ROBOT_INK[index], _ROBOT[index]), ("plain", " ")]
+        row += beside[index]
+        rows.append(row)
+    return rows
 
 
 def _compact_banner(with_tagline: bool) -> list:

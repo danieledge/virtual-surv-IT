@@ -97,7 +97,7 @@ def test_the_brand_palette_reaches_the_right_words():
     painted = "\n".join(brand_banner.render(80, _paint))
     assert "<cyan>COMPLIANCE</cyan>" in painted
     assert "<green>SURVEILLANCE</green>" in painted
-    assert "<amber>HUMAN CONTROLLED</amber>" in painted  # the one amber item, as supplied
+    assert "<amber>human controlled</amber>" in painted  # the one amber item, as supplied
     assert "<violet>" in painted  # the wordmark gradient's middle stop
 
 
@@ -105,16 +105,21 @@ def test_the_brand_palette_reaches_the_right_words():
 
 
 def test_full_tier_carries_every_element_of_the_supplied_brand():
+    """Four rows, mascot beside the text.
+
+    Was nine rows in a dashed box with five-row letterforms, until a photo of a real
+    PowerShell console showed the letters do not read at terminal aspect ratio: a five-row
+    V's diagonals never visually connect. The box went with them - it was noise around
+    content that reads perfectly well without it, and cost four of the nine lines."""
     lines = brand_banner.render(80)
     text = "\n".join(lines)
-    assert len(lines) == 9  # 2 rules + 5 art rows + tagline + strapline
+    assert len(lines) == 4  # antenna + head + face + chin, text beside
     assert brand_banner.TAGLINE in text
     assert brand_banner.FOOTER in text
     assert "o   o" in text  # the mascot's eyes
     assert "(v)" in text  # the shield with its tick
-    body = lines[1:-1]
-    assert all(line.strip().startswith(":") and line.rstrip().endswith(":") for line in body)
-    assert len({len(line.rstrip()) for line in lines}) == 1  # a true rectangle
+    assert "V S I T" in text  # spaced caps, legible at any width in any font
+    assert "+-" not in text, "the dashed box is gone; it read as debris on a real console"
 
 
 def test_narrow_terminals_get_the_compact_mark_not_a_wrapped_box():
