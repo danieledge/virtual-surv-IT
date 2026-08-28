@@ -1591,3 +1591,99 @@ def test_the_slow_steps_all_announce_themselves():
         index = source.index(call)
         preceding = source[max(0, index - 200) : index]
         assert "_progress(" in preceding, f"{call} runs without telling the user"
+
+
+# ---------------- update availability at go (2026-08-28 owner request) ----------------
+
+
+def _mini_repo(tmp_path, behind=0):
+    """A clone with an upstream, optionally `behind` commits back."""
+    import subprocess as sp
+
+    origin, clone = tmp_path / "origin.git", tmp_path / "clone"
+    sp.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    sp.run(["git", "clone", "-q", str(origin), str(clone)], check=True)
+    cfg = ["-c", "user.email=t@t", "-c", "user.name=t"]
+    (clone / "a.txt").write_text("a", encoding="utf-8")
+    sp.run(["git", "-C", str(clone), "add", "-A"], check=True)
+    sp.run(["git", "-C", str(clone), *cfg, "commit", "-qm", "one"], check=True)
+    branch = sp.run(
+        ["git", "-C", str(clone), "rev-parse", "--abbrev-ref", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    sp.run(["git", "-C", str(clone), "push", "-q", "origin", branch], check=True)
+    sp.run(
+        ["git", "-C", str(clone), "branch", "-q", f"--set-upstream-to=origin/{branch}"],
+        check=True,
+    )
+    for n in range(behind):
+        other = tmp_path / f"other{n}"
+        sp.run(["git", "clone", "-q", str(origin), str(other)], check=True)
+        (other / f"b{n}.txt").write_text("b", encoding="utf-8")
+        sp.run(["git", "-C", str(other), "add", "-A"], check=True)
+        sp.run(["git", "-C", str(other), *cfg, "commit", "-qm", f"up{n}"], check=True)
+        sp.run(["git", "-C", str(other), "push", "-q", "origin", branch], check=True)
+    sp.run(["git", "-C", str(clone), "fetch", "-q", "origin"], check=True)
+    return clone
+
+
+def test_it_reports_how_far_behind_upstream_the_clone_is(tmp_path):
+    mod = _load()
+    assert mod._commits_behind_upstream(_mini_repo(tmp_path, behind=2)) == 2
+
+
+def test_a_level_clone_reports_nothing_to_do(tmp_path):
+    mod = _load()
+    assert mod._commits_behind_upstream(_mini_repo(tmp_path, behind=0)) == 0
+
+
+def test_the_check_never_touches_the_network(tmp_path, monkeypatch):
+    """It runs on the `go` path, where this project's history is a catalogue of what a
+    network call costs: the probe cache exists because in-session probing takes minutes on
+    a corporate box, and pip-audit and semgrep were dropped outright for hanging on a corp
+    proxy rather than failing fast.
+
+    So the ANSWER comes from local refs only; freshness comes from a detached background
+    fetch that serves the NEXT launch."""
+    mod = _load()
+    clone = _mini_repo(tmp_path, behind=1)
+    seen = []
+    real = mod.subprocess.run
+
+    def _watch(argv, **kwargs):
+        seen.append(list(argv))
+        return real(argv, **kwargs)
+
+    monkeypatch.setattr(mod.subprocess, "run", _watch)
+    assert mod._commits_behind_upstream(clone) == 1
+    assert not any("fetch" in a for argv in seen for a in argv), "no fetch on the answer path"
+
+
+def test_no_upstream_configured_is_not_an_update_offer(tmp_path):
+    """A clone with no tracking branch has nothing to compare against - saying "0 behind"
+    is the honest answer, not an error and not an offer."""
+    import subprocess as sp
+
+    mod = _load()
+    solo = tmp_path / "solo"
+    solo.mkdir()
+    sp.run(["git", "init", "-q", str(solo)], check=True)
+    assert mod._commits_behind_upstream(solo) == 0
+
+
+def test_a_broken_repo_never_raises(tmp_path):
+    """This is cosmetic tier: an unreadable repo costs the offer, never the launch."""
+    mod = _load()
+    assert mod._commits_behind_upstream(tmp_path / "does-not-exist") == 0
+
+
+def test_the_background_refresh_is_ttl_gated(tmp_path, monkeypatch):
+    """Repeat launches must not each spawn a fetch."""
+    mod = _load()
+    clone = _mini_repo(tmp_path, behind=0)
+    spawned = []
+    monkeypatch.setattr(mod.subprocess, "Popen", lambda *a, **k: spawned.append(a) or None)
+    mod._refresh_remote_refs_in_background(clone)  # FETCH_HEAD is fresh from _mini_repo
+    assert spawned == [], "a fresh FETCH_HEAD must not trigger another fetch"

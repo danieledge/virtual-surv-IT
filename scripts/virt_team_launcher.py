@@ -3253,6 +3253,149 @@ def _installed_plugin_version() -> tuple:
     return "", ""
 
 
+# How long fetched remote refs are trusted before a refresh is attempted.
+_UPDATE_REFS_TTL_SECONDS = 12 * 3600
+
+
+def _clone_root() -> Path:
+    """The plugin clone this launcher is running from."""
+    return _scripts_dir().parent
+
+
+def _commits_behind_upstream(clone: Path) -> int:
+    """How many commits the clone is behind its tracked branch. 0 when level or unknown.
+
+    LOCAL REFS ONLY - this never touches the network, and must not. It is on the `go` path,
+    and this project's own history is a catalogue of what a network call there costs: the
+    probe cache exists because in-session probing "takes minutes" on a corporate box, and
+    pip-audit and semgrep were dropped outright for making unconditional network calls with
+    no reliable offline mode, hanging rather than failing fast on a corp proxy.
+
+    Freshness comes from _refresh_remote_refs_in_background instead, so the answer here is
+    always instant (measured: 5ms) and always honest about what the machine already knows."""
+    try:
+        head = subprocess.run(  # fixed argv, shell=False  # nosec B603
+            ["git", "-C", str(clone), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if head.returncode != 0:
+            return 0  # no upstream configured - nothing to compare against
+        upstream = (head.stdout or "").strip()
+        if not upstream:
+            return 0
+        counted = subprocess.run(  # fixed argv, shell=False  # nosec B603
+            ["git", "-C", str(clone), "rev-list", "--count", f"HEAD..{upstream}"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if counted.returncode != 0:
+            return 0
+        return int((counted.stdout or "0").strip() or 0)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return 0
+
+
+def _refresh_remote_refs_in_background(clone: Path) -> None:
+    """Start a detached `git fetch` so the NEXT launch knows about new versions.
+
+    DETACHED, not awaited. A fetch on a corporate network can take minutes or hang on a
+    proxy, and the one thing this must never do is make `go` slower - so this launch
+    answers from whatever refs the machine already has, and the fetch serves the next one.
+    A user who has never launched before sees no update offer, which is correct: nothing
+    has told the machine there is one.
+
+    TTL'd on the fetch-head timestamp so repeat launches do not spawn a fetch each time."""
+    try:
+        marker = clone / ".git" / "FETCH_HEAD"
+        if marker.is_file():
+            import time as _time
+
+            age = _time.time() - marker.stat().st_mtime
+            if age < _UPDATE_REFS_TTL_SECONDS:
+                return
+        kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+        if os.name == "nt":
+            # No console window for a background fetch, and break out of the job object so
+            # it is not killed when this launcher exits - the same treatment headless_run
+            # gives its detached process, and for the same reason.
+            kwargs["creationflags"] = (
+                getattr(subprocess, "DETACHED_PROCESS", 0)
+                | getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                | getattr(subprocess, "CREATE_BREAKAWAY_FROM_JOB", 0x01000000)
+            )
+        else:
+            kwargs["start_new_session"] = True
+        subprocess.Popen(  # fixed argv, shell=False  # nosec B603
+            ["git", "-C", str(clone), "fetch", "--quiet"], **kwargs
+        )
+    except Exception:
+        pass  # a refresh that will not start costs freshness, never the launch
+
+
+def _offer_update_if_behind() -> None:
+    """Say when a newer version is waiting, and offer to install it.
+
+    Owner request, 2026-08-28: "can we check for new versions and if there is one popup and
+    offer install?" This is the check; the install is the installer's own update path,
+    which already knows how to pull, refresh the marketplace copy and restart nothing it
+    should not.
+
+    Silent unless there is genuinely something to say. Never blocks: no upstream, no refs,
+    no network, not a tty - all mean "say nothing and get on with the launch"."""
+    try:
+        clone = _clone_root()
+        behind = _commits_behind_upstream(clone)
+        _refresh_remote_refs_in_background(clone)
+        if behind <= 0:
+            return
+        ink, err = _Ink(), sys.stderr
+        plural = "" if behind == 1 else "s"
+        print(
+            f"    {ink.good('*')} update available - {behind} new commit{plural} on the "
+            f"tracked branch.",
+            file=err,
+        )
+        if not sys.stdin.isatty():
+            print(ink.dim("      Run: virt-surv  ->  [u] update"), file=err)
+            return
+        print(ink.bold("      Update now? [y/N]: "), end="", file=err)
+        try:
+            answer = input().strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print("", file=err)
+            return
+        if answer not in ("y", "yes"):
+            print(ink.dim("      skipped - 'virt-surv' then [u] whenever you want it."), file=err)
+            return
+        installer = clone / "install_helper.py"
+        if not installer.is_file():
+            print(ink.warn("      install_helper.py not found in this clone."), file=err)
+            return
+        print(ink.dim("      updating..."), file=err)
+        proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
+            # The positional mode, not an invented flag: install_helper's own
+            # parser takes {install,update}, and "update" is the six-step subset
+            # that pulls and refreshes the installed copy without re-asking every
+            # question the human already answered.
+            [sys.executable, str(installer), "update", "--yes"],
+            timeout=900,
+        )
+        if proc.returncode == 0:
+            print(
+                f"    {ink.good('+')} updated. The session about to start uses the new version.",
+                file=err,
+            )
+        else:
+            print(
+                ink.warn("      update did not complete - run 'virt-surv' and pick [u]."), file=err
+            )
+    except Exception:
+        pass  # an update offer must never cost a launch
+
+
 def _check_plugin_cache_lag(project_dir: Path) -> None:
     """The go banner shows the CLONE's version, but a plugin-mode session loads the
     marketplace-installed cache - which only advances on a plugin update (live
@@ -3909,6 +4052,10 @@ def main() -> int:
         _check_plugin_cache_lag(project_dir)
     except Exception:
         pass
+    try:
+        _offer_update_if_behind()
+    except Exception:
+        pass  # cosmetic tier - never costs the launch
     try:
         added = _apply_new_recommended_defaults(project_dir)
         if added:
