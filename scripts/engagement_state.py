@@ -89,6 +89,7 @@ import argparse
 import contextlib
 import datetime as _dt
 import json
+
 # hashlib is imported INSIDE the three functions that hash (F9, 2026-08-26 perf audit):
 # it pulls _hashlib, an OpenSSL-backed extension module, for 4.2ms of this module's
 # 37.7ms import - paid by every `python -m scripts.engagement_state ...` call, which is
@@ -163,9 +164,12 @@ def _vsit_paths():
     other cross-script imports in this file are deferred."""
     import sys as _sys
 
-    here = str(Path(__file__).resolve().parent)
-    if here not in _sys.path:
-        _sys.path.insert(0, here)
+    here = Path(__file__).resolve().parent
+    for candidate in (here, here.parent, here.parent / "scripts"):
+        if (candidate / "vsit_paths.py").is_file():
+            if str(candidate) not in _sys.path:
+                _sys.path.insert(0, str(candidate))
+            break
     import vsit_paths
 
     return vsit_paths
@@ -540,6 +544,7 @@ def compute_fingerprint(pack: Path) -> str:
             f"{STATE_FILENAME}|" + json.dumps(validity_subset, sort_keys=True, ensure_ascii=False)
         )
     import hashlib  # deferred: see the note at the former import site
+
     return hashlib.sha256("\n".join(entries).encode("utf-8")).hexdigest()
 
 
@@ -805,6 +810,7 @@ def state_hash(state: dict) -> str:
     """Stable short hash of the state content - embedded in the render, checked by the DoD."""
     canon = json.dumps(state, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     import hashlib  # deferred: see the note at the former import site
+
     return hashlib.sha256(canon.encode("utf-8")).hexdigest()[:16]
 
 
@@ -817,6 +823,7 @@ def content_hash(md_text: str) -> str:
     while lines and lines[-1] == "":
         lines.pop()  # normalise trailing blanks - splitlines drops them asymmetrically
     import hashlib  # deferred: see the note at the former import site
+
     return hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()[:16]
 
 

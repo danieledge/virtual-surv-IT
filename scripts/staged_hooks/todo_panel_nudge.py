@@ -41,6 +41,30 @@ import os
 import sys
 from pathlib import Path
 
+
+def _vsit_paths():
+    """The layout resolver (VSIT migration), imported lazily.
+
+    Lazy because this file may run standalone from a bare clone where `scripts/` is not yet
+    on sys.path - the same reason the other cross-script imports here are deferred.
+
+    Searches its own directory AND a sibling `scripts/`, because this file also exists as a
+    staged copy under `scripts/staged_hooks/`, which the human applies. A first version
+    looked only beside __file__ and the staged copy died with ModuleNotFoundError - caught
+    by the tests that run the staged copies directly, which is what they are for."""
+    import sys as _sys
+
+    _here = Path(__file__).resolve().parent
+    for _candidate in (_here, _here.parent, _here.parent / "scripts"):
+        if (_candidate / "vsit_paths.py").is_file():
+            if str(_candidate) not in _sys.path:
+                _sys.path.insert(0, str(_candidate))
+            break
+    import vsit_paths
+
+    return vsit_paths
+
+
 _GATED_PHASES = ("delivery", "close")
 _SEEDED_MARKER = "todo-panel-seeded"
 
@@ -136,7 +160,7 @@ def main() -> int:
         return 0
 
     cwd = Path(os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or Path.cwd())
-    artifacts = cwd / "artifacts"
+    artifacts = _vsit_paths().engagements_dir(cwd)
     if not artifacts.is_dir():
         return 0
 
@@ -148,9 +172,9 @@ def main() -> int:
     # mismatch, means a dormant session - stay silent.
     session_id = data.get("session_id")
     try:
-        stamped = json.loads(
-            (artifacts / ".team-session.json").read_text(encoding="utf-8")
-        ).get("session")
+        stamped = json.loads((artifacts / ".team-session.json").read_text(encoding="utf-8")).get(
+            "session"
+        )
     except Exception:
         stamped = None
     if not session_id or stamped != session_id:

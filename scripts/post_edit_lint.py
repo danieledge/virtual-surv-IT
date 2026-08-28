@@ -32,6 +32,26 @@ import sys
 import tempfile
 from pathlib import Path
 
+
+def _vsit_paths():
+    """The layout resolver (VSIT migration), imported lazily.
+
+    Lazy because this file may run standalone from a bare clone where `scripts/` is not yet
+    on sys.path. Searches its own directory AND a sibling `scripts/`, because several of
+    these files also exist as staged copies under `scripts/staged_hooks/`."""
+    import sys as _sys
+
+    _here = Path(__file__).resolve().parent
+    for _candidate in (_here, _here.parent, _here.parent / "scripts"):
+        if (_candidate / "vsit_paths.py").is_file():
+            if str(_candidate) not in _sys.path:
+                _sys.path.insert(0, str(_candidate))
+            break
+    import vsit_paths
+
+    return vsit_paths
+
+
 _LIVE = ("in_progress", "blocked", "closing")
 
 
@@ -54,7 +74,7 @@ def _pack_live(pack: Path) -> bool:
 
 
 def _engagement_live(project_root: Path) -> bool:
-    artifacts = project_root / "artifacts"
+    artifacts = _vsit_paths().engagements_dir(project_root)
     if not artifacts.is_dir():
         return False
     if _pack_live(artifacts):

@@ -28,6 +28,26 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+
+def _vsit_paths():
+    """The layout resolver (VSIT migration), imported lazily.
+
+    Lazy because this file may run standalone from a bare clone where `scripts/` is not yet
+    on sys.path. Searches its own directory AND a sibling `scripts/`, because several of
+    these files also exist as staged copies under `scripts/staged_hooks/`."""
+    import sys as _sys
+
+    _here = Path(__file__).resolve().parent
+    for _candidate in (_here, _here.parent, _here.parent / "scripts"):
+        if (_candidate / "vsit_paths.py").is_file():
+            if str(_candidate) not in _sys.path:
+                _sys.path.insert(0, str(_candidate))
+            break
+    import vsit_paths
+
+    return vsit_paths
+
+
 APP_FALLBACK = "__app_fallback__"
 
 # Engagement rows visible at once before the list scrolls. Same reasoning as the
@@ -116,8 +136,18 @@ def project_line(project_dir: Path, mod, width=72):
     return text
 
 
-def screen(mod, *, title, body_fn, footer_fn, key_bindings, output=None, right_fn=None,
-           project_dir=None, refresh_interval=None):
+def screen(
+    mod,
+    *,
+    title,
+    body_fn,
+    footer_fn,
+    key_bindings,
+    output=None,
+    right_fn=None,
+    project_dir=None,
+    refresh_interval=None,
+):
     """One framed full-screen round, shared by EVERY launcher screen (menu, settings,
     archive). Written once so the screens cannot drift apart the way the two menu tiers
     did - the thing this whole effort exists to prevent."""
@@ -652,7 +682,7 @@ def finished_screen(project_dir: Path, mod, engagement_state, output=None):
         return None
 
     try:
-        rows = engagement_state.finished_engagements(project_dir / "artifacts")
+        rows = engagement_state.finished_engagements(_vsit_paths().engagements_dir(project_dir))
     except Exception:
         return None
     if not rows:
@@ -686,8 +716,12 @@ def finished_screen(project_dir: Path, mod, engagement_state, output=None):
             tail = "archived" if row.get("archived") else (row.get("status") or "")
             when = str(row.get("closed") or row.get("opened") or "")[:10]
             out.append(("class:dim", f"      {v['slug']}  {tail}" + (f"  {when}" if when else "")))
-            out.append(("class:on" if _signed(i) else "class:warn",
-                        "  signed off\n" if _signed(i) else "  unsigned\n"))
+            out.append(
+                (
+                    "class:on" if _signed(i) else "class:warn",
+                    "  signed off\n" if _signed(i) else "  unsigned\n",
+                )
+            )
         if len(views) > _MENU_PAGE:
             out.append(("class:hint", f"\n  {idx[0] + 1}/{len(views)}\n"))
         return out
@@ -706,19 +740,24 @@ def finished_screen(project_dir: Path, mod, engagement_state, output=None):
             lines.append(("class:on", f"\n  Signed off by {who}\n"))
         else:
             lines.append(("class:warn", "\n  Not signed off yet\n"))
-            lines.append(("class:dim", "  s  record sign-off (appends;\n     nothing is rewritten)\n"))
+            lines.append(
+                ("class:dim", "  s  record sign-off (appends;\n     nothing is rewritten)\n")
+            )
         lines.append(
-            ("class:dim",
-             "\n  Enter opens it in Claude,\n  read-only - nothing is\n  reopened.\n"
-             "\n  r  redo as NEW work that\n     supersedes this one\n")
+            (
+                "class:dim",
+                "\n  Enter opens it in Claude,\n  read-only - nothing is\n  reopened.\n"
+                "\n  r  redo as NEW work that\n     supersedes this one\n",
+            )
         )
         if note[0]:
             lines.append(("class:on", f"\n  {note[0]}\n"))
         return lines
 
     def _footer():
-        return [("class:hint",
-                 "  ↑↓ move · Enter open · s sign off · r redo (supersede) · Esc back")]
+        return [
+            ("class:hint", "  ↑↓ move · Enter open · s sign off · r redo (supersede) · Esc back")
+        ]
 
     kb = KeyBindings()
 
@@ -1449,7 +1488,10 @@ def slug_picker_screen(project_dir: Path, mod, shown: list, output=None):
         return ""
 
     g = glyphs(mod)
-    rows = [(mod._row_resume_token(r) or "?", mod.row_view(r, default_slug="", of_many=True)) for r in shown]
+    rows = [
+        (mod._row_resume_token(r) or "?", mod.row_view(r, default_slug="", of_many=True))
+        for r in shown
+    ]
     idx = [0]
     result = {"v": ""}
 
@@ -1557,27 +1599,33 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
     # verdict at all. Parking happens AT A GATE, which is a resumable place; a cap that
     # fires wherever the run happens to be is not.
     RUN_MODES = ("window", "headless")
-    state = {"data": False, "exec": False, "web": False, "cap": 3, "on_budget": 0, "mode": 0,
-             "confirmed": False}
+    state = {
+        "data": False,
+        "exec": False,
+        "web": False,
+        "cap": 3,
+        "on_budget": 0,
+        "mode": 0,
+        "confirmed": False,
+    }
     idx = [0]
     rows = [
-        ("data", "toggle", "Data is synthetic or masked",
-         "no PII/MNPI - your attestation"),
-        ("exec", "toggle", "Allow the session to RUN code unattended",
-         "grants the gate here, expiring"),
+        ("data", "toggle", "Data is synthetic or masked", "no PII/MNPI - your attestation"),
+        (
+            "exec",
+            "toggle",
+            "Allow the session to RUN code unattended",
+            "grants the gate here, expiring",
+        ),
         # OFF by default (owner, 2026-08-26). An unattended run reaching the internet is a
         # decision, not a convenience: nobody is watching what it fetches or what a fetched
         # page tells it to do, and reviewed content is DATA rather than instruction
         # (CLAUDE.md §7). But a research task without it writes from memory alone - a real
         # engagement produced a vendor report with no web access at all and never said so.
-        ("web", "toggle", "Allow web search",
-         "off = it writes from what it knows"),
-        ("mode", "cycle", "How it runs",
-         "headless has no window and can be capped"),
-        ("cap", "cycle", "Spend ceiling for this engagement",
-         "a threshold, or a wall - see below"),
-        ("on_budget", "cycle", "At the ceiling",
-         "the degrade ladder, answered up front"),
+        ("web", "toggle", "Allow web search", "off = it writes from what it knows"),
+        ("mode", "cycle", "How it runs", "headless has no window and can be capped"),
+        ("cap", "cycle", "Spend ceiling for this engagement", "a threshold, or a wall - see below"),
+        ("on_budget", "cycle", "At the ceiling", "the degrade ladder, answered up front"),
     ]
 
     def _value(key):
@@ -1614,9 +1662,13 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
             # A hard cap is a CLI flag that exists in print mode only. Offering it against a
             # windowed run and quietly not enforcing it would be the worst kind of setting:
             # one that reads as a guarantee and is a preference.
-            out.append(("class:warn",
-                        "  A hard cap needs a headless run - nothing outside a windowed\n"
-                        "  session can enforce one. Switch 'How it runs' to headless.\n"))
+            out.append(
+                (
+                    "class:warn",
+                    "  A hard cap needs a headless run - nothing outside a windowed\n"
+                    "  session can enforce one. Switch 'How it runs' to headless.\n",
+                )
+            )
         out.append(("", "\n"))
         # The keys live in the FOOTER and nowhere else. This screen used to repeat them in
         # the body, which went stale the moment Enter stopped starting the run - two
@@ -1643,7 +1695,9 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
             out.append(("class:warn", "  Code execution AUTHORISED\n"))
             out.append(("class:dim", "  for this run, then expires.\n"))
         else:
-            out.append(("class:dim", "  No execution: review stays\n  static, findings inferred.\n"))
+            out.append(
+                ("class:dim", "  No execution: review stays\n  static, findings inferred.\n")
+            )
         return out
 
     def _footer():
@@ -1812,9 +1866,7 @@ def request_screen(project_dir: Path, mod, output=None):
 
     def _footer():
         tail = " · Ctrl-T unattended" if auto_offered else ""
-        return [
-            ("class:hint", f"  Ctrl-D send · Enter new line · Esc back · Ctrl-U clear{tail}")
-        ]
+        return [("class:hint", f"  Ctrl-D send · Enter new line · Esc back · Ctrl-U clear{tail}")]
 
     kb = KeyBindings()
 
@@ -1943,7 +1995,7 @@ def _monitor_read(project_dir: Path, slug: str) -> dict:
     an exception."""
     import json as _json
 
-    pack = project_dir / "artifacts" / slug
+    pack = _vsit_paths().engagement_dir(slug, project_dir)
     state_path = pack / "engagement-state.json"
     snap = {"slug": slug, "exists": pack.is_dir(), "state": None, "artifacts": 0, "error": ""}
     try:
@@ -2062,8 +2114,9 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
             # Proof of life, from the first tick. Before a workspace exists these are the
             # ONLY evidence the run is doing anything, which is precisely when it matters.
             if head.get("events"):
-                rows.append(("activity", f"{head['events']} events, "
-                                         f"{head.get('tool_calls', 0)} tool calls"))
+                rows.append(
+                    ("activity", f"{head['events']} events, {head.get('tool_calls', 0)} tool calls")
+                )
             if head.get("stages"):
                 rows.append(("stages", str(len(head["stages"]))))
             if head.get("cost_usd"):
@@ -2083,16 +2136,23 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
                 # that ONLY ever reports patience is indistinguishable from one watching
                 # nothing, and a monitor that cries wolf at 45 seconds trains you to ignore
                 # it. Hedged deliberately - this is still a suggestion, not a diagnosis.
-                out.append(("class:warn",
-                            f"  Still no workspace after {_elapsed(started)}.\n"))
-                out.append(("class:dim",
-                            "  That is longer than a cold start usually takes, even on a\n"
-                            "  slow machine. Worth checking the other window for an error.\n\n"))
+                out.append(("class:warn", f"  Still no workspace after {_elapsed(started)}.\n"))
+                out.append(
+                    (
+                        "class:dim",
+                        "  That is longer than a cold start usually takes, even on a\n"
+                        "  slow machine. Worth checking the other window for an error.\n\n",
+                    )
+                )
             else:
                 out.append(("class:dim", f"  {snap['error']}\n"))
-                out.append(("class:dim",
-                            "  A cold start can take a few minutes on a locked-down\n"
-                            "  machine - this is normal.\n\n"))
+                out.append(
+                    (
+                        "class:dim",
+                        "  A cold start can take a few minutes on a locked-down\n"
+                        "  machine - this is normal.\n\n",
+                    )
+                )
         width = 13
         for label, value in _rows(snap):
             out.append(("class:dim", f"  {label:<{width}}"))
@@ -2115,9 +2175,13 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
             # A run refused its tools reports "completed" and produces nothing. Saying so
             # loudly is the difference between "it finished" and "it was stopped from
             # working" (2026-08-25: dontAsk denied Write and Bash, and the run looked fine).
-            out.append(("class:warn",
-                        f"\n  {len(head['denials'])} tool call(s) REFUSED - "
-                        "this run was blocked, not merely finished\n"))
+            out.append(
+                (
+                    "class:warn",
+                    f"\n  {len(head['denials'])} tool call(s) REFUSED - "
+                    "this run was blocked, not merely finished\n",
+                )
+            )
         if head.get("finished"):
             # Stop the clock. It kept counting after the run had ended, which reads as
             # activity when there is none (live screenshot, 2026-08-26).
@@ -2172,4 +2236,3 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
     except Exception:
         return None
     return result["v"]
-

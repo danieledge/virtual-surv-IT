@@ -46,6 +46,26 @@ import re
 import sys
 from pathlib import Path
 
+
+def _vsit_paths():
+    """The layout resolver (VSIT migration), imported lazily.
+
+    Lazy because this file may run standalone from a bare clone where `scripts/` is not yet
+    on sys.path. Searches its own directory AND a sibling `scripts/`, because several of
+    these files also exist as staged copies under `scripts/staged_hooks/`."""
+    import sys as _sys
+
+    _here = Path(__file__).resolve().parent
+    for _candidate in (_here, _here.parent, _here.parent / "scripts"):
+        if (_candidate / "vsit_paths.py").is_file():
+            if str(_candidate) not in _sys.path:
+                _sys.path.insert(0, str(_candidate))
+            break
+    import vsit_paths
+
+    return vsit_paths
+
+
 # shutil, subprocess and time are imported INSIDE the branches that use them, not here.
 # This hook fires on EVERY UserPromptSubmit - it must, because its job is to put the probe
 # in context before the turn starts, so it cannot be lazy or deferred - and on the great
@@ -126,7 +146,7 @@ def _resume_menu_json(project_dir: Path) -> str | None:
         # engagement_state.resume_menu_json's docstring). getattr fallback covers a
         # mixed-version install where this hook outruns an older engagement_state.
         menu_fn = getattr(engagement_state, "resume_menu_json", engagement_state.resume_menu)
-        menu = menu_fn(project_dir / "artifacts")
+        menu = menu_fn(_vsit_paths().engagements_dir(project_dir))
         return json.dumps(menu, ensure_ascii=False, indent=2)
     except Exception:
         return None
@@ -185,9 +205,7 @@ def _tail_lines(project_dir: Path, prompt: str) -> list:
         # ZERO engagement discovery under --new (SKILL.md 0b): the resume menu is
         # deliberately NOT injected - there is nothing to validate and nothing to
         # enumerate; the human already answered in the go menu.
-        lines.append(
-            "(--new: resume menu omitted on purpose - skip 0b entirely, no list --menu,"
-        )
+        lines.append("(--new: resume menu omitted on purpose - skip 0b entirely, no list --menu,")
         lines.append("no open-pack commentary; go straight to classifying the work)")
         lines.append("</engage-probe-result>")
         return lines
@@ -309,11 +327,9 @@ def _cached_block(project_dir: Path, data: dict, prompt: str) -> str | None:
     sid = data.get("session_id")
     if sid:
         try:
-            art = project_dir / "artifacts"
+            art = _vsit_paths().engagements_dir(project_dir)
             art.mkdir(parents=True, exist_ok=True)
-            (art / ".team-session.json").write_text(
-                json.dumps({"session": sid}), encoding="utf-8"
-            )
+            (art / ".team-session.json").write_text(json.dumps({"session": sid}), encoding="utf-8")
         except Exception:
             pass  # the first engagement_state mutation stamps as a fallback
     lines = [

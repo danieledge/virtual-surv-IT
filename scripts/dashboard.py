@@ -80,6 +80,30 @@ import sys
 import re as _re
 from pathlib import Path
 
+
+def _vsit_paths():
+    """The layout resolver (VSIT migration), imported lazily.
+
+    Lazy because this file may run standalone from a bare clone where `scripts/` is not yet
+    on sys.path - the same reason the other cross-script imports here are deferred.
+
+    Searches its own directory AND a sibling `scripts/`, because this file also exists as a
+    staged copy under `scripts/staged_hooks/`, which the human applies. A first version
+    looked only beside __file__ and the staged copy died with ModuleNotFoundError - caught
+    by the tests that run the staged copies directly, which is what they are for."""
+    import sys as _sys
+
+    _here = Path(__file__).resolve().parent
+    for _candidate in (_here, _here.parent, _here.parent / "scripts"):
+        if (_candidate / "vsit_paths.py").is_file():
+            if str(_candidate) not in _sys.path:
+                _sys.path.insert(0, str(_candidate))
+            break
+    import vsit_paths
+
+    return vsit_paths
+
+
 try:  # repo-relative import (python -m scripts.dashboard) with a fallback for direct runs
     from scripts.check_artifacts import (
         archived_open_packs,
@@ -308,7 +332,7 @@ def gate_findings_for(artifacts: Path) -> list[str]:
 
 def project_summary(project: Path) -> dict:
     """Facts about one working project, all from files on disk. Read-only throughout."""
-    artifacts = project / "artifacts"
+    artifacts = _vsit_paths().engagements_dir(project)
     emails = sorted(artifacts.rglob("engagement-summary-*.txt")) if artifacts.is_dir() else []
     engagements = engagement_rows(artifacts)
     archived = archived_slugs(artifacts) if artifacts.is_dir() else []
@@ -396,8 +420,8 @@ _MODEL_PRICING_PER_MTOK: dict[str, tuple[float, float, float, float, float]] = {
 }
 
 
-_CONTEXT_SUFFIX = _re.compile(r"\[[^\]]*\]$")     # claude-opus-5[1m]
-_DATE_SUFFIX = _re.compile(r"-\d{8}$")            # claude-haiku-4-5-20251001
+_CONTEXT_SUFFIX = _re.compile(r"\[[^\]]*\]$")  # claude-opus-5[1m]
+_DATE_SUFFIX = _re.compile(r"-\d{8}$")  # claude-haiku-4-5-20251001
 
 
 def normalise_model(model: str | None) -> str:
@@ -671,7 +695,7 @@ def _has_team_fingerprint(project: Path) -> bool:
     The check below is the one real remaining usage trace that ISN'T already covered by the
     registry: a generated codebase map (real registry engagements are covered by the check
     below that)."""
-    artifacts = project / "artifacts"
+    artifacts = _vsit_paths().engagements_dir(project)
     if find_codebase_map(project) is not None:
         return True
     registry = artifacts / "engagements.json"
@@ -1316,7 +1340,7 @@ def obligation_coverage(projects: list[dict]) -> list[dict]:
     register = _load_register()
     tally: dict[str, dict] = {}
     for p in projects:
-        artifacts_root = p["path"] / "artifacts"
+        artifacts_root = _vsit_paths().engagements_dir(p["path"])
         for e in p.get("engagements") or []:
             pack_dir = (
                 artifacts_root if e.get("dir") in (None, "(flat)") else artifacts_root / e["dir"]
@@ -1585,7 +1609,7 @@ def _engagement_json(e: dict, project_path: Path) -> dict:
     # Same pack-dir resolution as obligation_coverage()/_engagement_extras() - a workspaced
     # engagement lives at artifacts/<dir>, a legacy flat pack's artifacts sit at artifacts/
     # itself (dir is None or the "(flat)" sentinel scan_engagements() uses).
-    artifacts_root = project_path / "artifacts"
+    artifacts_root = _vsit_paths().engagements_dir(project_path)
     pack_dir = artifacts_root if e.get("dir") in (None, "(flat)") else artifacts_root / e["dir"]
     return {
         "slug": e.get("slug"),

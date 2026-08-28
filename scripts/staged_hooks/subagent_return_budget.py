@@ -39,6 +39,30 @@ import json
 import sys
 from pathlib import Path
 
+
+def _vsit_paths():
+    """The layout resolver (VSIT migration), imported lazily.
+
+    Lazy because this file may run standalone from a bare clone where `scripts/` is not yet
+    on sys.path - the same reason the other cross-script imports here are deferred.
+
+    Searches its own directory AND a sibling `scripts/`, because this file also exists as a
+    staged copy under `scripts/staged_hooks/`, which the human applies. A first version
+    looked only beside __file__ and the staged copy died with ModuleNotFoundError - caught
+    by the tests that run the staged copies directly, which is what they are for."""
+    import sys as _sys
+
+    _here = Path(__file__).resolve().parent
+    for _candidate in (_here, _here.parent, _here.parent / "scripts"):
+        if (_candidate / "vsit_paths.py").is_file():
+            if str(_candidate) not in _sys.path:
+                _sys.path.insert(0, str(_candidate))
+            break
+    import vsit_paths
+
+    return vsit_paths
+
+
 # ~1,500 tokens / ~30 lines is the STATED budget; the trigger is 2x that (clearly, not
 # marginally, over) so a rough char/4 token estimate never falsely flags a borderline return.
 _TOKEN_BUDGET = 1500
@@ -70,7 +94,7 @@ def _pack_live(pack: Path) -> bool:
 
 
 def _engagement_live(project_root: Path) -> bool:
-    artifacts = project_root / "artifacts"
+    artifacts = _vsit_paths().engagements_dir(project_root)
     if not artifacts.is_dir():
         return False
     if _pack_live(artifacts):

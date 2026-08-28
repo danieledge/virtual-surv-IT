@@ -73,6 +73,26 @@ import os
 import sys
 from pathlib import Path
 
+
+def _vsit_paths():
+    """The layout resolver (VSIT migration), imported lazily.
+
+    Lazy because this file may run standalone from a bare clone where `scripts/` is not yet
+    on sys.path. Searches its own directory AND a sibling `scripts/`, because several of
+    these files also exist as staged copies under `scripts/staged_hooks/`."""
+    import sys as _sys
+
+    _here = Path(__file__).resolve().parent
+    for _candidate in (_here, _here.parent, _here.parent / "scripts"):
+        if (_candidate / "vsit_paths.py").is_file():
+            if str(_candidate) not in _sys.path:
+                _sys.path.insert(0, str(_candidate))
+            break
+    import vsit_paths
+
+    return vsit_paths
+
+
 _NUDGE_MARKER_PREFIX = "dod-nudged:"
 
 
@@ -272,7 +292,7 @@ def main() -> int:
     # directory's engagement. Inside a real sandboxed eval session the two are equal,
     # so the gate stays fully armed there - which is exactly what the evals need.
     cwd = Path(os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or Path.cwd())
-    artifacts = cwd / "artifacts"
+    artifacts = _vsit_paths().engagements_dir(cwd)
     if not artifacts.is_dir():
         return 0
 
@@ -290,9 +310,9 @@ def main() -> int:
     # fail-toward-warning - dormancy is the promise being kept here.
     session_id = data.get("session_id")
     try:
-        stamped = json.loads(
-            (artifacts / ".team-session.json").read_text(encoding="utf-8")
-        ).get("session")
+        stamped = json.loads((artifacts / ".team-session.json").read_text(encoding="utf-8")).get(
+            "session"
+        )
     except Exception:
         stamped = None
     if not session_id or stamped != session_id:
@@ -340,9 +360,7 @@ def main() -> int:
         active_slug = None
         active_owned = True
         try:
-            record = json.loads(
-                (artifacts / ".active-engagement.json").read_text(encoding="utf-8")
-            )
+            record = json.loads((artifacts / ".active-engagement.json").read_text(encoding="utf-8"))
             active_slug = record.get("slug") or None
             marker_session = record.get("session")
             payload_session = data.get("session_id")
