@@ -490,10 +490,15 @@ def brand_banner_rows(style: Style, width: Optional[int] = None) -> list:
     written the way they are). print_banner falls back to its own boxed banner then - the
     art is shared, never duplicated, and never a hard dependency."""
     try:
-        scripts_dir = Path(__file__).resolve().parent / "scripts"
-        if str(scripts_dir) not in sys.path:
-            sys.path.insert(0, str(scripts_dir))
-        import brand_banner
+        # Through the shared resolver, NOT Path(__file__): the installer re-execs from a
+        # bare temp copy of itself for most of a session, so scripts/ is not beside it and
+        # the import failed on every real run. The designed banner was therefore never
+        # seen - `virt-surv go` showed the VSIT mascot and `virt-surv` showed a plain
+        # ASCII box, which read as two visual identities for one product and was actually
+        # the same defect in a third place (2026-08-28).
+        brand_banner = _import_from_scripts("brand_banner")
+        if brand_banner is None:
+            return []
     except Exception:
         return []
     painters = {
@@ -1657,8 +1662,6 @@ def choose_action(style: Style) -> str:
     directly - the caller only ever sees a final, concrete action."""
     s = style
     while True:
-        print("")
-        print(s.bold("What can I do for you?"))
         options = (
             ("1", "Install or update the team (this machine - full run)"),
             ("2", "Configure a project (per project - enable/permissions/preferences/model)"),
@@ -1687,6 +1690,12 @@ def choose_action(style: Style) -> str:
                 return "quit"
             answer = picked
         else:
+            # The heading belongs to THIS tier only. Printed before the tier is chosen, it
+            # landed in the scrollback above a full-screen app that then covered it, and
+            # was left behind as debris when the app exited - the picker's own frame title
+            # already says what screen you are on.
+            print("")
+            print(s.bold("What can I do for you?"))
             for key, text in options:
                 print(f"  {s.cyan(key + ')')} {text}")
             # Redraws the menu on entering/re-entering this loop (fresh session, or back
