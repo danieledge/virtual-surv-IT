@@ -530,7 +530,18 @@ def settings_screen(project_dir: Path, mod, output=None):
         # nothing to say"), so a note-based check silently reported "no change" for
         # every ordinary toggle.
         before = list(rows)
-        note = mod._editor_apply(project_dir, action)
+        if action == "d":
+            note = mod._editor_apply(project_dir, "d")
+        else:
+            # By KEY, not by screen position. The settings screen is grouped, so the
+            # highlighted row's index is no longer the dispatch index - and when it
+            # briefly was assumed to be, position 3 showed "evidence room at close" while
+            # the toggle changed "large-context review split" (2026-08-28). No test
+            # noticed, because none of them asserted that the row a user is looking at is
+            # the row that changes.
+            keys = mod._editor_keys(project_dir)
+            at = action - 1
+            note = mod._editor_apply_key(project_dir, keys[at]) if 0 <= at < len(keys) else ""
         _refresh()
         if list(rows) != before:
             changed[0] = True

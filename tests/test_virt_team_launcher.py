@@ -18,6 +18,17 @@ from pathlib import Path
 
 import scripts.vsit_paths as _vsit
 
+
+def _screen_position(mod, project, label):
+    """The 1-based position a label occupies ON THE GROUPED SCREEN.
+
+    Tests that simulate typing a number must compute it the way the editor resolves a
+    keystroke, not from the old `len(_TOGGLE_PREFS) + N` arithmetic - which was the
+    dispatch index, and stopped being the screen position when the screen was grouped
+    (2026-08-28)."""
+    labels = [row[0] for row in mod._editor_rows(project)]
+    return labels.index(label) + 1
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -490,7 +501,10 @@ def test_menu_c_with_a_change_refreshes_the_table(tmp_path, monkeypatch, capsys)
     monkeypatch.chdir(project)
     mod = _load()
     monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
-    answers = iter(["c", str(len(_load()._TOGGLE_PREFS) + 2), "b", "n"])  # jira, done, new
+    _mod = _load()
+    answers = iter(
+        ["c", str(_screen_position(_mod, tmp_path, "jira write-back")), "b", "n"]
+    )  # jira, done, new
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = mod.main()
     out = capsys.readouterr()
@@ -683,12 +697,20 @@ def test_go_prewarms_the_guard_interpreter_cache(tmp_path, monkeypatch, capsys):
     capsys.readouterr()
 
 
-def _editor_rows_idx(mod):
-    """(env_row, jira_row) as _editor_apply computes them. Hardcoded '8'/'9' here broke
-    the moment a toggle was added (2026-08-19, evidence_room) - the tests were pressing
-    a different button than they claimed to."""
-    n = len(mod._TOGGLE_PREFS)
-    return n + 1, n + 2
+def _editor_rows_idx(mod, project=None):
+    """(env_row, jira_row) as SCREEN POSITIONS, which is what a typed number means.
+
+    Hardcoded '8'/'9' here broke the moment a toggle was added (2026-08-19,
+    evidence_room) - "the tests were pressing a different button than they claimed to".
+    The arithmetic that replaced it, len(_TOGGLE_PREFS) + N, broke the same way when the
+    screen was grouped (2026-08-28): it computes the DISPATCH index, and display order
+    stopped being dispatch order. Now derived from the rendered rows, which cannot drift
+    from what a user is actually looking at."""
+    if project is None:  # legacy callers that only need the dispatch indices
+        n = len(mod._TOGGLE_PREFS)
+        return n + 1, n + 2
+    labels = [row[0] for row in mod._editor_rows(project)]
+    return labels.index(mod._ENV_ROW_LABEL) + 1, labels.index(mod._JIRA_ROW_LABEL) + 1
 
 
 def test_config_editor_jira_row_toggles_the_jira_integration(tmp_path, monkeypatch, capsys):
@@ -702,7 +724,7 @@ def test_config_editor_jira_row_toggles_the_jira_integration(tmp_path, monkeypat
         encoding="utf-8",
     )
     mod = _load()
-    _env_i, jira_i = _editor_rows_idx(mod)
+    _env_i, jira_i = _editor_rows_idx(mod, project)
     answers = iter([str(jira_i), "b"])  # toggle off, done
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     mod._config_editor(project)
@@ -721,7 +743,7 @@ def test_config_editor_jira_row_toggles_the_jira_integration(tmp_path, monkeypat
 def test_config_editor_jira_enable_without_key_says_where_to_set_it(tmp_path, monkeypatch, capsys):
     project = _plugin_enabled_project(tmp_path)
     mod = _load()
-    answers = iter([str(_editor_rows_idx(mod)[1]), "b"])
+    answers = iter([str(_editor_rows_idx(mod, project)[1]), "b"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     mod._config_editor(project)
     prefs = json.loads((project / ".claude" / "team-preferences.json").read_text(encoding="utf-8"))
@@ -1015,7 +1037,7 @@ def test_config_editor_env_toggle_on_applies_recommended_set(tmp_path, monkeypat
     env bundle add-only, same contract as the go-time propagation."""
     project = _plugin_enabled_project(tmp_path)
     mod = _load()
-    answers = iter([str(_editor_rows_idx(mod)[0]), "b"])
+    answers = iter([str(_editor_rows_idx(mod, project)[0]), "b"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     mod._config_editor(project)
     saved = json.loads((project / ".claude" / "settings.json").read_text(encoding="utf-8"))
@@ -1037,7 +1059,7 @@ def test_config_editor_env_toggle_off_keeps_custom_tuned_values(tmp_path, monkey
         encoding="utf-8",
     )
     mod = _load()
-    answers = iter([str(_editor_rows_idx(mod)[0]), "b"])
+    answers = iter([str(_editor_rows_idx(mod, project)[0]), "b"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     mod._config_editor(project)
     saved = json.loads((project / ".claude" / "settings.json").read_text(encoding="utf-8"))
@@ -1687,3 +1709,77 @@ def test_the_background_refresh_is_ttl_gated(tmp_path, monkeypatch):
     monkeypatch.setattr(mod.subprocess, "Popen", lambda *a, **k: spawned.append(a) or None)
     mod._refresh_remote_refs_in_background(clone)  # FETCH_HEAD is fresh from _mini_repo
     assert spawned == [], "a fresh FETCH_HEAD must not trigger another fetch"
+
+
+# ---------------- the grouped configuration screen (2026-08-28) ----------------
+
+
+def _fresh_project(tmp_path):
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+    return tmp_path
+
+
+def test_toggling_a_row_changes_THAT_row(tmp_path):
+    """THE test that was missing, and its absence let a live bug ship for one commit.
+
+    Grouping reordered the screen while dispatch was still positional, so position 3 showed
+    "evidence room at close" while the toggle changed "large-context review split". Every
+    existing test passed, because none of them asserted the row a user is looking at is the
+    row that changes. This one does, for every row on the screen."""
+    mod = _load()
+    project = _fresh_project(tmp_path)
+    keys = mod._editor_keys(project)
+    assert keys and all(keys), "every row must resolve to a key"
+    for position, key in enumerate(keys):
+        before = mod._editor_rows(project)
+        mod._editor_apply_key(project, key)
+        after = mod._editor_rows(project)
+        moved = [i for i, (b, a) in enumerate(zip(before, after)) if b[1] != a[1]]
+        assert moved == [position], (
+            f"toggling row {position + 1} ({before[position][0]!r}) changed rows "
+            f"{[m + 1 for m in moved]}"
+        )
+
+
+def test_related_settings_sit_together(tmp_path):
+    """The user-visible point of the grouping. Jira write-back and jira mirror were rows 16
+    and 18, with an unrelated row between them, which is why the Jira settings read as
+    incoherent - asked 2026-08-28, and already logged once on 2026-08-20."""
+    mod = _load()
+    layout = mod._editor_layout(_fresh_project(tmp_path))
+    labels = [label for _title, label, _v, _o in layout]
+    assert abs(labels.index("jira write-back") - labels.index("jira mirror")) == 1
+
+
+def test_every_row_lands_in_a_named_group(tmp_path):
+    """A setting missing from _SETTING_GROUPS still appears, under "Other" - so adding one
+    can never make it invisible - but "Other" is a signal that the table needs updating,
+    not a resting place."""
+    mod = _load()
+    layout = mod._editor_layout(_fresh_project(tmp_path))
+    titles = set()
+    current = ""
+    for title, _label, _v, _o in layout:
+        current = title or current
+        titles.add(current)
+    assert "Other" not in titles, "a setting is missing from _SETTING_GROUPS"
+
+
+def test_the_layout_carries_every_row_exactly_once(tmp_path):
+    mod = _load()
+    project = _fresh_project(tmp_path)
+    rows = mod._editor_rows(project)
+    layout = mod._editor_layout(project)
+    assert len(layout) == len(rows)
+    assert [label for _t, label, _v, _o in layout] == [label for label, _v, _o in rows]
+
+
+def test_group_headers_appear_once_per_group(tmp_path):
+    """A header on every row would be noise; a header only on the first row of each group
+    is what makes the screen scannable."""
+    mod = _load()
+    layout = mod._editor_layout(_fresh_project(tmp_path))
+    headers = [title for title, _l, _v, _o in layout if title]
+    assert len(headers) == len(set(headers)), "a group header repeated"
+    assert len(headers) >= 5, "the screen should be grouped, not one long list"

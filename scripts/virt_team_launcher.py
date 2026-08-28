@@ -354,6 +354,9 @@ _TOGGLE_PREFS = (
 # every row's on/off column against the settings-screen divider. "timeouts" moved into the
 # explanation pane, which now carries the detail for every row.
 _ENV_ROW_LABEL = "env tuning (1h cache TTL)"
+# Not a preferences key - it lives in settings.json - so it carries its own row key
+# for grouping and dispatch.
+_ENV_KEY = "env_tuning"
 
 # Renamed from the bare "jira integration" (2026-08-20 user question: "not clear what does
 # the setting jira do - what does it enable or disable or change"). Since [j] became a
@@ -361,6 +364,7 @@ _ENV_ROW_LABEL = "env tuning (1h cache TTL)"
 # engagement from a ticket works either way. What it decides is whether the team WRITES
 # BACK to a tracker on its own initiative, so the label names that instead.
 _JIRA_ROW_LABEL = "jira write-back"
+_JIRA_KEY = "jira"
 
 
 # Settings that are NOT on/off (2026-08-20). The editor was boolean-only, so qa_depth -
@@ -525,10 +529,49 @@ def setting_help(label: str) -> tuple:
     return _SETTING_HELP.get(label, ())
 
 
+# How the configuration screen is ORGANISED, as opposed to how the settings happen to be
+# stored (2026-08-28). Each entry is (group title, [row key, ...]); a key absent from here
+# still appears, under "Other", so adding a setting can never make it invisible.
+#
+# Grouped by the DECISION a reader is making, not by data type - the previous screen put
+# every boolean together and every choice together, which is a fact about the code and of
+# no use to someone deciding whether the team should write to Jira.
+_SETTING_GROUPS = (
+    (
+        "What the team produces",
+        ("extra_formats", "regulatory_citations", "evidence_room", "standards_critique"),
+    ),
+    (
+        "How much work it does",
+        ("qa_depth", "large_context_review_split", "parallel_dispatch_via_workflow"),
+    ),
+    (
+        "Running unattended",
+        ("autonomous_mode", "autonomous_default", "new_window"),
+    ),
+    (
+        "Understanding the codebase",
+        ("map_skeleton", "document_map", "data_profiling"),
+    ),
+    (
+        "Jira",
+        ("jira", "integrations.jira.mirror"),
+    ),
+    (
+        "Speed",
+        ("probe_cache", "guard_daemon", "env_tuning"),
+    ),
+)
+
+
 def _editor_rows(project_dir: Path):
-    """One consistent snapshot for a settings-editor render: [(label, value, on)] for
-    the six toggle prefs plus the env-bundle row, or None when preferences can't be
-    resolved. Shared by BOTH editor tiers so they can never drift."""
+    """One consistent snapshot for a settings-editor render, GROUPED.
+
+    Returns [(label, value, on)] - unchanged for callers - but ordered by
+    _SETTING_GROUPS rather than by the order the code appends them, so related settings
+    sit together. Group headers are rendered by the callers, from _editor_layout().
+
+    Shared by BOTH editor tiers so they can never drift."""
     try:
         import engage_probe
 
@@ -541,6 +584,13 @@ def _editor_rows(project_dir: Path):
         )
     except Exception:
         prefs = {}
+    keyed: dict = {}
+    order: list = []
+
+    def _add(row_key, label, value, on):
+        keyed[row_key] = (label, value, on)
+        order.append(row_key)
+
     rows = []
     for label, key in _TOGGLE_PREFS:
         if key == "extra_formats":
@@ -548,7 +598,7 @@ def _editor_rows(project_dir: Path):
         else:
             on = bool(effective.get(key))
         src = "" if key in prefs else "  (machine default)"
-        rows.append((label, ("on" if on else "off") + src, on))
+        _add(key, label, ("on" if on else "off") + src, on)
     try:
         env = (
             json.loads((project_dir / ".claude" / "settings.json").read_text(encoding="utf-8")).get(
@@ -559,7 +609,7 @@ def _editor_rows(project_dir: Path):
     except Exception:
         env = {}
     env_on = "ENABLE_PROMPT_CACHING_1H" in env
-    rows.append((_ENV_ROW_LABEL, "applied" if env_on else "not applied", env_on))
+    _add(_ENV_KEY, _ENV_ROW_LABEL, "applied" if env_on else "not applied", env_on)
     jira = (
         (prefs.get("integrations") or {}).get("jira")
         if isinstance(prefs.get("integrations"), dict)
@@ -568,16 +618,100 @@ def _editor_rows(project_dir: Path):
     jira = jira if isinstance(jira, dict) else {}
     if jira.get("enabled") is True:
         key = str(jira.get("project_key") or "") or "key UNSET"
-        rows.append((_JIRA_ROW_LABEL, f"on ({key})", True))
+        _add(_JIRA_KEY, _JIRA_ROW_LABEL, f"on ({key})", True)
     else:
-        rows.append((_JIRA_ROW_LABEL, "off", False))
+        _add(_JIRA_KEY, _JIRA_ROW_LABEL, "off", False)
     for label, key, values, default in _CHOICE_PREFS:
         stored = _choice_read(prefs, key)
         current = stored if stored in values else default
-        rows.append(
-            (label, current + ("" if stored in values else "  (default)"), current != default)
+        _add(
+            key,
+            label,
+            current + ("" if stored in values else "  (default)"),
+            current != default,
         )
+
+    # Ordered by group; anything not listed in _SETTING_GROUPS still appears, at the end,
+    # so a new setting can never become invisible by being forgotten here.
+    placed: list = []
+    seen: set = set()
+    for _title, keys in _SETTING_GROUPS:
+        for row_key in keys:
+            if row_key in keyed and row_key not in seen:
+                seen.add(row_key)
+                placed.append(row_key)
+    placed += [k for k in order if k not in seen]
+    for row_key in placed:
+        rows.append(keyed[row_key])
     return rows
+
+
+def _editor_layout(project_dir: Path):
+    """[(group title or "", label, value, on)] - the same rows, each tagged with the group
+    header that should precede it ("" for every row after the first in a group).
+
+    A separate function so _editor_rows' contract is untouched: both editor tiers and the
+    tests that pin them keep working on plain (label, value, on) triples, and only the
+    rendering opts in to headers."""
+    rows = _editor_rows(project_dir)
+    if rows is None:
+        return None
+    by_label = {}
+    for title, keys in _SETTING_GROUPS:
+        for row_key in keys:
+            by_label[row_key] = title
+    labels_to_key = {}
+    for label, key in _TOGGLE_PREFS:
+        labels_to_key[label] = key
+    labels_to_key[_ENV_ROW_LABEL] = _ENV_KEY
+    labels_to_key[_JIRA_ROW_LABEL] = _JIRA_KEY
+    for label, key, _values, _default in _CHOICE_PREFS:
+        labels_to_key[label] = key
+
+    out = []
+    current = None
+    for label, value, on in rows:
+        title = by_label.get(labels_to_key.get(label, ""), "Other")
+        out.append((title if title != current else "", label, value, on))
+        current = title
+    return out
+
+
+def _editor_keys(project_dir: Path):
+    """The row keys, in the SAME order _editor_rows returns them.
+
+    The bridge between "the third row on screen" and "which setting that is". Both editor
+    tiers resolve a user's choice through this rather than assuming the two orders agree -
+    they did not, for one commit, and nothing failed."""
+    rows = _editor_rows(project_dir)
+    if rows is None:
+        return []
+    label_to_key = {label: key for label, key in _TOGGLE_PREFS}
+    label_to_key[_ENV_ROW_LABEL] = _ENV_KEY
+    label_to_key[_JIRA_ROW_LABEL] = _JIRA_KEY
+    for label, key, _values, _default in _CHOICE_PREFS:
+        label_to_key[label] = key
+    return [label_to_key.get(label, "") for label, _v, _o in rows]
+
+
+def _editor_apply_key(project_dir: Path, row_key: str) -> str:
+    """Apply one setting by key, translating to the positional contract _editor_apply
+    still speaks internally.
+
+    The translation lives here rather than in _editor_apply so that function's own
+    index arithmetic - and the tests pinning it - stay exactly as they were."""
+    if row_key == _ENV_KEY:
+        return _editor_apply(project_dir, len(_TOGGLE_PREFS) + 1)
+    if row_key == _JIRA_KEY:
+        return _editor_apply(project_dir, len(_TOGGLE_PREFS) + 2)
+    for position, (_label, key) in enumerate(_TOGGLE_PREFS, start=1):
+        if key == row_key:
+            return _editor_apply(project_dir, position)
+    base = len(_TOGGLE_PREFS) + 2
+    for offset, (_label, key, _values, _default) in enumerate(_CHOICE_PREFS, start=1):
+        if key == row_key:
+            return _editor_apply(project_dir, base + offset)
+    return ""
 
 
 def _editor_apply(project_dir: Path, action) -> str:
@@ -768,7 +902,10 @@ def _pt_config_editor(p, project_dir: Path) -> None:
         return _editor_rows(project_dir) or []
 
     def _toggle(i):
-        note[0] = _editor_apply(project_dir, i + 1)
+        # By key, not by index: the screen is grouped, so the highlighted ROW's
+        # position is no longer the dispatch index (2026-08-28).
+        keys = _editor_keys(project_dir)
+        note[0] = _editor_apply_key(project_dir, keys[i]) if 0 <= i < len(keys) else ""
 
     @kb.add("up")
     def _up(event):
@@ -885,7 +1022,21 @@ def _config_editor(project_dir: Path) -> None:
             return
         if choice in ("", "b"):
             return
-        note = _editor_apply(project_dir, "d" if choice == "d" else choice)
+        if choice == "d":
+            note = _editor_apply(project_dir, "d")
+        else:
+            # A typed number is a SCREEN POSITION, and the screen is grouped, so it is no
+            # longer the same as the dispatch index. Resolve through the key list rather
+            # than assuming the two agree - they did not, and nothing failed (2026-08-28).
+            keys = _editor_keys(project_dir)
+            try:
+                at = int(choice) - 1
+            except (TypeError, ValueError):
+                at = -1
+            if 0 <= at < len(keys):
+                note = _editor_apply_key(project_dir, keys[at])
+            else:
+                note = f"1-{len(keys)}, d or b, please."
         if note:
             print(ink.dim(f"  {note}"), file=err)
 

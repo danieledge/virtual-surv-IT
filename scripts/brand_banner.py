@@ -28,6 +28,8 @@ and a strapline costs. The compact tiers are 2.
 
 from __future__ import annotations
 
+import sys
+
 # ------------------------------------------------------------------ palette roles
 # Role names, not colours: the caller maps them onto whatever painter it already has.
 # "plain" must always render unchanged - it is the alignment-safe default.
@@ -51,17 +53,51 @@ ROLES = ("plain", "dim", "cyan", "violet", "green", "amber", "bold")
 # shield-with-tick as `(v)`), the gradient across the letters, and the two coloured domain
 # words. What went: five-row letterforms, and the dashed box - the box was pure noise
 # around content that reads perfectly well without it, and it cost four of the nine lines.
-_ROBOT = (
-    "     .o.    ",
-    "   .-----.  ",
-    "  -|o   o|- ",
-    "   '-(v)-'  ",
+# TWO MASCOTS, and which one appears is decided by the console, not by preference.
+#
+# A terminal draws '-' at mid-cell height and '|' over the full cell, so an ASCII box never
+# closes: `.-----.` above `|o   o|` renders as strokes floating apart, which is exactly what
+# a photo of the corporate PowerShell console showed ("robot looks rubbish", 2026-08-28,
+# and the same verdict on the letterforms the day before). Box-drawing glyphs are designed
+# to join, so the box form is correct wherever it can be encoded - and cp1252, which is
+# what that console decodes as, cannot encode it.
+#
+# So: the drawn robot where it will look drawn, and a one-line face where it will not.
+# `[o_o]` needs nothing to join up - brackets are full-height glyphs and the face reads
+# instantly - which is the whole reason it is the fallback rather than a smaller box.
+_ROBOT_UNICODE = (
+    " \u256d\u2500\u2500\u2500\u2500\u2500\u256e ",
+    "\u2500\u2524 o o \u251c\u2500",
+    " \u2570\u2500\u2500\u2500\u2500\u2500\u256f ",
 )
-_ROBOT_INK = ("cyan", "cyan", "cyan", "violet")
+_ROBOT_ASCII = ("[o_o]", "     ", "     ")
+_ROBOT_INK = ("cyan", "cyan", "violet")
+_ART_ROWS = 3
 
 # The wordmark: spaced caps, cyan -> violet -> green, as in the source gradient.
 _WORDMARK = (("V", "cyan"), ("S", "violet"), ("I", "violet"), ("T", "green"))
-_ART_ROWS = 4
+
+
+def _can_encode(text: str) -> bool:
+    """Can stderr actually render these glyphs?
+
+    The same question _can_encode in virt_team_launcher answers, asked here so this module
+    stays importable on its own - install_helper loads it from a bare clone where the
+    launcher may not be on sys.path.
+
+    `sys` is imported at module level rather than here so a test can substitute a console
+    with a different encoding; a function-local import is invisible to monkeypatch."""
+    try:
+        text.encode(getattr(sys.stderr, "encoding", None) or "utf-8")
+        return True
+    except (UnicodeEncodeError, LookupError):
+        return False
+
+
+def _robot() -> tuple:
+    """The mascot rows for THIS console."""
+    return _ROBOT_UNICODE if _can_encode("".join(_ROBOT_UNICODE)) else _ROBOT_ASCII
+
 
 TAGLINE = "AI TEAM FOR COMPLIANCE & SURVEILLANCE IT"
 FOOTER = "specialist | independent review | human controlled"
@@ -71,7 +107,12 @@ INDENT = "  "
 # space + its text, and the longest text is the footer, not the tagline. Getting this wrong
 # by one column let the full tier render at 64 columns while needing 65 - which is the exact
 # class of bug the width tiers exist to prevent.
-FULL_WIDTH = len(INDENT) + max(len(row) for row in _ROBOT) + 1 + max(len(TAGLINE), len(FOOTER))
+FULL_WIDTH = (
+    len(INDENT)
+    + max(max(len(r) for r in _ROBOT_UNICODE), max(len(r) for r in _ROBOT_ASCII))
+    + 2
+    + max(len(TAGLINE), len(FOOTER))
+)
 # Below this the mascot is dropped and only the two text lines remain.
 COMPACT_WIDTH = len(INDENT) + 3 + len(TAGLINE)
 _MINIMAL_TAG = "compliance surveillance IT"
@@ -114,14 +155,12 @@ def _footer_segments() -> list:
 
 
 def _full_banner() -> list:
-    """Four rows: the mascot on the left, the three text lines beside it.
-
-    Blank text rows are deliberate - the mascot is four rows tall and the text is three, so
-    the antenna row carries no text rather than the mascot being cropped to fit."""
-    beside = [[], _wordmark_segments(), _tagline_segments(), _footer_segments()]
+    """Three rows: the mascot on the left, the three text lines beside it."""
+    art = _robot()
+    beside = [_wordmark_segments(), _tagline_segments(), _footer_segments()]
     rows = []
     for index in range(_ART_ROWS):
-        row = [("plain", INDENT), (_ROBOT_INK[index], _ROBOT[index]), ("plain", " ")]
+        row = [("plain", INDENT), (_ROBOT_INK[index], art[index]), ("plain", "  ")]
         row += beside[index]
         rows.append(row)
     return rows

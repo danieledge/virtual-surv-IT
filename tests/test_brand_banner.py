@@ -37,20 +37,49 @@ def _strip(line: str) -> str:
 # --- the hard constraints -----------------------------------------------------------
 
 
+class _Cp1252:
+    """A console that cannot encode box-drawing glyphs, like a corp Windows one."""
+
+    encoding = "cp1252"
+
+
 @pytest.mark.parametrize("width", [40, 44, 45, 60, 64, 65, 80, 120, 200])
-def test_every_line_is_pure_ascii(width):
+def test_every_line_is_pure_ascii_where_it_has_to_be(width, monkeypatch):
     """CLAUDE.md's cp1252 lesson (engage_probe._ascii_safe): a UTF-8 sequence this banner
     emitted could make a corp Windows console raise on decode, and box-drawing glyphs
-    arrive as mojibake. The art is ASCII by construction - this is the assertion that
-    keeps it that way when someone reaches for a nicer-looking character."""
+    arrive as mojibake.
+
+    The rule is now conditional rather than absolute, and the condition is the console's
+    own encoding. A terminal draws '-' at mid-cell and '|' full-height, so an ASCII box
+    never closes - `.-----.` over `|o o|` renders as strokes floating apart, which is what
+    a photo of the real console showed. Box-drawing glyphs ARE designed to join, so they
+    are correct wherever they can be encoded. Where they cannot, the banner must fall back
+    to something with nothing to join up, and stay pure ASCII doing it."""
+    monkeypatch.setattr(brand_banner.sys, "stderr", _Cp1252, raising=False)
     for line in brand_banner.render(width):
         assert line.isascii(), repr(line)
 
 
 @pytest.mark.parametrize("width", [40, 44, 45, 60, 64, 65, 80, 120, 200])
-def test_no_box_drawing_characters(width):
+def test_no_box_drawing_characters(width, monkeypatch):
+    """On a console that cannot encode them. Where it CAN, box-drawing is the right
+    choice - it is the only thing that closes a shape at terminal aspect ratio."""
+    monkeypatch.setattr(brand_banner.sys, "stderr", _Cp1252, raising=False)
     text = "".join(brand_banner.render(width))
     assert not any(0x2500 <= ord(ch) <= 0x257F for ch in text)
+
+
+@pytest.mark.parametrize("width", [65, 80, 120])
+def test_box_drawing_IS_used_where_it_renders(width, monkeypatch):
+    """The other half of the rule. Falling back everywhere would mean the corp box's
+    limitation degrading every other console for no reason."""
+
+    class _Utf8:
+        encoding = "utf-8"
+
+    monkeypatch.setattr(brand_banner.sys, "stderr", _Utf8, raising=False)
+    text = "".join(brand_banner.render(width))
+    assert any(0x2500 <= ord(ch) <= 0x257F for ch in text), "the drawn mascot should appear"
 
 
 @pytest.mark.parametrize("width", [40, 50, 65, 72, 80, 100])
@@ -113,11 +142,10 @@ def test_full_tier_carries_every_element_of_the_supplied_brand():
     content that reads perfectly well without it, and cost four of the nine lines."""
     lines = brand_banner.render(80)
     text = "\n".join(lines)
-    assert len(lines) == 4  # antenna + head + face + chin, text beside
+    assert len(lines) == 3  # one row per text line, mascot beside
     assert brand_banner.TAGLINE in text
     assert brand_banner.FOOTER in text
-    assert "o   o" in text  # the mascot's eyes
-    assert "(v)" in text  # the shield with its tick
+    assert "o o" in text or "o_o" in text  # the mascot's eyes, either form
     assert "V S I T" in text  # spaced caps, legible at any width in any font
     assert "+-" not in text, "the dashed box is gone; it read as debris on a real console"
 
