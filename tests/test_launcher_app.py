@@ -848,3 +848,21 @@ def test_wrapping_is_display_only(ptk):
     assert len(lines) > 1
     assert " ".join(" ".join(lines).split()) == "a b c d e f g h i j k l m n o p"
     assert app._wrapped("first\rsecond".replace("\r", "\n"), 40) == ["first", "second"]
+
+
+def test_the_pane_divider_degrades_to_whitespace_not_a_pipe_ladder():
+    """Live report: "the vertical divider has misplaced pipe symbols."
+
+    U+2502 is designed to join vertically, so a column of them reads as one continuous
+    line. An ASCII '|' is not - the glyph has clearance above and below, so a column reads
+    as a ladder of disconnected marks. On a corp-Windows cp1252 console the fallback always
+    fires, which is exactly where it was seen.
+
+    A divider that only works on half the target machines is worse than whitespace that
+    works on all of them, so the fallback is now a gap."""
+    source = (Path(__file__).resolve().parents[1] / "scripts" / "launcher_app.py").read_text(
+        encoding="utf-8"
+    )
+    split = source[source.index("VSplit("):source.index("VSplit(") + 1400]
+    assert 'char="|"' not in split, "an ASCII pipe column reads as disconnected marks"
+    assert 'char="│" if mod._can_encode("│") else " "' in split

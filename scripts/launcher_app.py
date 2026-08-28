@@ -166,7 +166,22 @@ def screen(
         body = VSplit(
             [
                 Window(FormattedTextControl(body_fn), wrap_lines=False, width=D(min=34, weight=2)),
-                Window(width=1, char="│" if mod._can_encode("│") else "|", style="class:dim"),
+                # A GAP, not a pipe, when the console cannot encode the box-drawing
+                # glyph (2026-08-28 live report: "the vertical divider has misplaced pipe
+                # symbols"). U+2502 is designed to join vertically, so a column of them
+                # reads as one continuous line. An ASCII '|' is not: the glyph has
+                # clearance above and below, so a column of them reads as a ladder of
+                # disconnected marks - which on a corp-Windows cp1252 console, where the
+                # fallback always fires, is exactly what it looked like.
+                #
+                # Two spaces separate the panes just as clearly and cannot render badly.
+                # A divider that only works on half the target machines is worse than
+                # whitespace that works on all of them.
+                Window(
+                    width=1 if mod._can_encode("│") else 2,
+                    char="│" if mod._can_encode("│") else " ",
+                    style="class:dim",
+                ),
                 Window(FormattedTextControl(right_fn), width=D(min=26, weight=1), wrap_lines=True),
             ]
         )
