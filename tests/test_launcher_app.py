@@ -876,3 +876,54 @@ def test_the_pane_divider_degrades_to_whitespace_not_a_pipe_ladder():
     split = source[source.index("VSplit(") : source.index("VSplit(") + 1400]
     assert 'char="|"' not in split, "an ASCII pipe column reads as disconnected marks"
     assert 'char="│" if mod._can_encode("│") else " "' in split
+
+
+def test_no_navigation_glyph_reaches_a_console_unprobed():
+    """The file's header says box characters are "chosen through _can_encode, never
+    assumed". Twenty-two footers, frame titles and hint lines assumed.
+
+    Nothing crashed - the vendored output layer encodes with errors="replace" - so a
+    cp1252 console rendered the navigation hint as "?? move ? Enter choose ? help ? Esc
+    back", which is worse than a crash: it looks like a rendering fault rather than a
+    fallback, and there is nothing to grep for.
+
+    Source-level because that is where the omission lives. A per-screen assertion would
+    have to be remembered for each NEW screen, which is exactly the discipline that
+    failed."""
+    src = (REPO_ROOT / "scripts" / "launcher_app.py").read_text(encoding="utf-8")
+    offenders = []
+    for number, line in enumerate(src.split("\n"), 1):
+        if not any(g in line for g in ("↑↓", "·", "⚠", "←")):
+            continue
+        stripped = line.strip()
+        if (
+            "ui_text(" in line  # already routed through the degrader
+            or "_UI_FALLBACKS" in line  # the mapping itself
+            or '"off": ' in line  # glyphs() defines its own fallback inline
+            or "_PREFLIGHT_KEYS = " in line  # module scope: degraded at its use site
+            or stripped.startswith("#")
+            or stripped.startswith('"  ↑↓ move · Enter toggle')  # continuation
+        ):
+            continue
+        offenders.append(f"{number}: {stripped[:70]}")
+    assert not offenders, "unprobed glyphs - wrap in ui_text(mod, ...):\n" + "\n".join(offenders)
+
+
+def test_ui_text_degrades_together_and_is_identity_otherwise():
+    app = _load("launcher_app")
+
+    class _Rich:
+        @staticmethod
+        def _can_encode(text):
+            return True
+
+    class _Cp1252:
+        @staticmethod
+        def _can_encode(text):
+            return False
+
+    rich_line = "  ↑↓ move · Enter choose · ⚠ careful"
+    assert app.ui_text(_Rich, rich_line) == rich_line
+    plain = app.ui_text(_Cp1252, rich_line)
+    plain.encode("cp1252")  # the whole point
+    assert "up/dn" in plain and "!" in plain

@@ -536,6 +536,34 @@ def setting_help(label: str) -> tuple:
 # Grouped by the DECISION a reader is making, not by data type - the previous screen put
 # every boolean together and every choice together, which is a fact about the code and of
 # no use to someone deciding whether the team should write to Jira.
+class _ModuleView:
+    """An attribute view over this module's globals.
+
+    The stand-in for `_this_module()` when that lookup fails. Reads globals() at
+    ACCESS time, not at construction, so monkeypatching a module attribute is still seen -
+    a snapshot would silently freeze whatever the tests set up."""
+
+    def __getattr__(self, name):
+        try:
+            return globals()[name]
+        except KeyError as exc:  # pragma: no cover - mirrors normal attribute semantics
+            raise AttributeError(name) from exc
+
+
+def _this_module():
+    """This module, however it happened to be loaded.
+
+    `_this_module()` is the usual idiom and it is not reliable: a harness that
+    loads this file with importlib.util.module_from_spec never registers it, so the
+    lookup raises KeyError. Every launcher_app screen is called with this handle inside a
+    `try/except Exception`, so the failure did not surface as an error - the screen was
+    simply never reached and a fallback ran instead, looking exactly like a console that
+    could not host it (found 2026-08-28, wiring the settings screen into _config_editor).
+
+    Thirteen call sites shared that trapdoor. They share this instead."""
+    return sys.modules.get(__name__) or _ModuleView()
+
+
 _SETTING_GROUPS = (
     (
         "What the team produces",
@@ -971,113 +999,35 @@ def _run_settings_editor(project_dir: Path) -> None:
             pass
 
 
-def _pt_config_editor(p, project_dir: Path) -> None:
-    """prompt_toolkit tier of the settings editor: arrows move, Enter/Space toggles the
-    highlighted row IN PLACE (only the widget repaints, no full redraw), 'd' restores
-    machine defaults, Esc/'b' done. Mouse: click a row to toggle it."""
-    idx = [0]
-    note = [""]
-    kb = p["KeyBindings"]()
-
-    def _rows():
-        return _editor_rows(project_dir) or []
-
-    def _toggle(i):
-        # By key, not by index: the screen is grouped, so the highlighted ROW's
-        # position is no longer the dispatch index (2026-08-28).
-        keys = _editor_keys(project_dir)
-        note[0] = _editor_apply_key(project_dir, keys[i]) if 0 <= i < len(keys) else ""
-
-    @kb.add("up")
-    def _up(event):
-        idx[0] = (idx[0] - 1) % max(len(_rows()), 1)
-
-    @kb.add("down")
-    def _down(event):
-        idx[0] = (idx[0] + 1) % max(len(_rows()), 1)
-
-    @kb.add("enter")
-    @kb.add(" ")
-    def _flip(event):
-        _toggle(idx[0])
-
-    @kb.add("d")
-    def _defaults(event):
-        note[0] = _editor_apply(project_dir, "d") or "machine defaults restored"
-
-    @kb.add("escape", eager=True)
-    @kb.add("c-c")
-    @kb.add("b")
-    @kb.add("q")
-    def _done(event):
-        event.app.exit()
-
-    def _fragments():
-        MouseEventType = p["MouseEventType"]
-        rows = _rows()
-        out = [("class:title", " Project settings\n")]
-        width = max((len(label) for label, _v, _o in rows), default=0)
-        for i, (label, value, on) in enumerate(rows):
-
-            def _click(mouse_event, _i=i):
-                if mouse_event.event_type == MouseEventType.MOUSE_UP:
-                    idx[0] = _i
-                    _toggle(_i)
-                    return None
-                return NotImplemented
-
-            sel = i == idx[0]
-            marker = "> " if sel else "  "
-            row_style = "class:sel" if sel else ""
-            head, _, src = value.partition("  ")
-            val_style = "class:sel" if sel else ("class:on" if on else "class:dim")
-            out.append((row_style, f"  {marker}{label.ljust(width + 2)}", _click))
-            out.append((val_style, head, _click))
-            if src:
-                out.append(("class:sel" if sel else "class:dim", f"  {src}", _click))
-            out.append(("", "\n"))
-        out.append(("class:dim", "  Enter/Space/click toggles · d machine defaults · Esc done"))
-        if note[0]:
-            out.append(("class:note", f"\n  {note[0]}"))
-        return out
-
-    rows0 = _rows()
-    if not rows0:
-        return True
-    app = p["Application"](
-        layout=p["Layout"](
-            p["Window"](
-                p["FormattedTextControl"](_fragments, focusable=True, show_cursor=False),
-                height=len(rows0) + 3,
-                always_hide_cursor=True,
-            )
-        ),
-        key_bindings=kb,
-        style=_pt_style(p),
-        mouse_support=True,
-        erase_when_done=True,
-        full_screen=False,
-        **_pt_io(),
-    )
-    try:
-        app.run()
-    except Exception:
-        return False  # widget never ran - caller falls back to the numbered tier
-    return True
-
-
 def _config_editor(project_dir: Path) -> None:
     """Inline project-settings editor on the go screen (2026-08-17 user request).
-    prompt_toolkit tier when the terminal supports it (arrows/mouse, in-place toggles);
-    numbered input() tier otherwise - both drive the same _editor_rows/_editor_apply,
-    so they can never disagree about what a toggle does. Writes team-preferences.json
-    preserving every unrelated key; restoring defaults means REMOVING the project-level
-    keys (resolve_preferences' key-presence precedence lets the machine tier speak
-    again). All interaction on stderr/stdin; stdout stays the decision channel. Every
-    failure path just returns - cosmetic tier."""
-    p = _ptk_ui()
-    if p and _pt_config_editor(p, project_dir) is not False:
-        return
+    TWO tiers, and this function is the only thing that chooses between them: the
+    launcher_app settings screen where prompt_toolkit runs, the numbered input() loop
+    everywhere else. Both drive the same _editor_rows/_editor_apply, so they can never
+    disagree about what a toggle does.
+
+    There used to be a third, _pt_config_editor, sitting between them - and it had
+    quietly drifted from both: no group headings, no explanation pane, and no Jira-key
+    prompt, so switching Jira on from that tier produced a row reading "on (key UNSET)"
+    with no way in the launcher to fix it. A middle tier that is a worse copy of the two
+    either side of it earns nothing and is where the drift collects, so it is gone
+    (2026-08-28 UX review). The app tier covers every console that can run
+    prompt_toolkit; the numbered tier covers the rest. Nothing is between them.
+
+    Writes team-preferences.json preserving every unrelated key; restoring defaults means
+    REMOVING the project-level keys (resolve_preferences' key-presence precedence lets
+    the machine tier speak again). All interaction on stderr/stdin; stdout stays the
+    decision channel. Every failure path just returns - cosmetic tier."""
+    try:
+        from launcher_app import settings_screen
+
+        # None = the screen could not run at all; False = it ran and nothing changed.
+        # Only the former falls through - treating Esc as "unavailable" once dumped the
+        # user into the numbered editor after cancelling (live report, 2026-08-20).
+        if settings_screen(project_dir, _this_module()) is not None:
+            return
+    except Exception:
+        pass  # any app failure degrades to the numbered tier below
     err = sys.stderr
     ink = _Ink()
     while True:
@@ -1514,7 +1464,7 @@ def _pick_engagement_slug(project_dir: Path, shown: list) -> str:
     try:
         from launcher_app import slug_picker_screen
 
-        picked = slug_picker_screen(project_dir, sys.modules[__name__], shown)
+        picked = slug_picker_screen(project_dir, _this_module(), shown)
         if picked:
             return picked
     except Exception:
@@ -1558,7 +1508,7 @@ def _browse_decision(project_dir: Path):
     try:
         from launcher_app import BROWSE_CANCELLED, browse_screen
 
-        chosen = browse_screen(project_dir, sys.modules[__name__])
+        chosen = browse_screen(project_dir, _this_module())
         if chosen is None:
             return _browse_prompt(project_dir)
         if chosen == BROWSE_CANCELLED:
@@ -1810,7 +1760,7 @@ def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> s
     try:
         from launcher_app import AUTO_CANCELLED, auto_preflight_screen
 
-        answers = auto_preflight_screen(project_dir, sys.modules[__name__], ref)
+        answers = auto_preflight_screen(project_dir, _this_module(), ref)
     except Exception:
         return ""
     if answers is None:
@@ -2140,7 +2090,7 @@ def _new_decision(project_dir: Path, engagement_state=None, menu=None, shown=Non
     try:
         from launcher_app import REQUEST_SKIPPED, request_screen
 
-        answer = request_screen(project_dir, sys.modules[__name__])
+        answer = request_screen(project_dir, _this_module())
     except Exception:
         answer = None
     if answer is None or answer == REQUEST_SKIPPED:
@@ -2279,7 +2229,7 @@ def _decision_from_pick(
             # and the plain prompt takes over; a cancel is NOT unavailability.
             from launcher_app import JIRA_CANCELLED, jira_screen
 
-            ref = jira_screen(project_dir, sys.modules[__name__])
+            ref = jira_screen(project_dir, _this_module())
             if ref == JIRA_CANCELLED:
                 return "__again__"
             auto = False
@@ -2307,7 +2257,7 @@ def _decision_from_pick(
         try:
             from launcher_app import help_screen
 
-            help_screen(project_dir, sys.modules[__name__])
+            help_screen(project_dir, _this_module())
         except Exception:
             pass  # cosmetic tier
         return "__again__"
@@ -2327,7 +2277,7 @@ def _decision_from_pick(
             try:
                 from launcher_app import artifacts_screen
 
-                if artifacts_screen(project_dir, sys.modules[__name__], slug) is None:
+                if artifacts_screen(project_dir, _this_module(), slug) is None:
                     _artifacts_plain(project_dir, slug)
             except Exception:
                 try:
@@ -2347,28 +2297,18 @@ def _decision_from_pick(
             return "__again__"
         return _CHDIR_PREFIX + str(chosen)
     if pick[0] == "settings":
+        # Tier choice lives in _config_editor, which every [c] entry point goes through -
+        # so the app-or-numbered decision is made once instead of once per call site.
         try:
-            # App screen first (2026-08-20): same _editor_rows/_editor_apply underneath,
-            # so behaviour is identical and only the presentation differs. Falls back to
-            # the numbered editor wherever the app can't run.
-            from launcher_app import settings_screen
-
-            # None = the app screen could not run; False = it ran and the user changed
-            # nothing (Esc). Only the former falls back - treating Esc as "unavailable"
-            # dumped the user into the old numbered editor (live report, 2026-08-20).
-            if settings_screen(project_dir, sys.modules[__name__]) is None:
-                _run_settings_editor(project_dir)
+            _run_settings_editor(project_dir)
         except Exception:
-            try:
-                _run_settings_editor(project_dir)
-            except Exception:
-                pass  # cosmetic tier
+            pass  # cosmetic tier
         return "__again__"
     if pick[0] == "archive":
         try:
             from launcher_app import archive_screen
 
-            if archive_screen(project_dir, sys.modules[__name__], engagement_state, menu) is None:
+            if archive_screen(project_dir, _this_module(), engagement_state, menu) is None:
                 _archive_menu(project_dir, engagement_state, menu)
         except Exception:
             try:
@@ -2384,7 +2324,7 @@ def _decision_from_pick(
         try:
             from launcher_app import finished_screen
 
-            token = finished_screen(project_dir, sys.modules[__name__], engagement_state)
+            token = finished_screen(project_dir, _this_module(), engagement_state)
         except Exception:
             token = None
         if token is None:
@@ -2437,7 +2377,7 @@ def _menu_round(
             from launcher_app import APP_FALLBACK, run_app
 
             pick = run_app(
-                project_dir, sys.modules[__name__], menu, shown, jira_on=_jira_offered(project_dir)
+                project_dir, _this_module(), menu, shown, jira_on=_jira_offered(project_dir)
             )
             if pick != APP_FALLBACK:
                 return _decision_from_pick(
@@ -3963,7 +3903,7 @@ def _offer_first_time_setup(project_dir: Path) -> bool:
     try:
         from launcher_app import SETUP_DEFAULTS, SETUP_GUIDED, SETUP_SKIP, setup_screen
 
-        choice = setup_screen(project_dir, sys.modules[__name__])
+        choice = setup_screen(project_dir, _this_module())
         if choice == SETUP_SKIP:
             return False
         if choice == SETUP_DEFAULTS:
@@ -4236,7 +4176,7 @@ def _watch_after_launch(project_dir: Path, slug: str) -> None:
         if slug:
             from launcher_app import monitor_screen
 
-            monitor_screen(project_dir, sys.modules[__name__], slug)
+            monitor_screen(project_dir, _this_module(), slug)
             return
     except Exception:
         pass

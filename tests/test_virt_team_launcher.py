@@ -965,17 +965,44 @@ def test_pt_menu_hotkey_n_starts_new(tmp_path, monkeypatch, capsys):
     assert out.out.strip() == "/compliance-surveillance-team:engage --new"
 
 
-def test_pt_editor_space_toggles_and_persists(tmp_path, monkeypatch, capsys):
-    """The in-place toggle: space flips the highlighted row (docx export, row 1) and
-    the write is the same _editor_apply the numbered tier uses."""
+def test_config_editor_prefers_the_app_screen_and_falls_back_to_numbered(
+    tmp_path, monkeypatch, capsys
+):
+    """Tier choice lives in ONE function now.
+
+    There used to be three tiers: the launcher_app settings screen, a _pt_config_editor
+    in between, and the numbered loop. The middle one had drifted from both - no group
+    headings, no explanation pane, and no Jira-key prompt, so switching Jira on there
+    produced "on (key UNSET)" with nothing in the launcher able to fix it (2026-08-28 UX
+    review). It is gone, and _config_editor is the only thing that picks a tier, so every
+    [c] entry point makes that decision the same way.
+
+    Both halves asserted here: the app screen is tried, and a screen that cannot run
+    falls through rather than leaving the user with no editor at all."""
     project = _plugin_enabled_project(tmp_path)
     mod = _load()
-    monkeypatch.setattr(mod, "_pt_io", lambda: {})
-    with _pt_session(monkeypatch, " b"):  # toggle row 1, then done
-        mod._config_editor(project)
+
+    tried = []
+    import launcher_app
+
+    monkeypatch.setattr(
+        launcher_app, "settings_screen", lambda p, m, **k: (tried.append("app"), False)[1]
+    )
+    monkeypatch.setattr("builtins.input", lambda prompt="": "b")
+    mod._config_editor(project)
+    assert tried == ["app"], "the app screen must be tried first"
+    assert "Project settings" not in capsys.readouterr().err, "and must not also fall back"
+
+    # A screen that cannot run (None) hands over to the numbered tier.
+    monkeypatch.setattr(
+        launcher_app, "settings_screen", lambda p, m, **k: (tried.append("app"), None)[1]
+    )
+    answers = iter([str(_screen_position(mod, project, "docx export")), "b"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    mod._config_editor(project)
     prefs = json.loads((project / ".claude" / "team-preferences.json").read_text(encoding="utf-8"))
     assert "docx" in prefs.get("extra_formats", [])
-    assert capsys.readouterr().out == ""  # stdout purity holds in the pt tier too
+    assert capsys.readouterr().out == ""  # stdout purity holds in both tiers
 
 
 def test_pt_failure_falls_back_to_numbered_menu(tmp_path, monkeypatch, capsys):
@@ -1854,3 +1881,43 @@ def test_a_toggle_goes_BOTH_ways(tmp_path):
         assert back[2] == start[2], (
             f"{start[0]!r} would not go back: {start[1]} -> {once[1]} -> {back[1]}"
         )
+
+
+def test_the_app_screens_are_reachable_when_this_module_is_not_registered():
+    """A trapdoor thirteen call sites shared.
+
+    Every launcher_app screen is invoked as `screen(project_dir, sys.modules[__name__])`
+    inside a `try/except Exception`. That lookup raises KeyError whenever this file is
+    loaded without being registered in sys.modules - which is exactly what a harness using
+    importlib.util.module_from_spec does. The exception was swallowed, so the screen was
+    never reached and a fallback ran, looking indistinguishable from a console that could
+    not host the app.
+
+    Found by wiring the settings screen into _config_editor and watching it take the
+    numbered path for no visible reason (2026-08-28)."""
+    mod = _load()  # loads WITHOUT registering, on purpose - that is the condition
+    # Force the unregistered condition rather than assuming it: in a full-suite run
+    # another test may have registered a DIFFERENT object under this name, and then
+    # _this_module() would answer with that one and the test would prove nothing.
+    saved = sys.modules.pop(mod.__name__, None)
+    try:
+        handle = mod._this_module()
+        _assert_module_handle_works(mod, handle)
+    finally:
+        if saved is not None:
+            sys.modules[mod.__name__] = saved
+
+
+def _assert_module_handle_works(mod, handle):
+    # The handle has to answer for the attributes launcher_app actually asks it for.
+    for attribute in ("_can_encode", "_morgan_line", "_plugin_version", "_git_branch"):
+        assert hasattr(handle, attribute), f"screens need {attribute} off this handle"
+
+    # And it must stay LIVE, not a snapshot: a monkeypatched attribute has to be visible
+    # through it, or tests would pass against a frozen copy of the module.
+    original = mod._plugin_version
+    try:
+        mod._plugin_version = lambda: "9.9.9"
+        assert handle._plugin_version() == "9.9.9"
+    finally:
+        mod._plugin_version = original

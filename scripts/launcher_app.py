@@ -64,7 +64,7 @@ def _bits(project_dir: Path, mod):
     branch = mod._git_branch(project_dir)
     if branch:
         facts.append(branch)
-    return "  ·  ".join(facts)
+    return ui_text(mod, "  ·  ").join(facts)
 
 
 # Warm accent, closer to a Claude session than the default cyan-on-black (2026-08-20 user
@@ -81,6 +81,37 @@ PALETTE = {
     "key": "#7aa2f7",  # hotkeys
     "hint": "#6b7280",
 }
+
+
+# Navigation glyphs, degraded together. The file's own header says box characters are
+# "chosen through _can_encode, never assumed" - and then twenty-two footers, frame titles
+# and hint lines assumed. The vendored output layer encodes with errors="replace", so a
+# cp1252 console never crashed on them; it just rendered the navigation hint as
+# "?? move ? Enter choose ? help ? Esc back", which is worse than useless because it
+# looks like a rendering fault rather than a fallback.
+#
+# A WRAPPER rather than a dict of pieces, so the source still reads as the line it
+# produces and a new footer cannot forget to consult it in one of its three spans.
+_UI_FALLBACKS = (
+    ("\u2191\u2193", "up/dn"),
+    ("\u00b7", "-"),
+    ("\u26a0", "!"),
+    ("\u2190", "<-"),
+    ("\u2026", "..."),
+)
+
+
+def ui_text(mod, text: str) -> str:
+    """A hint, title or footer with its glyphs swapped for ASCII where the console needs
+    it. Identity on any console that can encode them, which is most."""
+    try:
+        if mod._can_encode("".join(fancy for fancy, _plain in _UI_FALLBACKS)):
+            return text
+    except Exception:
+        return text
+    for fancy, plain in _UI_FALLBACKS:
+        text = text.replace(fancy, plain)
+    return text
 
 
 def glyphs(mod):
@@ -356,9 +387,11 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
             hint = mod._suggestion_line(project_dir, menu)
         except Exception:
             hint = ""
-        out = [("class:dim", "  ↑↓ move · Enter choose · ? help · Esc back to terminal")]
+        out = [
+            ("class:dim", ui_text(mod, "  ↑↓ move · Enter choose · ? help · Esc back to terminal"))
+        ]
         if hint:
-            out.append(("class:warn", f"   ⚠ {hint}"))
+            out.append(("class:warn", ui_text(mod, f"   ⚠ {hint}")))
         return to_formatted_text(out)
 
     kb = KeyBindings()
@@ -406,7 +439,7 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
         if i < 9:
             kb.add(str(i + 1))(lambda event, _i=i: _exit(event, ("resume", _i)))
 
-    frame_title = f"Virtual Surv-IT  ·  {_bits(project_dir, mod)}"
+    frame_title = ui_text(mod, f"Virtual Surv-IT  ·  {_bits(project_dir, mod)}")
     try:
         screen(
             mod,
@@ -551,10 +584,13 @@ def settings_screen(project_dir: Path, mod, output=None):
             (
                 "class:hint",
                 (
-                    "  type the key · Enter save · Esc cancel"
+                    ui_text(mod, "  type the key · Enter save · Esc cancel")
                     if editing[0] is not None
-                    else f"  ↑↓ move · Enter toggle · e edit key · d defaults · Esc back   "
-                    f"{project_dir.name}"
+                    else ui_text(
+                        mod,
+                        "  ↑↓ move · Enter toggle · e edit key · d defaults · Esc back   "
+                        f"{project_dir.name}",
+                    )
                 ),
             )
         ]
@@ -655,7 +691,7 @@ def settings_screen(project_dir: Path, mod, output=None):
     try:
         screen(
             mod,
-            title=f"{g['settings']}Settings  ·  {project_dir.resolve().name}",
+            title=ui_text(mod, f"{g['settings']}Settings  ·  {project_dir.resolve().name}"),
             body_fn=_body,
             right_fn=_right,
             footer_fn=_footer,
@@ -728,11 +764,11 @@ def archive_screen(project_dir: Path, mod, engagement_state, menu: dict, output=
                 "  An OPEN pack archives with\n  --force and shows as\n"
                 "  ARCHIVED-OPEN in checks.\n\n",
             ),
-            ("class:dim", "  Enter archive · Esc back\n"),
+            ("class:dim", ui_text(mod, "  Enter archive · Esc back\n")),
         ]
 
     def _footer():
-        return [("class:hint", "  ↑↓ move · Enter archive · Esc back")]
+        return [("class:hint", ui_text(mod, "  ↑↓ move · Enter archive · Esc back"))]
 
     kb = KeyBindings()
     total = len(views) + 1
@@ -764,7 +800,7 @@ def archive_screen(project_dir: Path, mod, engagement_state, menu: dict, output=
     try:
         screen(
             mod,
-            title=f"{g['archive']}Archive  ·  {project_dir.resolve().name}",
+            title=ui_text(mod, f"{g['archive']}Archive  ·  {project_dir.resolve().name}"),
             body_fn=_body,
             right_fn=_right,
             footer_fn=_footer,
@@ -868,7 +904,10 @@ def finished_screen(project_dir: Path, mod, engagement_state, output=None):
 
     def _footer():
         return [
-            ("class:hint", "  ↑↓ move · Enter open · s sign off · r redo (supersede) · Esc back")
+            (
+                "class:hint",
+                ui_text(mod, "  ↑↓ move · Enter open · s sign off · r redo (supersede) · Esc back"),
+            )
         ]
 
     kb = KeyBindings()
@@ -911,7 +950,7 @@ def finished_screen(project_dir: Path, mod, engagement_state, output=None):
     try:
         screen(
             mod,
-            title=f"{g['browse']}Done & archived  ·  {project_dir.resolve().name}",
+            title=ui_text(mod, f"{g['browse']}Done & archived  ·  {project_dir.resolve().name}"),
             body_fn=_body,
             right_fn=_right,
             footer_fn=_footer,
@@ -1048,8 +1087,8 @@ def jira_screen(project_dir: Path, mod, output=None):
         return out
 
     def _footer():
-        tail = " · Ctrl-T unattended run" if auto_offered else ""
-        return [("class:hint", f"  Enter start · Esc back · Ctrl-U clear{tail}")]
+        tail = ui_text(mod, " · Ctrl-T unattended run") if auto_offered else ""
+        return [("class:hint", ui_text(mod, f"  Enter start · Esc back · Ctrl-U clear{tail}"))]
 
     kb = KeyBindings()
 
@@ -1104,7 +1143,7 @@ def jira_screen(project_dir: Path, mod, output=None):
     try:
         screen(
             mod,
-            title=f"{g['jira']}From a Jira ticket  ·  {project_dir.resolve().name}",
+            title=ui_text(mod, f"{g['jira']}From a Jira ticket  ·  {project_dir.resolve().name}"),
             body_fn=_body,
             right_fn=_right,
             footer_fn=_footer,
@@ -1260,7 +1299,7 @@ def browse_screen(start_dir: Path, mod, output=None):
         return out
 
     def _footer():
-        return [("class:hint", "  ↑↓ move · Enter open · Backspace up · Esc cancel")]
+        return [("class:hint", ui_text(mod, "  ↑↓ move · Enter open · Backspace up · Esc cancel"))]
 
     kb = KeyBindings()
 
@@ -1385,7 +1424,7 @@ def setup_screen(project_dir: Path, mod, output=None):
         return out
 
     def _footer():
-        return [("class:hint", "  ↑↓ move · Enter choose · Esc skip")]
+        return [("class:hint", ui_text(mod, "  ↑↓ move · Enter choose · Esc skip"))]
 
     kb = KeyBindings()
 
@@ -1469,7 +1508,7 @@ def artifacts_screen(project_dir: Path, mod, slug: str, output=None):
         return out
 
     def _footer():
-        return [("class:hint", f"  ↑↓ move · Enter open · Esc back   {slug}")]
+        return [("class:hint", ui_text(mod, f"  ↑↓ move · Enter open · Esc back   {slug}"))]
 
     kb = KeyBindings()
 
@@ -1620,7 +1659,7 @@ def slug_picker_screen(project_dir: Path, mod, shown: list, output=None):
         return out
 
     def _footer():
-        return [("class:hint", "  ↑↓ move · Enter choose · Esc back")]
+        return [("class:hint", ui_text(mod, "  ↑↓ move · Enter choose · Esc back"))]
 
     kb = KeyBindings()
 
@@ -1666,6 +1705,8 @@ AUTO_CANCELLED = "__auto_cancelled__"
 # summary email, renders - needs budget to execute, and a wall at the ceiling denies it.
 _WALL_HEADROOM = 1.25
 
+# Left as the rich form; every use site passes it through ui_text, which is where a
+# console is actually in scope to ask.
 _PREFLIGHT_KEYS = "Space/Enter toggle · Ctrl-D START unattended · Esc cancel"
 
 
@@ -1813,7 +1854,7 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
         return out
 
     def _footer():
-        return [("class:hint", f"  {_PREFLIGHT_KEYS}")]
+        return [("class:hint", ui_text(mod, f"  {_PREFLIGHT_KEYS}"))]
 
     kb = KeyBindings()
 
@@ -1977,8 +2018,13 @@ def request_screen(project_dir: Path, mod, output=None):
         return out
 
     def _footer():
-        tail = " · Ctrl-T unattended" if auto_offered else ""
-        return [("class:hint", f"  Ctrl-D send · Enter new line · Esc back · Ctrl-U clear{tail}")]
+        tail = ui_text(mod, " · Ctrl-T unattended") if auto_offered else ""
+        return [
+            (
+                "class:hint",
+                ui_text(mod, f"  Ctrl-D send · Enter new line · Esc back · Ctrl-U clear{tail}"),
+            )
+        ]
 
     kb = KeyBindings()
 
@@ -2319,7 +2365,9 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
         return out
 
     def _footer():
-        return [("class:hint", "  Esc stop watching (the run continues) · r refresh now")]
+        return [
+            ("class:hint", ui_text(mod, "  Esc stop watching (the run continues) · r refresh now"))
+        ]
 
     kb = KeyBindings()
 
