@@ -1,0 +1,284 @@
+#!/usr/bin/env python3
+"""Full-screen screens for `virt-surv`, the installer/manager menu.
+
+The second consumer of tui_chrome (2026-08-28). `virt-surv go` has had arrow keys, a
+two-pane layout and in-place toggles since 2026-08-20; `virt-surv` had numbered prompts,
+and the two front doors of one product did not look like one product.
+
+WHY THE MENU SPECIFICALLY. Not "it looks plain". The Advanced submenu has fifteen items,
+six of which carry a parenthetical longer than the option itself - one is 136 characters.
+Printed as `  12) label (explanation...)` they soft-wrap to column 0 with no hanging
+indent, so the continuation sits under the number gutter and reads as a separate,
+unnumbered option. That is a layout problem and no amount of rewording fixes it: the text
+needs somewhere to go, and the right-hand pane is where.
+
+And ten of the twenty-one options write outside the repo - shell rc files,
+~/.claude/settings.json, one rmtree - with nothing on screen saying so. The launcher marks
+state on every row and states consequences before the keypress. This did not.
+
+A TIER, NEVER A REPLACEMENT. Every entry point returns None when it could not run, and the
+caller falls back to the numbered prompt it has always had. That keeps the installer
+working headless, under --yes, over a pipe, and on any box where prompt_toolkit will not
+start - which is the same box that most needs the installer to work.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
+
+def _chrome():
+    """tui_chrome, found from this file's own directory.
+
+    The installer may run from a bare clone, a marketplace cache or a temp directory that
+    a downloaded copy of install_helper.py was dropped into, so `scripts/` is not reliably
+    importable - the same reason launcher_app resolves vsit_paths this way."""
+    here = Path(__file__).resolve().parent
+    for candidate in (here, here.parent, here.parent / "scripts"):
+        if (candidate / "tui_chrome.py").is_file():
+            if str(candidate) not in sys.path:
+                sys.path.insert(0, str(candidate))
+            break
+    import tui_chrome
+
+    return tui_chrome
+
+
+class InstallerHost:
+    """The four attributes tui_chrome asks of a host, backed by install_helper.
+
+    A CLASS rather than passing install_helper itself, for one reason that is easy to get
+    wrong: install_helper._can_encode defaults its stream to sys.stdout, and the chrome
+    renders to sys.stderr. Handing the module over directly would probe one console and
+    draw on another - and that failure is silent, because the two are the same console on
+    every machine where anyone would notice."""
+
+    def __init__(self, ih, repo: Path | None = None):
+        self._ih = ih
+        self._repo = repo
+
+    def _can_encode(self, text: str) -> bool:
+        return self._ih._can_encode(text, sys.stderr)
+
+    def _morgan_line(self) -> str:
+        return self._ih.morgan_intro(sys.stderr)
+
+    def _plugin_version(self, *_args) -> str:
+        try:
+            if self._repo is not None:
+                return self._ih.installed_version(self._repo) or ""
+        except Exception:
+            pass
+        return ""
+
+    def _git_branch(self, *_args) -> str:
+        """The configured channel, which is what a reader of this menu cares about.
+
+        Not the checked-out branch: the installer's own clone may be on anything, and the
+        question the title answers is "which channel am I installing from"."""
+        try:
+            cfg = self._ih.load_config(self._ih.config_path())
+            branch = cfg.get("branch")
+            return branch if branch in self._ih.BRANCHES else ""
+        except Exception:
+            return ""
+
+
+def _wrap(text: str, width: int = 30, indent: str = "  ") -> str:
+    """Word-wrap for the explanation pane.
+
+    Hand-wrapped rather than left to the Window, for the same reason launcher_app does it:
+    the right pane is a weighted split, so wrap_lines would rewrap on every resize and the
+    text would jump around under the cursor while someone is reading it."""
+    out, line = [], ""
+    for word in (text or "").split():
+        if line and len(line) + 1 + len(word) > width:
+            out.append(indent + line)
+            line = word
+        else:
+            line = f"{line} {word}".strip()
+    if line:
+        out.append(indent + line)
+    return "\n".join(out)
+
+
+def _rows(options, ih):
+    """[(key, label, blurb, writes)] from the menu tables install_helper already has.
+
+    The tables carry `key, text` where text is "label (explanation)". Split on the first
+    " (" so the label stays short enough for a column and the explanation goes to the
+    pane - which is the whole point of having a pane."""
+    out = []
+    for key, text in options:
+        if not key:  # a divider row in the source table
+            continue
+        label, _, blurb = text.partition(" (")
+        out.append((key, label.strip(), blurb.rstrip(")").strip(), _writes(key, ih)))
+    return out
+
+
+# What each menu key touches OUTSIDE the repo, in the words a person needs before pressing
+# it. Absent means "nothing outside the repo", which is the safe default for a new entry:
+# a missing note understates, and understating is the direction that cannot mislead someone
+# into an action they would have declined.
+_WRITES = {
+    "statusline": "writes ~/.claude/settings.json",
+    "formats": "writes this machine's installer.json",
+    "model": "writes ~/.claude/settings.json",
+    "machinedefaults": "writes this machine's installer.json",
+    "fixbashrc": "edits your shell startup file",
+    "aliasmanage": "edits your shell startup file",
+    "cleanplugincache": "DELETES cached plugin copies from ~/.claude",
+    "relocate": "moves files in the working project",
+    "codeintel": "installs a Python package",
+    "setup": "installs requirements and may write ~/.claude",
+    "extensions": "writes this machine's org extensions file",
+}
+
+
+def _writes(key: str, ih) -> str:
+    action = None
+    for table in ("_ADVANCED_ACTIONS", "MENU_ACTIONS", "_DIAGNOSTICS_ACTIONS"):
+        mapping = getattr(ih, table, None)
+        if isinstance(mapping, dict) and key in mapping:
+            action = mapping[key]
+            break
+    return _WRITES.get(action or "", "")
+
+
+def chooser_screen(options, ih, *, title: str, repo: Path | None = None, output=None):
+    """One menu as a full-screen picker. Returns the chosen key, "" for back/Esc, or
+    **None when the screen could not run at all** - the caller then prints its numbered
+    menu exactly as before.
+
+    The None-vs-"" distinction is not decoration. The launcher's settings screen conflated
+    them once and cancelling dumped the user into the old numbered editor (2026-08-20); a
+    cancel is a decision, not an unavailability."""
+    try:
+        chrome = _chrome()
+        from prompt_toolkit.key_binding import KeyBindings
+    except Exception:
+        return None
+
+    # The same gate the launcher's _ptk_ui applies. Without it, every scripted test and
+    # every piped run would try to start a full-screen app. VIRT_SURV_FORCE_PTK skips it
+    # so this tier can be driven headlessly - an untestable tier is precisely how the
+    # launcher's two menus drifted apart in the first place.
+    if not os.environ.get("VIRT_SURV_FORCE_PTK"):
+        if not (sys.stdin.isatty() and sys.stderr.isatty()):
+            return None
+
+    host = InstallerHost(ih, repo)
+    rows = _rows(options, ih)
+    if not rows:
+        return None
+    g = chrome.glyphs(host)
+    # Its OWN markers, not glyphs()' on/off pair. "·" already means "off" on every
+    # launcher row, and reusing it here for "this writes outside the repo" would give one
+    # symbol two meanings in one product - which is worse than having no marker at all.
+    rich = host._can_encode("✎⛔")
+    mark_writes = "✎" if rich else "*"
+    mark_deletes = "⛔" if rich else "!"
+    idx = [0]
+    picked = [""]
+
+    def _body():
+        out = []
+        width = min(max((len(label) for _k, label, _b, _w in rows), default=0), 34)
+        for i, (key, label, _blurb, writes) in enumerate(rows):
+            sel = idx[0] == i
+            out.append(("class:sel" if sel else "", f"  {g['point']} " if sel else "    "))
+            out.append(("class:sel" if sel else "", f"{key:>2}  {label.ljust(width)}"))
+            # The consequence marker rides on the ROW, not only in the pane: someone
+            # arrowing quickly past a destructive option should not have to read to
+            # notice it.
+            mark = ""
+            if writes.startswith("DELETES"):
+                mark = f"  {mark_deletes}"
+            elif writes:
+                mark = f"  {mark_writes}"
+            out.append(("class:warn" if writes.startswith("DELETES") else "class:dim", mark))
+            out.append(("", "\n"))
+        return out
+
+    def _right():
+        _key, label, blurb, writes = rows[idx[0]]
+        out = [("class:group", chrome.ui_text(host, f"  {label}\n\n"))]
+        if blurb:
+            out.append(("class:dim", _wrap(blurb) + "\n\n"))
+        if writes:
+            style = "class:warn" if writes.startswith("DELETES") else "class:dim"
+            out.append((style, _wrap(writes) + "\n"))
+        else:
+            out.append(("class:dim", _wrap("Nothing outside this project.") + "\n"))
+        return out
+
+    def _footer():
+        legend = ""
+        if any(w for _k, _l, _b, w in rows):
+            legend = f"   {mark_writes} writes outside this project"
+            if any(w.startswith("DELETES") for _k, _l, _b, w in rows):
+                legend += f" · {mark_deletes} deletes"
+        return [
+            (
+                "class:hint",
+                chrome.ui_text(host, f"  ↑↓ move · Enter choose · Esc back{legend}"),
+            )
+        ]
+
+    kb = KeyBindings()
+
+    @kb.add("up")
+    def _up(event):
+        idx[0] = (idx[0] - 1) % len(rows)
+
+    @kb.add("down")
+    def _down(event):
+        idx[0] = (idx[0] + 1) % len(rows)
+
+    @kb.add("enter")
+    def _enter(event):
+        picked[0] = rows[idx[0]][0]
+        event.app.exit()
+
+    @kb.add("escape", eager=True)
+    @kb.add("c-c")
+    @kb.add("q")
+    def _esc(event):
+        picked[0] = ""
+        event.app.exit()
+
+    # Typing a key jumps straight to it, so muscle memory from the numbered menu still
+    # works - a picker that punishes people who already know the number is a downgrade.
+    for row_key, _label, _blurb, _writes in rows:
+        if len(row_key) == 1 and row_key.isalnum():
+
+            @kb.add(row_key)
+            def _jump(event, _k=row_key):
+                for position, row in enumerate(rows):
+                    if row[0] == _k:
+                        idx[0] = position
+                        break
+
+    try:
+        chrome.screen(
+            host,
+            title=title,
+            body_fn=_body,
+            right_fn=_right,
+            footer_fn=_footer,
+            key_bindings=kb,
+            output=output,
+        )
+    except Exception:
+        # A screen that cannot run degrades to the numbered menu, always. But a swallowed
+        # exception is indistinguishable from "this console cannot host an app", and a
+        # real TypeError in _right hid behind exactly this for one commit - the picker
+        # silently never ran and looked like a graceful fallback. VIRT_SURV_DEBUG_APP
+        # makes it loud when you are the one asking.
+        if os.environ.get("VIRT_SURV_DEBUG_APP"):
+            raise
+        return None
+    return picked[0]

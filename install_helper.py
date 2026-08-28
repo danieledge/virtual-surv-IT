@@ -1077,7 +1077,7 @@ def find_working_claude(probe) -> tuple:
 
     Existence is not the test that matters. A package-manager shim survives the removal
     of the binary it points at, so `which` answers, discovery reports a tick, and the
-    first real call fails - the shim's own `%~dp0\...` line reaching a file that is no
+    first real call fails - the shim's own `%~dp0` line reaching a file that is no
     longer there (which is why the failing path in the report carried a doubled
     separator: %~dp0 already ends in one). Walking on to the next candidate turns that
     from a dead end into a different install being used."""
@@ -1525,6 +1525,59 @@ _ADVANCED_ACTIONS = {
 }
 
 
+def _submenu_screen(style: Style, title: str, options: tuple, actions: dict):
+    """The full-screen tier of _choose_submenu, or None when it cannot run.
+
+    Isolated behind a bare `except Exception` on purpose: this is presentation, and the
+    installer has to keep working on a box where prompt_toolkit will not start - which is
+    the same box that most needs the installer to work."""
+    if os.environ.get("VIRT_SURV_NO_APP"):
+        return None  # documented escape hatch, and what the numbered-tier tests use
+    try:
+        installer_app = _import_from_scripts("installer_app")
+        if installer_app is None:
+            return None
+        return installer_app.chooser_screen(options, _this_module(), title=title, repo=_repo_hint())
+    except Exception:
+        return None
+
+
+def _import_from_scripts(name: str):
+    """Import a module out of this clone's scripts/ directory, or None.
+
+    EXPLICIT, not a bare `import name` inside a try. This helper sits at the clone root
+    and scripts/ is a sibling, so a bare import raises ImportError - which the caller's
+    `except Exception` would swallow, leaving the feature permanently and silently off.
+    That exact shape was found in the launcher on 2026-08-28, where thirteen screens were
+    unreachable and it looked like a console that could not host them."""
+    import importlib
+
+    here = Path(__file__).resolve().parent
+    for candidate in (here / "scripts", here, here.parent / "scripts"):
+        if (candidate / f"{name}.py").is_file():
+            if str(candidate) not in sys.path:
+                sys.path.insert(0, str(candidate))
+            try:
+                return importlib.import_module(name)
+            except Exception:
+                return None
+    return None
+
+
+def _this_module():
+    """This module, however it was loaded - run as __main__, imported, or neither."""
+    return sys.modules.get(__name__) or sys.modules.get("__main__")
+
+
+def _repo_hint():
+    """The configured clone, for the frame title's version. None is fine."""
+    try:
+        configured = load_config(config_path()).get("repo_path")
+        return Path(configured) if isinstance(configured, str) and configured else None
+    except Exception:
+        return None
+
+
 def _choose_submenu(style: Style, title: str, options: tuple, actions: dict) -> Optional[str]:
     """Shared submenu loop: prints options, returns the resolved action string, or None
     if the user chose 'back' (caller should redraw the top-level menu). A row with an
@@ -1534,6 +1587,18 @@ def _choose_submenu(style: Style, title: str, options: tuple, actions: dict) -> 
     Diagnostics mixed everyday checks with internal/prototype items with no visual
     separation)."""
     s = style
+    # Full-screen picker first, numbered list wherever it cannot run (2026-08-28). Same
+    # `options`/`actions` tables underneath, so the two tiers cannot disagree about what
+    # a key does - the pattern `virt-surv go` has used since 2026-08-20, and the reason
+    # its two menu tiers stopped drifting.
+    #
+    # None means the SCREEN could not run and the list below takes over; "" means the
+    # user chose back, which is a decision and must not be retried as a fallback.
+    picked = _submenu_screen(style, title, options, actions)
+    if picked is not None:
+        if not picked or actions.get(picked) == "back":
+            return None
+        return actions.get(picked)
     print("")
     print(s.bold(title))
     for key, text in options:

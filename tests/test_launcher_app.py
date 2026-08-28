@@ -870,7 +870,9 @@ def test_the_pane_divider_degrades_to_whitespace_not_a_pipe_ladder():
 
     A divider that only works on half the target machines is worse than whitespace that
     works on all of them, so the fallback is now a gap."""
-    source = (Path(__file__).resolve().parents[1] / "scripts" / "launcher_app.py").read_text(
+    # In tui_chrome since the 2026-08-28 extraction - screen() is shared with the
+    # installer's own screens now, so this fallback protects both front doors.
+    source = (Path(__file__).resolve().parents[1] / "scripts" / "tui_chrome.py").read_text(
         encoding="utf-8"
     )
     split = source[source.index("VSplit(") : source.index("VSplit(") + 1400]
@@ -890,7 +892,13 @@ def test_no_navigation_glyph_reaches_a_console_unprobed():
     Source-level because that is where the omission lives. A per-screen assertion would
     have to be remembered for each NEW screen, which is exactly the discipline that
     failed."""
-    src = (REPO_ROOT / "scripts" / "launcher_app.py").read_text(encoding="utf-8")
+    # BOTH files: the wrapper lives in tui_chrome now and the screens that must use it
+    # live in launcher_app, so scanning one of them would leave the other free to drift.
+    sources = {
+        name: (REPO_ROOT / "scripts" / name).read_text(encoding="utf-8")
+        for name in ("launcher_app.py", "tui_chrome.py")
+    }
+    src = "\n".join(f"{name}\n{text}" for name, text in sources.items())
     offenders = []
     for number, line in enumerate(src.split("\n"), 1):
         if not any(g in line for g in ("↑↓", "·", "⚠", "←")):

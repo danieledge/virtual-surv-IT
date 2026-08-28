@@ -25,7 +25,6 @@ CONTRACTS THAT MUST HOLD (each has already caused a live bug):
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 
@@ -48,212 +47,26 @@ def _vsit_paths():
     return vsit_paths
 
 
+# The frame, the palette and the glyph degradation now live in tui_chrome, shared with
+# the installer's own screens (2026-08-28). Re-exported by name so every screen below
+# keeps calling them unqualified, and so a reader looking for `screen` in this file still
+# finds the name it is looking for.
+from tui_chrome import (  # noqa: E402,F401  (re-exported for callers/tests)
+    PALETTE,
+    _bits,
+    _style,
+    _wrapped,
+    glyphs,
+    project_line,
+    screen,
+    ui_text,
+)
+
 APP_FALLBACK = "__app_fallback__"
 
 # Engagement rows visible at once before the list scrolls. Same reasoning as the
 # explorer's page size: the frame height is not known when the body is built.
 _MENU_PAGE = 9
-
-
-def _bits(project_dir: Path, mod):
-    """Header facts, reusing the launcher's own resolvers so nothing is re-derived."""
-    facts = [project_dir.resolve().name or str(project_dir)]
-    version = mod._plugin_version()
-    if version:
-        facts.append(f"v{version}")
-    branch = mod._git_branch(project_dir)
-    if branch:
-        facts.append(branch)
-    return ui_text(mod, "  ·  ").join(facts)
-
-
-# Warm accent, closer to a Claude session than the default cyan-on-black (2026-08-20 user
-# request). Every colour is a hex the terminal maps itself, so a 16-colour console still
-# renders something sensible rather than nothing.
-PALETTE = {
-    "title": "bold #d97757",  # the accent - frame titles, headings
-    "group": "bold #c9a227",  # group labels
-    "dim": "#8a8f98",
-    "warn": "#d29922",
-    "on": "#3fb950",
-    "off": "#8a8f98",
-    "sel": "bold reverse",
-    "key": "#7aa2f7",  # hotkeys
-    "hint": "#6b7280",
-}
-
-
-# Navigation glyphs, degraded together. The file's own header says box characters are
-# "chosen through _can_encode, never assumed" - and then twenty-two footers, frame titles
-# and hint lines assumed. The vendored output layer encodes with errors="replace", so a
-# cp1252 console never crashed on them; it just rendered the navigation hint as
-# "?? move ? Enter choose ? help ? Esc back", which is worse than useless because it
-# looks like a rendering fault rather than a fallback.
-#
-# A WRAPPER rather than a dict of pieces, so the source still reads as the line it
-# produces and a new footer cannot forget to consult it in one of its three spans.
-_UI_FALLBACKS = (
-    ("\u2191\u2193", "up/dn"),
-    ("\u00b7", "-"),
-    ("\u26a0", "!"),
-    ("\u2190", "<-"),
-    ("\u2026", "..."),
-)
-
-
-def ui_text(mod, text: str) -> str:
-    """A hint, title or footer with its glyphs swapped for ASCII where the console needs
-    it. Identity on any console that can encode them, which is most."""
-    try:
-        if mod._can_encode("".join(fancy for fancy, _plain in _UI_FALLBACKS)):
-            return text
-    except Exception:
-        return text
-    for fancy, plain in _UI_FALLBACKS:
-        text = text.replace(fancy, plain)
-    return text
-
-
-def glyphs(mod):
-    """Emoji where the console can encode them, ASCII where it cannot - the same
-    _can_encode gate the wordmark and Morgan's hat already use, so a cp1252 corp console
-    degrades to something readable instead of mojibake."""
-    rich = mod._can_encode("📋⚙️📦▸✓✗⏳⛔🔒")
-    return {
-        "engagements": "📋 " if rich else "",
-        "settings": "⚙️  " if rich else "",
-        "archive": "📦 " if rich else "",
-        "new": "✨ " if rich else "",
-        "jira": "🎫 " if rich else "",
-        "launch": "🚀 " if rich else "",
-        "point": "▸" if rich else ">",
-        # ASCII fallbacks are BRACKETS, not the words "on"/"off" (2026-08-20, found on a
-        # real cp1252 Windows console). As words they collided with the value beside them:
-        # boolean rows stuttered ("docx export  off off") and, far worse, a choice row read
-        # "qa depth  off auto" - stating the setting was OFF when it was set to auto. Only
-        # the corporate console path ever showed it; the emoji path never could.
-        "on": "✓" if rich else "[x]",
-        "off": "·" if rich else "[ ]",
-        "in_progress": "⏳" if rich else "*",
-        "blocked": "⛔" if rich else "!",
-        "closing": "🔒" if rich else "~",
-        "closed": "✓" if rich else "+",
-        "open": "📂 " if rich else "",
-        # Distinct from "archive" (📦, the WRITE action) - this is the read side, and
-        # the archive glyph already fronts three different labels.
-        "browse": "🗂️  " if rich and mod._can_encode("🗂️") else "",
-    }
-
-
-def _style(mod):
-    from prompt_toolkit.styles import Style
-
-    return Style.from_dict(PALETTE)
-
-
-def project_line(project_dir: Path, mod, width=72):
-    """The working directory, in full, left-truncated to keep the tail (2026-08-20 user
-    request: "show what project directory the user is in"). The basename alone was in the
-    frame title, which is not enough when several checkouts share a name - and picking the
-    wrong directory is a documented way to get a silent plain launch on corp Windows. The
-    TAIL is the informative end, so an over-long path loses its head, never its leaf."""
-    try:
-        text = str(project_dir.resolve())
-    except Exception:
-        text = str(project_dir)
-    if len(text) > width:
-        # An ellipsis, which is what the probe was there to test: three ASCII periods
-        # encode everywhere, so the old check could only ever answer yes and the "fallback"
-        # was unreachable.
-        lead = "\u2026" if mod._can_encode("\u2026") else "..."
-        text = lead + text[-(width - len(lead)) :]
-    return text
-
-
-def screen(
-    mod,
-    *,
-    title,
-    body_fn,
-    footer_fn,
-    key_bindings,
-    output=None,
-    right_fn=None,
-    project_dir=None,
-    refresh_interval=None,
-):
-    """One framed full-screen round, shared by EVERY launcher screen (menu, settings,
-    archive). Written once so the screens cannot drift apart the way the two menu tiers
-    did - the thing this whole effort exists to prevent."""
-    from prompt_toolkit.application import Application
-    from prompt_toolkit.layout import HSplit, Layout, VSplit, Window
-    from prompt_toolkit.layout.controls import FormattedTextControl
-    from prompt_toolkit.layout.dimension import D
-    from prompt_toolkit.output.defaults import create_output
-    from prompt_toolkit.widgets import Frame
-
-    body = Window(FormattedTextControl(body_fn), wrap_lines=False)
-    if right_fn is not None:
-        # 2:1 in favour of the left. An even split (the original) truncated the settings
-        # rows mid-label once the explanation pane arrived and pushed the on/off column
-        # clean off the screen - proven under a pty, 2026-08-20.
-        body = VSplit(
-            [
-                Window(FormattedTextControl(body_fn), wrap_lines=False, width=D(min=34, weight=2)),
-                # A GAP, not a pipe, when the console cannot encode the box-drawing
-                # glyph (2026-08-28 live report: "the vertical divider has misplaced pipe
-                # symbols"). U+2502 is designed to join vertically, so a column of them
-                # reads as one continuous line. An ASCII '|' is not: the glyph has
-                # clearance above and below, so a column of them reads as a ladder of
-                # disconnected marks - which on a corp-Windows cp1252 console, where the
-                # fallback always fires, is exactly what it looked like.
-                #
-                # Two spaces separate the panes just as clearly and cannot render badly.
-                # A divider that only works on half the target machines is worse than
-                # whitespace that works on all of them.
-                Window(
-                    width=1 if mod._can_encode("│") else 2,
-                    char="│" if mod._can_encode("│") else " ",
-                    style="class:dim",
-                ),
-                Window(FormattedTextControl(right_fn), width=D(min=26, weight=1), wrap_lines=True),
-            ]
-        )
-    header = [
-        Window(
-            FormattedTextControl(lambda: [("class:title", f"  {mod._morgan_line()}")]),
-            height=1,
-        )
-    ]
-    if project_dir is not None:
-        folder = "📂 " if mod._can_encode("📂") else ""
-        header.append(
-            Window(
-                FormattedTextControl(
-                    lambda: [("class:dim", f"  {folder}{project_line(project_dir, mod)}")]
-                ),
-                height=1,
-            )
-        )
-    root = HSplit(
-        header
-        + [
-            Frame(body, title=title),
-            Window(FormattedTextControl(footer_fn), height=1),
-        ]
-    )
-    app = Application(
-        layout=Layout(root),
-        key_bindings=key_bindings,
-        style=_style(mod),
-        full_screen=True,
-        mouse_support=True,
-        output=output or create_output(stdout=sys.stderr),
-        # Only the live monitor passes this; every other screen redraws on a keypress, and
-        # a timer on those would burn CPU redrawing something that cannot have changed.
-        refresh_interval=refresh_interval,
-    )
-    app.run()
 
 
 def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = False, output=None):
@@ -974,28 +787,6 @@ _COMPOSER_LINES = 9  # visible lines in the request composer; the buffer itself 
 # Sized against a real pty (2026-08-25): a two-sentence brief - the case that prompted the
 # composer - now fits without scrolling its own opening away, and the pane still has room
 # beneath for the unattended row. Longer briefs scroll, with a leading marker saying so.
-
-
-def _wrapped(text: str, width: int) -> list:
-    """Word-wrap for DISPLAY only, honouring the newlines the human typed.
-
-    Never used to decide what is sent - the request is flattened to one line on the way
-    out (_sanitise_request), so wrapping here can be purely cosmetic and lossless."""
-    lines = []
-    for paragraph in (text or "").split("\n"):
-        if not paragraph:
-            lines.append("")
-            continue
-        current = ""
-        for word in paragraph.split(" "):
-            candidate = f"{current} {word}".strip() if current else word
-            if len(candidate) <= width or not current:
-                current = candidate
-            else:
-                lines.append(current)
-                current = word
-        lines.append(current)
-    return lines or [""]
 
 
 def jira_screen(project_dir: Path, mod, output=None):
