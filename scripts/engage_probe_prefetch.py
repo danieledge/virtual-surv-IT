@@ -291,7 +291,7 @@ def _cached_block(project_dir: Path, data: dict, prompt: str) -> str | None:
         age = time.time() - float(raw.get("computed_at_epoch") or 0)
         if age < 0 or age > _PROBE_CACHE_TTL_S:
             return None
-        prefs_file = project_dir / ".claude" / "team-preferences.json"
+        prefs_file = _vsit_paths().preferences_file(project_dir)
         prefs_mtime = int(prefs_file.stat().st_mtime) if prefs_file.is_file() else 0
         cached_prefs_mtime = raw.get("prefs_mtime")
         # NOT `or -1`: a prefs-less project stamps 0, and 0-is-falsy turned that into -1,

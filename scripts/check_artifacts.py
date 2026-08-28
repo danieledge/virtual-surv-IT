@@ -78,10 +78,31 @@ import hashlib
 import json
 import re
 
+
 # Used for the git anchor query and for --fix's render_html call - both fixed-argv, no shell.
 import subprocess  # nosec B404
 import sys
 from pathlib import Path, PurePosixPath
+
+
+def _vsit_paths():
+    """The layout resolver (VSIT migration), imported lazily.
+
+    Lazy because this file may run standalone from a bare clone where `scripts/` is not yet
+    on sys.path. Searches its own directory AND a sibling `scripts/`, because several of
+    these files also exist as staged copies under `scripts/staged_hooks/`."""
+    import sys as _sys
+
+    _here = Path(__file__).resolve().parent
+    for _candidate in (_here, _here.parent, _here.parent / "scripts"):
+        if (_candidate / "vsit_paths.py").is_file():
+            if str(_candidate) not in _sys.path:
+                _sys.path.insert(0, str(_candidate))
+            break
+    import vsit_paths
+
+    return vsit_paths
+
 
 # Map hygiene thresholds (ADR-003: target ~200 lines; the gate hard-flags past 250).
 _MAP_MAX_LINES = 250
@@ -134,7 +155,7 @@ def _read_map_skeleton_toggle(project_dir: Path) -> bool:
     file must keep working invoked by path in plugin mode, not just as -m scripts.check_artifacts."""
     try:
         prefs = json.loads(
-            (project_dir / ".claude" / "team-preferences.json").read_text(encoding="utf-8-sig")
+            _vsit_paths().preferences_file(project_dir).read_text(encoding="utf-8-sig")
         )
         if isinstance(prefs, dict) and "map_skeleton" in prefs:
             return bool(prefs["map_skeleton"])

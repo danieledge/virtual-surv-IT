@@ -155,6 +155,28 @@ def local_dir(project: Path | str | None = None) -> Path:
     return candidate if PREFER_NEW_LAYOUT else root / ".claude"
 
 
+def preferences_file(project: Path | str | None = None) -> Path:
+    """This project's team settings.
+
+    `config/preferences.json` in the new layout, `.claude/team-preferences.json` in the old.
+    The name loses its "team-" prefix on the way: inside VSIT/config/ the folder already
+    says whose settings these are, and the prefix only existed to disambiguate them from
+    Claude Code's own files when they shared a directory."""
+    config = config_dir(project)
+    if config.name == ".claude":
+        return config / "team-preferences.json"
+    return config / "preferences.json"
+
+
+def extensions_file(project: Path | str | None = None) -> Path:
+    """This project's extensions contract. Legacy: `docs/team-extensions.md`."""
+    config = config_dir(project)
+    if config.name == ".claude":
+        # The legacy contract lived in the host project's docs/, not in .claude/.
+        return project_root(project) / "docs" / "team-extensions.md"
+    return config / "extensions.md"
+
+
 def engagement_dir(slug: str, project: Path | str | None = None) -> Path:
     """One engagement's workspace."""
     return engagements_dir(project) / slug

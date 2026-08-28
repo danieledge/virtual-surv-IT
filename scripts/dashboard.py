@@ -188,7 +188,7 @@ def read_team_preferences(project: Path) -> dict:
     """`.claude/team-preferences.json` - docx export and regulatory citations, both
     opt-in/opt-out project-wide settings. Absent file reads as today's defaults (docx
     off, citations on), matching engage_probe.py's own interpretation exactly."""
-    p = project / ".claude" / "team-preferences.json"
+    p = _vsit_paths().preferences_file(project)
     try:
         data = json.loads(p.read_text(encoding="utf-8-sig"))
     except (OSError, ValueError):

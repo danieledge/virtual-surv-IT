@@ -44,6 +44,26 @@ import json
 import sys
 from pathlib import Path
 
+
+def _vsit_paths():
+    """The layout resolver (VSIT migration), imported lazily.
+
+    Lazy because this file may run standalone from a bare clone where `scripts/` is not yet
+    on sys.path. Searches its own directory AND a sibling `scripts/`, because several of
+    these files also exist as staged copies under `scripts/staged_hooks/`."""
+    import sys as _sys
+
+    _here = Path(__file__).resolve().parent
+    for _candidate in (_here, _here.parent, _here.parent / "scripts"):
+        if (_candidate / "vsit_paths.py").is_file():
+            if str(_candidate) not in _sys.path:
+                _sys.path.insert(0, str(_candidate))
+            break
+    import vsit_paths
+
+    return vsit_paths
+
+
 # Every artifact worth naming in the pack, with the section it belongs to and whether
 # its absence is a genuine gap. "expected" drives the completeness checklist; anything
 # not expected is listed when present and simply not mentioned when absent.
@@ -395,7 +415,7 @@ def render(workspace: Path, force: bool = False) -> tuple[int, str]:
         # The project gate. Walk up from the workspace to the project root (artifacts/
         # sits under it) rather than assuming a cwd.
         project = workspace.parent.parent if workspace.parent.name == "artifacts" else workspace
-        prefs = _read_json(project / ".claude" / "team-preferences.json") or {}
+        prefs = _read_json(_vsit_paths().preferences_file(project)) or {}
         if not (isinstance(prefs, dict) and prefs.get("evidence_room") is True):
             return 0, (
                 "evidence room is off for this project - enable it with "

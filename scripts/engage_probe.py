@@ -466,7 +466,7 @@ def git_branch(root: Path) -> str:
 
 
 def read_team_preferences(project_dir: Path) -> dict:
-    p = project_dir / ".claude" / "team-preferences.json"
+    p = _vsit_paths().preferences_file(project_dir)
     try:
         data = json.loads(p.read_text(encoding="utf-8-sig"))
         return data if isinstance(data, dict) else {}
