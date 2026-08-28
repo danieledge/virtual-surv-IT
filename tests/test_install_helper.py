@@ -3696,6 +3696,11 @@ def test_format_preferences_step_shows_current_and_writes_on_change(tmp_path, mo
     preferences are project-wide (team-preferences.json), asked in one pass."""
     import install_helper as ih
 
+    # The step hands PROJECT preferences to the launcher's settings screen now
+    # (2026-08-28) - these tests cover the FALLBACK tier, which is what runs when the
+    # launcher cannot be started, so the handover is stubbed out as unavailable.
+    monkeypatch.setattr(ih, "_run_launcher_settings", lambda target, style: None)
+
     _isolate_home(monkeypatch, tmp_path)
     project = tmp_path / "proj"
     project.mkdir()
@@ -3714,6 +3719,11 @@ def test_format_preferences_step_shows_current_and_writes_on_change(tmp_path, mo
 def test_format_preferences_step_can_turn_on_citations(tmp_path, monkeypatch, capsys):
     """2026-08-07: citations defaults to OFF now, so turning it ON is the change case."""
     import install_helper as ih
+
+    # The step hands PROJECT preferences to the launcher's settings screen now
+    # (2026-08-28) - these tests cover the FALLBACK tier, which is what runs when the
+    # launcher cannot be started, so the handover is stubbed out as unavailable.
+    monkeypatch.setattr(ih, "_run_launcher_settings", lambda target, style: None)
 
     _isolate_home(monkeypatch, tmp_path)
     project = tmp_path / "proj"
@@ -3743,6 +3753,11 @@ def test_format_preferences_step_no_write_when_unchanged(tmp_path, monkeypatch):
 
 def test_format_preferences_step_can_turn_docx_off_again(tmp_path, monkeypatch):
     import install_helper as ih
+
+    # The step hands PROJECT preferences to the launcher's settings screen now
+    # (2026-08-28) - these tests cover the FALLBACK tier, which is what runs when the
+    # launcher cannot be started, so the handover is stubbed out as unavailable.
+    monkeypatch.setattr(ih, "_run_launcher_settings", lambda target, style: None)
     from install_helper import write_team_preferences
 
     _isolate_home(monkeypatch, tmp_path)
@@ -6909,6 +6924,11 @@ def test_format_preferences_step_review_tools_save_as_default(tmp_path, monkeypa
     mechanism as default_docx/default_regulatory_citations."""
     import install_helper as ih
 
+    # The step hands PROJECT preferences to the launcher's settings screen now
+    # (2026-08-28) - these tests cover the FALLBACK tier, which is what runs when the
+    # launcher cannot be started, so the handover is stubbed out as unavailable.
+    monkeypatch.setattr(ih, "_run_launcher_settings", lambda target, style: None)
+
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
@@ -8493,3 +8513,78 @@ def test_a_first_install_asks_two_preference_questions_not_eight(tmp_path, monke
     assert prefs["standards_critique"] is True, "declining must not reset what was set"
     assert prefs["map_skeleton"] is True
     assert "virt-surv go" in capsys.readouterr().out, "and must say where to change them"
+
+
+def test_project_preferences_hands_over_to_the_teams_own_settings_screen(tmp_path, monkeypatch):
+    """Owner decision, 2026-08-28: reconcile the two question sets over one file.
+
+    This step and the launcher's settings screen both write team-preferences.json and
+    asked DIFFERENT questions about it - this step's own intro used to admit it, listing
+    the preferences it does not cover and telling the reader to go elsewhere for them.
+    That is the drift _editor_rows was written to prevent, reappearing across the
+    entry-point boundary.
+
+    Handing over is what removes it: one screen, one question set, one file. Adding the
+    missing questions here would only have produced two longer lists to keep in sync."""
+    import install_helper as ih
+
+    handed = []
+    monkeypatch.setattr(
+        ih, "_run_launcher_settings", lambda target, style: (handed.append(target), 0)[1]
+    )
+    # A tty, or ask() takes its default without ever calling input() and the step would
+    # resolve the CURRENT directory instead of the one being typed.
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())
+    monkeypatch.setattr("builtins.input", lambda prompt="": str(tmp_path))
+    inst = ih.Installer(_args(), ih.Style(False), ih.marks())
+    inst.format_preferences_step()
+    assert handed == [tmp_path], "the project must go to the launcher's screen"
+
+
+def test_it_falls_back_to_prompts_when_the_launcher_cannot_run(tmp_path, monkeypatch, capsys):
+    """A user must never be left with nothing. None means the launcher could not be
+    started at all - and only then do the old prompts take over."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "_run_launcher_settings", lambda target, style: None)
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())
+    answers = iter([str(tmp_path), "n", "n", "", "n"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    inst = ih.Installer(_args(), ih.Style(False), ih.marks())
+    inst.format_preferences_step()
+    out = capsys.readouterr().out
+    assert "controlled documents" in out, "the old prompts must still be reachable"
+
+
+def test_a_machine_default_changes_the_row_you_are_looking_at(tmp_path, monkeypatch):
+    """The grid dispatches by KEY, never by row position.
+
+    This repo has shipped positional dispatch twice - a renumbered Advanced menu
+    redirecting an action, and a grouped settings screen toggling a different row than the
+    one on screen - and both times every test passed. This one toggles each row and
+    asserts the row that moved is the row asked for."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "config_path", lambda: tmp_path / "installer.json")
+    monkeypatch.setattr(ih, "user_settings_path", lambda: tmp_path / "settings.json")
+    for position, (_group, _label, _value, _on, key) in enumerate(ih._machine_rows()):
+        before = ih._machine_rows()
+        ih._machine_apply(key)
+        after = ih._machine_rows()
+        moved = [i for i, (b, a) in enumerate(zip(before, after)) if b[2] != a[2]]
+        assert moved == [position], f"changing {key!r} moved rows {moved}, expected [{position}]"
+
+
+def test_auto_is_stored_as_ABSENT_not_as_an_override(tmp_path, monkeypatch):
+    """A review tool cycled back to "auto" must leave no override behind.
+
+    Writing {"ruff": "auto"} would pin the current default forever - so a later change to
+    what auto means would silently not reach anyone who had once cycled that row."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "config_path", lambda: tmp_path / "installer.json")
+    monkeypatch.setattr(ih, "user_settings_path", lambda: tmp_path / "settings.json")
+    for _ in ih._REVIEW_TOOL_STATES:  # a full lap: auto -> on -> off -> auto
+        ih._machine_apply("review_tools.ruff")
+    stored = json.loads((tmp_path / "installer.json").read_text()).get("default_review_tools", {})
+    assert "ruff" not in stored, f"auto should be absent, found {stored}"

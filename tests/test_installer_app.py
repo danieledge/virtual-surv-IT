@@ -132,7 +132,12 @@ def test_the_write_marker_is_not_the_off_marker(ptk):
     import installer_app
 
     source = (REPO_ROOT / "scripts" / "installer_app.py").read_text(encoding="utf-8")
-    assert "g['off']" not in source and 'g["off"]' not in source
+    # Scoped to the CHOOSER. glyphs()["off"] is correct on a settings grid row, where it
+    # means what it says; the point is that the chooser must not borrow it for a different
+    # meaning. An unscoped assertion started failing the moment the grid landed and would
+    # have been "fixed" by deleting it.
+    chooser = source[source.index("def chooser_screen(") : source.index("def grid_screen(")]
+    assert "g['off']" not in chooser and 'g["off"]' not in chooser
     assert installer_app._WRITES["cleanplugincache"].startswith("DELETES")
 
 

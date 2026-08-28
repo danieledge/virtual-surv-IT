@@ -282,3 +282,122 @@ def chooser_screen(options, ih, *, title: str, repo: Path | None = None, output=
             raise
         return None
     return picked[0]
+
+
+def grid_screen(rows_fn, apply_fn, help_fn, ih, *, title, repo=None, output=None):
+    """A settings GRID: every value visible at once, Enter changes the highlighted row.
+
+    The shape `virt-surv go` has used since 2026-08-20, pointed at this machine's config
+    instead of a project's. What it replaces was a fixed interrogation - seven blocking
+    questions in a set order with no way to skip forward, go back, or see the whole state
+    while editing, and the current values printed once as a single ~250-character line that
+    wrapped three times.
+
+    `rows_fn` returns [(group, label, value, on, key)] and `apply_fn(key)` changes exactly
+    that key. Dispatch goes through the KEY, never the row's position: this repo has shipped
+    that bug twice (a renumbered Advanced menu redirecting an action, and a grouped settings
+    screen toggling a different row than the one on screen), and both times every test
+    passed.
+
+    Returns True if anything changed, False if not, and None when the screen could not run -
+    the caller then falls back to its prompts. False and None are different answers and the
+    caller must not conflate them.
+    """
+    try:
+        chrome = _chrome()
+        from prompt_toolkit.key_binding import KeyBindings
+    except Exception:
+        return None
+    if not os.environ.get("VIRT_SURV_FORCE_PTK"):
+        if not (sys.stdin.isatty() and sys.stderr.isatty()):
+            return None
+
+    host = InstallerHost(ih, repo)
+    rows = list(rows_fn() or [])
+    if not rows:
+        return None
+    g = chrome.glyphs(host)
+    idx = [0]
+    changed = [False]
+    notes: list = []
+
+    def _refresh():
+        rows[:] = list(rows_fn() or rows)
+
+    def _body():
+        out = []
+        width = min(max((len(label) for _gr, label, _v, _o, _k in rows), default=0), 28)
+        for i, (group, label, value, on, _key) in enumerate(rows):
+            if group:
+                out.append(("class:group", ("\n" if i else "") + f"  {group}\n"))
+            sel = idx[0] == i
+            out.append(("class:sel" if sel else "", f"  {g['point']} " if sel else "    "))
+            out.append(("class:sel" if sel else "", f"{label.ljust(width + 1)} "))
+            mark = g["on"] if on else g["off"]
+            out.append(("class:on" if on else "class:off", f"{mark} {value}\n"))
+        return out
+
+    def _right():
+        _group, label, value, on, key = rows[idx[0]]
+        out = [("class:group", _wrap(label) + "\n\n")]
+        text = help_fn(key) if help_fn else ""
+        out.append(("class:dim", _wrap(text or "No description for this setting yet.") + "\n\n"))
+        out.append(("class:on" if on else "class:off", _wrap(f"currently: {value}") + "\n"))
+        if notes:
+            out.append(("class:group", "\n  Just changed\n"))
+            for note in notes[-4:]:
+                out.append(("class:on", _wrap(note) + "\n"))
+        return out
+
+    def _footer():
+        return [("class:hint", chrome.ui_text(host, "  ↑↓ move · Enter change · Esc done"))]
+
+    kb = KeyBindings()
+
+    @kb.add("up")
+    def _up(event):
+        idx[0] = (idx[0] - 1) % len(rows)
+
+    @kb.add("down")
+    def _down(event):
+        idx[0] = (idx[0] + 1) % len(rows)
+
+    @kb.add("enter")
+    @kb.add(" ")
+    def _change(event):
+        before = list(rows)
+        note = apply_fn(rows[idx[0]][4]) or ""
+        _refresh()
+        if list(rows) != before:
+            changed[0] = True
+            for (_g, label, value, _o, _k), (_bg, _bl, was, _bo, _bk) in zip(rows, before):
+                if value != was:
+                    # ONE line per setting: toggling a row twice used to append two, which
+                    # reads as the panel duplicating rather than as two edits (2026-08-28).
+                    prefix = f"{label}: "
+                    notes[:] = [n for n in notes if not n.startswith(prefix)]
+                    notes.append(f"{label}: {was} -> {value}")
+        if note:
+            notes.append(note.strip())
+
+    @kb.add("escape", eager=True)
+    @kb.add("c-c")
+    @kb.add("q")
+    def _esc(event):
+        event.app.exit()
+
+    try:
+        chrome.screen(
+            host,
+            title=title,
+            body_fn=_body,
+            right_fn=_right,
+            footer_fn=_footer,
+            key_bindings=kb,
+            output=output,
+        )
+    except Exception:
+        if os.environ.get("VIRT_SURV_DEBUG_APP"):
+            raise
+        return None
+    return changed[0]

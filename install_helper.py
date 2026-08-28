@@ -3163,9 +3163,7 @@ class Installer:
             "supported analysers (ruff, mypy, bandit, black, sqlfluff, shfmt, gitleaks) "
             "on or off for this project. At the end, a separate, clearly optional "
             "question offers to also make these THIS MACHINE's default for other new "
-            "projects you configure later. (The large-context review-split and "
-            "codebase-skeleton drift-checking preferences aren't asked here - they're "
-            "set via 'Configure a project' instead.)"
+            "projects you configure later."
         )
         raw = ask(
             f"  Which project directory? (blank = {Path.cwd()})", ".", False, style=self.style
@@ -3174,6 +3172,26 @@ class Installer:
         if not project.is_dir():
             self.step_fail("Project preferences", f"not a directory: {project}")
             return
+        # HAND OVER to the launcher's settings screen, which edits this same file and
+        # edits it better: sixteen rows with every value visible at once, grouped, with an
+        # explanation pane - against a handful of blocking questions in a fixed order with
+        # no way to skip forward or go back (2026-08-28 UX review, owner decision).
+        #
+        # The point is not presentation. The two ask DIFFERENT questions about the same
+        # team-preferences.json: this step's own intro used to admit it, listing the
+        # preferences it does not cover and telling the reader to go somewhere else for
+        # them. That is the drift _editor_rows was written to prevent, reappearing across
+        # the entry-point boundary. Handing over is what removes it - one screen, one
+        # question set, one file - where adding the missing questions here would only have
+        # made two longer lists to keep in sync.
+        #
+        # None means the launcher could not be run at all, and only then do the prompts
+        # below take over: a user must never be left with nothing.
+        if not self.demo:
+            handed = _run_launcher_settings(project, self.style)
+            if handed is not None:
+                self.step_ok("Project preferences", "edited in the team's own settings screen")
+                return
         prefs_path = project / ".claude" / "team-preferences.json"
         existing = _read_json_dict(prefs_path)
         (
@@ -3399,6 +3417,30 @@ class Installer:
             return
         self.machine_defaults_step()
 
+    def _machine_defaults_grid(self):
+        """The grid tier of machine_defaults_step, or None when it cannot run.
+
+        Isolated behind an explicit import helper rather than a bare `import` in a try:
+        this file sits at the clone root and scripts/ is a sibling, so a bare import
+        raises ImportError and an `except Exception` would leave the tier permanently and
+        silently off. That shape has been found three times in two days."""
+        try:
+            installer_app = _import_from_scripts("installer_app")
+            if installer_app is None:
+                return None
+            return installer_app.grid_screen(
+                _machine_rows,
+                _machine_apply,
+                _machine_help,
+                _this_module(),
+                title="This machine's defaults",
+                repo=self.repo,
+            )
+        except Exception:
+            if os.environ.get("VIRT_SURV_DEBUG_APP"):
+                raise
+            return None
+
     def machine_defaults_step(self) -> None:
         """View/edit THIS MACHINE's defaults directly, no project needed (Advanced menu
         option 6, 2026-08-04 user request: "let's just have a clearer view and edit of
@@ -3423,6 +3465,21 @@ class Installer:
             "project's own choice (team-preferences.json, or its own settings.json "
             "`model` key) always overrides these."
         )
+        # GRID first, prompts wherever it cannot run (2026-08-28). Same _machine_rows /
+        # _machine_apply underneath either way, so the two tiers cannot disagree about what
+        # a change does - the pattern the launcher settled on after its own two tiers
+        # drifted apart. None means the screen could not start; False means it ran and
+        # nothing was changed, which is a decision and must NOT fall through to the
+        # prompts (the launcher conflated exactly those two once, and cancelling dumped
+        # the user into the tier they had just declined).
+        if not self.demo:
+            outcome = self._machine_defaults_grid()
+            if outcome is not None:
+                self.step_ok(
+                    "Machine defaults " + ("updated" if outcome else "unchanged"),
+                    "" if outcome else "nothing was changed",
+                )
+                return
         docx_current = bool(self.cfg.get("default_docx", False))
         citations_current = bool(self.cfg.get("default_regulatory_citations", False))
         review_tools_current = self.cfg.get("default_review_tools") or {}
@@ -4237,6 +4294,143 @@ def run_orchestrator_model_default(model: Optional[str], style: Style, mark_map:
 # enforces all three match).
 _REVIEW_TOOLS = ("ruff", "mypy", "bandit", "gitleaks", "sqlfluff", "black", "shfmt")
 _REVIEW_TOOL_STATES = ("auto", "on", "off")
+
+
+# THIS MACHINE's defaults as a grid, in the shape the launcher's settings screen already
+# speaks: rows carry a stable KEY, and dispatch resolves through it rather than through a
+# screen position. Both of this repo's positional-dispatch bugs came from the other choice
+# (a renumbered Advanced menu redirecting an action, and a grouped settings screen toggling
+# the wrong row), so the pattern is copied deliberately, not incidentally.
+#
+# Grouped by the decision being made, not by where the value is stored - most of these live
+# in installer.json and one in the user-level Claude settings, which is true and of no
+# interest to someone deciding what new projects should produce.
+_MACHINE_GROUPS = (
+    ("What new projects produce", ("default_docx", "default_regulatory_citations")),
+    ("Codebase map", ("default_map_skeleton", "default_statusline_show_map")),
+    ("Morgan's model", ("model",)),
+    ("Review tools", tuple(f"review_tools.{name}" for name in _REVIEW_TOOLS)),
+)
+
+_MACHINE_LABELS = {
+    "default_docx": "controlled-document export",
+    "default_regulatory_citations": "regulatory citations",
+    "default_map_skeleton": "codebase-map drift checking",
+    "default_statusline_show_map": "statusline map indicator",
+    "model": "Morgan's model",
+}
+
+_MACHINE_HELP = {
+    "default_docx": (
+        "New projects also produce the Word format alongside .md and .html for controlled "
+        "documents."
+    ),
+    "default_regulatory_citations": (
+        "Detections cite the specific obligation they serve, by default, in new projects."
+    ),
+    "default_map_skeleton": (
+        "Flags when the codebase map goes stale - a mapped area's code changed since it was "
+        "last verified, or a cited file:line no longer exists. Experimental (ADR-007)."
+    ),
+    "default_statusline_show_map": ("Adds map:on/off to the statusline. Off keeps the line short."),
+}
+
+
+def _machine_rows(cfg=None):
+    """[(group, label, value, on, key)] for this machine's defaults.
+
+    ONE snapshot, shared by the grid and by anything printing a summary, so the two can
+    never disagree about what is currently set - the failure the launcher's _editor_rows
+    exists to prevent, and which this file reproduced across the entry-point boundary."""
+    cfg = load_config(config_path()) if cfg is None else cfg
+    tools = cfg.get("default_review_tools") or {}
+    model = _read_json_dict(user_settings_path()).get("model") or ""
+    values = {
+        "default_docx": bool(cfg.get("default_docx", False)),
+        "default_regulatory_citations": bool(cfg.get("default_regulatory_citations", False)),
+        "default_map_skeleton": bool(cfg.get("default_map_skeleton", True)),
+        "default_statusline_show_map": bool(cfg.get("default_statusline_show_map", False)),
+    }
+    rows = []
+    for title, keys in _MACHINE_GROUPS:
+        first = True
+        for key in keys:
+            group = title if first else ""
+            first = False
+            if key == "model":
+                # Just "default": the value column is narrow and "default (sonnet)"
+                # clipped mid-word against the divider. Which model that means is in the
+                # pane, where there is room to say it.
+                shown = model or "default"
+                rows.append((group, _MACHINE_LABELS[key], shown, bool(model), key))
+            elif key.startswith("review_tools."):
+                tool = key.split(".", 1)[1]
+                state = tools.get(tool, "auto")
+                rows.append((group, tool, state, state != "auto", key))
+            else:
+                on = values[key]
+                rows.append((group, _MACHINE_LABELS[key], "on" if on else "off", on, key))
+    return rows
+
+
+def _machine_help(key: str) -> str:
+    """The explanation pane's text for one row."""
+    if key.startswith("review_tools."):
+        tool = key.split(".", 1)[1]
+        return (
+            f"Whether reviews run {tool}. auto: use it when it is installed. on: require it "
+            "and report when it is missing. off: never run it."
+        )
+    if key == "model":
+        return (
+            "The model Morgan the orchestrator runs on. A project's own settings always wins "
+            f"over this; unset means {ORCHESTRATOR_MODEL_DEFAULT}."
+        )
+    return _MACHINE_HELP.get(key, "")
+
+
+def _machine_apply(key: str) -> str:
+    """Toggle or cycle one machine default by KEY. Returns a short note, "" when silent.
+
+    Writes the same installer.json keys the project-configure path writes, so the two
+    routes stay interchangeable - this is only the direct one."""
+    cfg = load_config(config_path())
+    if key == "model":
+        order = ("",) + ORCHESTRATOR_MODELS
+        settings_path = user_settings_path()
+        settings = _read_json_dict(settings_path)
+        current = settings.get("model") or ""
+        nxt = order[(order.index(current) + 1) % len(order)] if current in order else order[1]
+        if nxt:
+            settings["model"] = nxt
+        else:
+            settings.pop("model", None)
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        settings_path.write_text(
+            json.dumps(settings, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        return ORCHESTRATOR_OPUS_NOTE if nxt == "opus" else ""
+    if key.startswith("review_tools."):
+        tool = key.split(".", 1)[1]
+        tools = dict(cfg.get("default_review_tools") or {})
+        current = tools.get(tool, "auto")
+        at = _REVIEW_TOOL_STATES.index(current) if current in _REVIEW_TOOL_STATES else 0
+        nxt = _REVIEW_TOOL_STATES[(at + 1) % len(_REVIEW_TOOL_STATES)]
+        if nxt == "auto":
+            tools.pop(tool, None)  # absent IS auto - never store the default as an override
+        else:
+            tools[tool] = nxt
+        cfg["default_review_tools"] = tools
+        save_config(config_path(), cfg)
+        return ""
+    if key in ("default_docx", "default_regulatory_citations", "default_statusline_show_map"):
+        cfg[key] = not bool(cfg.get(key, False))
+    elif key == "default_map_skeleton":
+        cfg[key] = not bool(cfg.get(key, True))
+    else:
+        return ""
+    save_config(config_path(), cfg)
+    return ""
 
 
 def _parse_review_tool_overrides(raw: str) -> tuple:
