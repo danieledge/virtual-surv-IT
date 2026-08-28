@@ -2983,12 +2983,33 @@ def _suggestion_line(project_dir: Path, menu: dict) -> str:
                 timeout=3,
             )
             if proc.returncode == 0:
-                changed = [ln for ln in (proc.stdout or "").splitlines() if ln.strip()]
-                if changed:
+                # Split tracked from untracked (2026-08-28 user report: "21 uncommitted
+                # files here" - where is that coming from?). Porcelain counts BOTH, and
+                # lumping them together overstates the case badly: on a real project the
+                # untracked half is usually build output, caches and scratch, which no
+                # review wants. A modified file has a diff to review; an untracked one has
+                # no baseline to compare against, so it is a different offer.
+                tracked = untracked = 0
+                for line in (proc.stdout or "").splitlines():
+                    if not line.strip():
+                        continue
+                    if line.startswith("??"):
+                        untracked += 1
+                    else:
+                        tracked += 1
+                if tracked and untracked:
                     return (
-                        f"{len(changed)} uncommitted file(s) here - "
-                        "a new engagement can review them"
+                        f"{tracked} modified file(s) here (+{untracked} untracked) - "
+                        "a new engagement can review the changes"
                     )
+                if tracked:
+                    return (
+                        f"{tracked} modified file(s) here - a new engagement can review the changes"
+                    )
+                if untracked:
+                    # No diff to read, so the offer is honestly weaker - say so rather
+                    # than implying there is something to review.
+                    return f"{untracked} untracked file(s) here - new work, not yet in git"
         except Exception:
             pass
     return ""

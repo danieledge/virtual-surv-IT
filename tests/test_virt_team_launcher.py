@@ -1448,3 +1448,63 @@ def test_alias_detection_reads_real_rc_files(tmp_path, monkeypatch):
         "virt-surv() { :; } # virt-surv-it-alias-v6\n", encoding="utf-8"
     )
     assert mod._alias_installed_anywhere() is True
+
+
+def test_the_nudge_separates_modified_from_untracked(tmp_path, monkeypatch):
+    """Live report: "virt-surv go said 21 uncommitted files here - where is that coming
+    from?" It was `git status --porcelain` counted whole, which includes UNTRACKED files.
+
+    Lumping them together overstates the case badly: on a real project the untracked half
+    is usually build output, caches and scratch that no review wants. A modified file has a
+    diff to review; an untracked one has no baseline to compare against, so the offer is
+    honestly weaker and now says so."""
+    mod = _load()
+
+    def _fake(argv, **kwargs):
+        class _P:
+            returncode = 0
+            stdout = " M src/a.py\n?? build/x.o\n?? build/y.o\n"
+            stderr = ""
+
+        return _P()
+
+    monkeypatch.setattr(mod.subprocess, "run", _fake)
+    line = mod._suggestion_line(tmp_path, {"shown": []})
+    assert "1 modified" in line
+    assert "+2 untracked" in line
+    assert "21 uncommitted" not in line
+
+
+def test_untracked_only_does_not_claim_there_is_a_diff(tmp_path, monkeypatch):
+    """No baseline to compare against, so "a new engagement can review the changes" would
+    be a claim the situation does not support."""
+    mod = _load()
+
+    def _fake(argv, **kwargs):
+        class _P:
+            returncode = 0
+            stdout = "?? a.txt\n?? b.txt\n"
+            stderr = ""
+
+        return _P()
+
+    monkeypatch.setattr(mod.subprocess, "run", _fake)
+    line = mod._suggestion_line(tmp_path, {"shown": []})
+    assert "2 untracked" in line
+    assert "review" not in line
+
+
+def test_a_clean_tree_says_nothing(tmp_path, monkeypatch):
+    """Silent by default - a nudge on every launch is noise with extra steps."""
+    mod = _load()
+
+    def _fake(argv, **kwargs):
+        class _P:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return _P()
+
+    monkeypatch.setattr(mod.subprocess, "run", _fake)
+    assert mod._suggestion_line(tmp_path, {"shown": []}) == ""
