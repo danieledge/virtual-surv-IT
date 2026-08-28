@@ -1390,6 +1390,7 @@ _ADVANCED_ACTIONS = {
     "12": "codeintel",
     "13": "extensions",
     "14": "reprobe",
+    "15": "relocate",
     "b": "back",
 }
 
@@ -1523,6 +1524,11 @@ def choose_action(style: Style) -> str:
                         "14",
                         "Re-probe installed tools (run after installing an analyser or "
                         "tree-sitter, so the team stops reporting it missing)",
+                    ),
+                    (
+                        "15",
+                        "Move team files into VSIT/ (one folder instead of scattered across "
+                        "your docs/ and repo root - shows you the plan before moving anything)",
                     ),
                     ("b", "Back"),
                 ),
@@ -7332,6 +7338,151 @@ def _fetch_extensions_from_git(url: str):
         _shutil.rmtree(tmp, ignore_errors=True)
 
 
+def _relocation_plan(project: Path) -> list:
+    """[(source, destination, label)] for what would move. Empty when nothing needs to.
+
+    Reads the layout rather than assuming it: only entries whose source EXISTS and whose
+    destination does NOT are listed, so running this twice is safe and a half-migrated
+    project is completed rather than confused."""
+    root = Path(project)
+    vsit = root / "VSIT"
+    candidates = [
+        (root / "artifacts", vsit / "engagements", "engagement workspaces"),
+        (root / "docs" / "codebase-map.md", vsit / "shared" / "map.md", "codebase map"),
+        (root / "docs" / "CODEBASE-MAP.md", vsit / "shared" / "map.md", "codebase map"),
+        (root / "docs" / "codebase-map.d", vsit / "shared" / "map.d", "codebase map areas"),
+        (
+            root / "docs" / "codebase-map.fingerprints.json",
+            vsit / "shared" / "derived.json",
+            "map fingerprints",
+        ),
+        (
+            root / "docs" / "team-extensions.md",
+            vsit / "config" / "extensions.md",
+            "extensions contract",
+        ),
+        (
+            root / ".claude" / "team-preferences.json",
+            vsit / "config" / "preferences.json",
+            "team preferences",
+        ),
+        (
+            root / ".claude" / ".tool-availability",
+            vsit / "local" / "tool-availability",
+            "tool inventory cache",
+        ),
+        (
+            root / ".claude" / "engage-probe.json",
+            vsit / "local" / "engage-probe.json",
+            "probe cache",
+        ),
+        (
+            root / ".claude" / ".guard-interpreter",
+            vsit / "local" / "guard-interpreter",
+            "interpreter cache",
+        ),
+        (
+            root / ".claude" / ".map-fingerprint-probe-cache.json",
+            vsit / "local" / "map-fingerprint-cache.json",
+            "fingerprint probe cache",
+        ),
+    ]
+    return [(s, d, label) for s, d, label in candidates if s.exists() and not d.exists()]
+
+
+_VSIT_README = """# VSIT/
+
+Everything the Virtual Surv-IT team keeps about this project lives here, so it is in one
+place rather than scattered through your own directories.
+
+    shared/        what every engagement needs: the codebase map, and a derived index of
+                   symbols and line ranges. COMMITTED - the next engagement inherits it.
+    engagements/   one folder per piece of work. NOT committed.
+    reports/       deliverables that belong to the project rather than one engagement.
+    config/        this project's team settings and its extensions contract. COMMITTED.
+    local/         caches derived from THIS checkout - file timestamps, resolved paths.
+                   NOT committed: they are wrong on anyone else's machine.
+
+Safe to delete: `local/` (regenerates), and `engagements/<slug>/` once an engagement is
+finished and archived. Not safe to delete: `shared/` and `config/`, which hold decisions
+and knowledge nothing can recompute.
+
+Nothing here is required for your project to build or run.
+"""
+
+
+def run_relocate_to_vsit(style: Style, mark_map: dict) -> int:
+    """Move a project's team files into VSIT/, after showing exactly what would move.
+
+    OFFERED, NEVER AUTOMATIC (plan-project-footprint-2026-08-27). Silently restructuring
+    someone's repository is precisely the behaviour that plan exists to stop, so this
+    prints the full plan first and does nothing without a yes.
+
+    Nothing depends on it: the resolver reads both layouts, so a project that never runs
+    this keeps working indefinitely. It is convenience, not correctness - which is also why
+    it refuses rather than guesses whenever anything looks unexpected.
+    """
+    ok, warn = mark_map.get("ok") or "OK", mark_map.get("warn") or "!"
+    default = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    answer = ask("  Project to relocate:", default, assume_yes=False, style=style).strip()
+    project = Path(answer or default).expanduser().resolve()
+    if not project.is_dir():
+        print(style.yellow(f"  {warn} not a directory: {project}"))
+        return 1
+
+    plan = _relocation_plan(project)
+    if not plan:
+        print(style.dim("  nothing to move - this project is already on the VSIT layout"))
+        return 0
+
+    print("")
+    print(style.bold(f"  Would move {len(plan)} item(s) in {project}:"))
+    for src, dst, label in plan:
+        print(f"    {src.relative_to(project)}")
+        print(style.dim(f"      -> {dst.relative_to(project)}   ({label})"))
+    print("")
+    print(
+        style.dim(
+            "  Nothing else is touched. Your own docs/ keeps everything that is "
+            "yours, and .claude/ keeps what Claude Code reads by path. Git history "
+            "follows a move, so committed files keep their history."
+        )
+    )
+    if not confirm("  Move them now?", default=False, assume_yes=False, style=style):
+        print(style.dim("  nothing moved."))
+        return 0
+
+    moved = 0
+    for src, dst, _label in plan:
+        try:
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            # shutil.move rather than rename: the destination can be on a different
+            # filesystem, and on Windows rename fails across volumes rather than copying.
+            shutil.move(str(src), str(dst))
+            moved += 1
+        except Exception as exc:  # noqa: BLE001 - report and continue; partial is recoverable
+            print(style.yellow(f"  {warn} could not move {src.name}: {exc}"))
+
+    readme = project / "VSIT" / "README.md"
+    if moved and not readme.exists():
+        try:
+            readme.parent.mkdir(parents=True, exist_ok=True)
+            readme.write_text(_VSIT_README, encoding="utf-8")
+        except OSError:
+            pass
+
+    print(f"  {ok} moved {moved} of {len(plan)} item(s)")
+    if moved:
+        print(
+            style.dim(
+                "      Commit VSIT/shared/ and VSIT/config/; add "
+                "VSIT/engagements/ and VSIT/local/ to .gitignore. A README "
+                "explaining the folder is in there."
+            )
+        )
+    return 0 if moved == len(plan) else 1
+
+
 def run_tool_reprobe(style: Style, mark_map: dict) -> int:
     """Force a fresh analyser/tool probe for a project, and show what it found.
 
@@ -9015,6 +9166,8 @@ def _main(argv=None) -> int:
                 rc = max(rc, run_extensions_editor(style, marks()))
             elif action == "reprobe":
                 rc = max(rc, run_tool_reprobe(style, marks()))
+            elif action == "relocate":
+                rc = max(rc, run_relocate_to_vsit(style, marks()))
             elif action == "gitbashperf":
                 run_gitbash_perf(style, marks(), args.yes, args.demo)
                 did_anything = did_anything or not args.demo

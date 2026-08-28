@@ -153,3 +153,80 @@ def test_the_root_never_walks_ancestors(tmp_path, monkeypatch, flipped):
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(nested))
     assert vp.project_root() == nested
     assert vp.engagements_dir() == nested / "VSIT" / "engagements"
+
+
+# ------------------- the offered migration (stage 4) -------------------
+
+
+import install_helper as ih  # noqa: E402
+
+
+def _legacy_project(tmp_path):
+    (tmp_path / "artifacts" / "eng-001").mkdir(parents=True)
+    (tmp_path / "artifacts" / "eng-001" / "engagement-state.json").write_text(
+        '{"schema": 2}', encoding="utf-8"
+    )
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "codebase-map.md").write_text("# map", encoding="utf-8")
+    (tmp_path / "docs" / "own-architecture.md").write_text("theirs", encoding="utf-8")
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+    (tmp_path / ".claude" / "settings.json").write_text("{}", encoding="utf-8")
+    return tmp_path
+
+
+def test_the_plan_lists_only_what_is_ours(tmp_path):
+    """The project's own files must not appear in a plan to move things. This runs against
+    someone else's repository, and a tool that offers to relocate their architecture doc
+    has misunderstood its job."""
+    project = _legacy_project(tmp_path)
+    sources = {src.name for src, _dst, _label in ih._relocation_plan(project)}
+    assert "artifacts" in sources
+    assert "codebase-map.md" in sources
+    assert "team-preferences.json" in sources
+    assert "own-architecture.md" not in sources, "the host project's own docs are not ours"
+    assert "settings.json" not in sources, "the harness's own file is not ours"
+
+
+def test_the_plan_is_empty_once_migrated(tmp_path):
+    """Idempotent: running it twice must be safe, and a half-migrated project completed
+    rather than confused."""
+    project = _legacy_project(tmp_path)
+    import shutil
+
+    for src, dst, _ in ih._relocation_plan(project):
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(dst))
+    assert ih._relocation_plan(project) == []
+
+
+def test_the_resolver_follows_the_move(tmp_path):
+    """The point of the whole exercise: after relocating, everything resolves to VSIT/ and
+    the engagement pack is still found."""
+    project = _legacy_project(tmp_path)
+    import shutil
+
+    for src, dst, _ in ih._relocation_plan(project):
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(dst))
+    assert vp.engagements_dir(project) == project / "VSIT" / "engagements"
+    assert vp.map_file(project) == project / "VSIT" / "shared" / "map.md"
+    assert vp.config_dir(project) == project / "VSIT" / "config"
+    assert vp.is_legacy_layout(project) is False
+    assert (vp.engagement_dir("eng-001", project) / "engagement-state.json").is_file()
+
+
+def test_a_destination_that_already_exists_is_never_overwritten(tmp_path):
+    """Only entries whose destination does NOT exist are listed, so a partially-migrated
+    project cannot have its new files clobbered by its old ones."""
+    project = _legacy_project(tmp_path)
+    (project / "VSIT" / "shared").mkdir(parents=True)
+    (project / "VSIT" / "shared" / "map.md").write_text("# newer", encoding="utf-8")
+    names = {dst.name for _src, dst, _label in ih._relocation_plan(project)}
+    assert "map.md" not in names
+    assert (project / "VSIT" / "shared" / "map.md").read_text(encoding="utf-8") == "# newer"
+
+
+def test_the_menu_entry_is_wired():
+    assert ih._ADVANCED_ACTIONS.get("15") == "relocate"
+    assert callable(ih.run_relocate_to_vsit)

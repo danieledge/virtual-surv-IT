@@ -1,7 +1,7 @@
 # Plan: stop colonising the host project's directories
 
-**Status:** proposed, 2026-08-27. Touches ADR-003 (map location) and ADR-010 (artifact
-placement).
+**Status:** IMPLEMENTED 2026-08-28, stages 0-4. Touches ADR-003 (map location) and
+ADR-010 (artifact placement).
 
 ## The problem
 

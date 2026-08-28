@@ -6056,6 +6056,7 @@ def test_advanced_submenu_full_mapping():
         "12": "codeintel",
         "13": "extensions",
         "14": "reprobe",
+        "15": "relocate",
         "b": "back",
     }
 
