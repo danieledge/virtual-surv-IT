@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ast
 import io
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -515,3 +516,46 @@ def test_the_stacked_layout_keeps_the_explanation(monkeypatch):
     flat = "".join(text for _style, text in stacked)
     assert "row one" in flat and "row two" in flat
     assert "why row one matters" in flat, "the explanation must survive the fold"
+
+
+def test_the_width_is_measured_on_the_stream_we_draw_on(monkeypatch):
+    """Why the fold did not fire on a phone even after it existed.
+
+    shutil.get_terminal_size asks sys.__stdout__. For `virt-surv go` stdout is a CAPTURED
+    PIPE - the shell function runs the launcher inside $(...) to read the launch decision
+    back - and a pipe has no size, so shutil returned its (80, 24) fallback. Every caller
+    then believed it was on an 80-column terminal and drew the two-pane split on a
+    50-column phone (photographed twice, 2026-08-29).
+
+    tui_chrome's own module docstring warns that _can_encode must ask about the stream the
+    chrome RENDERS to, which is stderr, and that getting it wrong "does not fail loudly".
+    term_columns was written a few lines below that warning and made exactly that mistake.
+    """
+    import tui_chrome
+
+    class _Tty:
+        def __init__(self, cols):
+            self._cols = cols
+
+        def isatty(self):
+            return True
+
+        def fileno(self):
+            return 2
+
+    monkeypatch.setattr(tui_chrome.sys, "stdout", None)  # captured: no size to be had
+    monkeypatch.setattr(tui_chrome.sys, "stderr", _Tty(50))
+    monkeypatch.setattr(tui_chrome.os, "get_terminal_size", lambda fd: os.terminal_size((50, 30)))
+    assert tui_chrome.term_columns() == 50
+    assert tui_chrome.is_narrow() is True, "a captured stdout must not hide a narrow tty"
+
+
+def test_an_exported_COLUMNS_is_used_when_nothing_is_a_tty(monkeypatch):
+    """Piped both ways - CI, a scripted run - falls back to what the environment declares
+    before it falls back to a guess."""
+    import tui_chrome
+
+    monkeypatch.setattr(tui_chrome.sys, "stdout", None)
+    monkeypatch.setattr(tui_chrome.sys, "stderr", None)
+    monkeypatch.setenv("COLUMNS", "46")
+    assert tui_chrome.term_columns() == 46

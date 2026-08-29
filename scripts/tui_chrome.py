@@ -33,6 +33,7 @@ CONTRACTS INHERITED FROM THE LAUNCHER (each has already caused a live bug):
 
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -166,7 +167,34 @@ NARROW_COLUMNS = 64
 
 
 def term_columns(default: int = 80) -> int:
-    """This terminal's width, never raising."""
+    """This terminal's width, measured on STDERR - never raising.
+
+    shutil.get_terminal_size asks sys.__stdout__, and for `virt-surv go` stdout is a
+    CAPTURED PIPE: the shell function runs the launcher inside $(...) to read the launch
+    decision back. A pipe has no size, so shutil returned its (80, 24) fallback and every
+    caller believed it was on an 80-column terminal - which is why the two-pane split kept
+    being drawn on a 50-column phone even after it was taught to fold (photographed
+    2026-08-29, second time).
+
+    This module's own docstring already warns that _can_encode must ask about the stream
+    the chrome RENDERS to, which is stderr, "and getting that wrong does not fail loudly".
+    The same trap, one function further down, written by someone who had just documented
+    it.
+
+    Order: the real tty we draw on, then an explicitly exported COLUMNS, then stdout for
+    the odd caller whose stdout is the terminal, then the default."""
+    for stream in (sys.stderr, sys.stdout):
+        try:
+            if stream is not None and stream.isatty():
+                return os.get_terminal_size(stream.fileno()).columns
+        except Exception:
+            continue
+    try:
+        declared = int(os.environ.get("COLUMNS", "") or 0)
+        if declared > 0:
+            return declared
+    except Exception:
+        pass
     try:
         return shutil.get_terminal_size((default, 24)).columns
     except Exception:

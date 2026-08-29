@@ -25,7 +25,6 @@ start - which is the same box that most needs the installer to work.
 from __future__ import annotations
 
 import os
-import shutil
 import sys
 from pathlib import Path
 
@@ -153,7 +152,9 @@ def brand_header(mod):
         brand = _import_brand(mod)
         if brand is None:
             return None
-        width = shutil.get_terminal_size((80, 24)).columns
+        # Through tui_chrome, which measures stderr: the same captured-stdout problem
+        # would otherwise pick the full banner tier on a phone.
+        width = _chrome().term_columns()
         rows = brand.banner(width)
     except Exception:
         return None
