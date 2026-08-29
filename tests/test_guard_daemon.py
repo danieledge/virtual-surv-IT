@@ -198,11 +198,22 @@ def _start_real_daemon(gd, module_root, state_root, idle_timeout=5):
     )
     t.start()
     port_file = state_root / ".claude" / gd.PORT_FILE_NAME
+    # Wait for the file to be COMPLETE, not merely to exist. The daemon writes the port
+    # and the token, and a reader that stops at is_file() can observe the file between
+    # those - which under full-suite load surfaced as an IndexError on lines[1] rather
+    # than as anything resembling the thing being tested (flaky, ~1 run in 40).
     deadline = time.monotonic() + 10
-    while time.monotonic() < deadline and not port_file.is_file():
+    lines: list = []
+    while time.monotonic() < deadline:
+        try:
+            lines = port_file.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            lines = []
+        if len(lines) >= 2 and lines[0].strip() and lines[1].strip():
+            break
         time.sleep(0.05)
     assert port_file.is_file(), "daemon never started"
-    lines = port_file.read_text(encoding="utf-8").splitlines()
+    assert len(lines) >= 2, f"port file never completed: {lines!r}"
     return int(lines[0]), lines[1]
 
 
