@@ -1310,3 +1310,83 @@ def test_qa_depth_rejects_an_unknown_level(tmp_path):
     state = load_state(art / "e")
     state["qa_depth"] = "none"
     assert any("qa_depth" in p for p in validate_state(state))
+
+
+def test_a_busy_queue_does_not_starve_a_waiter(tmp_path):
+    """The lock must wait on PROGRESS, not on a wall clock.
+
+    A waiter used to give up 5 seconds in while the lock it found was 0.2 seconds old: it
+    had been taken and released repeatedly the whole time and this waiter simply kept
+    losing the race. A fixed deadline cannot tell "one holder is stuck" from "eleven other
+    writers are getting on with it" - and the second is exactly what parallel Workflow
+    dispatch looks like (live flake, 2026-08-29, caught by a pre-commit run).
+
+    Measured before and after with 24 concurrent writers: 16 starved and 16 updates lost,
+    against 0 and 0. At 12 - what test_concurrent_mutations_do_not_lose_updates uses -
+    the old code passed almost always, which is why this only ever surfaced as a flake.
+
+    This test drives the LOCK directly rather than 24 subprocesses: the property is that a
+    waiter behind a moving queue keeps waiting, and that is cheap to state exactly."""
+    import threading
+    import time as _time
+
+    from scripts.engagement_state import _LOCK_WAIT_SECONDS, _state_lock
+
+    pack = tmp_path / "pack"
+    pack.mkdir()
+    stop = threading.Event()
+    churn_error = []
+
+    def churn():
+        # Hand the lock over again and again for longer than a waiter's whole deadline.
+        # Nothing here is stuck, so nothing should time out.
+        deadline = _time.time() + _LOCK_WAIT_SECONDS * 1.5
+        try:
+            while _time.time() < deadline and not stop.is_set():
+                with _state_lock(pack):
+                    _time.sleep(0.01)
+        except SystemExit as exc:  # pragma: no cover - would be the bug itself
+            churn_error.append(str(exc))
+
+    holders = [threading.Thread(target=churn) for _ in range(4)]
+    for t in holders:
+        t.start()
+    try:
+        _time.sleep(_LOCK_WAIT_SECONDS * 1.2)  # outlast a fixed deadline
+        with _state_lock(pack):
+            acquired = True
+    finally:
+        stop.set()
+        for t in holders:
+            t.join(timeout=30)
+
+    assert acquired, "a waiter behind a moving queue must eventually get the lock"
+    assert not churn_error, f"a busy queue starved its own writers: {churn_error}"
+
+
+def test_one_stuck_holder_still_times_a_waiter_out(tmp_path):
+    """The other half, and the reason the deadline exists at all.
+
+    Restarting the clock on every hand-over must not become "wait forever": a holder that
+    never lets go has to exhaust a waiter, or a stuck process jams the pack silently. The
+    deadline now measures the thing that is actually wrong - ONE holder not letting go -
+    rather than how busy everyone else is."""
+    import os
+    import time as _time
+
+    from scripts.engagement_state import LOCK_FILENAME, _LOCK_WAIT_SECONDS, _state_lock
+
+    pack = tmp_path / "pack"
+    pack.mkdir()
+    lock = pack / LOCK_FILENAME
+    fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    os.write(fd, b"12345:deadbeef")  # a holder that will never move
+    os.close(fd)
+
+    started = _time.time()
+    with pytest.raises(SystemExit) as caught:
+        with _state_lock(pack):
+            pass
+    waited = _time.time() - started
+    assert "holds the lock" in str(caught.value)
+    assert waited >= _LOCK_WAIT_SECONDS * 0.8, "it must actually wait before giving up"

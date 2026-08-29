@@ -97,9 +97,11 @@ import json
 # of the more AV-expensive import shapes on Windows. argparse (14.7ms, the largest single
 # import here) stays at module level - every CLI invocation genuinely needs it.
 import os
+import random
 import pathlib
 import sys
 import time
+import uuid
 from pathlib import Path, PurePosixPath
 
 STATE_FILENAME = "engagement-state.json"
@@ -1298,7 +1300,18 @@ def render_files(
 
 
 _LOCK_STALE_SECONDS = 30  # a single CLI mutation is a short in-process op; older = a dead holder
+
+# How long ONE unchanging holder may keep the lock before a waiter gives up. Not a budget
+# for the whole wait: the clock restarts every time the lock changes hands, because a lock
+# that keeps turning over is a busy system, not a stuck one (see _state_lock).
 _LOCK_WAIT_SECONDS = 5
+
+# Retry delay, as a base plus jitter. The jitter is the point. With a fixed interval every
+# waiter wakes on the same 50ms boundary and races for the same file, so the OS can favour
+# the same threads repeatedly and one waiter is beaten to it over and over - starvation,
+# not slowness. Randomising each waiter's next attempt breaks that lockstep.
+_LOCK_RETRY_BASE_SECONDS = 0.01
+_LOCK_RETRY_JITTER_SECONDS = 0.06
 
 
 @contextlib.contextmanager
@@ -1311,29 +1324,60 @@ def _state_lock(artifacts_dir: Path):
     no error from either process. Portable (os.O_CREAT | os.O_EXCL only, no fcntl/msvcrt
     dependency) since this project's install targets include Windows; a stale lock from a
     process that died mid-mutation is reclaimed by age rather than left to jam every
-    future command against the pack forever."""
+    future command against the pack forever.
+
+    WAITING IS PROGRESS-AWARE, and that is the whole design. A fixed deadline cannot tell
+    "one holder is stuck" from "eleven other writers are getting on with it", and the
+    second is exactly what parallel Workflow dispatch looks like. A waiter used to give up
+    5 seconds in while the lock it found was 0.2 seconds old - it had been taken and
+    released repeatedly the whole time, and the waiter simply kept losing the race (live
+    flake, 2026-08-29).
+
+    So the deadline restarts whenever the lock changes hands, identified by INODE rather
+    than mtime: a fresh O_EXCL create makes a new inode, while mtime can repeat inside one
+    filesystem timestamp tick and would report two different holders as one. A dead holder
+    is still handled, by _LOCK_STALE_SECONDS - that is what the absolute bound is for, and
+    it is a better bound than a wait deadline because it measures the thing that is
+    actually wrong."""
     lock_path = artifacts_dir / LOCK_FILENAME
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     deadline = time.time() + _LOCK_WAIT_SECONDS
+    held_by = None  # token of the holder we are currently waiting behind
     fd = None
     while fd is None:
         try:
             fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except FileExistsError:
             try:
-                age = time.time() - lock_path.stat().st_mtime
-            except FileNotFoundError:
-                continue  # released between our open() and stat() - retry immediately
+                stat = lock_path.stat()
+                token = lock_path.read_bytes()
+            except (FileNotFoundError, OSError):
+                continue  # released between our open() and read - retry immediately
+            age = time.time() - stat.st_mtime
             if age > _LOCK_STALE_SECONDS:
                 lock_path.unlink(missing_ok=True)  # holder is gone - reclaim it
                 continue
+            if token and token != held_by:
+                # It changed hands, so the system is making progress and nothing is stuck.
+                # Only a holder that will not let go should ever exhaust a waiter. An EMPTY
+                # read is the created-but-not-yet-stamped window, not a new holder -
+                # treating it as one would restart the deadline forever.
+                held_by = token
+                deadline = time.time() + _LOCK_WAIT_SECONDS
             if time.time() >= deadline:
                 raise SystemExit(
                     f"another engagement_state process holds the lock on {artifacts_dir} "
                     f"(age {age:.1f}s) - if it's genuinely dead, delete {lock_path} by hand"
                 )
-            time.sleep(0.05)
+            time.sleep(_LOCK_RETRY_BASE_SECONDS + random.random() * _LOCK_RETRY_JITTER_SECONDS)
     try:
+        # Stamp WHO holds it, so a waiter can tell one stuck holder from a busy queue.
+        # Best-effort: a lock that cannot be stamped is still a lock, it just costs
+        # waiters the progress signal.
+        try:
+            os.write(fd, f"{os.getpid()}:{uuid.uuid4().hex}".encode())
+        except OSError:
+            pass
         os.close(fd)
         yield
     finally:
