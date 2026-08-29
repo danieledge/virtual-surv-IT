@@ -287,6 +287,18 @@ def test_v1_registers_v2_alias() -> None:
         ok, note = ih._verify_alias_line("bash", Path.home() / ".bashrc", line, marker=marker)
         check(f"{marker} resolves in a shell", ok, True)
 
+    # virt-surv2's function must carry the SAME go handshake, or the launcher can
+    # emit a decision that nothing acts on - a launcher that does not launch.
+    v2_line = next(x for x in lines if x.lstrip().startswith(ih._ALIAS2_MARKER))
+    check("virt-surv2 handles go", '"$1" = "go"' in v2_line, True)
+    check("virt-surv2 honours the abort code", "97" in v2_line, True)
+    check("virt-surv2 passes the decision to the launch command",
+          "__v2_d" in v2_line, True)
+    check("virt-surv2 supports the cd handshake",
+          "VIRT_SURV_CD_FILE" in v2_line, True)
+    check("virt-surv2 resolves the launch command like v1 does",
+          "--launch-command" in v2_line, True)
+
     # Two constants in two files have to agree or heal_stale_aliases never fires and
     # every existing machine silently keeps the old single-alias block forever.
     import re as _re

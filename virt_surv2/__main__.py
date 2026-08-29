@@ -20,6 +20,7 @@ Exit code is the engine's own, so this substitutes for `install_helper.py` in a 
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -162,6 +163,17 @@ def main(argv=None) -> int:
         # The launcher's contract, shared with `virt-surv go`: the decision is the ONLY
         # thing on stdout, and 97 means the human backed out so the wrapper launches
         # nothing. A bare print of None would put "None" on the decision channel.
+        # If the user opened a different folder in the launcher, ask the parent shell
+        # to cd there - a child process cannot do it, which is exactly why the wrapper
+        # passes a temp file. Same VIRT_SURV_CD_FILE contract virt-surv go uses.
+        cd_file = os.environ.get("VIRT_SURV_CD_FILE")
+        chosen = getattr(app, "project", None)
+        if cd_file and chosen and Path(chosen).resolve() != project.resolve():
+            try:
+                Path(cd_file).write_text(str(Path(chosen).resolve()), encoding="utf-8")
+            except OSError:
+                pass                    # cosmetic - never fail a launch over a cd
+
         decision = getattr(app, "decision", None)
         if decision is None:
             return E.ABORT_EXIT_CODE

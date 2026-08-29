@@ -5839,7 +5839,7 @@ _ALIAS2_MARKER = "virt-surv2"
 # v6 (2026-08-19): the shell fast path matches 'engage' as well as 'go' - `virt-surv
 # engage` now LAUNCHES (it used to be project setup, which read as the opposite of
 # /engage in-session). heal_stale_aliases rewrites v5 definitions at the next launch.
-_ALIAS_VERSION = 8
+_ALIAS_VERSION = 9
 _ALIAS_STAMP = f"# {_ALIAS_MARKER}-alias-v{_ALIAS_VERSION}"
 
 # Any version's stamp - the removal marker for _strip_stamped_definitions.
@@ -5882,9 +5882,27 @@ def _alias_line_for(rc_path: Path, interpreter: str, launcher_path, script_path)
             # heal_stale_aliases keeps it current, and defined SEPARATELY so the two
             # can be run side by side (that is the whole point of v2 existing).
             f"\nfunction {_ALIAS2_MARKER} {{ "
+            f'if ($args.Count -gt 0 -and ($args[0] -eq "go" -or $args[0] -eq "engage")) {{ '
+            f"$__v2Rest = @(); if ($args.Count -gt 1) {{ $__v2Rest = $args[1..($args.Count-1)] }}; "
+            f'$__v2Cmd = @((& "{interpreter}" "{launcher_path}" --launch-command) -split " +"); '
+            f'if (-not $__v2Cmd) {{ $__v2Cmd = @("claude") }}; '
+            f"$__v2CmdArgs = @($__v2Cmd | Select-Object -Skip 1); "
+            f"$__v2F = [System.IO.Path]::GetTempFileName(); "
+            f"$env:VIRT_SURV_CD_FILE = $__v2F; "
             f'Push-Location "{Path(script_path).parent}"; '
-            f'try {{ & "{interpreter}" -m virt_surv2 @args }} '
-            f"finally {{ Pop-Location }} }} {_ALIAS_STAMP}"
+            f'try {{ $__v2D = & "{interpreter}" -m virt_surv2 go }} finally {{ Pop-Location }}; '
+            f"$__v2R = $LASTEXITCODE; "
+            f"Remove-Item Env:\\VIRT_SURV_CD_FILE -ErrorAction SilentlyContinue; "
+            f"$__v2Go = (Get-Content $__v2F -Raw -ErrorAction SilentlyContinue); "
+            f"Remove-Item $__v2F -ErrorAction SilentlyContinue; "
+            f"if ($__v2Go -and $__v2Go.Trim()) {{ Set-Location $__v2Go.Trim() }}; "
+            f"if ($__v2R -ne 97) {{ "
+            f'if ($__v2D) {{ & $__v2Cmd[0] @__v2CmdArgs "$__v2D" @__v2Rest }} '
+            f"else {{ & $__v2Cmd[0] @__v2CmdArgs @__v2Rest }} }} "
+            f"}} else {{ "
+            f'Push-Location "{Path(script_path).parent}"; '
+            f'try {{ & "{interpreter}" -m virt_surv2 @args }} finally {{ Pop-Location }} '
+            f"}} }} {_ALIAS_STAMP}"
         )
     return (
         f"{_ALIAS_MARKER}() {{ "
@@ -5898,9 +5916,24 @@ def _alias_line_for(rc_path: Path, interpreter: str, launcher_path, script_path)
         f'rm -f "$__vt_f"; '
         f'if [ "$__vt_r" -ne 97 ]; then $__vt_c ${{__vt_d:+"$__vt_d"}} "$@"; fi; '
         f'else "{interpreter}" "{script_path}" "$@"; fi; }} {_ALIAS_STAMP}'
-        # See the PowerShell branch above: same stamp, separate name.
-        f'\n{_ALIAS2_MARKER}() {{ ( cd "{Path(script_path).parent}" && '
-        f'"{interpreter}" -m virt_surv2 "$@" ); }} {_ALIAS_STAMP}'
+        # See the PowerShell branch above: same stamp, separate name. `go` runs the
+        # same handshake virt-surv's does - stdout is the decision, 97 means launch
+        # nothing, VIRT_SURV_CD_FILE is how a child asks the parent shell to cd - so
+        # the two front doors behave identically from the shell's point of view.
+        f'\n{_ALIAS2_MARKER}() {{ '
+        f'if [ "$1" = "go" ] || [ "$1" = "engage" ]; then shift; '
+        f'local __v2_c __v2_d __v2_f __v2_r; '
+        f'__v2_c="$("{interpreter}" "{launcher_path}" --launch-command)"; '
+        f'[ -n "$__v2_c" ] || __v2_c=claude; '
+        f'__v2_f="$(mktemp 2>/dev/null || echo "${{TMPDIR:-/tmp}}/virt-surv2-cd.$$")"; '
+        f'__v2_d="$(cd "{Path(script_path).parent}" && '
+        f'VIRT_SURV_CD_FILE="$__v2_f" "{interpreter}" -m virt_surv2 go)"; '
+        f"__v2_r=$?; "
+        f'if [ -s "$__v2_f" ]; then cd "$(cat "$__v2_f")" || true; fi; '
+        f'rm -f "$__v2_f"; '
+        f'if [ "$__v2_r" -ne 97 ]; then $__v2_c ${{__v2_d:+"$__v2_d"}} "$@"; fi; '
+        f'else ( cd "{Path(script_path).parent}" && "{interpreter}" -m virt_surv2 "$@" ); fi; '
+        f'}} {_ALIAS_STAMP}'
     )
 
 

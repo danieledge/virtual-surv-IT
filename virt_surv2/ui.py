@@ -71,7 +71,12 @@ class Responsive(Screen):
 
     def on_resize(self, event) -> None:
         self.set_class(event.size.width < NARROW, "-narrow")
-        self.paint()
+        # Not every screen repaints from state - the input screens build themselves in
+        # on_mount and have nothing to redraw. Assuming paint() existed crashed them on
+        # the first resize, which in a terminal is the very first event they see.
+        painter = getattr(self, "paint", None)
+        if callable(painter):
+            painter()
 
     @property
     def narrow(self) -> bool:
@@ -733,18 +738,24 @@ class LaunchScreen(Responsive):
         if not self.selectable:
             return
         kind, payload = self.rows[self.selectable[self.cursor]]
-        if event.key in ("down", "j"):
+        # Arrows only here, NOT vim j/k: this screen advertises [j] for Jira, and a
+        # vim binding silently ate it - the row printed a hotkey that moved the cursor.
+        # v1's launcher binds arrows only for the same reason.
+        if event.key == "down":
             self.cursor = (self.cursor + 1) % len(self.selectable)
-        elif event.key in ("up", "k"):
+        elif event.key == "up":
             self.cursor = (self.cursor - 1) % len(self.selectable)
-        elif event.key == "c" or (event.key == "enter" and kind == "act"
-                                  and ACTIONS[payload][0] == "c"):
-            event.stop()
-            self.app.push_screen(SettingsScreen(str(self.project)))
-            return
         elif event.key == "enter":
             event.stop()
             self._choose(kind, payload)
+            return
+        elif any(event.key == k for k, _l, _b in ACTIONS if k):
+            # The rows advertise [n] [j] [c] [o] [v] [a] [b]; only [c] was wired, so
+            # every other one silently did nothing - a hotkey that is printed and
+            # ignored is worse than one that was never offered.
+            event.stop()
+            idx = next(i for i, (k, _l, _b) in enumerate(ACTIONS) if k == event.key)
+            self._choose("act", idx)
             return
         else:
             return

@@ -640,6 +640,27 @@ def test_every_launcher_row_is_wired() -> None:
                  or A.LaunchScreen.ENGINE_ACTIONS.get(key) in E.RUN_FUNCTIONS)
         check(f"[{key or ' '}] {label[:34]}", wired, True)
 
+    # A hotkey that is printed on the row and then ignored is worse than one never
+    # offered: [n] [j] [o] [v] [a] [b] were all advertised and only [c] worked.
+    async def hotkeys():
+        rows = [{"title": "x", "status": "open", "mark": "●", "mark_style": "",
+                 "recommended": True, "lines": [("status", "open")]}]
+        for key, label, _b in A.ACTIONS:
+            if not key:
+                continue
+            app = A.VirtSurvApp(start="launch", frozen=True, project="/tmp/p", rows=rows)
+            async with app.run_test(size=(100, 34)) as p:
+                await p.pause()
+                before = type(app.screen).__name__
+                await p.press(key)
+                await p.pause()
+                moved = (type(app.screen).__name__ != before
+                         or not app._running
+                         or bool(getattr(app.screen, "note", "")))
+                check(f"hotkey [{key}] does something", moved, True)
+
+    asyncio.run(hotkeys())
+
     for key, action in A.LaunchScreen.ENGINE_ACTIONS.items():
         check(f"[{key}] -> {action} exists", action in E.RUN_FUNCTIONS, True)
 
@@ -650,6 +671,42 @@ def test_every_launcher_row_is_wired() -> None:
                     / "virt_team_launcher.py").read_text(encoding="utf-8")
     check("97 is the launcher's own abort code",
           "_ABORT_EXIT_CODE = 97" in launcher_src, True)
+
+
+def test_every_screen_survives_a_resize() -> None:
+    """Resize is the first event a screen sees in a real terminal.
+
+    Responsive.on_resize called self.paint() unconditionally; the input screens have
+    no paint, so opening one and resizing - or simply opening it under a pty - raised
+    AttributeError from the base class.
+    """
+    from virt_surv2 import ui as A
+    section("P  every screen survives a resize")
+
+    for name in ("JiraScreen", "OpenProjectScreen", "FirstRunScreen"):
+        cls = getattr(A, name)
+        check(f"{name} exists", cls is not None, True)
+
+    async def run():
+        for name, make in (
+            ("JiraScreen", lambda: A.JiraScreen("/tmp/p")),
+            ("OpenProjectScreen", lambda: A.OpenProjectScreen("/tmp/p")),
+            ("FirstRunScreen", lambda: A.FirstRunScreen("/tmp/p")),
+        ):
+            app = A.VirtSurvApp(start="launch", frozen=True, project="/tmp/p", rows=[])
+            async with app.run_test(size=(100, 34)) as p:
+                await p.pause()
+                app.push_screen(make())
+                await p.pause()
+                check(f"{name} opens", type(app.screen).__name__, name)
+                await app._on_resize_test(60) if False else None
+                app.screen.post_message(__import__("textual").events.Resize(
+                    __import__("textual").geometry.Size(60, 30),
+                    __import__("textual").geometry.Size(60, 30)))
+                await p.pause()
+                check(f"{name} survives a resize", app._running, True)
+
+    asyncio.run(run())
 
 
 def test_first_run_offer() -> None:
@@ -863,6 +920,7 @@ if __name__ == "__main__":
     test_failure_modes()
     test_step_labels_make_sense()
     test_every_launcher_row_is_wired()
+    test_every_screen_survives_a_resize()
     test_first_run_offer()
     test_menu_parity_with_v1()
     test_analysers()
