@@ -221,8 +221,8 @@ def test_settings() -> None:
         async with a.run_test(size=(104, 34)) as p:
             await p.pause()
             scr = a.screen
-            check("settings: 18 rows from the generated data", len(scr.rows), 18)
-            check("settings: groups", len(A.SETTING_GROUPS), 6)
+            check("settings rows from the generated data", len(scr.rows), 25)
+            check("settings: groups", len(A.SETTING_GROUPS), 7)
             check("settings: every row has help text",
                   all(r["what"] for r in scr.rows), True)
 

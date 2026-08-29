@@ -341,11 +341,11 @@ def test_settings_rows() -> None:
         async with a.run_test(size=(104, 40)) as p:
             await p.pause()
             scr = a.screen
-            check("18 rows", len(scr.rows), 18)
+            check("25 rows", len(scr.rows), 25)
             labels = [r["label"] for r in scr.rows]
-            check("no duplicate labels", len(set(labels)), 18)
+            check("no duplicate labels", len(set(labels)), 25)
             keys = [r["key"] for r in scr.rows]
-            check("no duplicate keys", len(set(keys)), 18)
+            check("no duplicate keys", len(set(keys)), 25)
 
             for i, r in enumerate(scr.rows):
                 scr.cursor = i
@@ -373,7 +373,7 @@ def test_settings_rows() -> None:
                     await p.press("space")
                 else:
                     await p.press("right")
-            check("all 18 marked changed", len(scr.changed), 18)
+            check("all rows marked changed", len(scr.changed), 25)
             await p.press("d")
             check("d restores every default",
                   [r["value"] for r in scr.rows],
@@ -624,7 +624,13 @@ def test_menu_parity_with_v1() -> None:
 
     v1_adv = {v for v in tables["_ADVANCED_ACTIONS"].values()} - {"back"}
     v2_adv = {a for a, _l, _b in A.ADVANCED}
-    check("advanced covers every v1 action", sorted(v1_adv - v2_adv), [])
+    # An item may be absent only if DEDUPED says where it went - so "we consolidated
+    # this on purpose" and "we forgot this" can never look the same.
+    check("advanced covers every v1 action (or records where it moved)",
+          sorted(v1_adv - v2_adv - set(A.DEDUPED)), [])
+    for action, where in A.DEDUPED.items():
+        check(f"{action} names its destination", len(where) > 20, True)
+        check(f"{action} is genuinely a v1 action", action in v1_adv, True)
 
     v1_diag = {v for v in tables["_DIAGNOSTICS_ACTIONS"].values()} - {"back"}
     v2_diag = {a for a, _l, _b in A.DIAGNOSTICS}

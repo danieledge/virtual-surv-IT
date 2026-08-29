@@ -897,8 +897,6 @@ ADVANCED: list[tuple[str, str, str]] = [
      "This machine, no code pull: marketplace, plugin, status line, enablement."),
     ("statusline", "Status line",
      "This machine - shown in every project."),
-    ("formats", "Project preferences",
-     "docx, citations, review tools."),
     ("model", "Morgan's model",
      "Per project only."),
     ("demo", "Demo",
@@ -949,6 +947,15 @@ DIAGNOSTICS: list[tuple[str, str, str]] = [
 
 # Items that write to a shell profile need a second, deliberate keypress.
 SHELL_WRITERS = {"fixbashrc", "aliasmanage", "gitbashperf"}
+
+# v1 Advanced items deliberately NOT duplicated here, and where they went instead.
+# The parity test allows these and requires a destination for each, so "missing" and
+# "moved on purpose" stay different things.
+DEDUPED = {
+    "formats": "the settings screen - project settings belong on the project you are "
+               "in, reached with [c] from the launcher. Its docx, citations and "
+               "per-project analyser toggles are all there.",
+}
 
 
 class AdvancedRow(Static):
