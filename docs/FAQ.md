@@ -217,7 +217,7 @@ where that step slots into the flow.
 
 ---
 
-Next: [Overview](OVERVIEW.md) · [Demos](demos/README.md) · [Glossary](glossary.md) · [README](../README.md)
+Next: [Overview](OVERVIEW.md) · [Demos](demos/review-demo.md) · [Glossary](glossary.md) · [README](../README.md)
 
 ## Startup feels slow in a project with lots of old engagements - can I speed it up?
 

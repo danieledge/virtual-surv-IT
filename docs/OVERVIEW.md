@@ -262,4 +262,4 @@ it organises and does the work - you stay in the loop at the decision points.
 
 ---
 
-Next: [Demos](demos/README.md) · [FAQ](FAQ.md) · [Glossary](glossary.md) · [README](../README.md)
+Next: [Demos](demos/review-demo.md) · [FAQ](FAQ.md) · [Glossary](glossary.md) · [README](../README.md)

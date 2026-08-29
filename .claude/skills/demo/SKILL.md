@@ -76,7 +76,7 @@ agents). State the token ballpark so the choice is informed. Pick a small, safe 
 7. **performance-reviewer** (static) - will it scale at surveillance volume?
 8. **Compile the delivery** - the PM writes the consolidated **delivery report** (RTM, finding
    dispositions, DoD status, developer handover, **token-usage table**) and renders every artifact to
-   `.md` + `.html` under `VSIT/engagements/` (or, for a keepable showcase, `docs/demos/build-artifacts/`).
+   `.md` + `.html` under `VSIT/engagements/`.
 
 **State the gates plainly:** the delivery is *demo-complete* but **say plainly it's NOT deployable**
 until the deploy gates close (re-calibrate on real labelled data, fix any scalability finding, and
@@ -92,9 +92,10 @@ on the roadmap).
 **5. Close - explain what was shown and how to do it for real.** Recap the patterns demonstrated in
 3-4 bullets, then hand back: *"That's the team end-to-end. To put it to work on your own code, type
 `/engage` and describe what you've got - I'll take it from there."* Offer to run a different demo
-flavour. Never dead-end. *(For the Build demo, a committed reference run lives at
-`docs/demos/build-artifacts/` - point the user there to read a complete delivery without spending
-the tokens.)*
+flavour. Never dead-end. *(Short of tokens? A captured review run lives at
+`docs/demos/review-demo.md` - point the user there to read a real session for free. There is no
+longer a committed Build reference run: the old one was captured pre-0.16 and was removed on
+2026-08-29 rather than left standing as a record of behaviour the team no longer has.)*
 
 > Narrate what genuinely happened (real agent outputs, real guard blocks, real
 > eval scores) - never fake a step for effect. If an analyser is missing or a finding is inferred,

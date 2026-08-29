@@ -218,7 +218,8 @@ banner · Windows permission-rule spelling (37).
   (workflow-dispatch.md).
 - ~3-hour deep review stall (CHANGELOG 0.33.45).
 - Snapshot ~6,196ms → ~261ms, ~15x (commit 7c6968a).
-- ~500k tokens / $4-8 full 9-agent delivery (docs/demos/build-artifacts/delivery-report.md);
+- ~500k tokens / $4-8 full 9-agent delivery (measured; the captured delivery it came
+  from was pre-0.16 and was removed on 2026-08-29, so the figure stands on this record);
   ~182k 8-agent delivery; ~51k / ~$2 one code review (README).
 - $12.66 Flask review run; $14.80 eval case; $2.3-$102 per-engagement spread at 0.29.0.
 - Persona anchor ~$0.04 of a $62.48 run (0.07%, ADR-012).

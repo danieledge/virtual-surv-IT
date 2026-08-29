@@ -13,7 +13,7 @@ L3 of the 2026-08-14 review flagged the persona layer (🎩 voice-marking, 16 na
 ceremony) as adding "per-turn token and rule-compliance surface whose value is unmeasured."
 
 Measuring it against the actual shipped code and a real logged engagement
-(`docs/demos/build-artifacts/delivery-report.md` §6, ~500k tokens / $4-8 at list price) puts the
+(measured, ~500k tokens / $4-8 at list price; the captured delivery was removed 2026-08-29) puts the
 token cost at **~1 cent per full engagement** (~0.2-0.3% of total spend):
 
 - `_ANCHOR` (fires once/engagement): 1,027 chars / 147 words ≈ 257 tokens

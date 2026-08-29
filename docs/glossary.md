@@ -47,4 +47,4 @@ The domain and spec shorthand used throughout the repo and the team's artifacts.
 
 ---
 
-Next: [Overview](OVERVIEW.md) · [Demos](demos/README.md) · [FAQ](FAQ.md) · [README](../README.md)
+Next: [Overview](OVERVIEW.md) · [Demos](demos/review-demo.md) · [FAQ](FAQ.md) · [README](../README.md)

@@ -83,17 +83,16 @@ The team builds the tooling; a person signs off every step.
 > regulatory advice.**
 
 **New to AI agents?** Start with [`docs/OVERVIEW.md`](docs/OVERVIEW.md), a plain-English tour.
-**See it work:** the end-to-end [build demo](docs/demos/build-demo.md) on synthetic data
-(artifacts in [`docs/demos/build-artifacts/`](docs/demos/build-artifacts/)) ·
-[review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md) transcripts.
+**See it work:** the [review demo](docs/demos/review-demo.md) transcript, and a full-lifecycle
+[eval run](docs/demos/transcripts/eval-full-lifecycle-20260801.md) captured end to end.
 
 > ⏱️ **Try it in 60 seconds.** Type **`/demo`** - from the repo opened as a project, or
 > `/compliance-surveillance-team:demo` from a plugin install - and Morgan runs a real engagement
 > end-to-end on safe synthetic data, narrating every decision. The Review flavour is light on
 > tokens; a full guided Build delivery is a real 9-agent run and costs roughly **$4-8 in API
 > tokens** (the measured number in [Token usage](#-token-usage--optimisation)). No tokens to
-> spare? The same runs are captured as pre-recorded transcripts in
-> [`docs/demos/README.md`](docs/demos/README.md) - reading those is free.
+> spare? A review run is captured verbatim in
+> [`docs/demos/review-demo.md`](docs/demos/review-demo.md) - reading it is free.
 
 ---
 
@@ -208,7 +207,7 @@ What the team gives you today, each row tied to where the claim is enforced or d
 | A real engineering team, right-sized | Morgan (PM) + 13 specialist subagents, with domain typology advice as three in-line knowledge packs ([`docs/sme/`](docs/sme/README.md), zero spawn cost); a typical task fires only 2-5 agents, and the PM states the intended count at the gate. | [`docs/agent-design.md`](docs/agent-design.md) · [Meet the team](#-meet-the-team) |
 | Independent review by construction | Advisors and reviewers hold no `Write`/`Edit` tools; QA and validation run as separate agents from the build. More than rules: pipelines/ETL, scripts, ML, reviews and docs all route to their own specialist. | Tool grants in [`.claude/agents/`](.claude/agents/), pinned by [`tests/test_docs_consistency.py`](tests/test_docs_consistency.py) · routing table in [`docs/team-operating-guide.md`](docs/team-operating-guide.md) |
 | Stateful, crash-safe engagement lifecycle | Per-engagement `VSIT/engagements/<slug>/` workspaces, a machine-readable state file (⏳ · ⛔ · 🔒 closing · ✅), a close that runs the mechanical gate and refuses on findings, and disk-first resume of state, intake answers and consent outcome. | ADR-008 · ADR-006 · [`docs/releases/0.33.md`](docs/releases/0.33.md) |
-| Safety guards: always-on data wall, session-scoped gates | Raw data under `data/raw/` blocked from the model in EVERY session; the execution gate and settings write-protection arm only in sessions that invoked the team (2026-08-17 - a dormant session is plain Claude Code), while the consent marker, hook files and git execution config stay write-protected everywhere. | [`docs/safety-model.md`](docs/safety-model.md) · the [data-safety demo](docs/demos/data-safety-demo.md) |
+| Safety guards: always-on data wall, session-scoped gates | Raw data under `data/raw/` blocked from the model in EVERY session; the execution gate and settings write-protection arm only in sessions that invoked the team (2026-08-17 - a dormant session is plain Claude Code), while the consent marker, hook files and git execution config stay write-protected everywhere. | [`docs/safety-model.md`](docs/safety-model.md) |
 | Document conversion front door | Excel/CSV/PDF/DOCX read via the vendored converter - no pip needed - with a JSON evidence report every run; a PreToolUse hook redirects binary-document reads to it. | [`docs/house-rules.md`](docs/house-rules.md) · [`scripts/convert_file.py`](scripts/convert_file.py) · [`scripts/document_input_redirect.py`](scripts/document_input_redirect.py) |
 | A real review subsystem | Context-routed lenses, the standard analysers per language, schema-validated findings packs rendered to one canonical layout, and a build fingerprint tying the reviewed code to the shipped artifact. | [`docs/code-review-method.md`](docs/code-review-method.md) · [`docs/review/`](docs/review/) · the [review demo](docs/demos/review-demo.md) |
 | Independent QA + a mechanical DoD gate | A close only counts when `check_artifacts` passes - finding codes like `STALE-INDEX`, `FINAL-BEFORE-CLOSE`, `ROSTER-UNKNOWN` catch the failure modes that actually happened live. Iteration history stays visible append-only (journey strip, QA cycles). | [`docs/DEFINITION-OF-DONE.md`](docs/DEFINITION-OF-DONE.md) · [`scripts/check_artifacts.py`](scripts/check_artifacts.py) |
@@ -219,7 +218,7 @@ What the team gives you today, each row tied to where the claim is enforced or d
 | Console & UX discipline | Progress in the native task list (TodoWrite), every clarification via the question tool, a statusline showing dormant-vs-engaged, and a clean console with detail in artifacts. | [`docs/team-operating-guide.md`](docs/team-operating-guide.md) · [`scripts/statusline.sh`](scripts/statusline.sh) |
 | Explicit AI identity | Every roster name in an artifact is marked 🤖 + "Virtual Surveillance IT"; an agent never shares a sign-off line with a human - mechanically checked. | [FAQ](docs/FAQ.md) · `AGENT-UNMARKED` / `AGENT-HUMAN-COMBINED` in [`scripts/check_artifacts.py`](scripts/check_artifacts.py) |
 | Claude Code native, dormant by default | A plugin with per-project enablement; skills cost ~nothing until `/engage`; a guided installer walks the whole flow (`python install_helper.py`). | [Claude Code features](#-claude-code-features-this-team-is-built-on) · [Quick start](#-quick-start) |
-| Documentation generation | Every deliverable in `.md` + `.html`, plus a close-only summary email signed by Morgan. | [`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md) · real output in [`docs/demos/build-artifacts/`](docs/demos/build-artifacts/) |
+| Documentation generation | Every deliverable in `.md` + `.html`, plus a close-only summary email signed by Morgan. | [`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md) · [`docs/templates/`](docs/templates/) |
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
@@ -1064,7 +1063,7 @@ so ±15%); the rest are estimates with no run behind them yet:
 |---|---|---|---|
 | One `code-reviewer` review (opus; **measured** in the build demo) | **~51k** | **~$2** | per review agent |
 | A lean engagement (intake + scorer + reviewer + synthesis), *estimate* | ~35-50k | ~$0.50-1.00 | per engagement |
-| A **full build → 3 reviews → tuning → performance** delivery (9 agent runs, **measured**) | **~500k** | **~$4-8** | the heavy end, a complete reviewed+calibrated deliverable (see the [build demo](docs/demos/build-artifacts/delivery-report.md) §6) |
+| A **full build → 3 reviews → tuning → performance** delivery (9 agent runs, **measured**) | **~500k** | **~$4-8** | the heavy end, a complete reviewed+calibrated deliverable |
 | A full fan-out (right-sizing off), *estimate* | ~500k+ | ~$5-10 | rarely, reserved for broad work |
 
 > 💵 **Cost basis (rough, ±2×; prices refreshed 2026-08-17).** At current list prices: **Opus 5
@@ -1084,10 +1083,12 @@ so ±15%); the rest are estimates with no run behind them yet:
 > retention keeps prompt caching but loses the Batch API's 50% discount, and Anthropic-side
 > analytics don't cover cloud usage - per-user cost visibility there needs OTEL or a gateway.
 >
-> 🧾 **Perspective:** the build demo's [delivery report](docs/demos/build-artifacts/delivery-report.md) §6
-> puts it plainly: that full 9-run delivery (~$4-8 API) is the routine ~80% of a real engagement
-> done in minutes, standing in for human effort measured in days, not dollars. *So people spend
-> their day on the judgement that matters.*
+> 🧾 **Perspective:** that full 9-run delivery (~$4-8 API) is the routine ~80% of a real
+> engagement done in minutes, standing in for human effort measured in days, not dollars.
+> *So people spend their day on the judgement that matters.* (The figure was measured on a
+> real 9-agent run; the captured delivery it came from was a pre-0.16 artifact and is no
+> longer published, so the number stands on this note rather than on a document you can
+> open.)
 
 **Optimisations in place** (these are the levers that matter, per Anthropic's cost guidance):
 - **Right-sizing**: the headline lever: a narrow change fires 2-3 agents, not 16; the PM states the
@@ -1218,7 +1219,7 @@ Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FA
 
 - 🆕 **New here** → [`docs/quick-start.pdf`](docs/quick-start.pdf)
   (one page, the whole mental model, renders directly on GitHub) → [`docs/OVERVIEW.md`](docs/OVERVIEW.md) (plain English, no prior knowledge) →
-  this README → [`docs/demos/README.md`](docs/demos/README.md) (real transcripts, nothing to
+  this README → [`docs/demos/review-demo.md`](docs/demos/review-demo.md) (a real transcript, nothing to
   run) → type **`/demo`**.
 - 🔧 **Extending the team** (agents/skills/menus) → [`docs/agent-design.md`](docs/agent-design.md)
   (design rationale + conformance matrix) → [`docs/team-operating-guide.md`](docs/team-operating-guide.md)
@@ -1237,7 +1238,7 @@ Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FA
 | [`docs/quick-start.pdf`](docs/quick-start.pdf) | **One-page quick-start reference** - the mental model, the four steps to a first engagement, and every command with when to use it (renders directly on GitHub; the [interactive HTML](https://htmlpreview.github.io/?https://github.com/danieledge/virtual-surv-IT/blob/dev/docs/quick-start.html) is also available) |
 | [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Plain-English tour, start here if you're new to agents/LLMs |
 | [`docs/FAQ.md`](docs/FAQ.md) | The questions a newcomer actually asks: evidence tags, hallucination, consent, the artifacts folder, Morgan |
-| [`docs/demos/README.md`](docs/demos/README.md) | Real captured demo transcripts (build, review, data-safety) - see the team work without running anything |
+| [`docs/demos/`](docs/demos/) | Captured transcripts - a review run and a full-lifecycle eval run; see the team work without running anything |
 | [`docs/EXTENDING.md`](docs/EXTENDING.md) | Extending the team for your organisation: recipes + the extensions contract, analyser registry, tool allowlist |
 | [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md) | First-class Jira and (experimental) PR-comment presence via your own MCP servers - **off by default**, project-scoped, one clear place to configure |
 | [`docs/team-operating-guide.md`](docs/team-operating-guide.md) | Standing rules, roster + routing table, question construction (read on-engage) |
