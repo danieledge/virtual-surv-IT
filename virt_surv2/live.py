@@ -30,9 +30,16 @@ STATUS_GLYPH = {"ok": ("✓", OK), "skip": ("–", HINT), "fail": ("✗", ERR)}
 # The titles are RELABELLED, never dropped: every step the engine runs still appears,
 # in its order, with its result. Only the wording changes.
 TITLE_OVERRIDES = {
-    "Quick setup or manual?": "Setup mode",
+    # Named for what the step DID, in words that mean something to someone who has
+    # never read this codebase. "Setup mode" was the first attempt and was no better
+    # than the question it replaced - it named a mechanism, not an outcome.
+    "Quick setup or manual?": "Applying your choices",
+    "Guard interpreter cache": "Safety guard cache",
+    "Pending hook fixes": "Hook updates",
     "Optional pip requirements": "Document output (.docx / .html)",
-    "Code intelligence (optional)": "Code intelligence",
+    "Code intelligence (optional)": "Code intelligence (tree-sitter)",
+    "Claude Code marketplace": "Plugin marketplace",
+    "Alias setup": "Shell shortcuts (virt-surv, virt-surv2)",
     "Machine defaults (optional)": "Machine defaults",
     "Enable for a project (optional)": "Enable for a project",
     "Status line (optional)": "Status line",
@@ -145,6 +152,7 @@ class LiveInstallScreen(Responsive):
         self.failure: str | None = None
         self.crash_detail: str = ""
         self.asked: list = []
+        self.self_updated = False
 
     def compose(self) -> ComposeResult:
         with Vertical(id="shell"):
@@ -253,6 +261,10 @@ class LiveInstallScreen(Responsive):
         t.append("   it sets the project up on first use\n", style=TEXT)
         t.append("\n  A Claude Code session already open elsewhere needs a restart.\n",
                  style=HINT)
+        if self.self_updated:
+            t.append("\n  The installer updated itself during this run - run ", style=GOLD)
+            t.append("virt-surv2", style=ACCENT)
+            t.append(" again\n  to pick up the new version.\n", style=GOLD)
         self.query_one("#steps", Static).update(t)
 
     # ── prompts ─────────────────────────────────────────────────────────────

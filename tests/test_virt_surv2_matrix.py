@@ -558,6 +558,35 @@ def test_analysers() -> None:
     check("bad path is survivable", E.analyser_specs(Path("/nope/nope")), [])
 
 
+def test_step_labels_make_sense() -> None:
+    """Every step title a user can see must read as an outcome, not a question or
+    an internal mechanism.
+
+    Reported twice: "(optional)" on steps nobody was offered, then "Setup mode",
+    which named a mechanism and meant nothing.
+    """
+    import re as _re
+
+    from virt_surv2.live import TITLE_OVERRIDES, display_title
+    section("M  step labels")
+
+    import install_helper as ih
+    raw = Path(ih.__file__).read_text(encoding="utf-8")
+    # Titles build_plan can emit, as literals in its (title, step) rows.
+    titles = set(_re.findall(r'\(\s*"([A-Z][^"]{3,60})",\s*self\.\w+\)', raw))
+    check("found build_plan titles", len(titles) > 8, True)
+
+    for title in sorted(titles):
+        shown = display_title(title)
+        check(f"{shown!r} is not a question", shown.endswith("?"), False)
+        check(f"{shown!r} does not say optional", "optional" in shown.lower(), False)
+
+    for shown in TITLE_OVERRIDES.values():
+        check(f"{shown!r} is not a question", shown.endswith("?"), False)
+        check(f"{shown!r} does not say optional", "optional" in shown.lower(), False)
+        check(f"{shown!r} is not jargon-only", shown.strip() != "", True)
+
+
 def test_menu_parity_with_v1() -> None:
     """Every option virt-surv offers must exist in virt-surv2.
 
@@ -718,6 +747,7 @@ if __name__ == "__main__":
     test_key_fuzz()
     test_responsive_matrix()
     test_failure_modes()
+    test_step_labels_make_sense()
     test_menu_parity_with_v1()
     test_analysers()
     test_discovery()

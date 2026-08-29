@@ -461,6 +461,41 @@ def run_action(ih, app, screen, action: str, choices: dict, repo: Optional[Path]
     return code
 
 
+def _disarm_self_reexec(installer, observer, screen) -> None:
+    """Stop the engine re-launching the CLASSIC installer underneath this UI.
+
+    _reexec_if_self_updated exists because a sync that pulls a new install_helper.py
+    leaves the rest of the run executing the OLD in-memory logic. Its fix is to
+    subprocess the fresh script and sys.exit() - correct for a terminal program, wrong
+    here: the child would write into our stdout capture and be invisible, and the
+    sys.exit lands in a worker thread, so a successful update would report as a failure.
+
+    So it is replaced with a note. The run finishes on the code it started with -
+    exactly what the engine does when the re-exec fails - and the finish screen says to
+    run virt-surv2 again.
+    """
+    original = getattr(installer, "_reexec_if_self_updated", None)
+    if original is None:
+        return
+
+    def _note_instead() -> None:
+        try:
+            fresh = (installer.repo / "install_helper.py") if installer.repo else None
+            if not fresh or not fresh.is_file():
+                return
+            import pathlib as _pl
+            running = _pl.Path(installer.__class__.__module__ and
+                               sys.modules[installer.__class__.__module__].__file__).resolve()
+            if running.read_bytes() == fresh.read_bytes():
+                return
+        except OSError:
+            return
+        screen.self_updated = True
+        observer.line("the installer updated itself - run virt-surv2 again to use it")
+
+    installer._reexec_if_self_updated = _note_instead
+
+
 def run_installer(ih, app, screen, choices: dict, repo: Optional[Path],
                   demo: bool, subset: str = "full", broker: PromptBroker | None = None) -> int:
     """Blocking; call on a worker thread. Returns the engine's own exit code.
@@ -483,6 +518,7 @@ def run_installer(ih, app, screen, choices: dict, repo: Optional[Path],
         installer = ih.Installer(build_args(choices, repo, demo), ih.Style(False),
                                  ih.marks(), subset=subset)
         installer.observer = observer
+        _disarm_self_reexec(installer, observer, screen)
 
         ih.ask, ih.confirm = answers.ask, answers.confirm
         cap = _Capture(observer.line)
