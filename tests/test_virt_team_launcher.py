@@ -1983,3 +1983,35 @@ def test_the_interactive_children_are_left_alone():
     assert mod._quiet_kwargs()["stdin"] is not None
     env = mod._no_prompt_env()
     assert env["GIT_TERMINAL_PROMPT"] == "0"
+
+
+def test_backing_out_of_first_time_setup_launches_nothing(tmp_path, monkeypatch, capsys):
+    """The end-to-end half: cancelling must reach the wrapper as exit 97.
+
+    _offer_first_time_setup returned a bool, so "the human left" had to be squeezed into
+    False - which already meant "not configured, go ahead and launch". That is why Esc
+    started a session. Cancel is a third answer now, and it exits 97 with EMPTY STDOUT,
+    which is what makes the shell function skip the launch rather than run a blank
+    command (live report 2026-08-29)."""
+    mod = _load()
+    import launcher_app
+
+    monkeypatch.setattr(launcher_app, "setup_screen", lambda p, m, **k: launcher_app.SETUP_CANCEL)
+    monkeypatch.setattr(mod, "_plugin_enabled", lambda p: False)
+    monkeypatch.chdir(tmp_path)
+    assert mod._offer_first_time_setup(tmp_path) == mod._ABORT
+
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == mod._ABORT_EXIT_CODE, "the wrapper only skips the launch on 97"
+    assert out.out.strip() == "", "stdout carries the decision - a cancel decides nothing"
+
+
+def test_skip_for_now_still_launches(tmp_path, monkeypatch):
+    """The other half. "Skip for now" is a deliberate choice that says launch without
+    configuring - turning it into an abort would break the option it names."""
+    mod = _load()
+    import launcher_app
+
+    monkeypatch.setattr(launcher_app, "setup_screen", lambda p, m, **k: launcher_app.SETUP_SKIP)
+    assert mod._offer_first_time_setup(tmp_path) is False

@@ -3924,14 +3924,18 @@ def _print_project_defaults(project_dir: Path) -> None:
         print(ink.dim(line), file=err)
 
 
-def _offer_first_time_setup(project_dir: Path) -> bool:
+def _offer_first_time_setup(project_dir: Path):
     """No team configuration here yet: offer the real first-time setup instead of a
     plain launch with a hint (2026-08-17 user request). The configure flow's own
     stdout is redirected onto OUR stderr - the caller captures this process's stdout
     via $(...) as the decision string, and a setup transcript leaking into it would
     become the session's opening prompt. Returns True only when the project actually
     ends up configured; every decline/failure path falls back to the explained plain
-    launch. Non-interactive callers (no tty, EOF) decline automatically."""
+    launch. Non-interactive callers (no tty, EOF) decline automatically.
+
+    Returns _ABORT when the human backed out of the screen, which is a THIRD answer and
+    not a kind of False: False means "not configured, go ahead and launch", and folding
+    Esc into it is what made leaving the screen start a session anyway."""
     err = sys.stderr
     helper = _scripts_dir().parent / "install_helper.py"
     if not helper.is_file():
@@ -3945,9 +3949,20 @@ def _offer_first_time_setup(project_dir: Path) -> bool:
     # only then does the [Y/n] fallback below appear.
     verb = "configure"
     try:
-        from launcher_app import SETUP_DEFAULTS, SETUP_GUIDED, SETUP_SKIP, setup_screen
+        from launcher_app import (
+            SETUP_CANCEL,
+            SETUP_DEFAULTS,
+            SETUP_GUIDED,
+            SETUP_SKIP,
+            setup_screen,
+        )
 
         choice = setup_screen(project_dir, _this_module())
+        if choice == SETUP_CANCEL:
+            # The human left. Returning _ABORT rather than False is the whole fix: False
+            # means "not configured, carry on and launch", which is what made pressing
+            # Esc start a session.
+            return _ABORT
         if choice == SETUP_SKIP:
             return False
         if choice == SETUP_DEFAULTS:
@@ -4260,6 +4275,12 @@ def main() -> int:
             configured = _offer_first_time_setup(project_dir)
         except Exception:
             configured = False  # cosmetic path - never let it kill the launch
+        if configured == _ABORT:
+            # Backed out: exit 97 so the wrapper launches nothing, the same contract the
+            # main menu's Esc has used since 2026-08-20. stdout stays empty, which is what
+            # makes the shell function skip the launch rather than run a blank command.
+            print(_Ink().dim("    -> back to the terminal"), file=sys.stderr)
+            return _ABORT_EXIT_CODE
         if configured:
             print("Setup complete - continuing the launch.", file=sys.stderr)
     if not _plugin_enabled(project_dir):

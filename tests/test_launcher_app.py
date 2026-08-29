@@ -556,7 +556,16 @@ def test_setup_screen_offers_defaults_without_leaving_the_interface(ptk, tmp_pat
     assert choice == app.SETUP_DEFAULTS
 
 
-def test_setup_screen_escape_skips(ptk, tmp_path):
+def test_setup_screen_escape_CANCELS_rather_than_skipping(ptk, tmp_path):
+    """Esc is the human leaving, and leaving must not start a session.
+
+    It used to return SETUP_SKIP - which is a real menu choice meaning "launch without
+    configuring" - so backing out of the screen launched Claude Code anyway (live report
+    2026-08-29: "it should exit the TUI... it launches claude anyway"). The launcher has
+    had an abort path since 2026-08-20, added for this exact complaint on the main menu;
+    this screen simply never used it.
+
+    SKIP and CANCEL must stay distinct: one launches, the other does not."""
     create_app_session, create_pipe_input, PlainTextOutput = ptk
     launcher = _load("virt_team_launcher")
     app = _load("launcher_app")
@@ -566,7 +575,8 @@ def test_setup_screen_escape_skips(ptk, tmp_path):
         pipe.send_text("\x1b")
         with create_app_session(input=pipe, output=out):
             choice = app.setup_screen(tmp_path, launcher, output=out)
-    assert choice == app.SETUP_SKIP
+    assert choice == app.SETUP_CANCEL
+    assert app.SETUP_CANCEL != app.SETUP_SKIP
     text = buf.getvalue()
     assert "First-time setup" in text
     assert "no questions asked" in text

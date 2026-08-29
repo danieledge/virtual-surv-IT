@@ -1166,6 +1166,12 @@ def browse_screen(start_dir: Path, mod, output=None):
 SETUP_DEFAULTS = "__setup_defaults__"
 SETUP_GUIDED = "__setup_guided__"
 SETUP_SKIP = "__setup_skip__"
+# Esc is not "skip". "Skip for now" is a CHOICE that still launches a session; Esc is the
+# human leaving, and leaving must not start anything (live report 2026-08-29: "pressing
+# exit on the project setup should exit the TUI... it launches claude anyway"). The
+# launcher has had an abort path since 2026-08-20, added for this exact complaint on the
+# main menu - this screen simply never used it.
+SETUP_CANCEL = "__setup_cancel__"
 
 
 def setup_screen(project_dir: Path, mod, output=None):
@@ -1181,7 +1187,9 @@ def setup_screen(project_dir: Path, mod, output=None):
     and cannot be hosted in this app - so the screen says it will leave rather than
     pretending otherwise.
 
-    Returns SETUP_DEFAULTS / SETUP_GUIDED / SETUP_SKIP, or None when the app cannot run."""
+    Returns SETUP_DEFAULTS / SETUP_GUIDED / SETUP_SKIP / SETUP_CANCEL, or None when the
+    app cannot run. CANCEL and SKIP are different answers and the caller must keep them
+    apart: skip launches without configuring, cancel launches nothing at all."""
     try:
         p = mod._ptk_ui()
         if not p:
@@ -1229,7 +1237,7 @@ def setup_screen(project_dir: Path, mod, output=None):
         return out
 
     def _footer():
-        return [("class:hint", ui_text(mod, "  ↑↓ move · Enter choose · Esc skip"))]
+        return [("class:hint", ui_text(mod, "  ↑↓ move · Enter choose · Esc back to the shell"))]
 
     kb = KeyBindings()
 
@@ -1248,8 +1256,9 @@ def setup_screen(project_dir: Path, mod, output=None):
 
     @kb.add("escape", eager=True)
     @kb.add("c-c")
+    @kb.add("q")
     def _esc(event):
-        result["v"] = SETUP_SKIP
+        result["v"] = SETUP_CANCEL
         event.app.exit()
 
     try:

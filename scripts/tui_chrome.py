@@ -161,9 +161,17 @@ def project_line(project_dir: Path, mod, width=72):
 # the right edge disappears off-screen entirely. Seen on a phone terminal at ~50 columns
 # (2026-08-29) - "set up with recommended defau", and pane text running past the frame.
 #
-# 34 + 1 divider + 26 + 2 borders = 63, so 64 is the first width where the split has room
-# to be what it claims to be.
-NARROW_COLUMNS = 64
+# 34 + 1 divider + 26 + 2 borders = 63, so 64 is where the split first FITS - and 64 was
+# the wrong number, because fitting is not the test. Measured on a real phone terminal
+# reporting 66 columns (2026-08-29): the right pane is pinned at its 26-column minimum
+# anywhere below ~96, so the left pane gets whatever is left - 37 columns at 66 - and the
+# longest row on the setup screen is 38 characters. It fitted, and it clipped.
+#
+# The floor is therefore set by the widest ROW, not by the sum of the minimums: the left
+# pane needs ~42 to hold one, so 42 + 26 + 1 + 2 = 71 is the true minimum and 80 is the
+# first comfortable width. 80 is also the classic terminal width, which makes the rule
+# easy to hold in your head: below 80 columns, one column.
+NARROW_COLUMNS = 80
 
 
 def term_columns(default: int = 80) -> int:
@@ -181,20 +189,26 @@ def term_columns(default: int = 80) -> int:
     The same trap, one function further down, written by someone who had just documented
     it.
 
-    Order: the real tty we draw on, then an explicitly exported COLUMNS, then stdout for
-    the odd caller whose stdout is the terminal, then the default."""
-    for stream in (sys.stderr, sys.stdout):
-        try:
-            if stream is not None and stream.isatty():
-                return os.get_terminal_size(stream.fileno()).columns
-        except Exception:
-            continue
+    Order: an explicitly exported COLUMNS, then the real tty we draw on, then stdout for
+    the odd caller whose stdout is the terminal, then a default.
+
+    COLUMNS FIRST, which is the order shutil.get_terminal_size uses and for the reason it
+    uses it: it is the documented way for someone to override a terminal that misreports
+    its own size. Putting the ioctl first - as a first version of this did - is defensible
+    right up to the moment a terminal lies, and then it takes away the only lever the user
+    has. Some phone terminals and multiplexers advertise a width wider than the glass."""
     try:
         declared = int(os.environ.get("COLUMNS", "") or 0)
         if declared > 0:
             return declared
     except Exception:
         pass
+    for stream in (sys.stderr, sys.stdout):
+        try:
+            if stream is not None and stream.isatty():
+                return os.get_terminal_size(stream.fileno()).columns
+        except Exception:
+            continue
     try:
         return shutil.get_terminal_size((default, 24)).columns
     except Exception:

@@ -550,12 +550,31 @@ def test_the_width_is_measured_on_the_stream_we_draw_on(monkeypatch):
     assert tui_chrome.is_narrow() is True, "a captured stdout must not hide a narrow tty"
 
 
-def test_an_exported_COLUMNS_is_used_when_nothing_is_a_tty(monkeypatch):
-    """Piped both ways - CI, a scripted run - falls back to what the environment declares
-    before it falls back to a guess."""
+def test_an_exported_COLUMNS_overrides_a_terminal_that_misreports(monkeypatch):
+    """COLUMNS wins over the ioctl, which is the order shutil uses and why.
+
+    A phone terminal reporting a width wider than its glass renders a frame that runs off
+    the right edge, and no amount of measuring the tty helps - the tty is the thing that is
+    wrong (photographed 2026-08-29). COLUMNS is the documented lever for that, and a first
+    version of this function put the ioctl first, which took the lever away."""
     import tui_chrome
 
-    monkeypatch.setattr(tui_chrome.sys, "stdout", None)
-    monkeypatch.setattr(tui_chrome.sys, "stderr", None)
+    class _WideTty:
+        @staticmethod
+        def isatty():
+            return True
+
+        @staticmethod
+        def fileno():
+            return 2
+
+    monkeypatch.setattr(tui_chrome.sys, "stderr", _WideTty)
+    monkeypatch.setattr(tui_chrome.os, "get_terminal_size", lambda fd: os.terminal_size((120, 30)))
     monkeypatch.setenv("COLUMNS", "46")
-    assert tui_chrome.term_columns() == 46
+    assert tui_chrome.term_columns() == 46, "an explicit COLUMNS must beat the ioctl"
+    assert tui_chrome.is_narrow() is True
+
+    # ...and with no COLUMNS set, the tty is still the source of truth.
+    monkeypatch.delenv("COLUMNS", raising=False)
+    assert tui_chrome.term_columns() == 120
+    assert tui_chrome.is_narrow() is False
