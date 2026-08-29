@@ -343,18 +343,34 @@ class InstallerTuiApp(App):
 
     CSS_PATH = "ui.tcss"
 
-    def __init__(self, ih, repo, demo: bool, start: str = "decide") -> None:
+    def __init__(self, ih, repo, demo: bool, start: str = "decide",
+                 project=None, rows=None, note: str = "") -> None:
         super().__init__()
         self.ih, self.repo, self.demo = ih, repo, demo
         self.start = start
+        self.project, self.rows, self.note = project, rows, note
         self.exit_code = 0
         self.broker = None
         self.pending_action = None
 
     def on_mount(self) -> None:
+        if self.start == "settings":
+            from .ui import SettingsScreen
+            self.push_screen(SettingsScreen(str(self.project) if self.project else "."))
+            return
         if self.start in ("advanced", "diagnostics"):
             from .ui import AdvancedScreen
             self.push_screen(AdvancedScreen(self.start))
+            return
+        if self.start == "launch":
+            from . import engine as E
+            from .ui import FirstRunScreen
+            # Same check virt-surv go makes: an unconfigured folder gets the offer, not
+            # a launcher listing nothing with no explanation.
+            if E.project_is_configured(self.repo, self.project) is False:
+                self.push_screen(FirstRunScreen(self.project))
+            else:
+                self.push_screen(self.open_launcher())
             return
         if self.start == "menu":
             from .ui import MenuScreen
@@ -381,20 +397,26 @@ class InstallerTuiApp(App):
             name="installer",
         )
 
+    def open_launcher(self):
+        from .ui import LaunchScreen
+        return LaunchScreen(self.project, self.rows, self.note)
+
     def open_decide(self):
         """The decide screen, seeded with the clone the engine was loaded from."""
         return DecideScreen({"clone": str(self.repo) if self.repo else None})
 
-    def start_action(self, action: str) -> None:
-        """An Advanced/Diagnostics item, rendered on the same live screen."""
+    def start_action(self, action: str, project=None) -> None:
+        """An Advanced/Diagnostics/first-run item, on the same live screen."""
         from . import engine as E
 
         screen = LiveInstallScreen({"channel": "dev"}, self.demo or action == "demo")
         self.push_screen(screen)
         self.broker = E.PromptBroker(self, screen)
+        target = project or self.project
         self.run_worker(
             lambda: E.run_action(self.ih, self, screen, action, {"channel": "dev"},
-                                 self.repo, self.demo, broker=self.broker),
+                                 self.repo, self.demo, broker=self.broker,
+                                 project=target),
             thread=True, name=f"action:{action}")
 
     def action_quit(self) -> None:

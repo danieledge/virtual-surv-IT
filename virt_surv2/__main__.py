@@ -145,20 +145,19 @@ def main(argv=None) -> int:
         print("  run it from inside the clone, or pass --repo PATH", file=sys.stderr)
         return 2
 
+    from .live import InstallerTuiApp
+
     if launching or a.settings:
         # Real engagement state for the folder the user is standing in - not a mock,
-        # and it says which folder it read.
-        from .ui import VirtSurvApp
+        # and it says which folder it read. Engine-backed, because an unconfigured
+        # folder gets the first-time setup offer and that has to be able to run it.
         project = Path(a.project).expanduser() if a.project else Path.cwd()
-        rows, note = ([], "")
-        if launching:
-            rows, note = E.load_engagements(repo, project)
-        app = VirtSurvApp(start="launch" if launching else "settings",
-                          project=project, rows=rows, note=note)
+        rows, note = E.load_engagements(repo, project) if launching else ([], "")
+        app = InstallerTuiApp(ih, repo, a.demo,
+                              start="launch" if launching else "settings",
+                              project=project, rows=rows, note=note)
         app.run()
-        return 0
-
-    from .live import InstallerTuiApp
+        return app.exit_code
 
     start = ("advanced" if a.advanced else
              "diagnostics" if a.diagnostics else

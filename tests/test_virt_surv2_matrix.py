@@ -617,6 +617,49 @@ def test_step_labels_make_sense() -> None:
         check(f"{shown!r} is not jargon-only", shown.strip() != "", True)
 
 
+def test_first_run_offer() -> None:
+    """An unconfigured folder must be offered first-time setup, as virt-surv go does.
+
+    The check is the launcher's own _plugin_enabled, so v1 and v2 cannot disagree
+    about what "set up" means.
+    """
+    from virt_surv2 import engine as E
+    from virt_surv2 import ui as A
+    section("N  first-time setup offer")
+
+    import install_helper as ih
+    repo = Path(ih.__file__).resolve().parent
+    check("the repo reads as configured",
+          E.project_is_configured(repo, repo), True)
+    with tempfile.TemporaryDirectory() as td:
+        check("a bare folder reads as not configured",
+              E.project_is_configured(repo, Path(td)), False)
+    check("no repo means unknown, not 'not set up'",
+          E.project_is_configured(None, Path("/tmp")), None)
+
+    check("three answers, like v1's setup screen", len(A.FIRST_RUN), 3)
+    actions = [a for a, _l, _b in A.FIRST_RUN]
+    check("offers defaults, guided and skip", sorted(actions),
+          ["configure", "onboard", "skip"])
+    check("onboard is runnable", "onboard" in E.RUN_FUNCTIONS, True)
+
+    async def run():
+        app = A.VirtSurvApp(start="launch", frozen=True, project="/tmp/x", rows=[],
+                            note="no open engagements in this folder")
+        async with app.run_test(size=(100, 30)) as p:
+            await p.pause()
+            # VirtSurvApp has no engine, so it shows the launcher directly; the offer
+            # is the engine-backed app's job. Assert the screen at least names the
+            # folder rather than inventing one.
+            check("launcher names the folder", "/tmp/x" in app.screen._folder(), True)
+
+        scr = A.FirstRunScreen("/tmp/unconfigured")
+        check("first-run screen keeps the folder",
+              str(scr.project), "/tmp/unconfigured")
+
+    asyncio.run(run())
+
+
 def test_menu_parity_with_v1() -> None:
     """Every option virt-surv offers must exist in virt-surv2.
 
@@ -784,6 +827,7 @@ if __name__ == "__main__":
     test_responsive_matrix()
     test_failure_modes()
     test_step_labels_make_sense()
+    test_first_run_offer()
     test_menu_parity_with_v1()
     test_analysers()
     test_discovery()

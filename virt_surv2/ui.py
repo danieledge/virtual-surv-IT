@@ -1179,6 +1179,129 @@ MAIN_MENU: list[tuple[str, str, str, str]] = [
 ]
 
 
+# The three answers `virt-surv go` offers on a project with no team configuration.
+# Same shape as launcher_app.setup_screen's, because it is the same decision.
+FIRST_RUN = [
+    ("onboard", "Set it up with the recommended defaults",
+     "Applies every recommended project default with no questions: enable the team "
+     "here, permissions, preferences and the orchestrator model. The usual answer."),
+    ("configure", "Walk me through it",
+     "The same setup, asking about each part, with the recommended answer pre-filled."),
+    ("skip", "Not now",
+     "Leaves this folder untouched and goes straight to the launcher. The team will "
+     "not run here until it is set up."),
+]
+
+
+class FirstRunRow(Static):
+    def __init__(self, index: int, **kw) -> None:
+        super().__init__(**kw)
+        self.index = index
+
+    def render_frame(self, selected: bool) -> None:
+        _action, label, _blurb = FIRST_RUN[self.index]
+        t = Text()
+        t.append("▸ " if selected else "  ", style=ACCENT if selected else HINT)
+        t.append(label, style=f"bold {TEXT}" if selected else TEXT)
+        self.update(t)
+        self.set_class(selected, "-selected")
+
+
+class FirstRunScreen(Responsive):
+    """No team configuration in this folder yet.
+
+    `virt-surv go` has offered real first-time setup here since 2026-08-17 rather than
+    launching with a hint; entering an unconfigured folder in v2 did nothing of the
+    sort, which made v2 look like it had simply lost the folder.
+    """
+
+    BINDINGS = [("q", "app.quit", "quit")]
+
+    def __init__(self, project) -> None:
+        super().__init__()
+        self.project = Path(project)
+        self.cursor = 0
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="shell"):
+            yield Brand(id="brand")
+            with Horizontal(id="panes"):
+                with Vertical(id="panel"):
+                    for i in range(len(FIRST_RUN)):
+                        yield FirstRunRow(i, id=f"fr{i}", classes="task")
+                with Vertical(id="side"):
+                    yield Static(id="side-body")
+            yield Static(id="detail")
+            yield Static(id="keys")
+
+    def on_mount(self) -> None:
+        self.query_one("#panel").border_title = "first-time setup"
+        self.query_one("#side").border_title = "what it does"
+        self.paint()
+
+    def paint(self) -> None:
+        folder = str(self.project)
+        try:
+            folder = "~/" + str(self.project.resolve().relative_to(Path.home()))
+        except (ValueError, OSError):
+            pass
+        self.query_one("#brand", Brand).render_frame(
+            0.0, folder if self.narrow else f"{folder}  ·  the team is not set up here",
+            self.narrow)
+        for i in range(len(FIRST_RUN)):
+            self.query_one(f"#fr{i}", FirstRunRow).render_frame(i == self.cursor)
+
+        _action, label, blurb = FIRST_RUN[self.cursor]
+        body = Text("\n")
+        for line in _wrap(label, 26):
+            body.append(f"  {line}\n", style=f"bold {ACCENT}")
+        body.append("\n")
+        for line in _wrap(blurb, 26):
+            body.append(f"  {line}\n", style=TEXT)
+        self.query_one("#side-body", Static).update(body)
+
+        d = Text("  ")
+        d.append("│ ", style=TRACK)
+        d.append(f"no team configuration in {folder}", style=HINT)
+        self.query_one("#detail", Static).update(d)
+
+        k = Text("  ")
+        for name, desc in (("↑↓", "move"), ("enter", "choose"), ("esc", "skip")):
+            k.append(name, style=KEY)
+            k.append(f" {desc}   ", style=HINT)
+        self.query_one("#keys", Static).update(k)
+
+    def on_key(self, event) -> None:
+        if event.key in ("down", "j"):
+            self.cursor = (self.cursor + 1) % len(FIRST_RUN)
+        elif event.key in ("up", "k"):
+            self.cursor = (self.cursor - 1) % len(FIRST_RUN)
+        elif event.key == "enter":
+            event.stop()
+            self._choose(FIRST_RUN[self.cursor][0])
+            return
+        else:
+            return
+        event.stop()
+        self.paint()
+
+    def _choose(self, action: str) -> None:
+        opener = getattr(self.app, "open_launcher", None)
+        if action == "skip":
+            # Esc and "Not now" both mean "carry on unconfigured" - v1 distinguishes
+            # those from backing out entirely, which exits without launching.
+            if opener:
+                self.app.switch_screen(opener())
+            return
+        runner = getattr(self.app, "start_action", None)
+        if runner:
+            runner(action, project=self.project)
+
+    def key_escape(self, event) -> None:
+        event.stop()
+        self._choose("skip")
+
+
 class MenuRow(Static):
     def __init__(self, index: int, **kw) -> None:
         super().__init__(**kw)

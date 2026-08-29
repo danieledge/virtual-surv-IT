@@ -339,6 +339,24 @@ class PromptBroker:
             ev.set()
 
 
+def project_is_configured(repo: Optional[Path], project: Path) -> Optional[bool]:
+    """Is the team enabled for this folder? None when the question cannot be answered.
+
+    Same check `virt-surv go` makes before offering first-time setup - the launcher's
+    own _plugin_enabled - so the two cannot disagree about what "set up" means.
+    """
+    if repo is None:
+        return None
+    scripts = Path(repo) / "scripts"
+    if str(scripts) not in sys.path:
+        sys.path.insert(0, str(scripts))
+    try:
+        import virt_team_launcher as launcher
+        return bool(launcher._plugin_enabled(Path(project)))
+    except Exception:                   # noqa: BLE001 — unknown, not "not set up"
+        return None
+
+
 def load_engagements(repo: Optional[Path], project: Path):
     """Real engagement rows for ONE project, or a reason there are none.
 
@@ -452,20 +470,27 @@ RUN_FUNCTIONS = {
     # `configure` is a free function in main(), not an Installer subset - it needs no
     # clone-management state. It asks for the directory itself, which our patched ask()
     # escalates to the modal, so the user still names the project.
-    "configure":    lambda ih, st, mk, repo: ih.run_configure(
-        Path(ih.ask("  Which project directory?", ".", False, style=st) or "."),
+    "configure":    lambda ih, st, mk, repo, project=None: ih.run_configure(
+        Path(project or ih.ask("  Which project directory?", ".", False, style=st) or "."),
         st, mk, False, False),
-    "howto":        lambda ih, st, mk, repo: ih.run_howto(st),
-    "aliasmanage":  lambda ih, st, mk, repo: ih.run_alias_manage(st, mk, False, False, repo),
-    "gitbashperf":  lambda ih, st, mk, repo: ih.run_gitbash_perf(st, mk, False, False),
-    "extensions":   lambda ih, st, mk, repo: ih.run_extensions_editor(st, mk),
-    "reprobe":      lambda ih, st, mk, repo: ih.run_tool_reprobe(st, mk),
-    "relocate":     lambda ih, st, mk, repo: ih.run_relocate_to_vsit(st, mk),
+    # `onboard` is configure with every default applied and zero prompts - the same
+    # thing v1's first-time-setup screen runs for its "use the defaults" answer.
+    "onboard":      lambda ih, st, mk, repo, project=None: ih.run_configure(
+        Path(project or "."), st, mk, True, False),
+    "howto":        lambda ih, st, mk, repo, project=None: ih.run_howto(st),
+    "aliasmanage":  lambda ih, st, mk, repo, project=None: ih.run_alias_manage(
+        st, mk, False, False, repo),
+    "gitbashperf":  lambda ih, st, mk, repo, project=None: ih.run_gitbash_perf(
+        st, mk, False, False),
+    "extensions":   lambda ih, st, mk, repo, project=None: ih.run_extensions_editor(st, mk),
+    "reprobe":      lambda ih, st, mk, repo, project=None: ih.run_tool_reprobe(st, mk),
+    "relocate":     lambda ih, st, mk, repo, project=None: ih.run_relocate_to_vsit(st, mk),
 }
 
 
 def run_action(ih, app, screen, action: str, choices: dict, repo: Optional[Path],
-               demo: bool, broker: "PromptBroker | None" = None) -> int:
+               demo: bool, broker: "PromptBroker | None" = None,
+               project: Optional[Path] = None) -> int:
     """One advanced/diagnostics item. Blocking; call on a worker thread.
 
     Same guarantees as run_installer: engine_finished always lands, streams and the
@@ -488,7 +513,8 @@ def run_action(ih, app, screen, action: str, choices: dict, repo: Optional[Path]
             fn = RUN_FUNCTIONS.get(action)
             if fn is not None:
                 observer.step(1, 1, action)
-                code = fn(ih, ih.Style(False), ih.marks(), args.repo) or 0
+                code = fn(ih, ih.Style(False), ih.marks(), args.repo,
+                          str(project) if project else None) or 0
             else:
                 subset = "full" if action == "demo" else action
                 inst = ih.Installer(args, ih.Style(False), ih.marks(), subset=subset)
