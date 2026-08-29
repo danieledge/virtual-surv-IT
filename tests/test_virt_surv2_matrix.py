@@ -390,11 +390,18 @@ def test_launcher_rows() -> None:
     section("E  launcher — every row and its detail pane")
 
     async def run():
-        a = A.VirtSurvApp(start="launch", frozen=True)
+        # Real row_view-shaped rows, not the old mock constant.
+        rows = [{"title": "spoofing-review", "status": "in progress", "mark": "●",
+                 "mark_style": "", "recommended": True,
+                 "lines": [("status", "in progress"), ("next", "tune thresholds")]},
+                {"title": "wash-trade-pack", "status": "blocked", "mark": "◐",
+                 "mark_style": "warn", "recommended": False,
+                 "lines": [("status", "blocked"), ("next", "await feed")]}]
+        a = A.VirtSurvApp(start="launch", frozen=True, project="/tmp/proj", rows=rows)
         async with a.run_test(size=(104, 36)) as p:
             await p.pause()
             scr = a.screen
-            n = len(A.ENGAGEMENTS) + len(A.ACTIONS)
+            n = len(rows) + len(A.ACTIONS)
             check("every engagement and action is selectable", len(scr.selectable), n)
             for i in range(len(scr.selectable)):
                 scr.cursor = i
@@ -414,7 +421,22 @@ def test_launcher_rows() -> None:
             check("every action has a blurb",
                   all(blurb for _k, _l, blurb in A.ACTIONS), True)
             check("every engagement has detail lines",
-                  all(lines for _n, _m, _c, _t, lines in A.ENGAGEMENTS), True)
+                  all(r["lines"] for r in rows), True)
+
+        # Empty folder: it must say WHICH folder, not show a bare heading.
+        a = A.VirtSurvApp(start="launch", frozen=True, project="/tmp/empty",
+                          rows=[], note="no open engagements in this folder")
+        async with a.run_test(size=(104, 36)) as p:
+            await p.pause()
+            scr = a.screen
+            check("no phantom resume heading",
+                  any(k == "group" and v == "Resume an engagement" for k, v in scr.rows),
+                  False)
+            check("the folder is named", "/tmp/empty" in scr._folder(), True)
+            detail = scr.query_one("#detail")
+            txt = getattr(detail, "content", "")
+            txt = txt.plain if hasattr(txt, "plain") else str(txt)
+            check("empty state names the folder", "/tmp/empty" in txt, True)
 
     asyncio.run(run())
 

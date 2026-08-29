@@ -98,6 +98,11 @@ def install_alias(write: bool) -> int:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="virt-surv2", description=__doc__.splitlines()[0])
+    # `go` for parity with `virt-surv go`, which is how everyone already reaches the
+    # launcher. Positional so `virt-surv2 go` reads the same as v1.
+    ap.add_argument("command", nargs="?", choices=["go"], default=None,
+                    help="go: the engagement launcher for the folder you are in")
+    ap.add_argument("--project", help="folder to read engagements from (default: cwd)")
     ap.add_argument("--repo", help="path to the clone (default: find it)")
     ap.add_argument("--demo", action="store_true",
                     help="dry run — the engine executes nothing and writes nothing")
@@ -129,11 +134,9 @@ def main(argv=None) -> int:
 
     # Screens with no engine behind them: useful for looking at the UI, and the only
     # thing that works if the clone cannot be found.
-    if a.launch or a.settings:
-        from .ui import VirtSurvApp
-        VirtSurvApp(start="launch" if a.launch else "settings").run()
-        return 0
 
+
+    launching = a.launch or a.command == "go"
     try:
         repo = E.find_repo(a.repo)
         ih = E.load_engine(repo)
@@ -141,6 +144,19 @@ def main(argv=None) -> int:
         print(f"virt-surv2: {exc}", file=sys.stderr)
         print("  run it from inside the clone, or pass --repo PATH", file=sys.stderr)
         return 2
+
+    if launching or a.settings:
+        # Real engagement state for the folder the user is standing in - not a mock,
+        # and it says which folder it read.
+        from .ui import VirtSurvApp
+        project = Path(a.project).expanduser() if a.project else Path.cwd()
+        rows, note = ([], "")
+        if launching:
+            rows, note = E.load_engagements(repo, project)
+        app = VirtSurvApp(start="launch" if launching else "settings",
+                          project=project, rows=rows, note=note)
+        app.run()
+        return 0
 
     from .live import InstallerTuiApp
 

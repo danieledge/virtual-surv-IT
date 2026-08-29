@@ -581,19 +581,20 @@ LAUNCH_ROWS: list[tuple[str, Any]] = (
 
 
 class LaunchRow(Static):
-    def __init__(self, kind: str, payload: Any, **kw) -> None:
+    def __init__(self, screen_rows, kind: str, payload, **kw) -> None:
         super().__init__(**kw)
-        self.kind, self.payload = kind, payload
+        self.screen_rows, self.kind, self.payload = screen_rows, kind, payload
 
     def render_frame(self, selected: bool) -> None:
         t = Text()
         t.append("▸ " if selected else "  ", style=ACCENT if selected else HINT)
         if self.kind == "eng":
-            name, mark, colour, tag, _ = ENGAGEMENTS[self.payload]
-            t.append(mark + " ", style=colour)
-            t.append(name, style=f"bold {TEXT}" if selected else TEXT)
-            if tag:
-                t.append(f"   ← {tag}", style=OK)
+            v = self.screen_rows[self.payload]
+            colour = GOLD if v.get("mark_style") == "warn" else DIM
+            t.append((v.get("mark") or "•") + " ", style=colour)
+            t.append(v.get("title") or "?", style=f"bold {TEXT}" if selected else TEXT)
+            if v.get("recommended"):
+                t.append("   ← most recent", style=OK)
         else:
             key, label, _ = ACTIONS[self.payload]
             t.append(f"[{key}] " if key else "    ", style=KEY)
@@ -603,86 +604,135 @@ class LaunchRow(Static):
 
 
 class LaunchScreen(Responsive):
-    BINDINGS = [("q", "app.quit", "quit"), ("escape", "app.quit", "back")]
+    """`virt-surv2 go`. Real engagement state for the folder you are in.
 
-    def __init__(self) -> None:
+    The first version of this screen was a mock with invented engagements and a made-up
+    project name, which is why it could not say which folder it was reading or whether
+    the list belonged to it. Both were reported, and both were the same defect.
+    """
+
+    # Esc leaves, as it does on every other screen and as the footer promises. Lost in
+    # the rewrite that wired this to real data, and caught only because a test pinned it.
+    BINDINGS = [("q", "app.quit", "quit"), ("escape", "app.quit", "back to terminal")]
+
+    def __init__(self, project=None, rows=None, note: str = "") -> None:
         super().__init__()
-        self.selectable = [i for i, (k, _) in enumerate(LAUNCH_ROWS) if k != "group"]
+        self.project = Path(project) if project else Path.cwd()
+        self.engagements = list(rows or [])
+        self.note = note
+        resume: list[tuple[str, Any]] = []
+        if self.engagements:
+            resume = ([("group", "Resume an engagement")]
+                      + [("eng", i) for i in range(len(self.engagements))])
+        elif self.note:
+            # Not an empty heading: a heading with nothing under it claims a list exists
+            # and then shows none, which is worse than saying so.
+            resume = [("note", self.note)]
+        self.rows: list[tuple[str, Any]] = (
+            resume
+            + [("group", "Start something new"), ("act", 0), ("act", 1), ("group", "Or")]
+            + [("act", i) for i in range(2, len(ACTIONS))]
+        )
+        self.selectable = [i for i, (k, _) in enumerate(self.rows)
+                           if k not in ("group", "note")]
         self.cursor = 0
 
     def compose(self) -> ComposeResult:
         with Vertical(id="shell"):
             yield Brand(id="brand")
             with Horizontal(id="panes"):
-                with Vertical(id="panel"):
-                    for i, (kind, payload) in enumerate(LAUNCH_ROWS):
+                with VerticalScroll(id="panel"):
+                    for i, (kind, payload) in enumerate(self.rows):
                         if kind == "group":
-                            yield Static(payload, classes="group -first" if i == 0 else "group")
+                            yield Static(payload,
+                                         classes="group -first" if i == 0 else "group")
+                        elif kind == "note":
+                            yield Static(id="lnote", classes="group -first")
                         else:
-                            yield LaunchRow(kind, payload, id=f"lrow{i}", classes="task")
+                            yield LaunchRow(self.engagements, kind, payload,
+                                            id=f"lrow{i}", classes="task")
                 with Vertical(id="side"):
                     yield Static(id="side-body")
             yield Static(id="detail")
             yield Static(id="keys")
 
     def on_mount(self) -> None:
-        self.query_one("#panel").border_title = f"{len(ENGAGEMENTS)} open"
+        n = len(self.engagements)
+        self.query_one("#panel").border_title = f"{n} open" if n else "nothing open"
         self.query_one("#side").border_title = "detail"
         k = Text("  ")
-        for name, desc in (("↑↓", "move"), ("enter", "choose"), ("?", "help"),
+        for name, desc in (("↑↓", "move"), ("enter", "choose"), ("c", "settings"),
                            ("esc", "back to terminal")):
             k.append(name, style=KEY)
             k.append(f" {desc}   ", style=HINT)
         self.query_one("#keys", Static).update(k)
         self.paint()
 
+    def _folder(self) -> str:
+        """The folder being read, shortened but never guessed at."""
+        try:
+            p = self.project.resolve()
+        except OSError:
+            p = self.project
+        home = Path.home()
+        try:
+            return "~/" + str(p.relative_to(home))
+        except ValueError:
+            return str(p)
+
     def paint(self) -> None:
-        sub = ("my-project  ·  dev" if self.narrow
-               else "my-project  ·  v0.34.0  ·  dev  ·  4 agents idle")
-        self.query_one("#brand", Brand).render_frame(0.0, sub, self.narrow)
-        sel_row = self.selectable[self.cursor]
-        for i, (kind, payload) in enumerate(LAUNCH_ROWS):
-            if kind == "group":
+        folder = self._folder()
+        self.query_one("#brand", Brand).render_frame(
+            0.0, folder if self.narrow else f"{folder}  ·  engagements in this folder",
+            self.narrow)
+
+        try:
+            n = Text()
+            n.append(self.note, style=HINT)
+            self.query_one("#lnote", Static).update(n)
+        except Exception:               # noqa: BLE001 — only present when there is a note
+            pass
+
+        sel_row = self.selectable[self.cursor] if self.selectable else -1
+        for i, (kind, payload) in enumerate(self.rows):
+            if kind in ("group", "note"):
                 continue
             self.query_one(f"#lrow{i}", LaunchRow).render_frame(i == sel_row)
 
-        # The detail pane. The settings screen already makes each SETTING explain
-        # itself; doing the same for actions costs nothing and removes the last
-        # place where you had to guess what a key does.
-        kind, payload = LAUNCH_ROWS[sel_row]
         t = Text("\n")
-        if kind == "eng":
-            name, _m, _c, _tag, lines = ENGAGEMENTS[payload]
-            t.append(f"  {name}\n\n", style=f"bold {ACCENT}")
-            for label, value in lines:
-                t.append(f"  {label:<10}", style=HINT)
-                warn = label in ("status", "next") and value in ("blocked", "await venue data feed")
-                t.append(f"{value}\n", style=GOLD if warn else TEXT)
-        else:
-            key, label, blurb = ACTIONS[payload]
-            t.append(f"  {label}\n\n", style=f"bold {ACCENT}")
-            for line in _wrap(blurb, 26):
-                t.append(f"  {line}\n", style=DIM)
-            if key:
-                t.append(f"\n  shortcut  ", style=HINT)
-                t.append(key, style=KEY)
+        if sel_row >= 0:
+            kind, payload = self.rows[sel_row]
+            if kind == "eng":
+                v = self.engagements[payload]
+                t.append(f"  {v.get('title') or '?'}\n\n", style=f"bold {ACCENT}")
+                for label, value in v.get("lines") or []:
+                    t.append(f"  {label:<10}", style=HINT)
+                    warn = v.get("status") == "blocked" and label in ("status", "next")
+                    t.append(f"{value}\n", style=GOLD if warn else TEXT)
+            else:
+                key, label, blurb = ACTIONS[payload]
+                t.append(f"  {label}\n\n", style=f"bold {ACCENT}")
+                for line in _wrap(blurb, 26):
+                    t.append(f"  {line}\n", style=DIM)
+                if key:
+                    t.append("\n  shortcut  ", style=HINT)
+                    t.append(key, style=KEY)
         self.query_one("#side-body", Static).update(t)
 
         d = Text("  ")
-        if self.narrow:
-            d.append("│ ", style=TRACK)
-            if kind == "eng":
-                name, _m, _c, _tag, lines = ENGAGEMENTS[payload]
-                d.append(f"{dict(lines)['status']} · next: {dict(lines)['next']}", style=HINT)
-            else:
-                d.append(ACTIONS[payload][2], style=HINT)
+        d.append("│ ", style=TRACK)
+        if self.note:
+            # Says WHICH folder, because "no open engagements" on its own reads as a
+            # statement about the product rather than about where you are standing.
+            d.append(f"{self.note} — {folder}", style=HINT)
         else:
-            d.append("⚠ ", style=GOLD)
-            d.append("wash-trade-pack has been open 11 days", style=HINT)
+            d.append(f"{len(self.engagements)} open in {folder}", style=HINT)
         self.query_one("#detail", Static).update(d)
 
     def on_key(self, event) -> None:
-        kind, payload = LAUNCH_ROWS[self.selectable[self.cursor]]
+        if not self.selectable:
+            return
+        kind, payload = self.rows[self.selectable[self.cursor]]
         if event.key in ("down", "j"):
             self.cursor = (self.cursor + 1) % len(self.selectable)
         elif event.key in ("up", "k"):
@@ -690,11 +740,33 @@ class LaunchScreen(Responsive):
         elif event.key == "c" or (event.key == "enter" and kind == "act"
                                   and ACTIONS[payload][0] == "c"):
             event.stop()
-            self.app.push_screen(SettingsScreen())
+            self.app.push_screen(SettingsScreen(str(self.project)))
+            return
+        elif event.key == "enter":
+            event.stop()
+            self._choose(kind, payload)
             return
         else:
             return
         event.stop()
+        self.paint()
+
+    def _choose(self, kind, payload) -> None:
+        """Enter used to do nothing at all - reported as "doesn't allow any option to
+        be selected". Actions that map to engine work run it; the rest say plainly
+        that they are not wired yet rather than silently ignoring the keypress."""
+        if kind == "eng":
+            v = self.engagements[payload]
+            self.note = f"resuming is not wired yet — use `virt-surv go` for {v.get('title')}"
+            self.paint()
+            return
+        key, label, _blurb = ACTIONS[payload]
+        runner = getattr(self.app, "start_action", None)
+        mapped = {"o": None, "b": None, "v": None, "a": None, "n": None, "j": None}
+        if key in mapped and mapped[key] and runner:
+            runner(mapped[key])
+            return
+        self.note = f"{label}: not wired yet in virt-surv2 — `virt-surv go` does it"
         self.paint()
 
 
@@ -1210,17 +1282,20 @@ class MenuScreen(Responsive):
 class VirtSurvApp(App):
     CSS_PATH = "ui.tcss"
 
-    def __init__(self, start: str = "decide", frozen: bool = False, done: bool = False) -> None:
+    def __init__(self, start: str = "decide", frozen: bool = False, done: bool = False,
+                 project=None, rows=None, note: str = "") -> None:
         super().__init__()
         self.start, self.frozen, self.done = start, frozen, done
+        self.project, self.rows, self.note = project, rows, note
 
     def on_mount(self) -> None:
         if self.start == "install":
             self.push_screen(InstallScreen(frozen=self.frozen, done=self.done))
         elif self.start == "launch":
-            self.push_screen(LaunchScreen())
+            self.push_screen(LaunchScreen(self.project, self.rows, self.note))
         elif self.start == "settings":
-            self.push_screen(SettingsScreen())
+            self.push_screen(SettingsScreen(str(self.project) if self.project
+                                            else "~/www/my-project"))
         elif self.start == "advanced":
             self.push_screen(AdvancedScreen())
         elif self.start == "diagnostics":

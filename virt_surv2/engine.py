@@ -339,6 +339,45 @@ class PromptBroker:
             ev.set()
 
 
+def load_engagements(repo: Optional[Path], project: Path):
+    """Real engagement rows for ONE project, or a reason there are none.
+
+    Returns (rows, note). rows are row_view() dicts - the launcher's own single source
+    of an engagement row's display content, so this cannot render them differently from
+    `virt-surv go`. note is a human sentence when the list is empty or unreadable, which
+    is the case the mock never had: an empty list and "could not read them" look
+    identical on screen unless one of them says so.
+    """
+    if repo is None:
+        return [], "no clone found, so no engagement state to read"
+    scripts = Path(repo) / "scripts"
+    if str(scripts) not in sys.path:
+        sys.path.insert(0, str(scripts))
+    try:
+        import engagement_state
+        import virt_team_launcher as launcher
+    except Exception as exc:            # noqa: BLE001
+        return [], f"could not load the engagement reader: {exc}"
+    try:
+        menu = engagement_state.resume_menu(Path(project), max_shown=_FULL_MENU)
+    except Exception as exc:            # noqa: BLE001 — an unreadable project is normal
+        return [], f"could not read engagements in this folder: {exc}"
+    rows = menu.get("open") or []
+    if not rows:
+        archived = menu.get("archived") or 0
+        return [], (f"no open engagements here ({archived} archived)" if archived
+                    else "no open engagements in this folder")
+    default = menu.get("default") or ""
+    try:
+        return [launcher.row_view(r, default_slug=default, of_many=len(rows) > 1)
+                for r in rows], ""
+    except Exception as exc:            # noqa: BLE001
+        return [], f"could not render engagements: {exc}"
+
+
+_FULL_MENU = 9999   # the launcher's own "no cap" value for resume_menu
+
+
 # ── running it ────────────────────────────────────────────────────────────────
 
 def build_args(choices: dict, repo: Optional[Path], demo: bool) -> SimpleNamespace:
