@@ -124,7 +124,7 @@ def _configured_launch_command() -> str:
 
 
 # Pinned to install_helper._ALIAS_VERSION by a sync test - bump both together.
-_EXPECTED_ALIAS_VERSION = 7  # v7: cd handshake for the project explorer + Esc exits
+_EXPECTED_ALIAS_VERSION = 8  # v8: also registers the virt-surv2 shortcut alongside
 # Exit code that means "the human backed out - do NOT launch" (2026-08-20 user report:
 # "when exiting the tui it launches claude code, it shouldn't"). Esc used to be folded
 # into the same empty decision as 'just launch', so backing out of the menu still

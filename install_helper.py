@@ -5794,6 +5794,9 @@ def run_manage_engagements(
 # file), and idempotent (checks for an existing "virt-surv" line first).
 
 _ALIAS_MARKER = "virt-surv"
+# The Textual front end (virt_surv2/). Registered by the same alias step, in the
+# same stamped block, so both front doors arrive and stay current together.
+_ALIAS2_MARKER = "virt-surv2"
 
 # The alias template's version stamp, embedded in every written line as a trailing
 # comment (valid end-of-line comment syntax in POSIX shells and PowerShell alike).
@@ -5823,7 +5826,7 @@ _ALIAS_MARKER = "virt-surv"
 # v6 (2026-08-19): the shell fast path matches 'engage' as well as 'go' - `virt-surv
 # engage` now LAUNCHES (it used to be project setup, which read as the opposite of
 # /engage in-session). heal_stale_aliases rewrites v5 definitions at the next launch.
-_ALIAS_VERSION = 7
+_ALIAS_VERSION = 8
 _ALIAS_STAMP = f"# {_ALIAS_MARKER}-alias-v{_ALIAS_VERSION}"
 
 # Any version's stamp - the removal marker for _strip_stamped_definitions.
@@ -5861,6 +5864,14 @@ def _alias_line_for(rc_path: Path, interpreter: str, launcher_path, script_path)
             f"}} else {{ "
             f'& "{interpreter}" "{script_path}" @args '
             f"}} }} {_ALIAS_STAMP}"
+            # virt-surv2: the Textual front end onto this same installer. Stamped
+            # identically so _strip_stamped_definitions removes it on upgrade and
+            # heal_stale_aliases keeps it current, and defined SEPARATELY so the two
+            # can be run side by side (that is the whole point of v2 existing).
+            f"\nfunction {_ALIAS2_MARKER} {{ "
+            f'Push-Location "{Path(script_path).parent}"; '
+            f'try {{ & "{interpreter}" -m virt_surv2 @args }} '
+            f"finally {{ Pop-Location }} }} {_ALIAS_STAMP}"
         )
     return (
         f"{_ALIAS_MARKER}() {{ "
@@ -5874,6 +5885,9 @@ def _alias_line_for(rc_path: Path, interpreter: str, launcher_path, script_path)
         f'rm -f "$__vt_f"; '
         f'if [ "$__vt_r" -ne 97 ]; then $__vt_c ${{__vt_d:+"$__vt_d"}} "$@"; fi; '
         f'else "{interpreter}" "{script_path}" "$@"; fi; }} {_ALIAS_STAMP}'
+        # See the PowerShell branch above: same stamp, separate name.
+        f'\n{_ALIAS2_MARKER}() {{ ( cd "{Path(script_path).parent}" && '
+        f'"{interpreter}" -m virt_surv2 "$@" ); }} {_ALIAS_STAMP}'
     )
 
 
@@ -6250,6 +6264,11 @@ def run_setup_alias(
         else:
             print(f"  {fail} verification failed: {note}")
             had_error = True
+        # The second front door. A failure here is reported but NOT fatal: virt-surv
+        # itself is what this step exists to install, and it having worked must not be
+        # undone by the extra alias.
+        verified2, note2 = _verify_alias_line(label, rc_path, line, marker=_ALIAS2_MARKER)
+        print(f"  {ok if verified2 else fail} {_ALIAS2_MARKER}: {note2}")
     if wrote_any:
         # A child process can never modify its parent shell, so the reload HAS to be
         # the user's own action - lead with it, unmissable, not buried mid-paragraph

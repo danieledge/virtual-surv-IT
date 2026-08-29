@@ -257,6 +257,45 @@ def test_settings() -> None:
     asyncio.run(run())
 
 
+def test_v1_registers_v2_alias() -> None:
+    """`virt-surv`'s own alias step must stamp BOTH shortcuts.
+
+    Both definitions carry the same version stamp, so _strip_stamped_definitions
+    removes them together and heal_stale_aliases keeps them current - bumping
+    _ALIAS_VERSION is what upgrades a machine that already has the old single alias.
+    """
+    import install_helper as ih
+
+    repo = Path(ih.__file__).resolve().parent
+    line = ih._alias_line_for(Path.home() / ".bashrc", "python3",
+                              repo / "scripts" / "virt_team_launcher.py",
+                              repo / "install_helper.py")
+    lines = line.splitlines()
+    check("alias step writes two definitions", len(lines), 2)
+    check("both are stamped",
+          all(ih._ALIAS_STAMP_ANY_RE.search(x) for x in lines), True)
+    check("v2 function is named virt-surv2",
+          any(x.lstrip().startswith(ih._ALIAS2_MARKER) for x in lines), True)
+
+    # Strip must take both, or an upgrade leaves a dead definition behind - the exact
+    # bug the stamp mechanism was added to fix.
+    stripped, removed = ih._strip_stamped_definitions("# before\n" + line + "\n# after\n")
+    check("strip removes both", len(removed), 2)
+    check("no marker survives the strip", ih._ALIAS_MARKER in stripped, False)
+
+    for marker in (ih._ALIAS_MARKER, ih._ALIAS2_MARKER):
+        ok, note = ih._verify_alias_line("bash", Path.home() / ".bashrc", line, marker=marker)
+        check(f"{marker} resolves in a shell", ok, True)
+
+    # Two constants in two files have to agree or heal_stale_aliases never fires and
+    # every existing machine silently keeps the old single-alias block forever.
+    import re as _re
+    launcher = (repo / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
+    expected = int(_re.search(r"_EXPECTED_ALIAS_VERSION = (\d+)", launcher).group(1))
+    check("launcher's expected alias version matches install_helper's",
+          expected, ih._ALIAS_VERSION)
+
+
 def test_css_paths() -> None:
     """Every App class must point at a stylesheet that exists.
 
@@ -324,6 +363,9 @@ if __name__ == "__main__":
     test_screen_keys()
     print("\nsettings")
     test_settings()
+
+    print("\nv1 registers v2")
+    test_v1_registers_v2_alias()
 
     print("\ncss paths")
     test_css_paths()

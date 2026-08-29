@@ -5609,7 +5609,9 @@ def test_setup_alias_write_error_from_verification_sets_had_error(tmp_path, monk
     home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
     _stub_interpreters(monkeypatch, ih)
     monkeypatch.setattr(
-        ih, "_verify_alias_line", lambda label, rc_path, line: (False, "simulated broken alias")
+        ih,
+        "_verify_alias_line",
+        lambda label, rc_path, line, **k: (False, "simulated broken alias"),
     )
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     assert rc == 1
