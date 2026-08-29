@@ -309,8 +309,17 @@ def test_summary_names_virt_surv2() -> None:
 
     src = inspect.getsource(ih.Installer.print_summary)
     check("summary names virt-surv2", "virt-surv2" in src, True)
-    check("summary tells you to open a new terminal",
-          "source ~/.bashrc" in src or "NEW terminal" in src, True)
+    check("summary uses the shared reload hint", "alias_reload_hint" in src, True)
+
+    # Both shells, or a Windows user gets an instruction that cannot work. One source,
+    # so the summary and the alias step can never drift apart.
+    hint = ih.alias_reload_hint(ih.Style(False))
+    check("hint covers PowerShell", "$PROFILE" in hint, True)
+    check("hint covers bash", "source ~/.bashrc" in hint, True)
+    check("hint covers zsh", "zshrc" in hint, True)
+    check("hint offers a new terminal", "new terminal" in hint, True)
+    check("alias step uses the same source",
+          "alias_reload_hint" in inspect.getsource(ih.run_setup_alias), True)
 
 
 def test_css_paths() -> None:

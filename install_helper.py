@@ -3194,10 +3194,7 @@ class Installer:
                 "full-screen interface - same engine, same steps. Try it with "
                 f"{s.yellow('virt-surv2 --demo')} (a dry run that writes nothing)."
             )
-            self.say(
-                s.dim("  Both shortcuts need a NEW terminal, or `source ~/.bashrc` - a "
-                      "running shell never reloads its own profile.")
-            )
+            self.say(f"  {s.yellow('->')} {alias_reload_hint(s)}")
         self.say("")
         # The celebratory "summon the team" close is only accurate for a full/setup run
         # that actually finished clean - live-caught (fable UX review, 2026-08-05): a
@@ -6066,6 +6063,25 @@ def _resolve_repo_root(repo_hint: Optional[str] = None) -> Optional[Path]:
     return fallback if looks_like_repo(fallback) else None
 
 
+def alias_reload_hint(style: Style) -> str:
+    """The one reload sentence, for every caller that needs it.
+
+    A child process can never modify its parent shell, so the reload is always the
+    user's own action - there is no version of this the installer can do for them.
+    What it CAN do is say so once, correctly, covering both shells: a Windows user
+    told only `source ~/.bashrc` has been given an instruction that cannot work.
+
+    Single source because it is now said twice - by run_setup_alias when it writes,
+    and again in the closing summary, which is the one a user actually still has on
+    screen after a full install (live report 2026-08-29)."""
+    return (
+        f"Now run {style.yellow('. $PROFILE')} (PowerShell) or "
+        f"{style.yellow('source ~/.bashrc')} (bash; ~/.zshrc for zsh), "
+        "or just open a new terminal - the shortcuts are not live in THIS "
+        "session until you do (no shell auto-reloads its profile mid-session)."
+    )
+
+
 def _verify_alias_line(label: str, rc_path: Path, line: str, marker: str = _ALIAS_MARKER) -> tuple:
     """Runs the JUST-WRITTEN alias/function definition in isolation - not the whole rc
     file, whose unrelated content is out of scope and risky to execute - and confirms
@@ -6289,13 +6305,7 @@ def run_setup_alias(
         # A child process can never modify its parent shell, so the reload HAS to be
         # the user's own action - lead with it, unmissable, not buried mid-paragraph
         # (2026-08-16 user request).
-        print(
-            f"\n{style.yellow('->')} Now run "
-            f"{style.yellow('. $PROFILE')} (PowerShell) or "
-            f"{style.yellow('source ~/.bashrc')} (bash; ~/.zshrc for zsh), "
-            "or just open a new terminal - the updated alias is not live in THIS "
-            "session until you do (no shell auto-reloads its profile mid-session)."
-        )
+        print(f"\n{style.yellow('->')} {alias_reload_hint(style)}")
         print(
             style.dim(
                 "Then: cd into your PROJECT's root folder (the "
