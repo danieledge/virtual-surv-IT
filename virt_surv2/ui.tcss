@@ -1,0 +1,196 @@
+/* Virt-Surv — Textual prototype.
+
+   The whole design lives here. That is the argument for Textual: the aesthetics
+   are a diffable stylesheet with live reload, not 373 lines of hand-drawn ANSI
+   spread through the render path. */
+
+Screen {
+    background: #0d0d10;
+    color: #e6e6e6;
+}
+
+/* Overflow should be quiet, not loud. The default scrollbar is a bright slab that
+   reads as an error the moment a short terminal clips a row. */
+* {
+    scrollbar-size-vertical: 1;
+    scrollbar-background: #0d0d10;
+    scrollbar-color: #2a2a31;
+    scrollbar-color-hover: #3d3d47;
+    scrollbar-color-active: #d97757;
+}
+
+#shell {
+    padding: 1 3;
+    height: auto;
+}
+
+#brand {
+    height: 5;
+    margin-bottom: 1;
+}
+
+#eyebrow {
+    color: #c9a227;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+#panel {
+    background: #191920;
+    border: round #2a2a31;
+    border-title-color: #6b7280;
+    border-title-align: right;
+    padding: 1 2;
+    height: auto;
+}
+
+/* Group eyebrows inside the panel — quieter than the screen eyebrow, so the
+   hierarchy reads panel > group > row without another border. The top margin is
+   the group separator; a blank spacer row would cost three rows of height. */
+.group {
+    color: #6b7280;
+    text-style: bold;
+    height: 1;
+    margin-top: 1;
+}
+
+.group.-first {
+    margin-top: 0;
+}
+
+.task {
+    height: 1;
+    width: 100%;
+}
+
+/* Selection is a filled row, not a caret alone. A caret on its own leaves the
+   eye hunting; a surface says "you are here" at a glance. */
+.task.-selected {
+    background: #24242e;
+}
+
+#edit {
+    margin-top: 1;
+    height: 3;
+    background: #191920;
+    border: round #d97757;
+    color: #e6e6e6;
+}
+
+#detail {
+    height: 1;
+}
+
+#keys {
+    margin-top: 1;
+    height: 1;
+}
+
+/* Two-pane split, ported from the prompt_toolkit launcher. Its own comment calls
+   the detail pane "the real gain over cramming everything onto one row". */
+#panes {
+    height: auto;
+}
+
+#panes > #panel {
+    width: 1fr;
+}
+
+/* Full height, not auto: a detail pane that stops halfway down the list it
+   describes reads as a rendering fault rather than a pane. */
+#side {
+    width: 32;
+    margin-left: 2;
+    background: #191920;
+    border: round #2a2a31;
+    border-title-color: #6b7280;
+    border-title-align: right;
+    padding: 0 1;
+    height: 100%;
+}
+
+
+/* ── narrow (< 76 cols): phones, split panes ───────────────────────────────
+   One column. The detail pane is not shrunk — it is dropped, and its content
+   moves to the footer line. Two panes at 48 columns clipped every label in the
+   list ("Resume an", "[b] browse done &") and lost a whole engagement row. */
+
+Screen.-narrow #shell {
+    padding: 0 1;
+}
+
+Screen.-narrow #side {
+    display: none;
+}
+
+Screen.-narrow #panes > #panel {
+    width: 100%;
+}
+
+Screen.-narrow #panel {
+    padding: 0 1;
+}
+
+Screen.-narrow #brand {
+    margin-bottom: 0;
+}
+
+Screen.-narrow #eyebrow {
+    margin-bottom: 0;
+}
+
+Screen.-narrow #keys {
+    margin-top: 0;
+}
+
+/* The interrupt modal — a question the decide screen could not have answered. */
+/* Near-opaque, not a light tint: at 70% the step list read THROUGH the dialog and
+   the two borders collided mid-word ("Prefl|") and the step titles behind were
+   truncated by the dialog's edge. Fully opaque instead: a modal that blocks the
+   engine thread owns the screen, and carries the step name as its own context. */
+PromptModal {
+    align: center middle;
+    background: #0d0d10;
+}
+
+#modal {
+    width: 74;
+    height: auto;
+    padding: 1 2;
+    background: #191920;
+    border: round #d97757;
+}
+
+#modal-q {
+    height: auto;
+}
+
+#modal-input {
+    margin-top: 1;
+    background: #0d0d10;
+    border: round #2a2a31;
+    color: #e6e6e6;
+}
+
+#modal-keys {
+    margin-top: 1;
+    height: 1;
+}
+
+
+/* ── settings: 18 rows + 6 headings is taller than most terminals ──────────
+   The brand and the footer stay put and only the list scrolls. With the shell
+   at height:auto the whole screen grew instead, pushing the robot off the top
+   and the key hints off the bottom. */
+
+SettingsScreen #shell {
+    height: 100%;
+}
+
+SettingsScreen #panes {
+    height: 1fr;
+}
+
+SettingsScreen #panel {
+    height: 100%;
+}

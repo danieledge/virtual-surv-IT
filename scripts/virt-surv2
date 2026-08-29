@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# virt-surv2 — the Textual front end, runnable from anywhere.
+#
+# Deliberately a sibling of `virt-surv`, not a replacement: both drive the same
+# install_helper.py engine, so they can be compared on the same machine.
+#
+#   virt-surv2 --demo       dry run, writes nothing
+#   virt-surv2              install / reconfigure
+#   virt-surv2 --launch     the launcher screen
+#   virt-surv2 --settings   project settings
+set -euo pipefail
+
+# The clone this script lives in — resolved through symlinks, so putting a link to it
+# on PATH works.
+SELF="${BASH_SOURCE[0]}"
+while [ -L "$SELF" ]; do SELF="$(readlink "$SELF")"; done
+REPO="$(cd "$(dirname "$SELF")/.." && pwd)"
+
+PY="${VS_PYTHON:-python3}"
+command -v "$PY" >/dev/null 2>&1 || { echo "virt-surv2: no $PY on PATH" >&2; exit 127; }
+
+cd "$REPO"
+exec "$PY" -m virt_surv2 "$@"
