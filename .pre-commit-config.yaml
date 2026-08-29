@@ -21,6 +21,17 @@ repos:
 
   - repo: local
     hooks:
+      # Hard reject on blocked terms (employer, colleague names, internal hosts).
+      # Terms live hashed in .dlp-blocklist; the plaintext master list is
+      # .dlp-keywords.local (gitignored). No list configured = no-op, so a fresh
+      # clone stays committable. See scripts/dlp_guard.py for the why.
+      - id: dlp-blocked-terms
+        name: block DLP keywords (employer / personal names / internal hosts)
+        entry: python3 scripts/dlp_guard.py
+        language: system
+        # Text-ish files only; the guard skips binaries by suffix anyway.
+        exclude: '^(vendor/|\.dlp-blocklist$)'
+
       - id: block-raw-data
         name: block raw market/comms data files (use synthetic data - CLAUDE.md §5)
         entry: "Raw data files must not be committed. Generate synthetic data with scripts/gen_synthetic.py."
@@ -32,7 +43,11 @@ repos:
       # prompt-dependent). Runs on changes to rules/, tests/ or scripts/.
       - id: pytest
         name: run tests (Definition of Done)
-        entry: python -m pytest -q
+        # python3 first: this host has no bare `python`, so the gate could never run and
+        # blocked every commit touching rules/, tests/ or scripts/ with "Executable
+        # `python` not found". Windows usually has `python` and no `python3`, hence the
+        # fallback - hardcoding either name breaks half the machines this plugin targets.
+        entry: sh -c 'command -v python3 >/dev/null 2>&1 && exec python3 -m pytest -q || exec python -m pytest -q'
         language: system
         pass_filenames: false
         files: '^(rules|tests|scripts)/.*\.py$'

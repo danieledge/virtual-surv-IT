@@ -87,6 +87,48 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  dlp-terms:
+    name: No blocked terms committed
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (SHA-pinned, 2026-08-19 audit)
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5 (SHA-pinned)
+        with:
+          python-version: "3.12"
+      # The repo carries NEITHER the blocked terms NOR their digests: a digest of a short
+      # unsalted word is a confirmable fingerprint, and publishing one in a public repo is
+      # an oracle for the very words being suppressed. The list arrives as the
+      # DLP_BLOCKLIST secret (digests only, so even a mistake here cannot echo a term) and
+      # is written to a temp file the scanner reads via $DLP_BLOCKLIST.
+      #
+      # Secret via env:, never inline ${{ }} in run: - inline interpolation splices the
+      # value into the shell command line before the shell ever sees it.
+      - name: Blocked-term scan (employer / personal names / internal hosts)
+        env:
+          DLP_BLOCKLIST_CONTENT: ${{ secrets.DLP_BLOCKLIST }}
+          IS_FORK_PR: ${{ github.event.pull_request.head.repo.fork == true }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DLP_BLOCKLIST_CONTENT:-}" ]; then
+            # A fork PR genuinely cannot see repository secrets and the contributor has no
+            # way to fix that, so warn rather than block. Anywhere else a missing secret
+            # means the gate is not running, which must be loud: silently passing is how a
+            # data-loss control rots into decoration.
+            if [ "${IS_FORK_PR}" = "true" ]; then
+              echo "::warning::DLP_BLOCKLIST unavailable to fork PRs - blocked-term scan skipped."
+              echo "It runs on the branch build before anything can merge."
+              exit 0
+            fi
+            echo "::error::DLP_BLOCKLIST secret is not set - the blocked-term scan did not run."
+            echo "Add it under Settings > Secrets and variables > Actions."
+            echo "Value: the contents of your local .dlp-blocklist (digests only, never terms)."
+            exit 1
+          fi
+          f="$(mktemp)"; trap 'rm -f "$f"' EXIT
+          printf '%s\n' "$DLP_BLOCKLIST_CONTENT" > "$f"
+          DLP_BLOCKLIST="$f" python3 scripts/dlp_guard.py --all
+
   no-raw-data:
     name: No raw data committed
     runs-on: ubuntu-latest
@@ -104,11 +146,25 @@ jobs:
           # same exception:
           #   - docs/review/gold-findings.jsonl - a documentation template ("example-review")
           #   - evals/results.jsonl             - eval run metrics (cost/duration/pass-fail)
-          if git ls-files '*.csv' '*.tsv' '*.parquet' '*.pcap' '*.jsonl' '*.xlsx' '*.xls' \
-              ':!docs/review/gold-findings.jsonl' ':!evals/results.jsonl' | grep -q .; then
+          #
+          # 2026-08-29: eval-case fixture packs join them. .gitignore lines 17-19 already
+          # declare `evals/cases/*/fixtures/**` committed-on-purpose golden inputs, but this
+          # gate was never told, so the two disagreed and CI had been red since the first
+          # such fixture landed. Scoped to that one directory shape rather than to .jsonl,
+          # keeping the "never by extension" rule intact - a stray .jsonl anywhere else,
+          # including elsewhere under evals/, still fails.
+          #
+          # One list, used twice: when the detect and report copies drifted apart the gate
+          # reported a different set from the one it failed on.
+          PATHSPEC=(
+            '*.csv' '*.tsv' '*.parquet' '*.pcap' '*.jsonl' '*.xlsx' '*.xls'
+            ':!docs/review/gold-findings.jsonl'
+            ':!evals/results.jsonl'
+            ':!evals/cases/*/fixtures/**'
+          )
+          if git ls-files "${PATHSPEC[@]}" | grep -q .; then
             echo "::error::Raw data files committed. Use synthetic data only (CLAUDE.md §5)."
-            git ls-files '*.csv' '*.tsv' '*.parquet' '*.pcap' '*.jsonl' '*.xlsx' '*.xls' \
-                ':!docs/review/gold-findings.jsonl' ':!evals/results.jsonl'
+            git ls-files "${PATHSPEC[@]}"
             exit 1
           fi
           echo "OK - no raw data files tracked."
