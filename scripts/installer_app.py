@@ -524,3 +524,285 @@ def grid_screen(rows_fn, apply_fn, help_fn, ih, *, title, repo=None, output=None
             raise
         return None
     return changed[0]
+
+
+# Rows a caller can hand to progress_screen: pending until the run reaches them.
+_PENDING, _RUNNING, _OK, _SKIP, _FAIL = "pending", "running", "ok", "skip", "fail"
+
+
+class _RunState:
+    """What a running install looks like to a screen.
+
+    Mutated from a WORKER THREAD and read by the render loop, which is safe here for one
+    specific reason: every field is replaced wholesale rather than edited in place, and
+    Python guarantees the assignment itself is atomic. A partially-updated row would show
+    for at most one 150ms frame; a lock around it would buy nothing a person could see.
+    """
+
+    def __init__(self, titles):
+        self.rows = [[title, _PENDING, ""] for title in titles]
+        self.lines = []
+        self.current = -1
+        self.done = False
+        self.code = None
+
+    # -- the observer protocol install_helper.Installer speaks --------------------
+    def step(self, number, total, title):
+        index = number - 1
+        if 0 <= index < len(self.rows):
+            self.rows[index][0] = title  # lazy titles resolve only once the step starts
+            self.rows[index][1] = _RUNNING
+            self.current = index
+
+    def result(self, name, status, detail):
+        if 0 <= self.current < len(self.rows):
+            self.rows[self.current][1] = status
+            self.rows[self.current][2] = detail or ""
+
+    def line(self, text):
+        text = (text or "").rstrip()
+        if text:
+            self.lines.append(text)
+            # Bounded: an install can emit hundreds of lines and only the tail is ever
+            # rendered, so keeping them all would be a slow leak for no visible gain.
+            if len(self.lines) > 200:
+                del self.lines[:100]
+
+
+def progress_screen(titles, run_fn, ih, *, title, repo=None, output=None):
+    """Run `run_fn(observer)` while showing its steps live. Returns its exit code, or
+    None when the screen could not run and the caller should fall back to streaming.
+
+    WHY THIS EXISTS. Picking "update" from the new picker used to drop straight out of
+    the full-screen interface into a scrolling step log - the interface the picker was
+    built to replace (owner report, 2026-08-29). The work is unchanged; only who renders
+    it moves.
+
+    The run happens on a WORKER THREAD because prompt_toolkit needs its event loop free
+    to redraw; a blocking subprocess on the main thread would freeze the frame it is
+    supposed to be animating. Which also means run_fn must not prompt - see update_screen
+    for how the decisions are taken before this starts."""
+    try:
+        chrome = _chrome()
+        _vendor_on_path()
+        from prompt_toolkit.key_binding import KeyBindings
+    except Exception:
+        return None
+    if not os.environ.get("VIRT_SURV_FORCE_PTK"):
+        if not (sys.stdin.isatty() and sys.stderr.isatty()):
+            return None
+
+    import threading
+
+    host = InstallerHost(ih, repo)
+    g = chrome.glyphs(host)
+    state = _RunState(titles)
+    marks = {
+        _PENDING: ("class:dim", g["off"]),
+        _RUNNING: ("class:group", g["point"]),
+        _OK: ("class:on", g["on"]),
+        _SKIP: ("class:warn", g["closing"]),
+        _FAIL: ("class:warn", g["blocked"]),
+    }
+
+    def _work():
+        try:
+            state.code = run_fn(state)
+        except BaseException:  # noqa: BLE001 - the screen must close whatever happens
+            state.code = 1
+        finally:
+            state.done = True
+
+    def _body():
+        out = []
+        for row_title, status, detail in state.rows:
+            style, mark = marks.get(status, marks[_PENDING])
+            out.append((style, f"  {mark} "))
+            out.append(("class:title" if status == _RUNNING else "", row_title))
+            if detail and status != _RUNNING:
+                out.append(("class:dim", f"  ({detail[:40]})"))
+            out.append(("", "\n"))
+        return out
+
+    def _right():
+        out = [("class:group", _wrap("Output") + "\n\n")]
+        for text in state.lines[-12:]:
+            out.append(("class:dim", _wrap(text) + "\n"))
+        return out
+
+    def _footer():
+        if state.done:
+            ok = state.code == 0
+            word = "done" if ok else f"finished with errors (exit {state.code})"
+            return [("class:hint", chrome.ui_text(host, f"  {word} · Enter close"))]
+        return [("class:hint", chrome.ui_text(host, "  working... · Ctrl-C stop"))]
+
+    kb = KeyBindings()
+
+    @kb.add("enter")
+    @kb.add("escape", eager=True)
+    @kb.add("q")
+    def _close(event):
+        # Only once the work has finished. Closing mid-run would leave the installer
+        # writing into a screen that no longer exists, and the user with no idea whether
+        # their plugin was half-updated.
+        if state.done:
+            event.app.exit()
+
+    @kb.add("c-c")
+    def _stop(event):
+        if state.done:
+            event.app.exit()
+
+    worker = threading.Thread(target=_work, daemon=True)
+    worker.start()
+    try:
+        chrome.screen(
+            host,
+            title=title,
+            body_fn=_body,
+            right_fn=_right,
+            footer_fn=_footer,
+            key_bindings=kb,
+            output=output,
+            refresh_interval=0.15,
+            header_fn=lambda: brand_header(ih),
+        )
+    except Exception:
+        if os.environ.get("VIRT_SURV_DEBUG_APP"):
+            raise
+        return None
+    worker.join(timeout=1)
+    return state.code
+
+
+def _update_facts(ih, repo=None):
+    """(local_version, remote_version, headlines, dirty) - all best-effort.
+
+    Read-only and cheap: this runs BEFORE the screen opens, because a screen that has to
+    wait on the network to draw its first frame is a screen that looks broken."""
+    local = remote = ""
+    headlines = []
+    dirty = False
+    try:
+        clone = repo or ih._resolve_repo_root(None)
+        if clone is None:
+            return local, remote, headlines, dirty
+        cfg = ih.load_config(ih.config_path())
+        branch = cfg.get("branch") if cfg.get("branch") in ih.BRANCHES else "dev"
+        local = ih.installed_version(clone) or ""
+        preview = ih.gather_update_preview(clone, branch, local) or {}
+        remote = preview.get("remote_version") or ""
+        headlines = [h for h in (preview.get("headlines") or []) if h][:6]
+        proc = ih.run_cmd(["git", "-C", str(clone), "status", "--porcelain"], timeout=10)
+        dirty = bool((proc.stdout or "").strip()) if proc and proc.returncode == 0 else False
+    except Exception:
+        pass
+    return local, remote, headlines, dirty
+
+
+def update_decision_screen(ih, repo=None, output=None):
+    """What the update would bring, and the one question worth asking. Returns "update",
+    "cancel", or None when the screen could not run.
+
+    ONE question, asked before anything starts. The streaming flow asked two, mid-run,
+    between blocks of log output - and a question you meet halfway through a wall of text
+    is one you answer without reading. Everything the human needs to decide is on this
+    screen at once: which version, what changed, and whether their working tree is dirty."""
+    try:
+        chrome = _chrome()
+        _vendor_on_path()
+        from prompt_toolkit.key_binding import KeyBindings
+    except Exception:
+        return None
+    if not os.environ.get("VIRT_SURV_FORCE_PTK"):
+        if not (sys.stdin.isatty() and sys.stderr.isatty()):
+            return None
+
+    host = InstallerHost(ih, repo)
+    g = chrome.glyphs(host)
+    local, remote, headlines, dirty = _update_facts(ih, repo)
+    options = [("update", "update now"), ("cancel", "not now")]
+    idx = [0]
+    picked = ["cancel"]
+
+    def _body():
+        out = []
+        if remote and local and remote != local:
+            out.append(("class:group", f"  {local}  ->  {remote}\n\n"))
+        elif remote and local and remote == local:
+            out.append(("class:on", f"  already on {local} - nothing to pull\n\n"))
+        else:
+            out.append(("class:dim", "  checking what is available...\n\n"))
+        if dirty:
+            # Stated BEFORE the keypress, not discovered mid-run. The streaming flow
+            # asked about this after it had already started working.
+            out.append(("class:warn", "  note: your clone has uncommitted changes\n"))
+            out.append(("class:dim", "        they are stashed and restored around the pull\n\n"))
+        for i, (key, label) in enumerate(options):
+            sel = idx[0] == i
+            out.append(("class:sel" if sel else "", f"  {g['point']} " if sel else "    "))
+            out.append(("class:sel" if sel else "", f"{label}\n"))
+        return out
+
+    def _right():
+        out = [("class:group", _wrap("What is coming") + "\n\n")]
+        if headlines:
+            for line in headlines:
+                out.append(("class:dim", _wrap(f"- {line}") + "\n"))
+        else:
+            out.append(("class:dim", _wrap("No release notes available.") + "\n"))
+        out.append(
+            (
+                "class:dim",
+                "\n"
+                + _wrap(
+                    "Pulls the new code and refreshes the copy Claude Code loads. Your settings, "
+                    "preferences and model choice are not touched and are not re-asked."
+                )
+                + "\n",
+            )
+        )
+        return out
+
+    def _footer():
+        return [("class:hint", chrome.ui_text(host, "  up/down move - Enter choose - Esc cancel"))]
+
+    kb = KeyBindings()
+
+    @kb.add("up")
+    def _up(event):
+        idx[0] = (idx[0] - 1) % len(options)
+
+    @kb.add("down")
+    def _down(event):
+        idx[0] = (idx[0] + 1) % len(options)
+
+    @kb.add("enter")
+    def _enter(event):
+        picked[0] = options[idx[0]][0]
+        event.app.exit()
+
+    @kb.add("escape", eager=True)
+    @kb.add("c-c")
+    @kb.add("q")
+    def _esc(event):
+        picked[0] = "cancel"
+        event.app.exit()
+
+    try:
+        chrome.screen(
+            host,
+            title="Update the team",
+            body_fn=_body,
+            right_fn=_right,
+            footer_fn=_footer,
+            key_bindings=kb,
+            output=output,
+            header_fn=lambda: brand_header(ih),
+        )
+    except Exception:
+        if os.environ.get("VIRT_SURV_DEBUG_APP"):
+            raise
+        return None
+    return picked[0]

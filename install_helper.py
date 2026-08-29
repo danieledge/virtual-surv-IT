@@ -69,6 +69,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import copy
 import os
 import re
 import shutil
@@ -1642,6 +1643,50 @@ def _submenu_screen(style: Style, title: str, options: tuple, actions: dict):
         return None
 
 
+def run_update_in_app(args, style: Style) -> "Optional[int]":
+    """The update, rendered as a live progress screen instead of a scrolling log.
+
+    Returns the exit code, or None when the screen could not run and the caller should
+    fall back to the streaming Installer it has always used.
+
+    THE FLOW IS DELIBERATELY REORDERED. sync_branch asks two questions mid-run - "shall I
+    bring you up to date?" after showing a preview, and "shall I stash them?" on a dirty
+    tree - and a question cannot be asked from a worker thread while a full-screen app
+    owns the keyboard. Rather than fight that, the decisions move to the FRONT: the
+    preview is gathered and shown first, the human answers once, and then the run has
+    nothing left to ask. Deciding up front and then watching is a better shape anyway
+    than being interrupted twice by a log.
+
+    assume_yes is set for the run itself, which is honest here precisely because the
+    questions it would have asked have already been put to the human on the screen above.
+    """
+    installer_app = _import_from_scripts("installer_app")
+    if installer_app is None:
+        return None
+    probe = Installer(args, style, marks(), subset="update")
+    try:
+        titles = [(title() if callable(title) else title) for title, _step in probe.build_plan()]
+    except Exception:
+        return None
+
+    decision = installer_app.update_decision_screen(_this_module(), repo=_repo_hint())
+    if decision is None:
+        return None  # screen unavailable - the caller streams instead
+    if decision == "cancel":
+        return 0
+
+    def _run(observer):
+        run_args = copy.copy(args)
+        run_args.yes = True  # every question it would ask was answered on the screen above
+        inst = Installer(run_args, style, marks(), subset="update")
+        inst.observer = observer
+        return inst.run()
+
+    return installer_app.progress_screen(
+        titles, _run, _this_module(), title="Updating the team", repo=_repo_hint()
+    )
+
+
 def _import_from_scripts(name: str):
     """Import a module out of the real clone's scripts/ directory, or None.
 
@@ -1914,30 +1959,58 @@ class Installer:
         # to False (ask individually) so a step reached WITHOUT quick_setup_choice ever
         # running (a subset other than "full") keeps its own original per-step question.
         self.quick_defaults = False
+        # Set to swap this run's output for structured callbacks - see say() and
+        # step_header(). None keeps the streaming behaviour every existing caller has.
+        self.observer = None
 
     # ---- console helpers
 
     def say(self, text: str = "") -> None:
+        # An observer TAKES the output rather than echoing it: a full-screen progress view
+        # owns the terminal, and a stray print would tear its frame. Every line the
+        # installer emits goes through here, which is why this one method is the whole
+        # hook (2026-08-29 - "when doing an update we drop out of the new interface").
+        if self.observer is not None:
+            self.observer.line(text)
+            return
         print(text)
 
     def step_header(self, number: int, total: int, title: str) -> None:
+        if self.observer is not None:
+            self.observer.step(number, total, title)
+            return
         self.say("")
         self.say(rule_header(number, total, title, self.style))
 
     def step_ok(self, name: str, detail: str = "") -> None:
         self.tracker.record(name, "ok", detail)
+        if self.observer is not None:
+            # The observer gets the RESULT, not the rendered line: a screen draws its own
+            # row from the status, and echoing the line as well would report the same fact
+            # twice in two places that can disagree.
+            self.observer.result(name, "ok", detail)
+            return
         suffix = f" {self.style.dim('(' + detail + ')')}" if detail else ""
         self.say(f"  {self.style.green(self.marks['ok'])} {name}{suffix}")
 
     def step_skip(self, name: str, detail: str = "") -> None:
         self.tracker.record(name, "skip", detail)
+        if self.observer is not None:
+            # The observer gets the RESULT, not the rendered line: a screen draws its own
+            # row from the status, and echoing the line as well would report the same fact
+            # twice in two places that can disagree.
+            self.observer.result(name, "skip", detail)
+            return
         suffix = f" {self.style.dim('(' + detail + ')')}" if detail else ""
         self.say(f"  {self.style.yellow(self.marks['skip'])} {name}{suffix}")
 
     def step_fail(self, name: str, detail: str = "", fatal: bool = True) -> None:
         self.tracker.record(name, "fail", detail)
-        suffix = f" {self.style.dim('(' + detail + ')')}" if detail else ""
-        self.say(f"  {self.style.red(self.marks['fail'])} {name}{suffix}")
+        if self.observer is not None:
+            self.observer.result(name, "fail", detail)
+        else:
+            suffix = f" {self.style.dim('(' + detail + ')')}" if detail else ""
+            self.say(f"  {self.style.red(self.marks['fail'])} {name}{suffix}")
         if fatal:
             raise InstallAbort(detail or name)
 
@@ -9912,6 +9985,15 @@ def _main(argv=None) -> int:
                     args.demo = saved_demo
             else:
                 subset = "full" if action == "full" else action
+                if subset == "update" and not args.demo:
+                    # In-app first (2026-08-29): picking update used to drop straight out
+                    # of the picker into a scrolling step log - the interface the picker
+                    # exists to replace. None means the screen could not run, and only
+                    # then does the streaming Installer below take over.
+                    in_app = run_update_in_app(args, style)
+                    if in_app is not None:
+                        did_anything = True
+                        continue
                 if args.demo:
                     print(
                         style.yellow(

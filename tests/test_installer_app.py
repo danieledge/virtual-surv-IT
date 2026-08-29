@@ -36,6 +36,29 @@ def ptk(monkeypatch):
     return create_app_session, create_pipe_input, PlainTextOutput
 
 
+def _args(**overrides):
+    """The argparse namespace the Installer expects.
+
+    Duplicated from tests/test_install_helper.py rather than imported: these two files are
+    collected independently and a cross-file import of a private helper couples their
+    collection order for no benefit."""
+    from types import SimpleNamespace
+
+    base = dict(
+        mode=None,
+        branch=None,
+        repo=None,
+        yes=False,
+        pip=False,
+        demo=False,
+        enable_project=None,
+        statusline=False,
+        permissions=None,
+    )
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
 _OPTIONS = (
     ("1", "Environment setup only (deps + status line, no clone sync)"),
     ("6", "Machine defaults (docx, citations, review tools, map skeleton, model)"),
@@ -578,3 +601,127 @@ def test_an_exported_COLUMNS_overrides_a_terminal_that_misreports(monkeypatch):
     monkeypatch.delenv("COLUMNS", raising=False)
     assert tui_chrome.term_columns() == 120
     assert tui_chrome.is_narrow() is False
+
+
+# --- the update, rendered in the interface rather than dropped out of it (2026-08-29) ---
+
+
+def test_the_observer_replaces_output_rather_than_echoing_it():
+    """A full-screen progress view owns the terminal; a stray print tears its frame.
+
+    Every line the installer emits goes through Installer.say, which is why that one
+    method is the whole hook. When an observer is set it TAKES the line - it does not also
+    print it."""
+    import install_helper as ih
+
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="update")
+    seen = []
+
+    class _Obs:
+        def line(self, text):
+            seen.append(text)
+
+        def step(self, n, total, title):
+            seen.append(f"STEP {n}/{total} {title}")
+
+        def result(self, name, status, detail):
+            seen.append(f"RESULT {name} {status}")
+
+    inst.observer = _Obs()
+    inst.say("a line")
+    inst.step_header(2, 7, "Local clone")
+    inst.step_ok("Local clone", "up to date")
+    assert seen == ["a line", "STEP 2/7 Local clone", "RESULT Local clone ok"]
+
+
+def test_progress_state_advances_and_bounds_its_output():
+    """The rows a screen renders, and the one thing that would otherwise leak: an install
+    emits hundreds of lines and only the tail is ever shown, so keeping them all is a slow
+    leak for no visible gain."""
+    import installer_app
+
+    state = installer_app._RunState(["one", "two", "three"])
+    assert [row[1] for row in state.rows] == ["pending"] * 3
+
+    state.step(1, 3, "one")
+    assert state.rows[0][1] == "running"
+    state.result("one", "ok", "fine")
+    assert state.rows[0][1] == "ok" and state.rows[0][2] == "fine"
+
+    state.step(2, 3, "two (resolved late)")
+    assert state.rows[1][0] == "two (resolved late)", "lazy titles resolve when the step starts"
+
+    for i in range(400):
+        state.line(f"line {i}")
+    assert len(state.lines) <= 200, "the output buffer must stay bounded"
+    assert state.lines[-1] == "line 399", "and must keep the TAIL, which is what is shown"
+
+
+def test_the_update_decides_before_it_runs_not_during(ptk, monkeypatch):
+    """The redesign, and the reason for it.
+
+    sync_branch asks two questions MID-RUN - "shall I bring you up to date?" after a
+    preview, and "shall I stash them?" on a dirty tree. A question cannot be asked from a
+    worker thread while a full-screen app owns the keyboard, and a question met halfway
+    through a wall of log output is one you answer without reading.
+
+    So the decisions move to the front: the preview is shown, the human answers once, and
+    the run has nothing left to ask. assume_yes on the run is honest precisely because
+    those questions were already put to the human."""
+    import install_helper as ih
+    import installer_app
+
+    captured = {}
+
+    monkeypatch.setattr(installer_app, "update_decision_screen", lambda mod, **k: "update")
+
+    def _fake_progress(titles, run_fn, mod, **kwargs):
+        captured["titles"] = titles
+
+        class _Obs:
+            rows = []
+
+            def line(self, t):
+                pass
+
+            def step(self, *a):
+                pass
+
+            def result(self, *a):
+                pass
+
+        return 0
+
+    monkeypatch.setattr(installer_app, "progress_screen", _fake_progress)
+    monkeypatch.setattr(ih, "_import_from_scripts", lambda name: installer_app)
+
+    rc = ih.run_update_in_app(_args(), ih.Style(False))
+    assert rc == 0
+    # The step list comes from the real plan, so the screen can never show a different
+    # set of steps than the one that runs.
+    assert "Preflight checks" in captured["titles"]
+    assert any("Sync to origin" in t for t in captured["titles"])
+    assert len(captured["titles"]) == 7, "the update subset is seven steps, deliberately"
+
+
+def test_cancelling_the_update_runs_nothing(ptk, monkeypatch):
+    """Choosing "not now" must not start the installer at all - not start it and abort."""
+    import install_helper as ih
+    import installer_app
+
+    started = []
+    monkeypatch.setattr(installer_app, "update_decision_screen", lambda mod, **k: "cancel")
+    monkeypatch.setattr(installer_app, "progress_screen", lambda *a, **k: started.append(1) or 0)
+    monkeypatch.setattr(ih, "_import_from_scripts", lambda name: installer_app)
+
+    assert ih.run_update_in_app(_args(), ih.Style(False)) == 0
+    assert started == [], "cancel must not reach the progress screen"
+
+
+def test_it_falls_back_to_streaming_when_the_screen_cannot_run(monkeypatch):
+    """A tier, never a replacement - the same contract every other screen here keeps.
+    None tells the caller to run the streaming Installer it has always used."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "_import_from_scripts", lambda name: None)
+    assert ih.run_update_in_app(_args(), ih.Style(False)) is None
