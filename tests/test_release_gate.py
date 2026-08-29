@@ -458,8 +458,11 @@ def test_later_cited_run_fail_overrides_earlier_pass(tmp_path, monkeypatch):
     raw pass must be flagged."""
     _fresh(monkeypatch)
     rerun_fail = "\n".join(
-        [json.dumps({"run_id": "20260901T000000Z", "case": _CASES[0], "mode": "run",
-                     "passed": False})]
+        [
+            json.dumps(
+                {"run_id": "20260901T000000Z", "case": _CASES[0], "mode": "run", "passed": False}
+            )
+        ]
     )
     root = _repo(
         tmp_path,
@@ -483,13 +486,16 @@ def test_rescore_rows_never_count_toward_raw_passes(tmp_path, monkeypatch):
     raw pass - declaring it raw must be flagged (the 0.35.0 baseline's own rescore row
     demonstrated the inflation)."""
     _fresh(monkeypatch)
-    fail_then_rescore = "\n".join([
-        json.dumps({"run_id": _RUN, "case": _CASES[0], "mode": "run", "passed": False}),
-        json.dumps({"run_id": _RUN, "case": _CASES[0], "mode": "rescore", "passed": True}),
-    ] + [
-        json.dumps({"run_id": _RUN, "case": c, "mode": "run", "passed": True})
-        for c in _CASES[1:]
-    ])
+    fail_then_rescore = "\n".join(
+        [
+            json.dumps({"run_id": _RUN, "case": _CASES[0], "mode": "run", "passed": False}),
+            json.dumps({"run_id": _RUN, "case": _CASES[0], "mode": "rescore", "passed": True}),
+        ]
+        + [
+            json.dumps({"run_id": _RUN, "case": c, "mode": "run", "passed": True})
+            for c in _CASES[1:]
+        ]
+    )
     root = _repo(
         tmp_path,
         baseline="Scope: full\n",

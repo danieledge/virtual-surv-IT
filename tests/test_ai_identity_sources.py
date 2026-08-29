@@ -45,9 +45,7 @@ _ROSTER = {name.capitalize() for name in _KNOWN_PERSONAS}
 def _roster_attributions(text: str) -> list[str]:
     """Persona attributions the DoD check would recognise: 'Name (Role)' where Name is on
     the roster. Exactly the shape AGENT-UNMARKED keys on."""
-    return [
-        m.group(0) for m in _PERSONA_RE.finditer(text) if m.group(1).strip() in _ROSTER
-    ]
+    return [m.group(0) for m in _PERSONA_RE.finditer(text) if m.group(1).strip() in _ROSTER]
 
 
 def test_no_template_attributes_work_to_an_agent_without_the_marker():
@@ -279,7 +277,5 @@ def test_this_repo_has_no_collapsed_tables():
 
     offenders = []
     for md in sorted((REPO_ROOT / "docs").rglob("*.md")):
-        offenders += _collapsed_table_findings(
-            md, md.read_text(encoding="utf-8", errors="replace")
-        )
+        offenders += _collapsed_table_findings(md, md.read_text(encoding="utf-8", errors="replace"))
     assert not offenders, "\n".join(offenders[:5])

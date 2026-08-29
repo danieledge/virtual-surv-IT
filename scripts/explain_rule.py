@@ -95,9 +95,7 @@ def explain_events(
                 len(olist),
                 f">= {th.min_orders_for_baseline}",
                 gate_ok,
-                ""
-                if gate_ok
-                else f"would evaluate at min_orders_for_baseline <= {len(olist)}",
+                "" if gate_ok else f"would evaluate at min_orders_for_baseline <= {len(olist)}",
             )
         )
         # Stage: baseline (lines ~220-228)
@@ -206,9 +204,8 @@ def explain_events(
                     observed = "no opposite-side filled order in the session"
                     cf = ""
                 else:
-                    observed = (
-                        f"nearest opposite fill {nearest[0].order_id} "
-                        + ("inside window" if nearest[1] == 0 else f"{nearest[1]}ms outside window")
+                    observed = f"nearest opposite fill {nearest[0].order_id} " + (
+                        "inside window" if nearest[1] == 0 else f"{nearest[1]}ms outside window"
                     )
                     cf = (
                         ""
@@ -252,9 +249,7 @@ def explain_events(
             )
         groups.append(group)
     return {
-        "alerts": [
-            {"order_id": a.spoof_order_id, "reason": a.reason} for a in alerts
-        ],
+        "alerts": [{"order_id": a.spoof_order_id, "reason": a.reason} for a in alerts],
         "groups": groups,
     }
 
@@ -275,7 +270,11 @@ def _print_markdown(result: dict) -> None:
                 line += f" | {s['counterfactual']}"
             print(line)
         for o in g["orders"]:
-            head = "ALERTED" if o["alerted"] else f"no alert - first failing: {o['first_failing_condition']}"
+            head = (
+                "ALERTED"
+                if o["alerted"]
+                else f"no alert - first failing: {o['first_failing_condition']}"
+            )
             print(f"\n  order {o['order_id']} ({o['side']}, qty {o['qty']:g}) -> {head}")
             for c in o["conditions"]:
                 mark = "PASS" if c["pass"] else "FAIL"

@@ -322,9 +322,7 @@ def test_forbidden_trap_ignores_hypothesis_table_rejections():
         "A feed outage was excluded: large-cap alerts unaffected",
     ):
         assert (
-            eval_score.score({"forbidden": [trap]}, [_f(title)])[
-                "false_positive_traps_triggered"
-            ]
+            eval_score.score({"forbidden": [trap]}, [_f(title)])["false_positive_traps_triggered"]
             == []
         ), title
     asserting_it = [_f("Root cause: a feed outage stopped small-cap data arriving")]

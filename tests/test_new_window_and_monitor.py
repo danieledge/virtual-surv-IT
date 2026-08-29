@@ -44,9 +44,7 @@ def _load(name: str):
 
 def _project(tmp_path: Path, **prefs) -> Path:
     (tmp_path / ".claude").mkdir(parents=True, exist_ok=True)
-    (tmp_path / ".claude" / "team-preferences.json").write_text(
-        json.dumps(prefs), encoding="utf-8"
-    )
+    (tmp_path / ".claude" / "team-preferences.json").write_text(json.dumps(prefs), encoding="utf-8")
     return tmp_path
 
 
@@ -74,7 +72,9 @@ def test_the_first_installed_terminal_wins(monkeypatch):
     lt = _load("launch_terminal")
     monkeypatch.setattr(lt.sys, "platform", "linux")
     monkeypatch.setenv("DISPLAY", ":0")
-    monkeypatch.setattr(lt, "_which", lambda name: "/usr/bin/konsole" if name == "konsole" else None)
+    monkeypatch.setattr(
+        lt, "_which", lambda name: "/usr/bin/konsole" if name == "konsole" else None
+    )
     assert lt.available() == "konsole"
 
 
@@ -144,9 +144,16 @@ def test_the_wrapper_is_told_to_stand_down_only_when_a_window_opened(tmp_path, m
     (project / ".claude" / ".auto-pending.json").write_text(
         json.dumps({"slug": "alpha", "auto": True}), encoding="utf-8"
     )
-    for name in ("_print_banner", "_check_plugin_cache_lag", "_print_project_defaults",
-                 "_prewarm_guard_interpreter", "_write_probe_cache", "_refresh_tool_cache",
-                 "_heal_stale_alias_once", "_clear_request_handoff"):
+    for name in (
+        "_print_banner",
+        "_check_plugin_cache_lag",
+        "_print_project_defaults",
+        "_prewarm_guard_interpreter",
+        "_write_probe_cache",
+        "_refresh_tool_cache",
+        "_heal_stale_alias_once",
+        "_clear_request_handoff",
+    ):
         if hasattr(mod, name):
             monkeypatch.setattr(mod, name, lambda *a, **k: None)
     monkeypatch.setattr(mod, "_resume_decision", lambda _d: "/engage --new --auto")
@@ -173,9 +180,16 @@ def test_an_attended_run_gets_a_window_too(tmp_path, monkeypatch):
     # for the wrong reason the day the default moves again - and it has moved three times.
     project = _project(tmp_path, new_window=True)
     monkeypatch.chdir(project)
-    for name in ("_print_banner", "_check_plugin_cache_lag", "_print_project_defaults",
-                 "_prewarm_guard_interpreter", "_write_probe_cache", "_refresh_tool_cache",
-                 "_heal_stale_alias_once", "_clear_request_handoff"):
+    for name in (
+        "_print_banner",
+        "_check_plugin_cache_lag",
+        "_print_project_defaults",
+        "_prewarm_guard_interpreter",
+        "_write_probe_cache",
+        "_refresh_tool_cache",
+        "_heal_stale_alias_once",
+        "_clear_request_handoff",
+    ):
         if hasattr(mod, name):
             monkeypatch.setattr(mod, name, lambda *a, **k: None)
     monkeypatch.setattr(mod, "_resume_decision", lambda _d: "/engage --new --request-pending")
@@ -214,12 +228,17 @@ def test_the_monitor_reads_a_live_state_file(tmp_path):
     pack = tmp_path / "artifacts" / "alpha"
     pack.mkdir(parents=True)
     (pack / "engagement-state.json").write_text(
-        json.dumps({
-            "status": "in_progress", "phase": "build", "auto": True,
-            "auto_on_budget": "continue", "budget": {"engagement_usd": 35},
-            "outstanding": [{"text": "QA pass"}],
-            "engagement": {"slug": "alpha", "title": "Alpha work"},
-        }),
+        json.dumps(
+            {
+                "status": "in_progress",
+                "phase": "build",
+                "auto": True,
+                "auto_on_budget": "continue",
+                "budget": {"engagement_usd": 35},
+                "outstanding": [{"text": "QA pass"}],
+                "engagement": {"slug": "alpha", "title": "Alpha work"},
+            }
+        ),
         encoding="utf-8",
     )
     snap = app._monitor_read(tmp_path, "alpha")
@@ -301,8 +320,11 @@ def test_windows_gets_a_new_console_never_a_detached_process(monkeypatch, tmp_pa
     source = (REPO_ROOT / "scripts" / "launch_terminal.py").read_text(encoding="utf-8")
     # Check what is USED, not what is mentioned - the reasoning above the code names the
     # flag it rejects, and a naive substring test flags its own explanation.
-    used = [line for line in source.splitlines()
-            if "creationflags" in line or "getattr(subprocess" in line]
+    used = [
+        line
+        for line in source.splitlines()
+        if "creationflags" in line or "getattr(subprocess" in line
+    ]
     assert any("CREATE_NEW_CONSOLE" in line for line in used), used
     assert not any("DETACHED_PROCESS" in line for line in used), (
         "a detached child has no window; that is not what 'another window' means on Windows"
@@ -371,11 +393,13 @@ def test_the_windowed_launch_uses_the_same_command_the_wrapper_would(tmp_path, m
     lt = _load("launch_terminal")
     monkeypatch.setattr(lt, "available", lambda: "xterm")
     seen = {}
-    monkeypatch.setattr(lt, "open_in_new_window",
-                        lambda cmd, cwd: seen.update(cmd=cmd, cwd=cwd) or True)
+    monkeypatch.setattr(
+        lt, "open_in_new_window", lambda cmd, cwd: seen.update(cmd=cmd, cwd=cwd) or True
+    )
     monkeypatch.setattr(mod, "_configured_launch_command", lambda: "cc --resume")
     try:
         import launcher_app
+
         monkeypatch.setattr(launcher_app, "monitor_screen", lambda *a, **k: None)
     except Exception:
         pass
@@ -463,9 +487,16 @@ def test_the_new_window_is_opt_in(tmp_path):
 
 def _drive_main(mod, monkeypatch, project, decision):
     monkeypatch.chdir(project)
-    for name in ("_print_banner", "_check_plugin_cache_lag", "_print_project_defaults",
-                 "_prewarm_guard_interpreter", "_write_probe_cache", "_refresh_tool_cache",
-                 "_heal_stale_alias_once", "_clear_request_handoff"):
+    for name in (
+        "_print_banner",
+        "_check_plugin_cache_lag",
+        "_print_project_defaults",
+        "_prewarm_guard_interpreter",
+        "_write_probe_cache",
+        "_refresh_tool_cache",
+        "_heal_stale_alias_once",
+        "_clear_request_handoff",
+    ):
         if hasattr(mod, name):
             monkeypatch.setattr(mod, name, lambda *a, **k: None)
     monkeypatch.setattr(mod, "_resume_decision", lambda _d: decision)
@@ -491,6 +522,7 @@ def test_every_reason_not_to_open_a_window_is_said_out_loud(tmp_path, monkeypatc
     monkeypatch.setattr(lt, "available", lambda: "")
     assert _drive_main(mod, monkeypatch, ok, "/engage --new --auto") == 0
     assert "no windowed terminal found" in capsys.readouterr().err
+
 
 def test_the_running_engagement_is_found_from_the_active_marker(tmp_path):
     mod = _load("virt_team_launcher")
@@ -672,13 +704,20 @@ def test_an_unattended_run_with_no_window_goes_headless_not_in_place(tmp_path, m
         json.dumps({"slug": "alpha", "auto": True, "run_mode": "window"}), encoding="utf-8"
     )
     monkeypatch.chdir(project)
-    for name in ("_print_banner", "_check_plugin_cache_lag", "_print_project_defaults",
-                 "_prewarm_guard_interpreter", "_write_probe_cache", "_refresh_tool_cache",
-                 "_heal_stale_alias_once", "_clear_request_handoff"):
+    for name in (
+        "_print_banner",
+        "_check_plugin_cache_lag",
+        "_print_project_defaults",
+        "_prewarm_guard_interpreter",
+        "_write_probe_cache",
+        "_refresh_tool_cache",
+        "_heal_stale_alias_once",
+        "_clear_request_handoff",
+    ):
         if hasattr(mod, name):
             monkeypatch.setattr(mod, name, lambda *a, **k: None)
     monkeypatch.setattr(mod, "_resume_decision", lambda _d: "/engage --new --auto")
-    monkeypatch.setattr(mod, "_launch_in_window", lambda *a: False)   # no window anywhere
+    monkeypatch.setattr(mod, "_launch_in_window", lambda *a: False)  # no window anywhere
     started = []
     monkeypatch.setattr(mod, "_start_headless", lambda p, d, pend: started.append(d) or True)
 
@@ -693,9 +732,16 @@ def test_an_attended_run_with_no_window_still_falls_back_in_place(tmp_path, monk
     mod = _load("virt_team_launcher")
     project = _project(tmp_path, new_window=True)
     monkeypatch.chdir(project)
-    for name in ("_print_banner", "_check_plugin_cache_lag", "_print_project_defaults",
-                 "_prewarm_guard_interpreter", "_write_probe_cache", "_refresh_tool_cache",
-                 "_heal_stale_alias_once", "_clear_request_handoff"):
+    for name in (
+        "_print_banner",
+        "_check_plugin_cache_lag",
+        "_print_project_defaults",
+        "_prewarm_guard_interpreter",
+        "_write_probe_cache",
+        "_refresh_tool_cache",
+        "_heal_stale_alias_once",
+        "_clear_request_handoff",
+    ):
         if hasattr(mod, name):
             monkeypatch.setattr(mod, name, lambda *a, **k: None)
     monkeypatch.setattr(mod, "_resume_decision", lambda _d: "/engage --new --request-pending")

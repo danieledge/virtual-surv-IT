@@ -141,9 +141,7 @@ def test_stamp_write_blocked_on_every_channel_and_state(tmp_path):
     assert _run(_CONSENT, _write("artifacts/.team-session.json"), tmp_path) == BLOCK
     _stamp(tmp_path)
     assert _run(_CONSENT, _write("artifacts/.team-session.json"), tmp_path) == BLOCK
-    assert (
-        _run(_CONSENT, _bash("echo x > artifacts/.team-session.json"), tmp_path) == BLOCK
-    )
+    assert _run(_CONSENT, _bash("echo x > artifacts/.team-session.json"), tmp_path) == BLOCK
 
 
 def test_stamp_delete_blocked_unlike_the_marker(tmp_path):

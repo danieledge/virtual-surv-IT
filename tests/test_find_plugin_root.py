@@ -253,9 +253,7 @@ def test_partial_registry_install_falls_through_to_a_usable_copy(tmp_path, monke
     assert find_plugin_root(home, cwd) == str(healthy)
 
 
-def test_installer_config_is_the_last_resort_when_everything_else_is_broken(
-    tmp_path, monkeypatch
-):
+def test_installer_config_is_the_last_resort_when_everything_else_is_broken(tmp_path, monkeypatch):
     """The 2026-08-17 corp bug report's exact state: the registry names cache version
     dirs that were never populated, the only cache copy on disk is ancient (predates
     engage_probe.py, so unusable), and the healthy install is the source clone that
@@ -273,8 +271,16 @@ def test_installer_config_is_the_last_resort_when_everything_else_is_broken(
         _json.dumps(
             {
                 "plugins": [
-                    {"installPath": str(plugins / "cache" / "m" / "compliance-surveillance-team" / "0.33.62")},
-                    {"installPath": str(plugins / "cache" / "m" / "compliance-surveillance-team" / "0.33.60")},
+                    {
+                        "installPath": str(
+                            plugins / "cache" / "m" / "compliance-surveillance-team" / "0.33.62"
+                        )
+                    },
+                    {
+                        "installPath": str(
+                            plugins / "cache" / "m" / "compliance-surveillance-team" / "0.33.60"
+                        )
+                    },
                 ]
             }
         ),

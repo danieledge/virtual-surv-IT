@@ -263,7 +263,9 @@ def test_finished_engagements_returns_closed_and_archived_rows(tmp_path):
     assert es_main(["--dir", str(root), "archive", "done-and-archived"]) == 0
     # an OPEN pack must never appear
     open_pack = root / "still-open"
-    assert es_main(["--dir", str(open_pack), "init", "--title", "open", "--slug", "still-open"]) == 0
+    assert (
+        es_main(["--dir", str(open_pack), "init", "--title", "open", "--slug", "still-open"]) == 0
+    )
 
     rows = finished_engagements(root)
     by_slug = {r["dir"]: r for r in rows}

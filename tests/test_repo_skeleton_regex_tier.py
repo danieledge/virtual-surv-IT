@@ -113,7 +113,9 @@ def test_sql_reports_the_object_type_not_just_the_name(tmp_path):
 
 def test_scala_csharp_and_typescript(tmp_path):
     scala, _ = _symbols(
-        tmp_path, "S.scala", "case class Score(id: String)\nobject Scoring {\n  def compute = 1\n}\n"
+        tmp_path,
+        "S.scala",
+        "case class Score(id: String)\nobject Scoring {\n  def compute = 1\n}\n",
     )
     assert "type Score" in scala and "def compute" in scala
     cs, _ = _symbols(

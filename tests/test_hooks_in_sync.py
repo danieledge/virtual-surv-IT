@@ -192,7 +192,8 @@ _APPLY_ALL = REPO / "scripts" / "apply-all-staged.sh"
 
 def _staged_files():
     return sorted(
-        p for p in _STAGED_DIR.iterdir()
+        p
+        for p in _STAGED_DIR.iterdir()
         if p.is_file() and p.suffix != ".pyc" and not p.name.startswith(".")
     )
 

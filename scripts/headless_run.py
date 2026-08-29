@@ -110,19 +110,19 @@ def new_state() -> dict:
         "version": "",
         "started": False,
         "finished": False,
-        "ok": None,          # None while running; True/False once the result arrives
-        "outcome": "",       # terminal_reason, or the error category
-        "message": "",       # the final text, or the failure
+        "ok": None,  # None while running; True/False once the result arrives
+        "outcome": "",  # terminal_reason, or the error category
+        "message": "",  # the final text, or the failure
         "cost_usd": 0.0,
-        "by_model": {},      # canonical model -> {"cost_usd", "input", "output", "cache_read"}
+        "by_model": {},  # canonical model -> {"cost_usd", "input", "output", "cache_read"}
         "turns": 0,
         "duration_ms": 0,
-        "stages": [],        # subagent calls, in order
+        "stages": [],  # subagent calls, in order
         "tool_calls": 0,
         "retries": [],
-        "denials": [],          # tools the run was refused - a blocked run is not a good one
+        "denials": [],  # tools the run was refused - a blocked run is not a good one
         "rate_limited": False,
-        "rate_limit_use": {},   # window -> utilisation, 0..1
+        "rate_limit_use": {},  # window -> utilisation, 0..1
         "events": 0,
         "undecodable": 0,
     }
@@ -235,9 +235,7 @@ def _apply_result(state: dict, event: dict) -> dict:
     # watcher sees the difference between finished and finished-having-been-blocked.
     denials = event.get("permission_denials")
     if isinstance(denials, list):
-        state["denials"] = [
-            str(d.get("tool_name") or "?") for d in denials if isinstance(d, dict)
-        ]
+        state["denials"] = [str(d.get("tool_name") or "?") for d in denials if isinstance(d, dict)]
     if not state["ok"] and not state["message"]:
         state["message"] = f"failed (HTTP {event.get('api_error_status')})"
     return state
@@ -336,10 +334,10 @@ def summary(state: dict) -> str:
 # stays readable. A pipe would have made the launcher a single point of failure for work it
 # is only supposed to be watching.
 
-import os          # noqa: E402 - grouped with the supervision half, not the decoding half
+import os  # noqa: E402 - grouped with the supervision half, not the decoding half
 import subprocess  # noqa: E402
-import time        # noqa: E402
-import uuid        # noqa: E402
+import time  # noqa: E402
+import uuid  # noqa: E402
 
 _RUN_DIR = ".headless"
 # A run whose stream file has not been touched in this long, with no result event, is not
@@ -412,9 +410,10 @@ def start(
         kwargs["creationflags"] = base | breakaway
     else:
         kwargs["start_new_session"] = True
-    with stream_path.open("w", encoding="utf-8") as out, error_path.open(
-        "w", encoding="utf-8"
-    ) as err:
+    with (
+        stream_path.open("w", encoding="utf-8") as out,
+        error_path.open("w", encoding="utf-8") as err,
+    ):
         try:
             proc = subprocess.Popen(argv, stdout=out, stderr=err, **kwargs)  # noqa: S603
         except OSError:
@@ -438,9 +437,7 @@ def start(
         "argv_summary": [a for a in argv if a != prompt],
         "cwd": str(project_dir),
     }
-    (folder / f"{session_id}.run.json").write_text(
-        json.dumps(record, indent=2), encoding="utf-8"
-    )
+    (folder / f"{session_id}.run.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
     return record
 
 

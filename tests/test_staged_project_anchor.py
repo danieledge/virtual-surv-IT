@@ -82,7 +82,9 @@ def test_persona_fires_from_project_even_when_cwd_elsewhere(tmp_path, monkeypatc
     _open_engagement(project)
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
-    rc, out = _run_persona(monkeypatch, capsys, {"session_id": _SID, "cwd": str(elsewhere)}, project)
+    rc, out = _run_persona(
+        monkeypatch, capsys, {"session_id": _SID, "cwd": str(elsewhere)}, project
+    )
     assert rc == 0 and "persona-anchor" in out
 
 
@@ -101,7 +103,9 @@ def test_stop_gate_silent_when_cwd_wanders_into_foreign_engagement(tmp_path, mon
     # The sandbox even carries a flaggable defect - the gate must not look at it at all.
     (sandbox / "artifacts" / "review-pass-1.md").write_text("# interim\n", encoding="utf-8")
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
-    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"session_id": _SID, "cwd": str(sandbox)})))
+    monkeypatch.setattr(
+        "sys.stdin", io.StringIO(json.dumps({"session_id": _SID, "cwd": str(sandbox)}))
+    )
     assert gate.main() == 0
     assert capsys.readouterr().out == ""
 
@@ -115,7 +119,9 @@ def test_stop_gate_fires_on_project_engagement_when_cwd_elsewhere(tmp_path, monk
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
-    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"session_id": _SID, "cwd": str(elsewhere)})))
+    monkeypatch.setattr(
+        "sys.stdin", io.StringIO(json.dumps({"session_id": _SID, "cwd": str(elsewhere)}))
+    )
     rc = gate.main()
     out = capsys.readouterr().out
     assert rc == 0

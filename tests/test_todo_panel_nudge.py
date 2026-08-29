@@ -35,9 +35,7 @@ def _stamped_run(run_fn, monkeypatch, capsys, payload: dict):
     if cwd:
         art = Path(cwd) / "artifacts"
         if art.is_dir():
-            (art / ".team-session.json").write_text(
-                json.dumps({"session": _SID}), encoding="utf-8"
-            )
+            (art / ".team-session.json").write_text(json.dumps({"session": _SID}), encoding="utf-8")
     return run_fn(monkeypatch, capsys, payload)
 
 

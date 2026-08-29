@@ -125,8 +125,8 @@ def test_wrong_multiselect_on_depth_flagged():
         _q("Depth", ["Quick", "Deep", "Audit", "None"], multi=True),
         _q("Performance", ["Yes", "No"]),
         _q("Fix-cycle", ["Report only", "Apply fixes", "Fix → re-review loop"]),
-            _q("Origin", ["AI-assisted / vibe-coded", "Mixed", "Hand-written"]),
-]
+        _q("Origin", ["AI-assisted / vibe-coded", "Mixed", "Hand-written"]),
+    ]
     proc = _run(bad)
     assert proc.returncode == 2
     assert "multiSelect: false" in proc.stderr
@@ -203,8 +203,8 @@ def test_recommended_marker_on_review_menu_option_passes():
         _q("Depth", ["Quick (Recommended)", "Deep", "Audit", "None"]),
         _q("Performance", ["Yes", "No"]),
         _q("Fix-cycle", ["Report only", "Apply fixes", "Fix → re-review loop"]),
-            _q("Origin", ["AI-assisted / vibe-coded", "Mixed", "Hand-written"]),
-]
+        _q("Origin", ["AI-assisted / vibe-coded", "Mixed", "Hand-written"]),
+    ]
     proc = _run(good)
     assert proc.returncode == 0
     assert proc.stderr == ""
@@ -215,8 +215,8 @@ def test_recommended_marker_on_multiple_options_passes():
         _q("Depth", ["Quick", "Deep", "Audit", "None"]),
         _q("Performance", ["Yes (Recommended)", "No"]),
         _q("Fix-cycle", ["Report only", "Apply fixes (Recommended)", "Fix → re-review loop"]),
-            _q("Origin", ["AI-assisted / vibe-coded", "Mixed", "Hand-written"]),
-]
+        _q("Origin", ["AI-assisted / vibe-coded", "Mixed", "Hand-written"]),
+    ]
     proc = _run(good)
     assert proc.returncode == 0
 

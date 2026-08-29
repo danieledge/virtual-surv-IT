@@ -112,7 +112,9 @@ def main() -> int:
                     for o in g["orders"]:
                         if o["first_failing_condition"]:
                             cond = next(
-                                c for c in o["conditions"] if c["id"] == o["first_failing_condition"]
+                                c
+                                for c in o["conditions"]
+                                if c["id"] == o["first_failing_condition"]
                             )
                             print(
                                 f"  {name} seed={seed} order={o['order_id']}: "

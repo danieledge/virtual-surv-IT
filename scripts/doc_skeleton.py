@@ -120,16 +120,17 @@ def render(root: Path, entries: list[dict], budget: int) -> str:
     head = [
         f"# Documentation skeleton - {root}",
         f"# {len(entries)} document(s) inventoried, budget ~{budget} tokens",
-        "# "
-        + ", ".join(f"{suffix} x{count}" for suffix, count in sorted(by_type.items())),
+        "# " + ", ".join(f"{suffix} x{count}" for suffix, count in sorted(by_type.items())),
         "",
     ]
     lines: list[str] = []
     spent = sum(len(line) for line in head) // _CHARS_PER_TOKEN
     shown = 0
     for entry in entries:
-        block = [f"## {entry['path']}  [{entry['kind']}], {entry['bytes']:,} bytes, "
-                 f"modified {entry['modified']}"]
+        block = [
+            f"## {entry['path']}  [{entry['kind']}], {entry['bytes']:,} bytes, "
+            f"modified {entry['modified']}"
+        ]
         if entry["kind"] == "document":
             block.append(f"  (read with: python -m scripts.convert_file {entry['path']})")
         for heading in entry["headings"]:

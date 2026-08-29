@@ -266,16 +266,22 @@ def _shell_knows(program: str, terminal: str) -> bool:
                 # No -NoProfile, deliberately: the profile is exactly where an alias like
                 # `cc` is defined, and skipping it would make the probe answer a different
                 # question from the one that matters.
-                [exe, "-NoLogo", "-Command",
-                 f"if (Get-Command {_ps_quote(program)} -ErrorAction SilentlyContinue) "
-                 "{exit 0} else {exit 1}"],
-                capture_output=True, timeout=_RESOLVE_TIMEOUT,
+                [
+                    exe,
+                    "-NoLogo",
+                    "-Command",
+                    f"if (Get-Command {_ps_quote(program)} -ErrorAction SilentlyContinue) "
+                    "{exit 0} else {exit 1}",
+                ],
+                capture_output=True,
+                timeout=_RESOLVE_TIMEOUT,
             )
             return probe.returncode == 0
         if sys.platform != "win32":
             probe = subprocess.run(  # noqa: S603 - argv built here, never shell
                 ["sh", "-lc", f"command -v {_quote(program)} >/dev/null 2>&1"],
-                capture_output=True, timeout=_RESOLVE_TIMEOUT,
+                capture_output=True,
+                timeout=_RESOLVE_TIMEOUT,
             )
             return probe.returncode == 0
     except (OSError, ValueError, subprocess.TimeoutExpired):
@@ -376,12 +382,8 @@ def open_in_new_window(command: list[str], cwd: Path) -> bool:
             return True
         if sys.platform == "darwin":
             joined = " ".join(_quote(part) for part in command)
-            script = (
-                f'tell application "Terminal" to do script '
-                f'"cd {_quote(str(cwd))} && {joined}"'
-            )
-            argv = ["osascript", "-e", script, "-e",
-                    'tell application "Terminal" to activate']
+            script = f'tell application "Terminal" to do script "cd {_quote(str(cwd))} && {joined}"'
+            argv = ["osascript", "-e", script, "-e", 'tell application "Terminal" to activate']
         elif sys.platform == "win32":
             argv = _windows_argv(terminal, command, cwd)
         else:
@@ -448,7 +450,8 @@ def main(argv: list[str] | None = None) -> int:
     command = args.command.split() if args.command else _probe_command()
     cwd = Path.cwd()
     argv_built = (
-        _windows_argv(terminal, command, cwd) if sys.platform == "win32"
+        _windows_argv(terminal, command, cwd)
+        if sys.platform == "win32"
         else _posix_argv(terminal, command, cwd)
     )
     print("argv it would run :")
@@ -463,8 +466,8 @@ def main(argv: list[str] | None = None) -> int:
         "A window should now be visible. If this says True and you see nothing, the spawn "
         "is reporting success it cannot back up - say so, because that is the bug that "
         "stopped a session starting at all on 2026-08-25."
-        if ok else
-        "Nothing launched - an unattended run would fall back to this window, which is the "
+        if ok
+        else "Nothing launched - an unattended run would fall back to this window, which is the "
         "correct behaviour."
     )
     return 0 if ok else 1

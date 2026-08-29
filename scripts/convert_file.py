@@ -174,13 +174,17 @@ def _mail_blocks(message, report: "Report", attachments: list[str]) -> dict:
 
     Body preference is plain text, then HTML with tags stripped - and when only HTML exists
     that is SAID, because a stripped body loses structure a reader may need."""
-    blocks = [{"kind": "para", "text": f"**{name}:** {message.get(name)}"}
-              for name in _MAIL_HEADERS if message.get(name)]
+    blocks = [
+        {"kind": "para", "text": f"**{name}:** {message.get(name)}"}
+        for name in _MAIL_HEADERS
+        if message.get(name)
+    ]
     body, note = "", ""
     if message.is_multipart():
         parts = list(message.walk())
     else:
         parts = [message]
+
     def _content(part) -> str:
         """`get_content()` raises on a message with no payload at all - which is exactly the
         .msg-rebuilt-from-property-streams case when the body stream is missing. Found by
@@ -285,8 +289,12 @@ def read_msg(source: Path, report: "Report") -> dict:
         else:
             # Rebuild the minimum from individual properties - honest about being partial.
             message = EmailMessage()
-            for tag, name in (("0037", "Subject"), ("0C1A", "From"), ("0E04", "To"),
-                              ("0E03", "Cc")):
+            for tag, name in (
+                ("0037", "Subject"),
+                ("0C1A", "From"),
+                ("0E04", "To"),
+                ("0E03", "Cc"),
+            ):
                 value = _text(tag)
                 if value:
                     message[name] = value
@@ -973,9 +981,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--schema", help="feed schema (.yaml/.json) to validate against")
     parser.add_argument("--delimiter", help="csv only: field delimiter (default: sniffed)")
     parser.add_argument("--encoding", help="csv only: source encoding (default: detected)")
-    parser.add_argument(
-        "--report", help="evidence report path (default: <out>.evidence.json)"
-    )
+    parser.add_argument("--report", help="evidence report path (default: <out>.evidence.json)")
     parser.add_argument(
         "--layout",
         action="store_true",

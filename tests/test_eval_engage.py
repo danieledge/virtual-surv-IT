@@ -648,20 +648,48 @@ def test_usage_attribution_splits_main_and_subagent_output():
     from scripts.eval_engage import usage_attribution
 
     series = [
-        {"type": "assistant", "from_subagent": False, "model": "sonnet-x",
-         "usage": {"output_tokens": 100}},
-        {"type": "assistant", "from_subagent": True, "model": "haiku-y",
-         "usage": {"output_tokens": 40}},
-        {"type": "assistant", "from_subagent": True, "model": "sonnet-x",
-         "usage": {"output_tokens": 60}},
-        {"type": "result", "total_cost_usd": 1.0, "num_turns": 3,
-         "usage": {"input_tokens": 5, "output_tokens": 200,
-                   "cache_read_input_tokens": 7, "cache_creation_input_tokens": 9},
-         "model_usage": {"sonnet-x": {"outputTokens": 160}}},
-        {"type": "result", "total_cost_usd": 2.5, "num_turns": 4,
-         "usage": {"input_tokens": 6, "output_tokens": 210,
-                   "cache_read_input_tokens": 8, "cache_creation_input_tokens": 10},
-         "model_usage": {"sonnet-x": {"outputTokens": 170}}},
+        {
+            "type": "assistant",
+            "from_subagent": False,
+            "model": "sonnet-x",
+            "usage": {"output_tokens": 100},
+        },
+        {
+            "type": "assistant",
+            "from_subagent": True,
+            "model": "haiku-y",
+            "usage": {"output_tokens": 40},
+        },
+        {
+            "type": "assistant",
+            "from_subagent": True,
+            "model": "sonnet-x",
+            "usage": {"output_tokens": 60},
+        },
+        {
+            "type": "result",
+            "total_cost_usd": 1.0,
+            "num_turns": 3,
+            "usage": {
+                "input_tokens": 5,
+                "output_tokens": 200,
+                "cache_read_input_tokens": 7,
+                "cache_creation_input_tokens": 9,
+            },
+            "model_usage": {"sonnet-x": {"outputTokens": 160}},
+        },
+        {
+            "type": "result",
+            "total_cost_usd": 2.5,
+            "num_turns": 4,
+            "usage": {
+                "input_tokens": 6,
+                "output_tokens": 210,
+                "cache_read_input_tokens": 8,
+                "cache_creation_input_tokens": 10,
+            },
+            "model_usage": {"sonnet-x": {"outputTokens": 170}},
+        },
     ]
     att = usage_attribution(series)
     assert att["total_cost_usd"] == 2.5 and att["num_turns"] == 4  # last result wins

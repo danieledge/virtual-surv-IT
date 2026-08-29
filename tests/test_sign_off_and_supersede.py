@@ -40,7 +40,10 @@ def _load(name: str):
 def _run(*args, **kw):
     return subprocess.run(
         [sys.executable, "-m", "scripts.engagement_state", *args],
-        cwd=REPO_ROOT, capture_output=True, text=True, **kw
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        **kw,
     )
 
 

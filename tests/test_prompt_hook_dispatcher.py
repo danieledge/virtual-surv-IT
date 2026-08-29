@@ -15,6 +15,7 @@ opposite: a crash must cost the injected context, never the user's prompt.
 from __future__ import annotations
 
 import importlib.util
+import os
 import json
 import subprocess
 import sys
@@ -33,46 +34,81 @@ def _load():
     return module
 
 
-def _payload(prompt: str = "hello") -> str:
+def _payload(prompt: str = "hello", cwd: Path | None = None, session_id: str = "t") -> str:
     return json.dumps(
         {
-            "session_id": "t",
+            "session_id": session_id,
             "transcript_path": "/tmp/x",
-            "cwd": str(REPO),
+            "cwd": str(cwd or REPO),
             "hook_event_name": "UserPromptSubmit",
             "prompt": prompt,
         }
     )
 
 
-def _run(payload: str, script: Path) -> tuple[int, str]:
+def _run(payload: str, script: Path, env: dict | None = None) -> tuple[int, str]:
     proc = subprocess.run(
         [sys.executable, str(script)],
         input=payload,
         capture_output=True,
         text=True,
+        env=env,
     )
     return proc.returncode, proc.stdout
+
+
+_FIXTURE_SESSION = "session-under-test"
+
+
+def _engaged_project(tmp_path: Path) -> tuple[Path, dict]:
+    """A minimal project the anchor will actually speak in, plus the env to reach it.
+
+    persona_anchor stays silent unless it finds an engagements dir, a `.team-session.json`
+    stamp matching THIS payload's session, and at least one live pack. Those live under
+    `artifacts/`, which is gitignored - so on a fresh checkout (every CI run) there is
+    nothing to find and both hooks print nothing. The test then compared "" to "" and
+    passed regardless of what the dispatcher did, which is the case its own docstring
+    calls out as worthless; it only ever really ran on a developer machine that happened
+    to have an open engagement (CI red from 2026-08-28). Building the state here makes
+    the comparison meaningful everywhere and independent of local working files.
+    """
+    root = tmp_path / "project"
+    artifacts = root / "artifacts"  # legacy layout name, resolved by vsit_paths
+    (artifacts / "demo-engagement").mkdir(parents=True)
+    (artifacts / ".team-session.json").write_text(
+        json.dumps({"session": _FIXTURE_SESSION}), encoding="utf-8"
+    )
+    # "in_progress" is the stored vocabulary; check_artifacts._STATE_STATUS_MAP maps it to
+    # the live status "open". Writing "open" directly parses to None and the pack reads as
+    # not-an-engagement, which is silent rather than an error.
+    (artifacts / "demo-engagement" / "engagement-state.json").write_text(
+        json.dumps({"status": "in_progress", "slug": "demo-engagement"}), encoding="utf-8"
+    )
+    # CLAUDE_PROJECT_DIR outranks the payload's cwd in the hooks' own resolution order,
+    # so pin it rather than leaving whatever the outer session exported to leak in.
+    env = {**os.environ, "CLAUDE_PROJECT_DIR": str(root)}
+    return root, env
 
 
 # --------------------------------------------------------------- output fidelity
 
 
 @pytest.mark.parametrize("prompt", ["/engage", "/compliance-surveillance-team:engage --new"])
-def test_the_dispatcher_emits_exactly_what_the_two_hooks_emitted(prompt):
+def test_the_dispatcher_emits_exactly_what_the_two_hooks_emitted(prompt, tmp_path):
     """The whole justification is that nothing observable changes. Uses prompts that make
     the prefetch hook actually produce output - an all-empty comparison would pass whatever
-    the dispatcher did."""
-    payload = _payload(prompt)
+    the dispatcher did, which is why the engaged project below is built rather than assumed."""
+    root, env = _engaged_project(tmp_path)
+    payload = _payload(prompt, cwd=root, session_id=_FIXTURE_SESSION)
     # WARM FIRST. engage_probe_prefetch writes caches on a cold run (the tool-availability
     # inventory among them), so the very first invocation in a sequence can legitimately
     # produce different output from the second. Comparing a cold run against a warm one
     # tests the cache, not the dispatcher - which is exactly how this failed once the
     # code-intel step started clearing that cache (2026-08-27).
-    _run(payload, REPO / "scripts" / "engage_probe_prefetch.py")
-    _, anchor = _run(payload, REPO / "scripts" / "persona_anchor.py")
-    _, prefetch = _run(payload, REPO / "scripts" / "engage_probe_prefetch.py")
-    code, combined = _run(payload, DISPATCHER)
+    _run(payload, REPO / "scripts" / "engage_probe_prefetch.py", env)
+    _, anchor = _run(payload, REPO / "scripts" / "persona_anchor.py", env)
+    _, prefetch = _run(payload, REPO / "scripts" / "engage_probe_prefetch.py", env)
+    code, combined = _run(payload, DISPATCHER, env)
     assert code == 0
     assert combined == anchor + prefetch
     assert combined, "this prompt must produce output, or the test proves nothing"

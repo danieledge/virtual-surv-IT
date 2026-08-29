@@ -182,9 +182,21 @@ def test_the_launcher_hands_the_unattended_flag_to_the_workspace(tmp_path):
     )
     workspace = tmp_path / "artifacts" / "demo"
     subprocess.run(
-        [sys.executable, "-m", "scripts.engagement_state", "init",
-         "--dir", str(workspace), "--slug", "demo", "--title", "Demo"],
-        cwd=REPO_ROOT, capture_output=True, check=True,
+        [
+            sys.executable,
+            "-m",
+            "scripts.engagement_state",
+            "init",
+            "--dir",
+            str(workspace),
+            "--slug",
+            "demo",
+            "--title",
+            "Demo",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        check=True,
     )
     state = json.loads((workspace / "engagement-state.json").read_text(encoding="utf-8"))
     assert state["auto"] is True, "the unattended flag never reached the pack"
@@ -200,9 +212,21 @@ def test_an_ordinary_engagement_is_never_marked_autonomous(tmp_path):
 
     workspace = tmp_path / "artifacts" / "demo"
     subprocess.run(
-        [sys.executable, "-m", "scripts.engagement_state", "init",
-         "--dir", str(workspace), "--slug", "demo", "--title", "Demo"],
-        cwd=REPO_ROOT, capture_output=True, check=True,
+        [
+            sys.executable,
+            "-m",
+            "scripts.engagement_state",
+            "init",
+            "--dir",
+            str(workspace),
+            "--slug",
+            "demo",
+            "--title",
+            "Demo",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        check=True,
     )
     state = json.loads((workspace / "engagement-state.json").read_text(encoding="utf-8"))
     assert state["auto"] is False
@@ -239,7 +263,9 @@ def test_a_hand_made_marker_survives_a_stale_sidecar(tmp_path):
     project = _project(tmp_path)
     (project / ".claude" / MARKER_NAME).write_text("granted by hand\n", encoding="utf-8")
     (project / ".claude" / ".auto-grant.json").write_text(
-        json.dumps({"expires_at": (datetime.datetime.now() - datetime.timedelta(days=1)).isoformat()}),
+        json.dumps(
+            {"expires_at": (datetime.datetime.now() - datetime.timedelta(days=1)).isoformat()}
+        ),
         encoding="utf-8",
     )
     assert mod._expire_stale_auto_consent(project) is False
@@ -377,7 +403,9 @@ def test_the_auto_gate_is_reached_through_the_real_entry_point(tmp_path):
     # checked this repo instead of the fixture.
     result = subprocess.run(
         [sys.executable, "-m", "scripts.check_artifacts", str(tmp_path / "artifacts")],
-        cwd=REPO_ROOT, capture_output=True, text=True,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
     )
     printed = result.stdout + result.stderr
     assert "AUTO-NOT-PARTIAL" in printed, (
@@ -402,9 +430,21 @@ def test_the_handoff_carries_the_ceiling_and_the_chosen_rung(tmp_path):
     )
     workspace = tmp_path / "artifacts" / "demo"
     subprocess.run(
-        [sys.executable, "-m", "scripts.engagement_state", "init",
-         "--dir", str(workspace), "--slug", "demo", "--title", "Demo"],
-        cwd=REPO_ROOT, capture_output=True, check=True,
+        [
+            sys.executable,
+            "-m",
+            "scripts.engagement_state",
+            "init",
+            "--dir",
+            str(workspace),
+            "--slug",
+            "demo",
+            "--title",
+            "Demo",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        check=True,
     )
     state = json.loads((workspace / "engagement-state.json").read_text(encoding="utf-8"))
     assert state["auto"] is True
@@ -423,9 +463,21 @@ def test_an_unattended_run_defaults_to_parking_at_the_ceiling(tmp_path):
     )
     workspace = tmp_path / "artifacts" / "demo"
     subprocess.run(
-        [sys.executable, "-m", "scripts.engagement_state", "init",
-         "--dir", str(workspace), "--slug", "demo", "--title", "Demo"],
-        cwd=REPO_ROOT, capture_output=True, check=True,
+        [
+            sys.executable,
+            "-m",
+            "scripts.engagement_state",
+            "init",
+            "--dir",
+            str(workspace),
+            "--slug",
+            "demo",
+            "--title",
+            "Demo",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        check=True,
     )
     state = json.loads((workspace / "engagement-state.json").read_text(encoding="utf-8"))
     assert state["auto_on_budget"] == "park"
@@ -438,9 +490,21 @@ def test_an_attended_engagement_keeps_the_ladder(tmp_path):
 
     workspace = tmp_path / "artifacts" / "demo"
     subprocess.run(
-        [sys.executable, "-m", "scripts.engagement_state", "init",
-         "--dir", str(workspace), "--slug", "demo", "--title", "Demo"],
-        cwd=REPO_ROOT, capture_output=True, check=True,
+        [
+            sys.executable,
+            "-m",
+            "scripts.engagement_state",
+            "init",
+            "--dir",
+            str(workspace),
+            "--slug",
+            "demo",
+            "--title",
+            "Demo",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        check=True,
     )
     state = json.loads((workspace / "engagement-state.json").read_text(encoding="utf-8"))
     assert state["auto_on_budget"] is None
@@ -457,9 +521,21 @@ def test_a_corrupt_handoff_still_marks_the_run_unattended(tmp_path):
     handoff.write_text("{ not json", encoding="utf-8")
     workspace = tmp_path / "artifacts" / "demo"
     subprocess.run(
-        [sys.executable, "-m", "scripts.engagement_state", "init",
-         "--dir", str(workspace), "--slug", "demo", "--title", "Demo"],
-        cwd=REPO_ROOT, capture_output=True, check=True,
+        [
+            sys.executable,
+            "-m",
+            "scripts.engagement_state",
+            "init",
+            "--dir",
+            str(workspace),
+            "--slug",
+            "demo",
+            "--title",
+            "Demo",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        check=True,
     )
     state = json.loads((workspace / "engagement-state.json").read_text(encoding="utf-8"))
     assert state["auto"] is True
@@ -467,9 +543,9 @@ def test_a_corrupt_handoff_still_marks_the_run_unattended(tmp_path):
 
 
 def test_the_reference_tells_the_run_not_to_ask_at_the_ceiling():
-    text = (
-        REPO_ROOT / ".claude" / "skills" / "engage" / "references" / "auto-mode.md"
-    ).read_text(encoding="utf-8")
+    text = (REPO_ROOT / ".claude" / "skills" / "engage" / "references" / "auto-mode.md").read_text(
+        encoding="utf-8"
+    )
     assert "do not offer the degrade ladder" in text
     assert "auto_on_budget" in text
     for rung in ("`park`", "`light`", "`continue`"):
@@ -485,9 +561,9 @@ def test_the_light_rung_cannot_be_reached_on_the_models_own_judgement():
 
     Fragments, not sentences: the source is hard-wrapped, so asserting a full phrase tests
     the line breaks rather than the meaning (which it did, on the first attempt)."""
-    text = (
-        REPO_ROOT / ".claude" / "skills" / "engage" / "references" / "auto-mode.md"
-    ).read_text(encoding="utf-8")
+    text = (REPO_ROOT / ".claude" / "skills" / "engage" / "references" / "auto-mode.md").read_text(
+        encoding="utf-8"
+    )
     light = text[text.index("- **`light`**") :][:900]
     assert "pre-authorised" in light, "nothing distinguishes this from inferring the profile"
     assert "own judgement" in light
@@ -635,9 +711,7 @@ def test_the_decision_hands_a_shell_nothing_to_reinterpret(tmp_path):
     command = mod._new_command(project, messy, auto=True)
     assert "\n" not in command
     assert '"' not in command and "'" not in command
-    assert command.split() == [
-        mod._engage_command(project), "--new", "--request-pending", "--auto"
-    ]
+    assert command.split() == [mod._engage_command(project), "--new", "--request-pending", "--auto"]
     body = (project / ".claude" / ".request-pending.txt").read_text(encoding="utf-8").strip()
     assert body == "run the 'Q3' tuning analysis", "the text itself keeps its spaces"
 
@@ -665,9 +739,9 @@ def test_speech_marks_of_every_shape_cannot_close_the_span(tmp_path):
     project = _project(tmp_path)
     for text in (
         'check the "Q3" figures',
-        "check the “Q3” figures",     # curly
-        "check the «Q3» figures",     # guillemets
-        "check the ″Q3″ figures",     # double prime
+        "check the “Q3” figures",  # curly
+        "check the «Q3» figures",  # guillemets
+        "check the ″Q3″ figures",  # double prime
     ):
         body = _request_body(mod._new_command(project, text), project)
         assert '"' not in body, f"{text!r} left a terminator in {body!r}"
@@ -762,13 +836,16 @@ def test_arming_never_skips_the_preflight(tmp_path):
         pass
 
     import types
+
     fake = types.SimpleNamespace(
         AUTO_CANCELLED=_Cancelled,
         auto_preflight_screen=lambda p, m, ref: calls.append(ref) or None,
     )
     sys.modules["launcher_app"] = fake
     try:
-        decision = mod._auto_run_decision(project, "tune thresholds", request_text="tune thresholds")
+        decision = mod._auto_run_decision(
+            project, "tune thresholds", request_text="tune thresholds"
+        )
     finally:
         sys.modules.pop("launcher_app", None)
     assert calls == ["tune thresholds"], "the pre-flight must be consulted every time"
@@ -786,7 +863,7 @@ def test_the_spend_ceiling_defaults_to_35():
     src = _preflight_source()
     assert "CAPS = (0, 10, 25, 35, 50, 100)" in src, "$35 must be an offered rung"
     body = src.split("def auto_preflight_screen", 1)[1]
-    state = body.split('state = {', 1)[1].split("}", 1)[0]
+    state = body.split("state = {", 1)[1].split("}", 1)[0]
     assert '"cap": 3' in state, "index 3 of CAPS is $35"
 
 
@@ -801,7 +878,7 @@ def test_at_the_ceiling_it_defaults_to_parking():
     assert 'ON_BUDGET = ("park", "light", "continue", "stop")' in body, (
         "four rungs: three advisory, one enforced"
     )
-    state = body.split('state = {', 1)[1].split("}", 1)[0]
+    state = body.split("state = {", 1)[1].split("}", 1)[0]
     assert '"on_budget": 0' in state, "index 0 of ON_BUDGET is park"
     assert '"park": "park at next gate"' in body
 
@@ -820,7 +897,7 @@ def test_enter_cannot_start_an_unattended_run():
     # when Enter stopped starting the run, and then clipped when corrected. Assert the
     # constant and that the footer uses it, rather than a literal that can drift again.
     src = _preflight_source()
-    assert 'Ctrl-D START unattended' in src.split("_PREFLIGHT_KEYS = ", 1)[1].split("\n", 1)[0]
+    assert "Ctrl-D START unattended" in src.split("_PREFLIGHT_KEYS = ", 1)[1].split("\n", 1)[0]
     assert "_PREFLIGHT_KEYS" in body, "the footer must render the shared constant"
     assert body.count("Ctrl-D START unattended") == 0, "and must not repeat it as a literal"
 
@@ -898,8 +975,14 @@ def test_a_plain_new_engagement_leaves_no_request_behind(tmp_path):
 
 def _preflight_answers(**over):
     """The dict the pre-flight returns, as the launcher consumes it."""
-    base = {"data_attested": True, "allow_exec": False, "engagement_usd": 35,
-            "on_budget": "continue", "run_mode": "window", "hard_cap_usd": None}
+    base = {
+        "data_attested": True,
+        "allow_exec": False,
+        "engagement_usd": 35,
+        "on_budget": "continue",
+        "run_mode": "window",
+        "hard_cap_usd": None,
+    }
     base.update(over)
     return base
 
@@ -960,7 +1043,7 @@ def test_web_search_is_off_unless_the_human_says_otherwise():
     instruction (CLAUDE.md §7). So it is a pre-flight question with the cautious default."""
     src = _preflight_source()
     body = src.split("def auto_preflight_screen", 1)[1]
-    state = body.split('state = {', 1)[1].split("}", 1)[0]
+    state = body.split("state = {", 1)[1].split("}", 1)[0]
     assert '"web": False' in state, "off by default"
     assert '("web", "toggle", "Allow web search"' in body, "and asked, not assumed"
 

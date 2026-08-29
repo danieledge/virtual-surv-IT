@@ -35,9 +35,7 @@ def _stamped_run(run_fn, monkeypatch, capsys, payload: dict):
     if cwd:
         art = Path(cwd) / "artifacts"
         if art.is_dir():
-            (art / ".team-session.json").write_text(
-                json.dumps({"session": _SID}), encoding="utf-8"
-            )
+            (art / ".team-session.json").write_text(json.dumps({"session": _SID}), encoding="utf-8")
     return run_fn(monkeypatch, capsys, payload)
 
 
@@ -290,9 +288,7 @@ def _owned_setup(tmp_path, marker_session: str):
     (art / ".active-engagement.json").write_text(
         json.dumps({"slug": "previous", "session": marker_session}), encoding="utf-8"
     )
-    (art / ".team-session.json").write_text(
-        json.dumps({"session": "sess-mine"}), encoding="utf-8"
-    )
+    (art / ".team-session.json").write_text(json.dumps({"session": "sess-mine"}), encoding="utf-8")
     return art
 
 
@@ -341,9 +337,7 @@ def test_own_sessions_active_pack_keeps_the_fix_list(tmp_path, monkeypatch, caps
 
 def test_legacy_marker_without_session_keeps_old_behaviour(tmp_path, monkeypatch, capsys):
     art = _owned_setup(tmp_path, marker_session="ignored")
-    (art / ".active-engagement.json").write_text(
-        json.dumps({"slug": "previous"}), encoding="utf-8"
-    )
+    (art / ".active-engagement.json").write_text(json.dumps({"slug": "previous"}), encoding="utf-8")
     rc, out = _run_staged(
         monkeypatch, capsys, {"session_id": "sess-mine", "cwd": str(tmp_path)}, tmp_path
     )

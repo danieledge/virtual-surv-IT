@@ -46,7 +46,18 @@ def test_diagnosis_plus_email_closes_without_a_delivery_report(tmp_path):
         cwd=REPO_ROOT,
         timeout=120,
     )
-    assert _es(art, "add-artifact", "DIAGNOSIS-wna.md", "--title", "Diagnosis (the delivery)", "--slug", "wna").returncode == 0
+    assert (
+        _es(
+            art,
+            "add-artifact",
+            "DIAGNOSIS-wna.md",
+            "--title",
+            "Diagnosis (the delivery)",
+            "--slug",
+            "wna",
+        ).returncode
+        == 0
+    )
     assert _es(art, "set-status", "closing", "--slug", "wna").returncode == 0
     _es(art, "resolve-outstanding", "independent QA", "--slug", "wna")
     _es(art, "resolve-outstanding", "DoD", "--slug", "wna")
@@ -56,10 +67,27 @@ def test_diagnosis_plus_email_closes_without_a_delivery_report(tmp_path):
         "Virtual Surveillance IT.\nMorgan (PM) 🤖\n",
         encoding="utf-8",
     )
-    assert _es(art, "add-artifact", "engagement-summary-email-wna.txt", "--title", "Engagement summary email", "--slug", "wna").returncode == 0
-    assert _es(art, "set-team", "Morgan (PM) 🤖", "Ana (data-analyst) 🤖", "--slug", "wna").returncode == 0
+    assert (
+        _es(
+            art,
+            "add-artifact",
+            "engagement-summary-email-wna.txt",
+            "--title",
+            "Engagement summary email",
+            "--slug",
+            "wna",
+        ).returncode
+        == 0
+    )
+    assert (
+        _es(art, "set-team", "Morgan (PM) 🤖", "Ana (data-analyst) 🤖", "--slug", "wna").returncode
+        == 0
+    )
     assert _es(art, "finalise-artifacts", "--slug", "wna").returncode == 0
-    assert _es(art, "set-footprint", "--agents", "1", "--tokens", "~20k", "--slug", "wna").returncode == 0
+    assert (
+        _es(art, "set-footprint", "--agents", "1", "--tokens", "~20k", "--slug", "wna").returncode
+        == 0
+    )
 
     env = dict(os.environ)
     env["PYTHONPATH"] = str(REPO_ROOT)

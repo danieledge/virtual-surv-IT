@@ -170,7 +170,9 @@ def merge_contracts(org: dict | None, project: dict | None) -> dict:
             org_lines = org_body.splitlines()
             seen = {line.strip() for line in org_lines if line.strip()}
             extra = [ln for ln in proj_body.splitlines() if ln.strip() not in seen]
-            sections[name] = "\n".join(org_lines + ([""] + extra if any(x.strip() for x in extra) else []))
+            sections[name] = "\n".join(
+                org_lines + ([""] + extra if any(x.strip() for x in extra) else [])
+            )
         elif proj_body:
             sections[name] = proj_body
         elif org_body:

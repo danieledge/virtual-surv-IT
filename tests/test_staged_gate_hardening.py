@@ -45,9 +45,7 @@ _SID = "sess-hardening-suite"
 def _stamp_if_artifacts(project: Path) -> None:
     art = project / "artifacts"
     if art.is_dir():
-        (art / ".team-session.json").write_text(
-            json.dumps({"session": _SID}), encoding="utf-8"
-        )
+        (art / ".team-session.json").write_text(json.dumps({"session": _SID}), encoding="utf-8")
 
 
 def _run_gate(monkeypatch, capsys, payload: dict, project: Path):
@@ -89,9 +87,7 @@ def test_stop_gate_fires_in_plugin_mode_subprocess(tmp_path):
     art.mkdir(parents=True)
     (art / "START-HERE.md").write_text("Status: ⏳ in progress\n", encoding="utf-8")
     (art / "review-pass-1.md").write_text("# interim\n", encoding="utf-8")  # MISSING-HTML
-    (art / ".team-session.json").write_text(
-        json.dumps({"session": _SID}), encoding="utf-8"
-    )
+    (art / ".team-session.json").write_text(json.dumps({"session": _SID}), encoding="utf-8")
     hook = REPO_ROOT / "scripts" / "staged_hooks" / "dod_stop_gate.py"
     env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
     env["CLAUDE_PROJECT_DIR"] = str(project)

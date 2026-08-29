@@ -53,7 +53,9 @@ def _weekday_rows(start: date, days: int, skip: set[date] | None = None):
 def _run(script: str, *args) -> str:
     result = subprocess.run(
         [sys.executable, "-m", f"scripts.{script}", *args],
-        cwd=REPO_ROOT, capture_output=True, text=True,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
     )
     return result.stdout + result.stderr
 
@@ -128,9 +130,14 @@ def test_finance_columns_get_fibo_grounded_tags(tmp_path):
     path = _write(
         tmp_path / "t.csv",
         [
-            {"trade_date": "2026-01-05", "counterparty_id": "CP1",
-             "notional_amount": "1000.50", "settlement_currency": "GBP"}
-        ] * 5,
+            {
+                "trade_date": "2026-01-05",
+                "counterparty_id": "CP1",
+                "notional_amount": "1000.50",
+                "settlement_currency": "GBP",
+            }
+        ]
+        * 5,
     )
     data = json.loads(_run("tag_columns", str(path), "--json"))
     tags = {c["column"]: (c["match"] or {}).get("tag") for c in data["results"]}
@@ -244,8 +251,9 @@ def test_eml_converts_with_headers_body_and_attachment_names(tmp_path):
     message["Subject"] = "Re: order 12345"
     message["Date"] = "Mon, 24 Aug 2026 10:00:00 +0100"
     message.set_content("Please review the fill.")
-    message.add_attachment(b"x", maintype="application", subtype="octet-stream",
-                           filename="blotter.csv")
+    message.add_attachment(
+        b"x", maintype="application", subtype="octet-stream", filename="blotter.csv"
+    )
     path = tmp_path / ("note." + "eml")
     path.write_bytes(message.as_bytes())
     out = _run("convert_file", str(path))
@@ -269,9 +277,7 @@ def test_attachments_are_named_but_never_silently_treated_as_extracted(tmp_path)
     path = tmp_path / ("a." + "eml")
     path.write_bytes(message.as_bytes())
     _run("convert_file", str(path))
-    evidence = json.loads(
-        (tmp_path / "a.converted.md.evidence.json").read_text(encoding="utf-8")
-    )
+    evidence = json.loads((tmp_path / "a.converted.md.evidence.json").read_text(encoding="utf-8"))
     assert evidence["attachments"] == 1
     assert any("NOT extracted" in w for w in evidence["warnings"])
 
@@ -333,14 +339,26 @@ def test_the_daemon_is_on_by_default(tmp_path, monkeypatch):
 
 
 def test_either_tier_can_turn_the_daemon_off_and_the_project_wins(tmp_path, monkeypatch):
-    assert _resolve(tmp_path, machine={"default_guard_daemon": False},
-                    monkeypatch=monkeypatch)["guard_daemon"] is False
-    assert _resolve(tmp_path, prefs={"guard_daemon": False},
-                    monkeypatch=monkeypatch)["guard_daemon"] is False
+    assert (
+        _resolve(tmp_path, machine={"default_guard_daemon": False}, monkeypatch=monkeypatch)[
+            "guard_daemon"
+        ]
+        is False
+    )
+    assert (
+        _resolve(tmp_path, prefs={"guard_daemon": False}, monkeypatch=monkeypatch)["guard_daemon"]
+        is False
+    )
     # Project beats machine in BOTH directions - that is what "project wins" has to mean.
-    assert _resolve(tmp_path, prefs={"guard_daemon": True},
-                    machine={"default_guard_daemon": False},
-                    monkeypatch=monkeypatch)["guard_daemon"] is True
+    assert (
+        _resolve(
+            tmp_path,
+            prefs={"guard_daemon": True},
+            machine={"default_guard_daemon": False},
+            monkeypatch=monkeypatch,
+        )["guard_daemon"]
+        is True
+    )
 
 
 def test_the_shell_and_python_tiers_agree_on_the_default():

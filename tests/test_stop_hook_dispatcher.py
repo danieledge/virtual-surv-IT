@@ -71,9 +71,7 @@ def _ws(project: Path, slug: str) -> Path:
     # Explicit, deterministic stamp: es_main itself only stamps when the pytest
     # process env happens to carry CLAUDE_CODE_SESSION_ID (true under a live Claude
     # session, false in CI) - never rely on that here.
-    (art / ".team-session.json").write_text(
-        json.dumps({"session": _SID}), encoding="utf-8"
-    )
+    (art / ".team-session.json").write_text(json.dumps({"session": _SID}), encoding="utf-8")
     return art / slug
 
 

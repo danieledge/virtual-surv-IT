@@ -19,7 +19,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 def _dashboard():
     if str(REPO_ROOT / "scripts") not in sys.path:
         sys.path.insert(0, str(REPO_ROOT / "scripts"))
-    spec = importlib.util.spec_from_file_location("dashboard", REPO_ROOT / "scripts" / "dashboard.py")
+    spec = importlib.util.spec_from_file_location(
+        "dashboard", REPO_ROOT / "scripts" / "dashboard.py"
+    )
     mod = importlib.util.module_from_spec(spec)
     sys.modules["dashboard"] = mod
     spec.loader.exec_module(mod)
@@ -46,8 +48,12 @@ def test_an_unknown_model_is_still_unpriced():
     unpriced, which is the honest answer - guessing from a neighbour would look
     authoritative and be wrong."""
     d = _dashboard()
-    usage = {"input_tokens": 1_000_000, "output_tokens": 0,
-             "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0}
+    usage = {
+        "input_tokens": 1_000_000,
+        "output_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+    }
     assert d.price_usage("some-other-vendor-model", usage) is None
     assert d.price_usage("", usage) is None
     assert d.price_usage(None, usage) is None
@@ -56,8 +62,17 @@ def test_an_unknown_model_is_still_unpriced():
 def test_the_models_actually_seen_in_transcripts_all_price():
     """The point of the fix: these are the ids that appear in real files."""
     d = _dashboard()
-    usage = {"input_tokens": 1_000_000, "output_tokens": 0,
-             "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0}
-    for model in ("claude-opus-5[1m]", "claude-opus-5", "claude-fable-5",
-                  "claude-haiku-4-5-20251001", "claude-sonnet-5"):
+    usage = {
+        "input_tokens": 1_000_000,
+        "output_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+    }
+    for model in (
+        "claude-opus-5[1m]",
+        "claude-opus-5",
+        "claude-fable-5",
+        "claude-haiku-4-5-20251001",
+        "claude-sonnet-5",
+    ):
         assert d.price_usage(model, usage) is not None, f"{model} priced as unknown"

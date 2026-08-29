@@ -161,8 +161,7 @@ def profile(path: Path, taxonomy: list[dict], floor: float) -> dict:
                 break
             sample.append(row)
     columns = [
-        tag_column(name, [row.get(name, "") for row in sample], taxonomy, floor)
-        for name in headers
+        tag_column(name, [row.get(name, "") for row in sample], taxonomy, floor) for name in headers
     ]
     return {
         "file": path.name,

@@ -148,9 +148,7 @@ def find_gaps(days: list[date], median: float | None, calendar: str) -> list[dic
         missing = span - 1
         if calendar == "business":
             missing = sum(
-                1
-                for offset in range(1, span)
-                if (earlier + timedelta(days=offset)).weekday() < 5
+                1 for offset in range(1, span) if (earlier + timedelta(days=offset)).weekday() < 5
             )
             if missing == 0:
                 continue  # a weekend, not a gap
@@ -194,9 +192,7 @@ def build_profile(path: Path, args) -> dict:
         return profile
 
     days = [s.date() for s in stamps]
-    as_of = (
-        datetime.strptime(args.as_of, "%Y-%m-%d").date() if args.as_of else date.today()
-    )
+    as_of = datetime.strptime(args.as_of, "%Y-%m-%d").date() if args.as_of else date.today()
     # Freshness and gaps are measured on dates up to the as-of ONLY. A single future-dated
     # row (a timezone slip, a typo) otherwise becomes the "latest" date, turning freshness
     # negative and inventing a months-long gap that ends at a row nobody has yet lived
@@ -232,9 +228,7 @@ def build_profile(path: Path, args) -> dict:
         # The context-aware half - a volume ordinary for one venue or rule is glaring for
         # another, and a global outlier check on alert data is mostly noise. Names of
         # subgroups ARE values from the data, so this is opt-in and capped.
-        per_group = Counter(
-            (row.get(args.by) or "(blank)") for row, p in zip(rows, parsed) if p
-        )
+        per_group = Counter((row.get(args.by) or "(blank)") for row, p in zip(rows, parsed) if p)
         profile["by_column"] = args.by
         profile["rows_by_group"] = dict(per_group.most_common(20))
         profile["distinct_groups"] = len(per_group)
@@ -279,8 +273,11 @@ def render(profile: dict) -> str:
     for month, count in profile["rows_by_month"].items():
         out.append(f"  {month}  {count:,}")
     if profile.get("rows_by_group"):
-        out += ["", f"## Rows by {profile['by_column']} (top {len(profile['rows_by_group'])}"
-                f" of {profile['distinct_groups']})"]
+        out += [
+            "",
+            f"## Rows by {profile['by_column']} (top {len(profile['rows_by_group'])}"
+            f" of {profile['distinct_groups']})",
+        ]
         for name, count in profile["rows_by_group"].items():
             out.append(f"  {name}  {count:,}")
     out += [
