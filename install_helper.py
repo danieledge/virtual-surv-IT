@@ -3182,6 +3182,22 @@ class Installer:
             )
             self.say(s.dim(f"  No alias yet? Use: {fallback}"))
             self.say(s.dim("  A Claude Code session already open elsewhere needs a restart."))
+            # Both shortcuts are registered now, so both have to be NAMED here. Reported
+            # live (2026-08-29): the alias step wrote virt-surv2 correctly, the closing
+            # text never mentioned it, and typing it in the shell that had just run the
+            # install returned "command not found" - because no shell reloads its own
+            # profile mid-session. The reload line is the fix for that; the mention is
+            # the fix for not knowing the command exists at all.
+            self.say("")
+            self.say(
+                f"  {s.yellow('virt-surv2')} is the same installer and launcher with a "
+                "full-screen interface - same engine, same steps. Try it with "
+                f"{s.yellow('virt-surv2 --demo')} (a dry run that writes nothing)."
+            )
+            self.say(
+                s.dim("  Both shortcuts need a NEW terminal, or `source ~/.bashrc` - a "
+                      "running shell never reloads its own profile.")
+            )
         self.say("")
         # The celebratory "summon the team" close is only accurate for a full/setup run
         # that actually finished clean - live-caught (fable UX review, 2026-08-05): a

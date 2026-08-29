@@ -296,6 +296,23 @@ def test_v1_registers_v2_alias() -> None:
           expected, ih._ALIAS_VERSION)
 
 
+def test_summary_names_virt_surv2() -> None:
+    """The install must NAME the second shortcut and say a new shell is needed.
+
+    Live report: the alias was written correctly, the closing text never mentioned it,
+    and typing virt-surv2 in the shell that had just run the install said "command not
+    found" - because no shell reloads its own profile mid-session.
+    """
+    import inspect
+
+    import install_helper as ih
+
+    src = inspect.getsource(ih.Installer.print_summary)
+    check("summary names virt-surv2", "virt-surv2" in src, True)
+    check("summary tells you to open a new terminal",
+          "source ~/.bashrc" in src or "NEW terminal" in src, True)
+
+
 def test_css_paths() -> None:
     """Every App class must point at a stylesheet that exists.
 
@@ -366,6 +383,9 @@ if __name__ == "__main__":
 
     print("\nv1 registers v2")
     test_v1_registers_v2_alias()
+
+    print("\nsummary")
+    test_summary_names_virt_surv2()
 
     print("\ncss paths")
     test_css_paths()
