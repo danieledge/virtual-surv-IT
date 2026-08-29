@@ -952,10 +952,27 @@ def register_plugin_directly(repo: Path, claude_dir: Path, version: Optional[str
     return touched
 
 
+def _demo_active() -> bool:
+    """True while --demo has swapped run_cmd for the dry-run stand-in.
+
+    Read off the installed runner rather than a module flag: main() swaps run_cmd at
+    three separate sites, and a flag would have to be set and restored at every one."""
+    return bool(getattr(run_cmd, "is_demo", False))
+
+
 def _claude_via_npm_prefix() -> Optional[str]:
     """Ask npm where its prefix is, then look for claude under it. Covers custom
     corporate prefixes no hardcoded candidate list can know. Best-effort: npm absent,
-    blocked or slow just returns None."""
+    blocked or slow just returns None.
+
+    This is the one discovery tier that needs its own subprocess (the others read the
+    filesystem or the registry), so it is also the one that has to opt out of --demo:
+    the dry run's contract is that it spawns nothing at all. Only reached when PATH and
+    the known locations came up empty, so it stayed invisible on any box with claude on
+    PATH and only ever failed where claude was missing - CI, and the corporate machines
+    this tier exists for (CI red from 2026-08-28)."""
+    if _demo_active():
+        return None
     npm = shutil.which("npm.cmd") or shutil.which("npm")
     if not npm:
         return None
@@ -1083,8 +1100,14 @@ def find_claude(refresh: bool = False) -> tuple:
     global _claude_cache
     if _claude_cache is not None and not refresh:
         return _claude_cache
-    _claude_cache = next(_claude_candidates(), (None, ""))
-    return _claude_cache
+    found = next(_claude_candidates(), (None, ""))
+    # A demo run skips the npm-prefix tier, so its answer is narrower than the real
+    # one. Caching it would let a one-shot "Demo" from the menu poison every later
+    # menu action in the same process with a claude it only "failed" to find because
+    # the probe was suppressed.
+    if not _demo_active():
+        _claude_cache = found
+    return found
 
 
 def find_working_claude(probe) -> tuple:
@@ -1239,6 +1262,22 @@ def run_cmd(argv, cwd: Optional[Path] = None, timeout: int = 300):
     argv = [a.as_posix() if isinstance(a, Path) else str(a) for a in argv]
     prefix = command_argv(argv[0])
     decode = {"encoding": "utf-8", "errors": "replace"}
+    # NOTHING WE SPAWN READS THE TERMINAL. capture_output routes stdout and stderr away
+    # but leaves stdin attached, and git asks for credentials on /dev/tty regardless of
+    # stdin - turning echo OFF to read a password. With our output captured, the prompt is
+    # invisible: the user sees a terminal that has stopped echoing and no reason why. Live
+    # report, 2026-08-29: "when I exit virt-surv I can't type in that same terminal, the
+    # letters I type don't echo at the prompt."
+    #
+    # Both halves are needed. DEVNULL stops a child consuming keystrokes meant for the
+    # shell; GIT_TERMINAL_PROMPT=0 stops git going around stdin to the tty and is what
+    # actually fixes the echo. A credential prompt nobody can see is never useful - failing
+    # fast turns a silent hang into an error message.
+    env = dict(os.environ)
+    env.setdefault("GIT_TERMINAL_PROMPT", "0")
+    env.setdefault("GIT_ASKPASS", "")
+    env.setdefault("SSH_ASKPASS", "")
+    quiet_stdin = {"stdin": subprocess.DEVNULL, "env": env}
     if prefix[0] == "cmd":
         # Batch shim: one explicit string, shell=False. This branch is unreachable on
         # POSIX (which() never resolves a bare name to *.cmd/*.bat there).
@@ -1247,6 +1286,7 @@ def run_cmd(argv, cwd: Optional[Path] = None, timeout: int = 300):
             cwd=str(cwd) if cwd else None,
             capture_output=True,
             timeout=timeout,
+            **quiet_stdin,
             **decode,
         )
     return subprocess.run(  # argv is a fixed list built here, shell=False  # nosec B603
@@ -1254,6 +1294,7 @@ def run_cmd(argv, cwd: Optional[Path] = None, timeout: int = 300):
         cwd=str(cwd) if cwd else None,
         capture_output=True,
         timeout=timeout,
+        **quiet_stdin,
         **decode,
     )
 
@@ -1299,6 +1340,12 @@ def make_demo_runner(style: Style):
         print(style.dim("    would run: " + " ".join(argv)))
         return subprocess.CompletedProcess(argv, 0, stdout=demo_stdout(argv), stderr="")
 
+    # Marks this as the dry-run stand-in so helpers that would otherwise probe the
+    # system with their own subprocess (_claude_via_npm_prefix) can tell demo mode is
+    # active. Checking the installed runner beats a separate module flag: main() swaps
+    # run_cmd at three sites, and a flag would have to be set and restored at each -
+    # one missed site and "--demo spawns nothing" silently stops being true.
+    runner.is_demo = True
     return runner
 
 

@@ -119,3 +119,24 @@ docs/internal/plan-temporal-data-lens-2026-08-24.md
 # Deliberately not shipped - a container definition that assumes one developer's box is worse
 # than none, because it looks portable and is not.
 docker/
+
+# Rendered demo output (2026-08-29): every file here is generated from its .md sibling by
+# scripts/render_html.py, so tracking it version-controls build output. The .md is the
+# source and is tracked; regenerate with `python -m scripts.render_html <file>.md`.
+# NOT applied to evals/cases/**: those .html files are FIXTURES - they define the workspace
+# a case starts from, so removing them would change what the eval sees.
+docs/demos/**/*.html
+
+# DLP blocked terms - NEITHER file is ever committed.
+#
+# .dlp-keywords.local  the terms themselves, plaintext.
+# .dlp-blocklist       SHA-256 digests of those terms.
+#
+# The digest file was going to be committed so a fresh clone inherited the protection.
+# It is not, because a digest of a short unsalted word is a confirmable fingerprint: a
+# stranger who merely GUESSES a blocked term can prove the guess with one sha256 call.
+# In a public repo that is an oracle for exactly the words we refuse to publish. The
+# scanner (scripts/dlp_guard.py) carries no terms and no digests, so it commits freely;
+# the list reaches CI through the DLP_BLOCKLIST repo secret instead.
+.dlp-keywords.local
+.dlp-blocklist

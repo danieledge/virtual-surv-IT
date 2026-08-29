@@ -10,6 +10,7 @@ substitution and must never see the interactive transcript mixed in.
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import io
 import json
@@ -1921,3 +1922,64 @@ def _assert_module_handle_works(mod, handle):
         assert handle._plugin_version() == "9.9.9"
     finally:
         mod._plugin_version = original
+
+
+def test_no_background_probe_can_reach_the_terminal():
+    """Why a terminal stopped echoing after virt-surv exited.
+
+    capture_output routes stdout and stderr away but leaves stdin attached, and git asks
+    for credentials on /dev/tty regardless of stdin - turning ECHO OFF to read a password.
+    With our output captured that prompt is invisible: the terminal simply stops echoing,
+    and the user meets it after the tool has already exited, with nothing on screen to say
+    why (live report 2026-08-29).
+
+    Both halves are asserted because either alone leaves the bug: stdin=DEVNULL stops a
+    child eating keystrokes meant for the shell, and GIT_TERMINAL_PROMPT=0 stops git going
+    around stdin to the tty, which is the half that actually restores echo.
+
+    The two INTERACTIVE children are excluded by name - they are handed the user's own
+    terminal on purpose, and silencing them would break the thing they exist to do."""
+    source = (REPO_ROOT / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    interactive = {"_offer_update_if_behind", "_offer_first_time_setup"}
+
+    owner = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for line in range(node.lineno, (node.end_lineno or node.lineno) + 1):
+                owner.setdefault(line, node.name)
+
+    offenders = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if getattr(getattr(func, "value", None), "id", None) != "subprocess":
+            continue
+        if getattr(func, "attr", None) not in ("run", "Popen"):
+            continue
+        function = owner.get(node.lineno, "<module>")
+        if function in interactive:
+            continue
+        keywords = {kw.arg for kw in node.keywords}
+        has_stdin = "stdin" in keywords or None in keywords  # None => **kwargs splat
+        if not has_stdin:
+            offenders.append(f"{node.lineno}: {function}")
+
+    assert not offenders, (
+        "these spawn a child that can still read the terminal - pass **_quiet_kwargs():\n"
+        + "\n".join(f"  {o}" for o in offenders)
+    )
+    assert "GIT_TERMINAL_PROMPT" in source, "stdin alone does not stop git prompting on the tty"
+
+
+def test_the_interactive_children_are_left_alone():
+    """The update and first-time-setup runs hand the user their own terminal on purpose.
+    Silencing those would break the thing they exist to do, so the guard above excludes
+    them by name rather than by pattern - and this pins that they still exist."""
+    mod = _load()
+    assert hasattr(mod, "_offer_update_if_behind")
+    assert hasattr(mod, "_offer_first_time_setup")
+    assert mod._quiet_kwargs()["stdin"] is not None
+    env = mod._no_prompt_env()
+    assert env["GIT_TERMINAL_PROMPT"] == "0"

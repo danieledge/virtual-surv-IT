@@ -2956,6 +2956,7 @@ def _write_probe_cache(project_dir: Path) -> None:
                 capture_output=True,
                 text=True,
                 timeout=5,
+                **_quiet_kwargs(),
             )
             lines = (proc.stdout or "").strip().splitlines()
             if proc.returncode == 0 and len(lines) >= 2:
@@ -3166,6 +3167,7 @@ def _suggestion_line(project_dir: Path, menu: dict) -> str:
                 capture_output=True,
                 text=True,
                 timeout=3,
+                **_quiet_kwargs(),
             )
             if proc.returncode == 0:
                 # Split tracked from untracked (2026-08-28 user report: "21 uncommitted
@@ -3250,6 +3252,31 @@ def _can_encode(text: str) -> bool:
         return False
 
 
+def _no_prompt_env() -> dict:
+    """The environment for a child that must never ask the user anything.
+
+    git asks for credentials on /dev/tty, NOT on stdin - so redirecting stdin alone does
+    not stop it. It turns ECHO OFF to read a password, and when the caller has captured
+    stdout and stderr that prompt is invisible: the terminal simply stops echoing, and the
+    user meets it after virt-surv has already exited, with nothing on screen to explain it
+    (live report, 2026-08-29: "the letters I type don't echo at the prompt").
+
+    A prompt nobody can see is never useful, so these make git fail fast instead."""
+    env = dict(os.environ)
+    env.setdefault("GIT_TERMINAL_PROMPT", "0")
+    env.setdefault("GIT_ASKPASS", "")
+    env.setdefault("SSH_ASKPASS", "")
+    return env
+
+
+def _quiet_kwargs() -> dict:
+    """No terminal input, no prompting - for a probe whose output we capture.
+
+    Deliberately NOT used for the two children that are MEANT to be interactive: the
+    installer runs we hand the user's own terminal to."""
+    return {"stdin": subprocess.DEVNULL, "env": _no_prompt_env()}
+
+
 def _git_branch(project_dir: Path) -> str:
     """The working project's branch for the header line, '' when it isn't a git repo or
     git isn't available. Cosmetic only - never let it cost or block a launch."""
@@ -3259,6 +3286,7 @@ def _git_branch(project_dir: Path) -> str:
             capture_output=True,
             text=True,
             timeout=3,
+            **_quiet_kwargs(),
         )
         if proc.returncode == 0:
             return (proc.stdout or "").strip()
@@ -3480,6 +3508,7 @@ def _commits_behind_upstream(clone: Path) -> int:
             capture_output=True,
             text=True,
             timeout=5,
+            **_quiet_kwargs(),
         )
         if head.returncode != 0:
             return 0  # no upstream configured - nothing to compare against
@@ -3491,6 +3520,7 @@ def _commits_behind_upstream(clone: Path) -> int:
             capture_output=True,
             text=True,
             timeout=5,
+            **_quiet_kwargs(),
         )
         if counted.returncode != 0:
             return 0
@@ -3517,7 +3547,20 @@ def _refresh_remote_refs_in_background(clone: Path) -> None:
             age = _time.time() - marker.stat().st_mtime
             if age < _UPDATE_REFS_TTL_SECONDS:
                 return
-        kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+        # stdin DEVNULL and no terminal prompting: this is DETACHED and invisible, so a
+        # credential prompt from it would turn the terminal's echo off with nothing on
+        # screen to explain why - and the user would meet it after virt-surv had already
+        # exited (live report, 2026-08-29).
+        env = dict(os.environ)
+        env.setdefault("GIT_TERMINAL_PROMPT", "0")
+        env.setdefault("GIT_ASKPASS", "")
+        env.setdefault("SSH_ASKPASS", "")
+        kwargs = {
+            "stdout": subprocess.DEVNULL,
+            "stderr": subprocess.DEVNULL,
+            "stdin": subprocess.DEVNULL,
+            "env": env,
+        }
         if os.name == "nt":
             # No console window for a background fetch, and break out of the job object so
             # it is not killed when this launcher exits - the same treatment headless_run
@@ -3645,6 +3688,7 @@ def _check_plugin_cache_lag(project_dir: Path) -> None:
                 capture_output=True,
                 text=True,
                 timeout=180,
+                **_quiet_kwargs(),
             )
             tail = (proc.stdout or proc.stderr or "").strip().splitlines()
             if tail:
