@@ -447,7 +447,7 @@ def banner_version_line() -> str:
     root, so this covers every normal run including demo and fresh installs), then the
     configured clone's manifest, then a fixed fallback (a standalone-downloaded helper
     file has no manifest anywhere yet)."""
-    version = installed_version(Path(__file__).resolve().parent)
+    version = installed_version(clone_asset())
     if not version:
         repo = load_config(config_path()).get("repo_path")
         if isinstance(repo, str) and repo:
@@ -462,7 +462,7 @@ def _installed_cache_note() -> str:
     (2026-08-18: the banner said v0.34.0 while sessions would load the older installed
     copy; here the fix is literally menu option 1)."""
     try:
-        clone_v = installed_version(Path(__file__).resolve().parent) or ""
+        clone_v = installed_version(clone_asset()) or ""
         if not clone_v:
             return ""
         for raw in _registry_install_paths(Path.home()):
@@ -518,8 +518,22 @@ def brand_banner_rows(style: Style, width: Optional[int] = None) -> list:
         return []
 
 
+# Set the first time the banner is printed. The app tier draws the brand INSIDE its frame
+# (the alternate screen hides anything printed before it, for as long as anyone is
+# actually using the menu), so the terminal print is skipped when that tier is going to
+# run - and the numbered tier prints it on the way past instead. Exactly one banner,
+# wherever it can be seen.
+_BANNER_SHOWN = False
+
+
+def banner_already_shown() -> bool:
+    return _BANNER_SHOWN
+
+
 def print_banner(style: Style, stream=None) -> None:
     """The brand banner (or the boxed fallback), the version line and Morgan's intro."""
+    global _BANNER_SHOWN
+    _BANNER_SHOWN = True
     rows = brand_banner_rows(style)
     if rows:
         for row in rows:
@@ -1530,6 +1544,31 @@ _ADVANCED_ACTIONS = {
 }
 
 
+def app_tier_available() -> bool:
+    """Whether a full-screen screen can actually run here.
+
+    Asked by BOTH the banner (to decide whether to print) and the menus (to decide which
+    tier to draw), so the two cannot disagree and leave a run with no banner at all."""
+    if os.environ.get("VIRT_SURV_NO_APP"):
+        return False
+    if not os.environ.get("VIRT_SURV_FORCE_PTK"):
+        try:
+            if not (sys.stdin.isatty() and sys.stderr.isatty()):
+                return False
+        except Exception:
+            return False
+    module = _import_from_scripts("installer_app")
+    if module is None:
+        return False
+    try:
+        module._vendor_on_path()
+        import prompt_toolkit  # noqa: F401
+
+        return True
+    except Exception:
+        return False
+
+
 def _submenu_screen(style: Style, title: str, options: tuple, actions: dict):
     """The full-screen tier of _choose_submenu, or None when it cannot run.
 
@@ -1690,6 +1729,11 @@ def choose_action(style: Style) -> str:
                 return "quit"
             answer = picked
         else:
+            # This tier has no frame, so it owns the banner - and prints it only if the
+            # app tier was expected to and then could not, which is the one path where
+            # nobody has shown it yet.
+            if not banner_already_shown():
+                print_banner(style)
             # The heading belongs to THIS tier only. Printed before the tier is chosen, it
             # landed in the scrollback above a full-screen app that then covered it, and
             # was left behind as debris when the app exited - the picker's own frame title
@@ -5419,19 +5463,46 @@ def run_configure(
     return rc
 
 
+def clone_asset(*parts) -> Path:
+    """A path to something inside the REAL clone - scripts/x.py, docs/templates/y.md.
+
+    Never Path(__file__).parent. _relocate_if_running_inside_target_repo copies this file
+    into a bare temp directory and re-execs from there for the rest of the session, so
+    that a git checkout can overwrite the original safely. From that moment __file__'s
+    parent holds exactly one .py file and none of the siblings anything here wants.
+
+    Three separate features shipped broken because of that and each failed silently: the
+    new installer screens never ran, the brand banner fell back to a plain box, and
+    scripts/ imports returned None which callers read as "unavailable" (all 2026-08-28).
+    The pattern is not that any one of them was careless - it is that a path derived from
+    __file__ is WRONG AT RUNTIME here, and wrong quietly.
+
+    Falls back to __file__'s parent, which is correct for a checkout being run in place
+    and for the single-file curl bootstrap before any clone exists."""
+    root = None
+    try:
+        root = _resolve_repo_root(None)
+    except Exception:
+        root = None
+    base = root if root else Path(__file__).resolve().parent
+    for part in parts:
+        base = base / part
+    return base
+
+
 def _engagement_state_script() -> Optional[Path]:
     """Locates scripts/engagement_state.py relative to THIS clone - install_helper.py
     always sits at the clone's own repo root, next to scripts/, so no plugin-root
     discovery is needed here (unlike find_plugin_root.py's problem, which is specifically
     about locating things from an ARBITRARY foreign project directory)."""
-    candidate = Path(__file__).resolve().parent / "scripts" / "engagement_state.py"
+    candidate = clone_asset("scripts", "engagement_state.py")
     return candidate if candidate.is_file() else None
 
 
 def _review_tools_script() -> Optional[Path]:
     """Locates scripts/check-review-tools.sh relative to THIS clone - same rationale as
     _engagement_state_script()."""
-    candidate = Path(__file__).resolve().parent / "scripts" / "check-review-tools.sh"
+    candidate = clone_asset("scripts", "check-review-tools.sh")
     return candidate if candidate.is_file() else None
 
 
@@ -8222,7 +8293,7 @@ def _edit_org_extensions(target: Path, style: Style, mark_map: dict) -> int:
     if not target.is_file():
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
-            template = Path(__file__).resolve().parent / "docs" / "templates" / "team-extensions.md"
+            template = clone_asset("docs", "templates", "team-extensions.md")
             target.write_text(
                 template.read_text(encoding="utf-8") if template.is_file() else _MINIMAL_ORG,
                 encoding="utf-8",
@@ -8292,7 +8363,7 @@ def _vsit_engagements(project: Path) -> Path:
     try:
         import sys as _sys
 
-        _here = Path(__file__).resolve().parent / "scripts"
+        _here = clone_asset("scripts")
         if str(_here) not in _sys.path:
             _sys.path.insert(0, str(_here))
         import vsit_paths
@@ -8401,7 +8472,7 @@ def _parse_extensions(path: Path):
     Imported lazily and from the clone, because this runs standalone: a bare
     `python install_helper.py` has nothing on sys.path yet."""
     try:
-        scripts_dir = Path(__file__).resolve().parent / "scripts"
+        scripts_dir = clone_asset("scripts")
         if str(scripts_dir) not in sys.path:
             sys.path.insert(0, str(scripts_dir))
         import extensions as ext_mod
@@ -9711,7 +9782,12 @@ def _main(argv=None) -> int:
     if not args.demo:
         _relocate_if_running_inside_target_repo(args, argv)
 
-    print_banner(style)
+    # The interactive menu draws the brand in its own frame, so printing it here as well
+    # would put it somewhere the alternate screen immediately hides. Every other path -
+    # --yes, a piped run, a direct --mode - has no frame and still gets it here.
+    _menu_coming = args.mode is None and not args.yes and sys.stdin.isatty()
+    if not (_menu_coming and app_tier_available()):
+        print_banner(style)
     # Deliberately NOT gated on `not args.demo` (2026-08-04 fix, live-tested gap: --demo
     # used to skip straight to a fixed full-flow preview, never showing the menu at all -
     # so none of the newer options, including "Configure", could be previewed. Demo mode

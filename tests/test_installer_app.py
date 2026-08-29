@@ -8,6 +8,7 @@ exercised, and this file exists so the installer's two do not repeat it.
 
 from __future__ import annotations
 
+import ast
 import io
 import subprocess
 import sys
@@ -314,3 +315,140 @@ def test_it_still_resolves_when_there_is_no_configured_clone(tmp_path, monkeypat
     monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: None)
     module = ih._import_from_scripts("fakemod2")
     assert module is not None and module.VALUE == "in place"
+
+
+def test_the_banner_is_drawn_once_and_where_it_can_be_seen(monkeypatch, capsys):
+    """The app runs in the alternate screen, so anything printed before it is invisible
+    for as long as someone is actually using the menu, and only reappears when they leave.
+    Identity belongs in the frame (owner decision, 2026-08-28).
+
+    Both halves matter: the terminal print is skipped when the frame will carry it, AND
+    the numbered tier still prints it - otherwise a box that cannot run the app would get
+    no banner at all."""
+    for extra in (REPO_ROOT / "scripts", REPO_ROOT):
+        if str(extra) not in sys.path:
+            sys.path.insert(0, str(extra))
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "_BANNER_SHOWN", False, raising=False)
+    monkeypatch.setattr(ih, "_submenu_screen", lambda *a, **k: None)  # app tier declines
+    monkeypatch.setattr("builtins.input", lambda prompt="": "q")
+    ih.choose_action(ih.Style(False))
+    assert "Virtual Surveillance IT" in capsys.readouterr().out, (
+        "the numbered tier has no frame, so it must print the banner itself"
+    )
+
+    # ...and having printed it, it must not print it a second time.
+    monkeypatch.setattr("builtins.input", lambda prompt="": "q")
+    ih.choose_action(ih.Style(False))
+    assert capsys.readouterr().out.count("Virtual Surveillance IT") == 0
+
+
+def test_the_frame_header_carries_the_brand(ptk):
+    """The banner as frame-header rows. Its absence must cost the art and nothing else -
+    brand_header returns None, not [], so the caller keeps tui_chrome's identity line
+    rather than rendering a blank strip."""
+    import install_helper as ih
+    import installer_app
+
+    rows = installer_app.brand_header(ih)
+    assert rows, "the brand must resolve through the host's own importer"
+    flat = "".join(text for row in rows for _style, text in row)
+    assert "V S I T" in flat and "Virtual Surveillance IT" in flat
+
+    # Forced through _import_brand rather than through a host with no resolver: that host
+    # still finds brand_banner by plain import when scripts/ happens to be importable,
+    # which is the deliberate curl-bootstrap fallback and not the case under test.
+    original = installer_app._import_brand
+    try:
+        installer_app._import_brand = lambda mod: None
+        assert installer_app.brand_header(ih) is None
+    finally:
+        installer_app._import_brand = original
+
+
+def test_the_banner_and_the_menu_agree_about_the_app_tier(monkeypatch):
+    """One question, asked once. If the banner decided "the frame will show it" and the
+    menu then drew the numbered tier, a run would end up with no banner at all - so both
+    consult app_tier_available rather than each testing conditions of their own."""
+    for extra in (REPO_ROOT / "scripts", REPO_ROOT):
+        if str(extra) not in sys.path:
+            sys.path.insert(0, str(extra))
+    import install_helper as ih
+
+    monkeypatch.setenv("VIRT_SURV_NO_APP", "1")
+    assert ih.app_tier_available() is False
+    monkeypatch.delenv("VIRT_SURV_NO_APP", raising=False)
+    monkeypatch.setattr(ih, "_import_from_scripts", lambda name: None)
+    assert ih.app_tier_available() is False
+
+
+def test_no_new_clone_asset_is_resolved_from___file__():
+    """A ratchet on a defect that has shipped three times and hid every time.
+
+    _relocate_if_running_inside_target_repo copies install_helper.py into a bare temp
+    directory and re-execs from there for the rest of the session. From that moment
+    Path(__file__).parent holds one .py file and none of its siblings - so a path built
+    that way is wrong AT RUNTIME, and wrong quietly: the new installer screens never ran,
+    the brand banner fell back to a plain box, and scripts/ imports returned None which
+    callers read as "unavailable" (all 2026-08-28, all found only by instrumenting a real
+    container, none by any test).
+
+    A NAMED ALLOW-LIST rather than a cleverer heuristic. Every legitimate use here is
+    legitimate for its own specific reason - it is about the running file, or __file__ is
+    a documented last resort after the configured clone has been tried - and no pattern
+    match distinguishes those from the broken ones reliably. Naming them means a new use
+    has to be argued for, which is the entire point: the three that shipped were all
+    written without anyone asking the question."""
+    src = (REPO_ROOT / "install_helper.py").read_text(encoding="utf-8")
+    tree = ast.parse(src)
+
+    allowed = {
+        # About the RUNNING file, which is exactly what __file__ means.
+        "_reexec_if_self_updated": "reads its own bytes to detect a self-update",
+        "_relocate_if_running_inside_target_repo": "is the relocation itself",
+        # __file__ as a documented LAST resort, after args.repo / installer.json.
+        "_resolve_repo_root": "its docstring names __file__ as the final fallback",
+        "clone_asset": "asks the resolver first, falls back for an in-place checkout",
+        "_import_from_scripts": "same, and the reason clone_asset exists",
+        # Candidates that are only accepted if looks_like_repo() agrees, which a bare
+        # temp directory never does - and each checks the configured clone first.
+        "resolve_repo": "script_root is a guarded candidate after args.repo/config",
+        "locate_clone_asis": "same guarded-candidate shape",
+        "check_updates_step": "same guarded-candidate shape",
+        "check_for_update_upfront": "same guarded-candidate shape",
+        # `(resolved / x) if resolved else Path(__file__) / x` - resolver first.
+        "heal_stale_aliases": "resolver first, __file__ only when it returns nothing",
+        "run_setup_alias": "resolver first, __file__ only when it returns nothing",
+        "_run_evidence_room": "(repo / scripts) if repo else __file__ - resolver first",
+        "_run_launcher_settings": "same",
+        "_run_go": "same",
+        # `_resolve_repo_root(hint) or Path(__file__)...` - resolver first, by construction.
+        "run_env_check": "_resolve_repo_root(hint) or __file__",
+        "run_hook_latency_diagnostic": "_resolve_repo_root(hint) or __file__",
+        "run_adr014_smoke_test": "_resolve_repo_root(hint) or __file__",
+        "run_daemon_start_diagnostic": "_resolve_repo_root(hint) or __file__",
+        "run_selftest": "_resolve_repo_root(hint) or __file__",
+    }
+
+    owner = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for line in range(node.lineno, (node.end_lineno or node.lineno) + 1):
+                owner.setdefault(line, node.name)
+
+    # Only real __file__ EXPRESSIONS - not the prose in docstrings and comments, which
+    # mentions it constantly and should.
+    offenders = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id == "__file__":
+            function = owner.get(node.lineno, "<module>")
+            if function not in allowed:
+                offenders.setdefault(function, node.lineno)
+
+    assert not offenders, (
+        "these build a path from __file__, which at runtime is a temp copy of this file "
+        "holding no siblings - use clone_asset() instead, or add the function to the "
+        "allow-list with the reason it is safe:\n"
+        + "\n".join(f"  {name} (line {line})" for name, line in sorted(offenders.items()))
+    )

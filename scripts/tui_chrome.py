@@ -162,6 +162,7 @@ def screen(
     right_fn=None,
     project_dir=None,
     refresh_interval=None,
+    header_fn=None,
 ):
     """One framed full-screen round, shared by EVERY launcher screen (menu, settings,
     archive). Written once so the screens cannot drift apart the way the two menu tiers
@@ -200,12 +201,24 @@ def screen(
                 Window(FormattedTextControl(right_fn), width=D(min=26, weight=1), wrap_lines=True),
             ]
         )
-    header = [
-        Window(
-            FormattedTextControl(lambda: [("class:title", f"  {mod._morgan_line()}")]),
-            height=1,
-        )
-    ]
+    # A caller-supplied header replaces the identity line entirely, and may be several
+    # rows tall. The installer uses it to put the brand banner INSIDE the frame: the app
+    # runs in the alternate screen, so anything printed before it is invisible for as long
+    # as someone is actually using the menu, and only reappears once they leave (owner
+    # decision, 2026-08-28). Identity belongs where it can be seen.
+    if header_fn is not None:
+        rows = header_fn()
+        header = [
+            Window(FormattedTextControl(row_fn), height=1)
+            for row_fn in (lambda row=row: row for row in rows)
+        ]
+    else:
+        header = [
+            Window(
+                FormattedTextControl(lambda: [("class:title", f"  {mod._morgan_line()}")]),
+                height=1,
+            )
+        ]
     if project_dir is not None:
         folder = "📂 " if mod._can_encode("📂") else ""
         header.append(

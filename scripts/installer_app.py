@@ -25,6 +25,7 @@ start - which is the same box that most needs the installer to work.
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -126,6 +127,57 @@ def _wrap(text: str, width: int = 30, indent: str = "  ") -> str:
     if line:
         out.append(indent + line)
     return "\n".join(out)
+
+
+# tui_chrome's palette names, keyed by the brand banner's own role names. The banner is
+# rendered for a terminal by install_helper and for an app by this - one set of art, two
+# painters, so the mascot cannot drift between the two front doors.
+_BRAND_STYLE = {
+    "cyan": "class:on",
+    "violet": "class:group",
+    "green": "class:on",
+    "bold": "class:title",
+    "dim": "class:dim",
+    "amber": "class:warn",
+    "plain": "",
+}
+
+
+def brand_header(mod):
+    """The VSIT banner as frame-header rows, or None when the art is unavailable.
+
+    None rather than [] so the caller keeps tui_chrome's own identity line instead of a
+    blank strip - a missing banner should cost the art, never the header."""
+    try:
+        brand = _import_brand(mod)
+        if brand is None:
+            return None
+        width = shutil.get_terminal_size((80, 24)).columns
+        rows = brand.banner(width)
+    except Exception:
+        return None
+    if not rows:
+        return None
+    return [[(_BRAND_STYLE.get(role, ""), text) for role, text in row] for row in rows]
+
+
+def _import_brand(mod):
+    """brand_banner, via the host's own resolver when it has one.
+
+    install_helper._import_from_scripts knows that this file may be running from a temp
+    copy of itself and asks the configured clone instead - which is exactly the mistake
+    that hid the banner from every real installation until 2026-08-28."""
+    resolver = getattr(mod, "_import_from_scripts", None)
+    if callable(resolver):
+        found = resolver("brand_banner")
+        if found is not None:
+            return found
+    try:
+        import brand_banner
+
+        return brand_banner
+    except Exception:
+        return None
 
 
 def _rows(options, ih, actions=None):
@@ -337,6 +389,7 @@ def chooser_screen(options, ih, *, title: str, actions=None, repo: Path | None =
             footer_fn=_footer,
             key_bindings=kb,
             output=output,
+            header_fn=lambda: brand_header(ih),
         )
     except Exception:
         # A screen that cannot run degrades to the numbered menu, always. But a swallowed
@@ -462,6 +515,7 @@ def grid_screen(rows_fn, apply_fn, help_fn, ih, *, title, repo=None, output=None
             footer_fn=_footer,
             key_bindings=kb,
             output=output,
+            header_fn=lambda: brand_header(ih),
         )
     except Exception:
         if os.environ.get("VIRT_SURV_DEBUG_APP"):
