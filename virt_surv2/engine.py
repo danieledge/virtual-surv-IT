@@ -397,6 +397,13 @@ def _install_analysers(ih, observer, repo: Optional[Path], demo: bool) -> int:
 # Advanced/diagnostics actions that are NOT an Installer subset: main() reaches these
 # through a run_* function, so this does the same rather than reimplementing them.
 RUN_FUNCTIONS = {
+    # `configure` is a free function in main(), not an Installer subset - it needs no
+    # clone-management state. It asks for the directory itself, which our patched ask()
+    # escalates to the modal, so the user still names the project.
+    "configure":    lambda ih, st, mk, repo: ih.run_configure(
+        Path(ih.ask("  Which project directory?", ".", False, style=st) or "."),
+        st, mk, False, False),
+    "howto":        lambda ih, st, mk, repo: ih.run_howto(st),
     "aliasmanage":  lambda ih, st, mk, repo: ih.run_alias_manage(st, mk, False, False, repo),
     "gitbashperf":  lambda ih, st, mk, repo: ih.run_gitbash_perf(st, mk, False, False),
     "extensions":   lambda ih, st, mk, repo: ih.run_extensions_editor(st, mk),

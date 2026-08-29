@@ -263,7 +263,7 @@ def test_decide_rows() -> None:
         async with a.run_test(size=(100, 34)) as p:
             await p.pause()
             scr = a.screen
-            check("8 decisions", len(scr.decisions), 8)
+            check("7 decisions", len(scr.decisions), 7)
             for i, d in enumerate(scr.decisions):
                 scr.cursor = i
                 scr.paint()
@@ -558,6 +558,59 @@ def test_analysers() -> None:
     check("bad path is survivable", E.analyser_specs(Path("/nope/nope")), [])
 
 
+def test_menu_parity_with_v1() -> None:
+    """Every option virt-surv offers must exist in virt-surv2.
+
+    Asserted against install_helper's OWN tables, not a copy of them, so adding an
+    option to v1 without adding it here fails immediately instead of leaving v2
+    quietly missing a feature.
+    """
+    import ast
+
+    from virt_surv2 import ui as A
+    section("L  parity - every virt-surv option exists in virt-surv2")
+
+    import install_helper as ih
+    src = ast.parse(Path(ih.__file__).read_text(encoding="utf-8"))
+    tables = {}
+    for node in src.body:
+        if isinstance(node, ast.Assign):
+            name = getattr(node.targets[0], "id", "")
+            if name in ("MENU_ACTIONS", "_ADVANCED_ACTIONS", "_DIAGNOSTICS_ACTIONS"):
+                tables[name] = ast.literal_eval(node.value)
+
+    v1_top = {v for v in tables["MENU_ACTIONS"].values()}
+    v2_top = {a for _k, a, _l, _b in A.MAIN_MENU}
+    check("top-level menu covers every v1 action", sorted(v1_top - v2_top), [])
+    check("top-level keys match v1", [k for k, _a, _l, _b in A.MAIN_MENU],
+          list(tables["MENU_ACTIONS"].keys()))
+
+    v1_adv = {v for v in tables["_ADVANCED_ACTIONS"].values()} - {"back"}
+    v2_adv = {a for a, _l, _b in A.ADVANCED}
+    check("advanced covers every v1 action", sorted(v1_adv - v2_adv), [])
+
+    v1_diag = {v for v in tables["_DIAGNOSTICS_ACTIONS"].values()} - {"back"}
+    v2_diag = {a for a, _l, _b in A.DIAGNOSTICS}
+    check("diagnostics covers every v1 action", sorted(v1_diag - v2_diag), [])
+
+    # Everything reachable must actually be runnable: an Installer subset, a run_*
+    # function, or a screen the UI handles itself.
+    from virt_surv2 import engine as E
+    # Screens the UI handles itself, plus demo (run_action maps it to the full plan
+    # with args.demo set, which is what v1's menu does too).
+    handled = {"full", "quit", "advanced", "diagnostics", "alias2", "demo"}
+    # The subsets build_plan actually branches on, read from the RAW source: unparsing
+    # the AST normalises quoting, so matching a double-quoted literal against it
+    # silently found nothing and every check "failed".
+    import re as _re
+    raw = Path(ih.__file__).read_text(encoding="utf-8")
+    subsets = set(_re.findall(r'self\.subset == "([a-z0-9]+)"', raw))
+    check("build_plan exposes subsets", len(subsets) > 10, True)
+    for action in sorted((v2_top | v2_adv | v2_diag) - handled):
+        runnable = action in E.RUN_FUNCTIONS or action in subsets
+        check(f"{action} is runnable", runnable, True)
+
+
 def test_discovery() -> None:
     from virt_surv2 import engine as E
     section("I  find_repo / load_engine")
@@ -665,6 +718,7 @@ if __name__ == "__main__":
     test_key_fuzz()
     test_responsive_matrix()
     test_failure_modes()
+    test_menu_parity_with_v1()
     test_analysers()
     test_discovery()
     test_modal_matrix()

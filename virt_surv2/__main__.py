@@ -6,8 +6,10 @@ is imported and driven, never reimplemented, so every Windows fix in it — clau
 discovery, the PATH-shim fallback, `windows_shim_cmdline`, cp1252 handling — applies
 here unchanged.
 
+    python -m virt_surv2               the menu - the same seven options as virt-surv
+    python -m virt_surv2 --install     straight to the install decisions
+    python -m virt_surv2 --update      update only, keeping every setting
     python -m virt_surv2 --demo        dry run: executes nothing, writes nothing
-    python -m virt_surv2               install / reconfigure
     python -m virt_surv2 --launch      the launcher screen (virt-surv go)
     python -m virt_surv2 --settings    project settings
     python -m virt_surv2 --repo PATH   point at a specific clone
@@ -103,6 +105,10 @@ def main(argv=None) -> int:
     ap.add_argument("--settings", action="store_true", help="open project settings")
     ap.add_argument("--advanced", action="store_true", help="advanced / one-off settings")
     ap.add_argument("--diagnostics", action="store_true", help="diagnostics")
+    ap.add_argument("--install", action="store_true",
+                    help="skip the menu and go straight to the install decisions")
+    ap.add_argument("--update", action="store_true",
+                    help="update only: new code + plugin, keeping every setting")
     ap.add_argument("--alias", action="store_true",
                     help="register the 'virt-surv2' shell shortcut (idempotent)")
     ap.add_argument("--print-alias", action="store_true",
@@ -138,8 +144,14 @@ def main(argv=None) -> int:
 
     from .live import InstallerTuiApp
 
-    start = ("advanced" if a.advanced else "diagnostics" if a.diagnostics else "decide")
+    start = ("advanced" if a.advanced else
+             "diagnostics" if a.diagnostics else
+             "decide" if a.install else
+             "menu")
     app = InstallerTuiApp(ih, repo, a.demo, start=start)
+    if a.update:
+        app.start = "menu"
+        app.pending_action = "update"
     app.run()
     return app.exit_code
 

@@ -21,6 +21,27 @@ from .ui import (ACCENT, DIM, ERR, GOLD, HINT, KEY, OK, SPINNER, TEXT, TRACK,
 
 STATUS_GLYPH = {"ok": ("✓", OK), "skip": ("–", HINT), "fail": ("✗", ERR)}
 
+# build_plan()'s titles are written for a run that stops and asks. Here nothing is
+# asked - the decide screen already answered - so a completed step reading "Quick setup
+# or manual?" describes a choice the user never saw, and "(optional)" implies one they
+# were never offered. Reported live: "I don't get asked any questions ... there was no
+# quick install option as it indicated there was".
+#
+# The titles are RELABELLED, never dropped: every step the engine runs still appears,
+# in its order, with its result. Only the wording changes.
+TITLE_OVERRIDES = {
+    "Quick setup or manual?": "Setup mode",
+    "Optional pip requirements": "Document output (.docx / .html)",
+    "Code intelligence (optional)": "Code intelligence",
+    "Machine defaults (optional)": "Machine defaults",
+    "Enable for a project (optional)": "Enable for a project",
+    "Status line (optional)": "Status line",
+}
+
+
+def display_title(title: str) -> str:
+    return TITLE_OVERRIDES.get(title, title)
+
 
 class PromptModal(ModalScreen):
     """A question the decide screen could not have answered — a dirty clone, an
@@ -154,7 +175,7 @@ class LiveInstallScreen(Responsive):
         self.total = total
         while len(self.steps) < number:
             self.steps.append({"title": "", "results": [], "state": "pending"})
-        self.steps[number - 1]["title"] = title
+        self.steps[number - 1]["title"] = display_title(title)
         for i in range(number - 1):
             if self.steps[i]["state"] == "active":
                 self.steps[i]["state"] = "done"
@@ -255,6 +276,7 @@ class LiveInstallScreen(Responsive):
         if self.code == 0:
             d.append("✓ ", style=OK)
             d.append(self.detail, style=DIM)
+            self._show_next_steps()
         elif self.code:
             d.append("✗ ", style=ERR)
             d.append(self.detail, style=DIM)
@@ -288,11 +310,18 @@ class InstallerTuiApp(App):
         self.start = start
         self.exit_code = 0
         self.broker = None
+        self.pending_action = None
 
     def on_mount(self) -> None:
         if self.start in ("advanced", "diagnostics"):
             from .ui import AdvancedScreen
             self.push_screen(AdvancedScreen(self.start))
+            return
+        if self.start == "menu":
+            from .ui import MenuScreen
+            self.push_screen(MenuScreen())
+            if getattr(self, "pending_action", None):
+                self.start_action(self.pending_action)
             return
         # Seed "Clone to" with the clone we actually loaded the engine from, so the row
         # reflects reality instead of a guess the run then silently overrides.
@@ -312,6 +341,10 @@ class InstallerTuiApp(App):
             thread=True,
             name="installer",
         )
+
+    def open_decide(self):
+        """The decide screen, seeded with the clone the engine was loaded from."""
+        return DecideScreen({"clone": str(self.repo) if self.repo else None})
 
     def start_action(self, action: str) -> None:
         """An Advanced/Diagnostics item, rendered on the same live screen."""

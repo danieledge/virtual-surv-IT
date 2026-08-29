@@ -193,12 +193,10 @@ GROUPS: list[tuple[str, list[Decision]]] = [
                      "the 'virt-surv go' shortcut"),
         ],
     ),
-    (
-        "After install",
-        [
-            Decision("project", "Enable for project", "path", "~/www/my-project", ""),
-        ],
-    ),
+    # No "enable for a project" row. Enabling is a per-project decision taken from
+    # inside the project - `virt-surv go` does it on first use - and asking for a path
+    # here invited someone to name a folder they were not in. The install now says what
+    # to do next instead of half-doing it.
 ]
 
 LABEL_W = 20
@@ -325,11 +323,14 @@ class DecideScreen(Responsive):
         if self.editing:
             keys = (("enter", "commit"), ("esc", "cancel"))
         elif d.kind == "toggle":
-            keys = (("↑↓", "move"), ("space", "toggle"), ("i", "install"), ("q", "quit"))
+            keys = (("↑↓", "move"), ("space", "toggle"), ("i", "install"),
+                    ("a", "advanced"), ("x", "diagnostics"), ("q", "quit"))
         elif d.kind == "choice":
-            keys = (("↑↓", "move"), ("←→", "change"), ("i", "install"), ("q", "quit"))
+            keys = (("↑↓", "move"), ("←→", "change"), ("i", "install"),
+                    ("a", "advanced"), ("x", "diagnostics"), ("q", "quit"))
         else:
-            keys = (("↑↓", "move"), ("enter", "edit"), ("i", "install"), ("q", "quit"))
+            keys = (("↑↓", "move"), ("enter", "edit"), ("i", "install"),
+                    ("a", "advanced"), ("x", "diagnostics"), ("q", "quit"))
         k = Text("  ")
         for name, desc in keys:
             k.append(name, style=KEY)
@@ -368,6 +369,13 @@ class DecideScreen(Responsive):
                 starter(self.snapshot())
             else:
                 self.app.push_screen(InstallScreen(self.snapshot()))
+        elif k == "a":
+            # Everything the classic menu keeps behind "Advanced / one-off settings",
+            # machine defaults included. Unreachable from here, it may as well not
+            # exist - which is exactly how it was reported.
+            self.app.push_screen(AdvancedScreen("advanced"))
+        elif k == "x":
+            self.app.push_screen(AdvancedScreen("diagnostics"))
         else:
             return
         event.stop()
@@ -1001,7 +1009,9 @@ class AdvancedScreen(Responsive):
 
         action, label, blurb = self.items[self.cursor]
         body = Text("\n")
-        body.append(f"  {label}\n\n", style=f"bold {ACCENT}")
+        for line in _wrap(label, 26):
+            body.append(f"  {line}\n", style=f"bold {ACCENT}")
+        body.append("\n")
         for line in _wrap(blurb, 26):
             body.append(f"  {line}\n", style=TEXT)
         self.query_one("#side-body", Static).update(body)
@@ -1078,6 +1088,136 @@ class AdvancedScreen(Responsive):
             self.app.exit()
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# MAIN MENU — mirrors `virt-surv`'s own front door
+# ══════════════════════════════════════════════════════════════════════════════
+
+# The same seven entries as install_helper.choose_action(), same keys, same order.
+# Without this, three of v1's top-level options - configure, help, update-only - had
+# nowhere to live in v2 and were simply absent.
+MAIN_MENU: list[tuple[str, str, str, str]] = [
+    ("1", "full", "Install or reconfigure the team",
+     "The full run. Every decision up front, then it runs start to finish without "
+     "stopping to ask."),
+    ("2", "configure", "Configure a project",
+     "Per project: enable, permissions, preferences and Morgan's model, in one guided "
+     "pass over one folder."),
+    ("3", "diagnostics", "Diagnostics...",
+     "Update check, analyser cleanliness, the full environment report, self-test, and "
+     "the internal daemon probes."),
+    ("4", "advanced", "Advanced / one-off settings...",
+     "Status line, project preferences, machine defaults, the aliases, code "
+     "intelligence, org extensions, tool re-probe and the rest."),
+    ("5", "howto", "Help: using the plugin",
+     "Morgan explains what the team is and how to work with it. Read-only."),
+    ("u", "update", "Update only (quick)",
+     "New code and a refreshed plugin, keeping every setting. Does NOT re-ask the "
+     "channel: an update that silently changed channel would be a different thing "
+     "wearing an update's name."),
+    ("q", "quit", "Quit", "Leave. Nothing is written."),
+]
+
+
+class MenuRow(Static):
+    def __init__(self, index: int, **kw) -> None:
+        super().__init__(**kw)
+        self.index = index
+
+    def render_frame(self, selected: bool) -> None:
+        key, _action, label, _blurb = MAIN_MENU[self.index]
+        t = Text()
+        t.append("▸ " if selected else "  ", style=ACCENT if selected else HINT)
+        t.append(f"[{key}] ", style=KEY)
+        t.append(label, style=f"bold {TEXT}" if selected else TEXT)
+        self.update(t)
+        self.set_class(selected, "-selected")
+
+
+class MenuScreen(Responsive):
+    BINDINGS = [("q", "app.quit", "quit"), ("escape", "app.quit", "quit")]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.cursor = 0
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="shell"):
+            yield Brand(id="brand")
+            with Horizontal(id="panes"):
+                with Vertical(id="panel"):
+                    for i in range(len(MAIN_MENU)):
+                        yield MenuRow(i, id=f"menu{i}", classes="task")
+                with Vertical(id="side"):
+                    yield Static(id="side-body")
+            yield Static(id="detail")
+            yield Static(id="keys")
+
+    def on_mount(self) -> None:
+        self.query_one("#panel").border_title = "what can I do for you?"
+        self.query_one("#side").border_title = "what it does"
+        self.paint()
+
+    def paint(self) -> None:
+        self.query_one("#brand", Brand).render_frame(
+            0.0, "virt-surv2" if self.narrow else "virt-surv2  ·  same engine, new front end",
+            self.narrow)
+        for i in range(len(MAIN_MENU)):
+            self.query_one(f"#menu{i}", MenuRow).render_frame(i == self.cursor)
+
+        _key, _action, label, blurb = MAIN_MENU[self.cursor]
+        body = Text("\n")
+        for line in _wrap(label, 26):
+            body.append(f"  {line}\n", style=f"bold {ACCENT}")
+        body.append("\n")
+        for line in _wrap(blurb, 26):
+            body.append(f"  {line}\n", style=TEXT)
+        self.query_one("#side-body", Static).update(body)
+
+        d = Text("  ")
+        d.append("│ ", style=TRACK)
+        d.append("nothing runs until you choose it", style=HINT)
+        self.query_one("#detail", Static).update(d)
+
+        k = Text("  ")
+        for name, desc in (("↑↓", "move"), ("enter", "choose"), ("1-5 u", "jump"),
+                           ("q", "quit")):
+            k.append(name, style=KEY)
+            k.append(f" {desc}   ", style=HINT)
+        self.query_one("#keys", Static).update(k)
+
+    def on_key(self, event) -> None:
+        keys = [row[0] for row in MAIN_MENU]
+        if event.key in ("down", "j"):
+            self.cursor = (self.cursor + 1) % len(MAIN_MENU)
+        elif event.key in ("up", "k"):
+            self.cursor = (self.cursor - 1) % len(MAIN_MENU)
+        elif event.key in keys:
+            self.cursor = keys.index(event.key)
+            self._choose()
+            return
+        elif event.key == "enter":
+            self._choose()
+            return
+        else:
+            return
+        event.stop()
+        self.paint()
+
+    def _choose(self) -> None:
+        action = MAIN_MENU[self.cursor][1]
+        if action == "quit":
+            self.app.exit()
+        elif action == "full":
+            opener = getattr(self.app, "open_decide", None)
+            self.app.push_screen(opener() if opener else DecideScreen())
+        elif action in ("advanced", "diagnostics"):
+            self.app.push_screen(AdvancedScreen(action))
+        else:
+            runner = getattr(self.app, "start_action", None)
+            if runner:
+                runner(action)
+
+
 class VirtSurvApp(App):
     CSS_PATH = "ui.tcss"
 
@@ -1096,6 +1236,8 @@ class VirtSurvApp(App):
             self.push_screen(AdvancedScreen())
         elif self.start == "diagnostics":
             self.push_screen(AdvancedScreen("diagnostics"))
+        elif self.start == "menu":
+            self.push_screen(MenuScreen())
         else:
             self.push_screen(DecideScreen())
 
