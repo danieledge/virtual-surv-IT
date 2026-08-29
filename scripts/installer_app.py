@@ -25,6 +25,7 @@ start - which is the same box that most needs the installer to work.
 from __future__ import annotations
 
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -526,6 +527,10 @@ def grid_screen(rows_fn, apply_fn, help_fn, ih, *, title, repo=None, output=None
     return changed[0]
 
 
+# ANSI escapes as the installer emits them - stripped before a formatted-text control
+# sees them, which renders escape codes as the characters they are.
+_ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+
 # Rows a caller can hand to progress_screen: pending until the run reaches them.
 _PENDING, _RUNNING, _OK, _SKIP, _FAIL = "pending", "running", "ok", "skip", "fail"
 
@@ -560,7 +565,12 @@ class _RunState:
             self.rows[self.current][2] = detail or ""
 
     def line(self, text):
-        text = (text or "").rstrip()
+        # The installer pre-styles its own output with ANSI (self.style.dim(...)), which
+        # a terminal interprets and a formatted-text control renders LITERALLY - so the
+        # pane filled up with "^[[2m Just the basics...^[[0m" (seen on screen 2026-08-29).
+        # Stripped here rather than in the installer, because the streaming tier still
+        # wants its colour; only this renderer needs plain text.
+        text = _ANSI.sub("", (text or "")).rstrip()
         if text:
             self.lines.append(text)
             # Bounded: an install can emit hundreds of lines and only the tail is ever

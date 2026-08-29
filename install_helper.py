@@ -1794,7 +1794,12 @@ def choose_action(style: Style) -> str:
     s = style
     while True:
         options = (
-            ("1", "Install or update the team (this machine - full run)"),
+            # NOT "update" (2026-08-29). Both this and [u] said it, and this one said it
+            # first and louder, so someone wanting to update reasonably picked the 14-step
+            # interactive run and met "which channel shall I track for you?" - a question
+            # the quick update deliberately never asks. The word now appears once, on the
+            # option that actually means it.
+            ("1", "Install or reconfigure the team (full run - asks everything)"),
             ("2", "Configure a project (per project - enable/permissions/preferences/model)"),
             ("3", "Diagnostics..."),
             ("4", "Advanced / one-off settings..."),
@@ -4229,6 +4234,15 @@ class Installer:
         if self.subset in ("full", "setup"):
             self.mode = decide_mode(self.args.mode, self.cfg)
             self.say(s.dim(f"Mode: {self.mode} (config: {self.cfg_path})"))
+        elif self.subset == "update":
+            # An update run that thinks it is installing takes the slower path and mislabels
+            # itself: the step rendered as "Plugin install" inside a screen titled "Updating
+            # the team" (seen on screen, 2026-08-29). decide_mode answers "update" whenever
+            # the configured clone exists, which is exactly the case this subset is for.
+            # Both marketplace() and plugin() then try their update fast path first and fall
+            # back to the remove-and-add they were already doing, so this is strictly the
+            # better route, not a different one.
+            self.mode = decide_mode(self.args.mode, self.cfg)
         plan = self.build_plan()
         aborted = False
         cancelled = False

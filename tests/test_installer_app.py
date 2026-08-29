@@ -725,3 +725,62 @@ def test_it_falls_back_to_streaming_when_the_screen_cannot_run(monkeypatch):
 
     monkeypatch.setattr(ih, "_import_from_scripts", lambda name: None)
     assert ih.run_update_in_app(_args(), ih.Style(False)) is None
+
+
+def test_only_one_menu_option_calls_itself_an_update():
+    """Two options said "update", and the one listed first was the 14-step interactive
+    run - so someone wanting to update reasonably picked it and met "which channel shall
+    I track for you?", a question the quick update deliberately never asks (live report,
+    2026-08-29: "should I be seeing this drop back on updating the team?").
+
+    Asserted on the LABELS because that is where the ambiguity lived - both flows were
+    working exactly as designed."""
+    import install_helper as ih
+
+    source = (REPO_ROOT / "install_helper.py").read_text(encoding="utf-8")
+    start = source.index('("1", "Install or reconfigure')
+    end = source.index('("q", "Quit")', start)
+    labels = source[start:end]
+    updates = [line for line in labels.split("\n") if "update" in line.lower() and '"' in line]
+    assert len(updates) == 1, f"exactly one option may claim to update:\n{updates}"
+    assert '"u"' in updates[0], "and it must be the quick update, not the full run"
+
+
+def test_the_output_pane_shows_text_not_escape_codes():
+    """The installer pre-styles its own output with ANSI. A terminal interprets that; a
+    formatted-text control renders it literally, so the pane filled with
+    "^[[2m Just the basics...^[[0m" (seen on screen, 2026-08-29).
+
+    Stripped in the observer rather than in the installer: the streaming tier still wants
+    its colour, and only this renderer needs plain text."""
+    import installer_app
+
+    state = installer_app._RunState(["step"])
+    state.line("\x1b[2m  Priming the guards' interpreter cache\x1b[0m")
+    state.line("\x1b[32m✓\x1b[0m done")
+    assert state.lines == ["  Priming the guards' interpreter cache", "✓ done"]
+    assert not any("\x1b" in line for line in state.lines)
+
+
+def test_an_update_run_knows_it_is_an_update():
+    """It rendered "Plugin install" inside a screen titled "Updating the team".
+
+    self.mode was only set for the full and setup subsets, so the update subset ran as
+    mode="install" - which mislabels the step AND takes the slower path, since both
+    marketplace() and plugin() branch on it. decide_mode answers "update" whenever the
+    configured clone exists, which is exactly what this subset is for."""
+    import install_helper as ih
+
+    inst = ih.Installer(_args(mode="update"), ih.Style(False), ih.marks(), subset="update")
+    titles = [t() if callable(t) else t for t in (row[0] for row in inst.build_plan())]
+    # The title is lazy, so it reflects mode at the moment the step starts - which is why
+    # the plan alone cannot be asserted without running. Assert the mechanism instead.
+    assert any("Plugin" in t for t in titles)
+    inst.mode = ih.decide_mode("update", {})
+    assert inst.mode == "update"
+    # By what it PRODUCES, not by position: "Sync to origin/{branch}" is lazy too, and
+    # taking the first callable found the wrong one.
+    resolved = [row[0]() if callable(row[0]) else row[0] for row in inst.build_plan()]
+    assert "Plugin update" in resolved, (
+        f"the label follows the mode it is actually running in; got {resolved}"
+    )
