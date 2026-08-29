@@ -452,3 +452,66 @@ def test_no_new_clone_asset_is_resolved_from___file__():
         "allow-list with the reason it is safe:\n"
         + "\n".join(f"  {name} (line {line})" for name, line in sorted(offenders.items()))
     )
+
+
+def test_a_phone_width_terminal_gets_one_column(monkeypatch):
+    """A two-pane split cannot fit a phone, and prompt_toolkit resolves the impossible
+    request by overflowing rather than by refusing.
+
+    The panes carry minimums of 34 and 26, plus a divider and the frame's borders. At the
+    ~50 columns a phone terminal actually has, the layout is wider than the screen: labels
+    clip mid-word ("set up with recommended defau"), the explanation wraps outside the
+    frame border, and the right edge is simply not on screen (photographed 2026-08-29).
+
+    So below the width where the split is honest, it folds into one column and the
+    explanation moves underneath the list - where it still describes the highlighted row
+    and has the full width to do it in."""
+    import tui_chrome
+
+    monkeypatch.setattr(tui_chrome, "term_columns", lambda default=80: 50)
+    assert tui_chrome.is_narrow() is True
+    monkeypatch.setattr(tui_chrome, "term_columns", lambda default=80: 100)
+    assert tui_chrome.is_narrow() is False
+    # 34 + divider + 26 + two borders = 63, so 64 is the first width that genuinely fits.
+    monkeypatch.setattr(tui_chrome, "term_columns", lambda default=80: tui_chrome.NARROW_COLUMNS)
+    assert tui_chrome.is_narrow() is False
+
+
+def test_wrapped_pane_text_narrows_with_the_terminal(monkeypatch):
+    """A hard-coded 30 was right beside a 26-column pane on a laptop and too wide on a
+    phone, where the same text is the only column and the borders come out of it too."""
+    import tui_chrome
+
+    monkeypatch.setattr(tui_chrome, "term_columns", lambda default=80: 50)
+    assert tui_chrome.pane_width() == 44
+    monkeypatch.setattr(tui_chrome, "term_columns", lambda default=80: 100)
+    assert tui_chrome.pane_width() == 30  # unchanged where the split is real
+    # Never so narrow that words cannot fit at all.
+    monkeypatch.setattr(tui_chrome, "term_columns", lambda default=80: 12)
+    assert tui_chrome.pane_width() >= 20
+
+
+def test_the_stacked_layout_keeps_the_explanation(monkeypatch):
+    """Folding to one column must not silently drop the right pane - the explanation is
+    the reason the screen has two columns in the first place.
+
+    Asserted on the COMPOSITION rather than through a rendered frame: the fold is the only
+    thing that differs between the two widths, and both columns come from the same two
+    functions either way. That is also the answer to "two interfaces to maintain" - there
+    is one set of content, composed side by side or stacked."""
+    import tui_chrome
+
+    body = lambda: [("", "row one\n"), ("", "row two\n")]  # noqa: E731
+    right = lambda: [("", "why row one matters\n")]  # noqa: E731
+    captured = {}
+
+    def _fake_window(control, **kwargs):
+        captured.setdefault("controls", []).append(control)
+        return ("window", control)
+
+    monkeypatch.setattr(tui_chrome, "term_columns", lambda default=80: 48)
+    assert tui_chrome.is_narrow()
+    stacked = tui_chrome._stacked_rows(body, right)
+    flat = "".join(text for _style, text in stacked)
+    assert "row one" in flat and "row two" in flat
+    assert "why row one matters" in flat, "the explanation must survive the fold"

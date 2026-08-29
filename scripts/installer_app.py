@@ -111,12 +111,13 @@ class InstallerHost:
             return ""
 
 
-def _wrap(text: str, width: int = 30, indent: str = "  ") -> str:
+def _wrap(text: str, width: int = 0, indent: str = "  ") -> str:
     """Word-wrap for the explanation pane.
 
     Hand-wrapped rather than left to the Window, for the same reason launcher_app does it:
     the right pane is a weighted split, so wrap_lines would rewrap on every resize and the
     text would jump around under the cursor while someone is reading it."""
+    width = width or _chrome().pane_width()
     out, line = [], ""
     for word in (text or "").split():
         if line and len(line) + 1 + len(word) > width:

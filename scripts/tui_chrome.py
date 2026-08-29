@@ -33,6 +33,7 @@ CONTRACTS INHERITED FROM THE LAUNCHER (each has already caused a live bug):
 
 from __future__ import annotations
 
+import shutil
 import sys
 from pathlib import Path
 
@@ -151,6 +152,56 @@ def project_line(project_dir: Path, mod, width=72):
     return text
 
 
+# The narrowest terminal a two-pane split can honestly fit.
+#
+# The panes carry minimum widths (34 and 26) plus a divider and the frame's own borders,
+# so below this the layout is WIDER THAN THE SCREEN and prompt_toolkit resolves that by
+# overflowing: labels clip mid-word, the explanation wraps outside the frame border, and
+# the right edge disappears off-screen entirely. Seen on a phone terminal at ~50 columns
+# (2026-08-29) - "set up with recommended defau", and pane text running past the frame.
+#
+# 34 + 1 divider + 26 + 2 borders = 63, so 64 is the first width where the split has room
+# to be what it claims to be.
+NARROW_COLUMNS = 64
+
+
+def term_columns(default: int = 80) -> int:
+    """This terminal's width, never raising."""
+    try:
+        return shutil.get_terminal_size((default, 24)).columns
+    except Exception:
+        return default
+
+
+def is_narrow() -> bool:
+    """Whether to fold the two panes into one column."""
+    return term_columns() < NARROW_COLUMNS
+
+
+def pane_width(default: int = 30) -> int:
+    """Characters available for wrapped pane text.
+
+    A single hard-coded 30 was fine beside a 26-column pane on a laptop and far too wide
+    for the same text on a phone, where it is the only column and the frame borders and
+    indent have to come out of it too."""
+    columns = term_columns()
+    if columns < NARROW_COLUMNS:
+        return max(20, columns - 6)
+    return default
+
+
+def _stacked_rows(body_fn, right_fn) -> list:
+    """The two panes as one column: the list, a blank line, then the explanation.
+
+    A named function rather than a closure so it can be asserted on directly - the fold is
+    the only thing that differs between a wide terminal and a narrow one, and both columns
+    come from the same two callables either way."""
+    rows = list(body_fn())
+    rows.append(("", "\n"))
+    rows.extend(right_fn())
+    return rows
+
+
 def screen(
     mod,
     *,
@@ -175,7 +226,15 @@ def screen(
     from prompt_toolkit.widgets import Frame
 
     body = Window(FormattedTextControl(body_fn), wrap_lines=False)
-    if right_fn is not None:
+    if right_fn is not None and is_narrow():
+        # ONE COLUMN. The explanation is not dropped - it moves underneath the list, where
+        # it still describes the highlighted row and has the full width to do it in. A
+        # pane that has to clip both of its columns tells you less than a single column
+        # that fits.
+        body = Window(
+            FormattedTextControl(lambda: _stacked_rows(body_fn, right_fn)), wrap_lines=True
+        )
+    elif right_fn is not None:
         # 2:1 in favour of the left. An even split (the original) truncated the settings
         # rows mid-label once the explanation pane arrived and pushed the on/off column
         # clean off the screen - proven under a pty, 2026-08-20.

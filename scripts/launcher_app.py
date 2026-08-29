@@ -355,10 +355,14 @@ def settings_screen(project_dir: Path, mod, output=None):
             out.append(("class:on" if on else "class:off", f"{mark} {head}\n"))
         return out
 
-    def _wrap(text, width=30, indent="  "):
+    def _wrap(text, width=0, indent="  "):
         """Hand-wrapped rather than left to the Window: the right pane is a weighted
         split, so wrap_lines would rewrap on every resize and the explanation would jump
         around under the cursor while someone is reading it."""
+        # Width from the terminal, not a constant: 30 sits fine beside a 26-column pane on
+        # a laptop and overflows the frame on a phone, where the same text is the only
+        # column and the borders come out of it too (2026-08-29).
+        width = width or _chrome_pane_width()
         out, line = [], ""
         for word in text.split():
             if line and len(line) + 1 + len(word) > width:
@@ -957,6 +961,16 @@ BROWSE_CANCELLED = "__browse_cancelled__"
 # not known when the body is built, and 15 fits the 24-line terminal that is the floor
 # everywhere this runs.
 _BROWSE_PAGE = 15
+
+
+def _chrome_pane_width(default: int = 30) -> int:
+    """tui_chrome's pane width, resolved lazily so this module keeps importing standalone."""
+    try:
+        import tui_chrome
+
+        return tui_chrome.pane_width(default)
+    except Exception:
+        return default
 
 
 def _dir_entries(here: Path, mod, limit=200):
