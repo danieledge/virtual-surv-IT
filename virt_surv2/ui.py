@@ -913,13 +913,9 @@ ADVANCED: list[tuple[str, str, str]] = [
      "non-interactively before each one."),
     ("cleanplugincache", "Clean stale plugin cache",
      "Removes old installs, keeps the active one."),
-    ("aliasmanage", "Manage the 'virt-surv' alias",
-     "Register/update it, or change the 'go' launch command. This is v1's alias - "
-     "the virt-surv2 shortcut is the item below."),
-    ("alias2", "Register the 'virt-surv2' shortcut",
-     "Adds a 'virt-surv2' shell function to ~/.bashrc (and ~/.zshrc if you have one) "
-     "so you can run this from any folder. Shows the exact line first and writes "
-     "nothing until you confirm. Leaves the 'virt-surv' alias untouched."),
+    ("aliasmanage", "Manage the shell shortcuts",
+     "Register or update BOTH shortcuts - virt-surv and virt-surv2 - or change the "
+     "command 'go' launches. One block, one stamp, so an upgrade keeps them together."),
     ("gitbashperf", "Git Bash performance fix",
      "Claude Code shell-snapshot slowness on Windows."),
     ("codeintel", "Code intelligence",
@@ -952,7 +948,7 @@ DIAGNOSTICS: list[tuple[str, str, str]] = [
 ]
 
 # Items that write to a shell profile need a second, deliberate keypress.
-SHELL_WRITERS = {"alias2", "fixbashrc", "aliasmanage", "gitbashperf"}
+SHELL_WRITERS = {"fixbashrc", "aliasmanage", "gitbashperf"}
 
 
 class AdvancedRow(Static):
@@ -1054,23 +1050,9 @@ class AdvancedScreen(Responsive):
     def _activate(self, action: str) -> None:
         if action in SHELL_WRITERS and not self.armed:
             self.armed, self.note = True, ""
-            if action == "alias2":
-                from .__main__ import alias_line
-                body = Text("\n")
-                body.append("  about to append\n\n", style=f"bold {GOLD}")
-                for line in alias_line().splitlines():
-                    for part in _wrap(line, 26):
-                        body.append(f"  {part}\n", style=TEXT)
-                body.append("\n  to ~/.bashrc\n", style=HINT)
-                self.query_one("#side-body", Static).update(body)
             return
 
         self.armed = False
-        if action == "alias2":
-            from .__main__ import install_alias
-            install_alias(write=True)
-            self.note = "added to your shell profile — open a new terminal"
-            return
         runner = getattr(self.app, "start_action", None)
         if runner:
             runner(action)

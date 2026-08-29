@@ -363,7 +363,7 @@ def build_args(choices: dict, repo: Optional[Path], demo: bool) -> SimpleNamespa
     )
 
 
-def _install_analysers(ih, observer, repo: Optional[Path], demo: bool) -> int:
+def _install_analysers(ih, observer, repo: Optional[Path], demo: bool, installer=None) -> int:
     """ruff/black/mypy/bandit/sqlfluff. Never fatal: like the engine's own optional
     pip steps, a locked-down box with no pip must not fail an otherwise-good install."""
     import sys as _sys
@@ -388,6 +388,19 @@ def _install_analysers(ih, observer, repo: Optional[Path], demo: bool) -> int:
         return 0
     if rc == 0:
         observer.result("Review analysers", "ok", ", ".join(s.split(">")[0] for s in specs))
+        # The probe caches tool availability on a 7-day TTL and Morgan reads it at
+        # engagement open. Installing analysers and leaving that cache alone means the
+        # team keeps reporting them missing for up to a week AFTER they were installed -
+        # "the user did exactly what they were told and nothing changed", which is what
+        # run_tool_reprobe exists to rescue. The engine's code-intel step invalidates it
+        # for its own install; this does the same for these.
+        drop = getattr(installer, "_invalidate_tool_cache", None)
+        if drop is not None:
+            try:
+                drop()
+                observer.result("Tool cache", "ok", "cleared - the team will re-probe")
+            except Exception as exc:    # noqa: BLE001 — best-effort, never fatal
+                observer.result("Tool cache", "skip", f"not cleared: {exc}")
     else:
         observer.result("Review analysers", "skip",
                         "pip install failed - reviews fall back to their built-in checks")
@@ -533,7 +546,7 @@ def run_installer(ih, app, screen, choices: dict, repo: Optional[Path],
         # An extra step the engine has no equivalent for. Reported through the same
         # observer so it renders as step N+1 rather than as a surprise after the run.
         if code == 0 and choices.get("analysers"):
-            code = _install_analysers(ih, observer, repo, demo)
+            code = _install_analysers(ih, observer, repo, demo, installer)
 
     except BaseException as exc:        # noqa: BLE001 — includes KeyboardInterrupt
         sys.stdout, sys.stderr = orig_out, orig_err

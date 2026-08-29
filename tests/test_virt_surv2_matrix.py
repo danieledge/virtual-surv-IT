@@ -554,6 +554,14 @@ def test_analysers() -> None:
         check("tree-sitter excluded (the engine installs those)",
               any("tree-sitter" in x for x in specs), False)
         check("pins preserved", all(">" in x or "=" in x for x in specs), True)
+    # Installing analysers without dropping the probe cache means the team keeps
+    # reporting them missing for up to a week - run_tool_reprobe exists because of
+    # exactly that, and the code-intel step avoids it by clearing the cache itself.
+    import inspect
+    src = inspect.getsource(E._install_analysers)
+    check("analyser install clears the tool cache", "_invalidate_tool_cache" in src, True)
+    check("cache clearing is not fatal", "never fatal" in src or "best-effort" in src, True)
+
     check("missing repo is survivable", E.analyser_specs(None), [])
     check("bad path is survivable", E.analyser_specs(Path("/nope/nope")), [])
 
@@ -627,7 +635,7 @@ def test_menu_parity_with_v1() -> None:
     from virt_surv2 import engine as E
     # Screens the UI handles itself, plus demo (run_action maps it to the full plan
     # with args.demo set, which is what v1's menu does too).
-    handled = {"full", "quit", "advanced", "diagnostics", "alias2", "demo"}
+    handled = {"full", "quit", "advanced", "diagnostics", "demo"}
     # The subsets build_plan actually branches on, read from the RAW source: unparsing
     # the AST normalises quoting, so matching a double-quoted literal against it
     # silently found nothing and every check "failed".
