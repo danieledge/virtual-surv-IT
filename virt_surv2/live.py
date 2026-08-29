@@ -202,17 +202,18 @@ class LiveInstallScreen(Responsive):
         for s in self.steps:
             if s["state"] == "active":
                 s["state"] = "done" if code == 0 else "fail"
-        decided = sum(1 for _p, _v, src in asked if src == "decided")
-        prompted = len(asked) - decided
         if failure:
             self.detail = failure
         elif code == 0:
-            self.detail = (f"done — {decided} answered from your choices, "
-                           f"{prompted} needed asking")
+            self.detail = "installed"
         elif code == 130:
             self.detail = "cancelled"
         else:
             self.detail = f"the installer stopped (exit {code}) — see the steps above"
+        try:
+            self.query_one("#panel").border_title = "done" if code == 0 else "stopped"
+        except Exception:               # noqa: BLE001 — cosmetic only
+            pass
         k = Text("  ")
         for name, desc in (("q", "quit"), ("r", "change & retry")) if code else (("q", "quit"),):
             k.append(name, style=KEY)
@@ -227,7 +228,34 @@ class LiveInstallScreen(Responsive):
             if len(self.app.screen_stack) > 2:
                 self.app.pop_screen()          # back to decide, choices intact
 
-    # ── prompts ───────────────────────────────────────────────────────────────
+    def _show_next_steps(self) -> None:
+        """What to do next, in the panel where the steps were.
+
+        The install cannot enable a project for you and should not pretend to: that is
+        a decision taken from inside the project, and `virt-surv go` makes it on first
+        use. So this says so, once, where you are already looking.
+        """
+        t = Text()
+        t.append("\n  ✓  installed\n\n", style=f"bold {OK}")
+        t.append("  Next\n\n", style=f"bold {GOLD}")
+        t.append("    1  ", style=HINT)
+        t.append("open a new terminal", style=TEXT)
+        t.append("   or  ", style=HINT)
+        t.append(". $PROFILE", style=ACCENT)
+        t.append("  /  ", style=HINT)
+        t.append("source ~/.bashrc", style=ACCENT)
+        t.append("\n", style=HINT)
+        t.append("    2  ", style=HINT)
+        t.append("cd", style=ACCENT)
+        t.append(" into the project you want the team on\n", style=TEXT)
+        t.append("    3  run ", style=HINT)
+        t.append("virt-surv go", style=ACCENT)
+        t.append("   it sets the project up on first use\n", style=TEXT)
+        t.append("\n  A Claude Code session already open elsewhere needs a restart.\n",
+                 style=HINT)
+        self.query_one("#steps", Static).update(t)
+
+    # ── prompts ─────────────────────────────────────────────────────────────
     def open_prompt(self, kind, prompt, default, box, done) -> None:
         ctx = "the installer is asking"
         if 0 <= self.current < len(self.steps) and self.total:
@@ -274,9 +302,8 @@ class LiveInstallScreen(Responsive):
 
         d = Text("  ")
         if self.code == 0:
-            d.append("✓ ", style=OK)
-            d.append(self.detail, style=DIM)
             self._show_next_steps()
+            d.append("", style=DIM)
         elif self.code:
             d.append("✗ ", style=ERR)
             d.append(self.detail, style=DIM)

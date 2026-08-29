@@ -509,7 +509,10 @@ def run_installer(ih, app, screen, choices: dict, repo: Optional[Path],
         broker.release_all()
         try:
             app.call_from_thread(screen.engine_finished, code, answers.asked, failure)
-        except Exception:               # noqa: BLE001 — app already gone
-            pass
+        except Exception as exc:        # noqa: BLE001 — usually just "app already gone"
+            # But not always: a bug in the finish handler raises here too, and
+            # swallowing it silently makes a broken final screen look like a clean one
+            # (live: _show_next_steps was called but never defined, and nothing said so).
+            _trace("engine_finished failed", type(exc).__name__, exc)
 
     return code

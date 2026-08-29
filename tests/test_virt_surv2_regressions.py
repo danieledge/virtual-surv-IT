@@ -322,6 +322,50 @@ def test_summary_names_virt_surv2() -> None:
           "alias_reload_hint" in inspect.getsource(ih.run_setup_alias), True)
 
 
+def test_finish_screen_renders() -> None:
+    """The completion screen must actually paint.
+
+    _show_next_steps was CALLED but never defined - a patch targeted an indented
+    `def _wrap` that is module-level, so the edit silently did nothing. The resulting
+    AttributeError was then swallowed by run_installer's finally, so a crashed final
+    screen looked exactly like a clean finish that just had not repainted.
+    """
+    from virt_surv2.live import LiveInstallScreen
+
+    check("_show_next_steps exists",
+          callable(getattr(LiveInstallScreen, "_show_next_steps", None)), True)
+
+    async def run():
+        from textual.app import App
+
+        class T(App):
+            CSS_PATH = str(Path(__file__).resolve().parent.parent
+                           / "virt_surv2" / "ui.tcss")
+
+            def on_mount(self):
+                self.scr = LiveInstallScreen({"channel": "dev"}, True)
+                self.push_screen(self.scr)
+
+        app = T()
+        async with app.run_test(size=(92, 30)) as p:
+            await p.pause()
+            scr = app.scr
+            scr.engine_step(1, 1, "Preflight checks")
+            scr.engine_finished(0, [], None)      # must not raise
+            await p.pause()
+            body = scr.query_one("#steps")
+            text = getattr(body, "content", None)
+            text = text.plain if hasattr(text, "plain") else str(text)
+            check("finish screen says installed", "installed" in text, True)
+            check("finish screen tells you to open a new terminal",
+                  "new terminal" in text, True)
+            check("finish screen names virt-surv go", "virt-surv go" in text, True)
+            check("panel title becomes done",
+                  str(scr.query_one("#panel").border_title), "done")
+
+    asyncio.run(run())
+
+
 def test_css_paths() -> None:
     """Every App class must point at a stylesheet that exists.
 
@@ -395,6 +439,9 @@ if __name__ == "__main__":
 
     print("\nsummary")
     test_summary_names_virt_surv2()
+
+    print("\nfinish screen")
+    test_finish_screen_renders()
 
     print("\ncss paths")
     test_css_paths()
