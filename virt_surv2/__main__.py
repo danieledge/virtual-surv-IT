@@ -157,7 +157,17 @@ def main(argv=None) -> int:
                               start="launch" if launching else "settings",
                               project=project, rows=rows, note=note)
         app.run()
-        return app.exit_code
+        if not launching:
+            return app.exit_code
+        # The launcher's contract, shared with `virt-surv go`: the decision is the ONLY
+        # thing on stdout, and 97 means the human backed out so the wrapper launches
+        # nothing. A bare print of None would put "None" on the decision channel.
+        decision = getattr(app, "decision", None)
+        if decision is None:
+            return E.ABORT_EXIT_CODE
+        if decision:
+            print(decision)
+        return 0
 
     start = ("advanced" if a.advanced else
              "diagnostics" if a.diagnostics else

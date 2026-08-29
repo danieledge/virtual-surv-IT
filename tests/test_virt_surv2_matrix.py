@@ -455,10 +455,14 @@ def test_key_fuzz() -> None:
     async def run():
         for start in ("decide", "install", "launch", "settings"):
             a = A.VirtSurvApp(start=start, frozen=True)
+            # On the launcher, Enter IS how you leave: choosing an engagement or "a new
+            # engagement" hands a decision to the shell wrapper and exits, which is the
+            # whole contract `virt-surv go` runs on.
+            leaves = {"q", "escape"} | ({"enter"} if start == "launch" else set())
             async with a.run_test(size=(100, 36)) as p:
                 await p.pause()
                 for key in KEYS:
-                    if key in ("q", "escape"):
+                    if key in leaves:
                         continue          # those legitimately leave
                     await p.press(key)
                     if not a._running:
@@ -615,6 +619,37 @@ def test_step_labels_make_sense() -> None:
         check(f"{shown!r} is not a question", shown.endswith("?"), False)
         check(f"{shown!r} does not say optional", "optional" in shown.lower(), False)
         check(f"{shown!r} is not jargon-only", shown.strip() != "", True)
+
+
+def test_every_launcher_row_is_wired() -> None:
+    """Every row on the launcher must DO something.
+
+    Enter did nothing at all originally; then some rows worked and the rest said "not
+    wired yet". This asserts the last of that is gone: each action either emits a
+    decision for the shell wrapper, opens a screen, or runs an engine function.
+    """
+    from virt_surv2 import engine as E
+    from virt_surv2 import ui as A
+    section("O  every launcher row is wired")
+
+    opens_a_screen = {"c", "o", "j"}
+    emits_a_decision = {"n", ""}
+    for key, label, _blurb in A.ACTIONS:
+        wired = (key in opens_a_screen
+                 or key in emits_a_decision
+                 or A.LaunchScreen.ENGINE_ACTIONS.get(key) in E.RUN_FUNCTIONS)
+        check(f"[{key or ' '}] {label[:34]}", wired, True)
+
+    for key, action in A.LaunchScreen.ENGINE_ACTIONS.items():
+        check(f"[{key}] -> {action} exists", action in E.RUN_FUNCTIONS, True)
+
+    # The stdout contract, shared with virt-surv go.
+    check("abort code matches the wrapper's", E.ABORT_EXIT_CODE, 97)
+    import install_helper as ih
+    launcher_src = (Path(ih.__file__).resolve().parent / "scripts"
+                    / "virt_team_launcher.py").read_text(encoding="utf-8")
+    check("97 is the launcher's own abort code",
+          "_ABORT_EXIT_CODE = 97" in launcher_src, True)
 
 
 def test_first_run_offer() -> None:
@@ -827,6 +862,7 @@ if __name__ == "__main__":
     test_responsive_matrix()
     test_failure_modes()
     test_step_labels_make_sense()
+    test_every_launcher_row_is_wired()
     test_first_run_offer()
     test_menu_parity_with_v1()
     test_analysers()

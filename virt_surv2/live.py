@@ -11,6 +11,8 @@ from __future__ import annotations
 import threading
 
 from rich.text import Text
+from pathlib import Path
+
 from textual.app import App, ComposeResult
 from textual.containers import Vertical, VerticalScroll
 from textual.screen import ModalScreen
@@ -352,6 +354,11 @@ class InstallerTuiApp(App):
         self.exit_code = 0
         self.broker = None
         self.pending_action = None
+        # The launcher's stdout contract: a decision the shell wrapper hands to Claude
+        # Code. None means "nothing chosen" (exit 97, launch nothing); "" means "launch
+        # with no pre-seeded prompt".
+        self.decision = None
+        self.engage_cmd = "/compliance-surveillance-team:engage"
 
     def on_mount(self) -> None:
         if self.start == "settings":
@@ -397,9 +404,23 @@ class InstallerTuiApp(App):
             name="installer",
         )
 
-    def open_launcher(self):
+    def open_launcher(self, project=None):
+        from . import engine as E
         from .ui import LaunchScreen
+
+        if project is not None:
+            self.project = Path(project)
+            self.rows, self.note = E.load_engagements(self.repo, self.project)
+        self.engage_cmd = E.engage_command(self.repo, self.project or Path.cwd())
         return LaunchScreen(self.project, self.rows, self.note)
+
+    def jira_decision(self, project, ref: str) -> str:
+        from . import engine as E
+        return E.jira_decision(self.repo, project, ref)
+
+    def resume_token(self, view: dict) -> str:
+        from . import engine as E
+        return E.resume_token(self.repo, view)
 
     def open_decide(self):
         """The decide screen, seeded with the clone the engine was loaded from."""

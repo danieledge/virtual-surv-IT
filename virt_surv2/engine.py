@@ -339,6 +339,46 @@ class PromptBroker:
             ev.set()
 
 
+# The launcher's stdout contract, reused verbatim: stdout carries the decision the
+# shell wrapper hands to Claude Code, and exit 97 means "the human backed out, launch
+# nothing". Both are shared with `virt-surv go`, so one wrapper shape serves both.
+ABORT_EXIT_CODE = 97
+
+
+def engage_command(repo: Optional[Path], project: Path) -> str:
+    """The engage command spelling THIS project answers to.
+
+    Namespaced under a plugin install, bare in repo-as-project mode - which is exactly
+    why it is resolved rather than hardcoded.
+    """
+    if repo is None:
+        return "/compliance-surveillance-team:engage"
+    scripts = Path(repo) / "scripts"
+    if str(scripts) not in sys.path:
+        sys.path.insert(0, str(scripts))
+    try:
+        import virt_team_launcher as launcher
+        return launcher._engage_command(Path(project))
+    except Exception:                   # noqa: BLE001
+        return "/compliance-surveillance-team:engage"
+
+
+def resume_token(repo: Optional[Path], row: dict) -> str:
+    """The identifier a --resume decision carries for this row - the launcher's own
+    _row_resume_token, which prefers the workspace dir and has a documented exception
+    for flat-layout packs that once emitted a literal `--resume (flat)`."""
+    if repo is None:
+        return ""
+    scripts = Path(repo) / "scripts"
+    if str(scripts) not in sys.path:
+        sys.path.insert(0, str(scripts))
+    try:
+        import virt_team_launcher as launcher
+        return launcher._row_resume_token(row.get("row") or row) or ""
+    except Exception:                   # noqa: BLE001
+        return ""
+
+
 def project_is_configured(repo: Optional[Path], project: Path) -> Optional[bool]:
     """Is the team enabled for this folder? None when the question cannot be answered.
 
@@ -387,8 +427,12 @@ def load_engagements(repo: Optional[Path], project: Path):
                     else "no open engagements in this folder")
     default = menu.get("default") or ""
     try:
-        return [launcher.row_view(r, default_slug=default, of_many=len(rows) > 1)
-                for r in rows], ""
+        views = []
+        for r in rows:
+            v = launcher.row_view(r, default_slug=default, of_many=len(rows) > 1)
+            v["row"] = r        # the raw row, so a --resume token can be derived later
+            views.append(v)
+        return views, ""
     except Exception as exc:            # noqa: BLE001
         return [], f"could not render engagements: {exc}"
 
@@ -484,8 +528,68 @@ RUN_FUNCTIONS = {
         st, mk, False, False),
     "extensions":   lambda ih, st, mk, repo, project=None: ih.run_extensions_editor(st, mk),
     "reprobe":      lambda ih, st, mk, repo, project=None: ih.run_tool_reprobe(st, mk),
+    "archive":      lambda ih, st, mk, repo, project=None: ih.run_archive_engagements(
+        Path(project or "."), st, mk, False),
+    "finished":     lambda ih, st, mk, repo, project=None: ih.run_list_engagements(
+        Path(project or "."), st, mk),
+    # watch and artifacts have plain, text-only fallbacks in the launcher precisely
+    # because their full-screen versions cannot always run. Those are what this calls:
+    # their output lands in the capture and renders as run output, rather than a second
+    # prompt_toolkit app fighting this one for the terminal.
+    "watch":        lambda ih, st, mk, repo, project=None: _launcher_call(
+        repo, "_watch_running_engagement", Path(project or ".")),
+    "artifacts":    lambda ih, st, mk, repo, project=None: _launcher_artifacts(
+        repo, Path(project or ".")),
     "relocate":     lambda ih, st, mk, repo, project=None: ih.run_relocate_to_vsit(st, mk),
 }
+
+
+def _launcher(repo: Optional[Path]):
+    if repo is None:
+        raise RuntimeError("no clone found")
+    scripts = Path(repo) / "scripts"
+    if str(scripts) not in sys.path:
+        sys.path.insert(0, str(scripts))
+    import virt_team_launcher
+    return virt_team_launcher
+
+
+def _launcher_call(repo, name: str, *args) -> int:
+    fn = getattr(_launcher(repo), name, None)
+    if fn is None:
+        print(f"  {name} is not available in this clone")
+        return 0
+    fn(*args)
+    return 0
+
+
+def _launcher_artifacts(repo, project: Path) -> int:
+    """The artifacts view for the most recent open engagement in this folder."""
+    launcher = _launcher(repo)
+    rows, _note = load_engagements(repo, project)
+    if not rows:
+        print("  no open engagements in this folder")
+        return 0
+    slug = resume_token(repo, rows[0])
+    if not slug:
+        print("  could not identify an engagement to show artifacts for")
+        return 0
+    plain = getattr(launcher, "_artifacts_plain", None)
+    if plain is None:
+        print("  the artifacts view is not available in this clone")
+        return 0
+    plain(project, slug)
+    return 0
+
+
+def jira_decision(repo: Optional[Path], project: Path, ref: str) -> str:
+    """The decision `virt-surv go` emits for a Jira ticket, resolved by its own
+    _jira_command so the spelling cannot drift."""
+    try:
+        launcher = _launcher(repo)
+        return launcher._jira_command(Path(project), ref)
+    except Exception:                   # noqa: BLE001
+        return f"{engage_command(repo, project)} --new {ref}".strip()
 
 
 def run_action(ih, app, screen, action: str, choices: dict, repo: Optional[Path],

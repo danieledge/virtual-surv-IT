@@ -751,22 +751,64 @@ class LaunchScreen(Responsive):
         event.stop()
         self.paint()
 
+    # Launcher rows that hand a DECISION to the shell wrapper, which then starts
+    # Claude Code with it - the same stdout contract `virt-surv go` uses.
+    DECISIONS = {"n": "--new", "": ""}
+    # Rows that run engine work in this process instead.
+    ENGINE_ACTIONS = {"a": "archive", "b": "finished", "v": "artifacts", "t": "watch"}
+
+    def _decide(self, decision: str) -> None:
+        """Hand a decision to the wrapper and leave, exactly as virt_team_launcher does:
+        stdout carries it, nothing else may."""
+        self.app.decision = decision
+        self.app.exit()
+
+    @property
+    def engage_cmd(self) -> str:
+        # Defaulted, not assumed: the screen-only app has no engine to resolve the
+        # project's engage spelling, and a fuzzed Enter must not crash it.
+        return getattr(self.app, "engage_cmd", "/compliance-surveillance-team:engage")
+
     def _choose(self, kind, payload) -> None:
         """Enter used to do nothing at all - reported as "doesn't allow any option to
-        be selected". Actions that map to engine work run it; the rest say plainly
-        that they are not wired yet rather than silently ignoring the keypress."""
+        be selected"."""
         if kind == "eng":
             v = self.engagements[payload]
-            self.note = f"resuming is not wired yet — use `virt-surv go` for {v.get('title')}"
-            self.paint()
+            token = ""
+            getter = getattr(self.app, "resume_token", None)
+            if getter:
+                token = getter(v)
+            if not token:
+                self.note = f"no resume token for {v.get('title')} - open it with virt-surv go"
+                self.paint()
+                return
+            self._decide(f"{self.engage_cmd} --resume {token}")
             return
+
         key, label, _blurb = ACTIONS[payload]
-        runner = getattr(self.app, "start_action", None)
-        mapped = {"o": None, "b": None, "v": None, "a": None, "n": None, "j": None}
-        if key in mapped and mapped[key] and runner:
-            runner(mapped[key])
+        if key == "n":
+            self._decide(f"{self.engage_cmd} --new")
             return
-        self.note = f"{label}: not wired yet in virt-surv2 — `virt-surv go` does it"
+        if key == "":
+            # "decide inside the session": launch with no decision, which is what an
+            # empty stdout means to the wrapper.
+            self._decide("")
+            return
+        if key == "c":
+            self.app.push_screen(SettingsScreen(str(self.project)))
+            return
+        if key == "o":
+            self.app.push_screen(OpenProjectScreen(self.project))
+            return
+        if key == "j":
+            self.app.push_screen(JiraScreen(self.project))
+            return
+        runner = getattr(self.app, "start_action", None)
+        engine_action = self.ENGINE_ACTIONS.get(key)
+        if engine_action and runner:
+            runner(engine_action, project=self.project)
+            return
+        self.note = f"{label}: not available here"
         self.paint()
 
 
@@ -1302,6 +1344,121 @@ class FirstRunScreen(Responsive):
         self._choose("skip")
 
 
+class JiraScreen(Responsive):
+    """[j] - start an engagement from a ticket.
+
+    Emits the decision virt_team_launcher._jira_command builds, so the spelling cannot
+    drift from what `virt-surv go` hands Claude Code for the same choice.
+    """
+
+    BINDINGS = [("q", "app.quit", "quit")]
+
+    def __init__(self, project) -> None:
+        super().__init__()
+        self.project = Path(project)
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="shell"):
+            yield Brand(id="brand")
+            with Vertical(id="panel"):
+                yield Static(id="open-help")
+            yield Input(placeholder="e.g. ABC-123 or a ticket URL", id="edit")
+            yield Static(id="detail")
+            yield Static(id="keys")
+
+    def on_mount(self) -> None:
+        self.query_one("#panel").border_title = "from a Jira ticket"
+        h = Text()
+        h.append("\n  Which ticket?\n\n", style=f"bold {ACCENT}")
+        h.append("  The engagement opens with the ticket's summary and acceptance\n",
+                 style=TEXT)
+        h.append("  criteria already read in.\n", style=TEXT)
+        self.query_one("#open-help", Static).update(h)
+        inp = self.query_one("#edit", Input)
+        self.call_after_refresh(inp.focus)
+        d = Text("  ")
+        d.append("│ ", style=TRACK)
+        d.append("enter starts the session with it; esc goes back", style=HINT)
+        self.query_one("#detail", Static).update(d)
+        k = Text("  ")
+        for name, desc in (("enter", "start"), ("esc", "back")):
+            k.append(name, style=KEY)
+            k.append(f" {desc}   ", style=HINT)
+        self.query_one("#keys", Static).update(k)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        ref = event.value.strip()
+        if not ref:
+            self.app.pop_screen()
+            return
+        builder = getattr(self.app, "jira_decision", None)
+        self.app.decision = (builder(self.project, ref) if builder
+                             else f"{getattr(self.app, 'engage_cmd', '')} --new --jira {ref}")
+        self.app.exit()
+
+    def key_escape(self, event) -> None:
+        event.stop()
+        self.app.pop_screen()
+
+
+class OpenProjectScreen(Responsive):
+    """Point the launcher at a different folder without leaving it."""
+
+    BINDINGS = [("q", "app.quit", "quit")]
+
+    def __init__(self, project) -> None:
+        super().__init__()
+        self.project = Path(project)
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="shell"):
+            yield Brand(id="brand")
+            with Vertical(id="panel"):
+                yield Static(id="open-help")
+            yield Input(placeholder="path to a project folder", id="edit")
+            yield Static(id="detail")
+            yield Static(id="keys")
+
+    def on_mount(self) -> None:
+        self.query_one("#panel").border_title = "open a folder"
+        h = Text()
+        h.append("\n  Which project folder?\n\n", style=f"bold {ACCENT}")
+        h.append("  The launcher re-reads engagements for whatever you name here.\n",
+                 style=TEXT)
+        h.append("  Blank keeps the current one.\n", style=HINT)
+        self.query_one("#open-help", Static).update(h)
+        inp = self.query_one("#edit", Input)
+        inp.value = str(self.project)
+        self.call_after_refresh(inp.focus)
+        d = Text("  ")
+        d.append("│ ", style=TRACK)
+        d.append(f"currently {self.project}", style=HINT)
+        self.query_one("#detail", Static).update(d)
+        k = Text("  ")
+        for name, desc in (("enter", "open"), ("esc", "cancel")):
+            k.append(name, style=KEY)
+            k.append(f" {desc}   ", style=HINT)
+        self.query_one("#keys", Static).update(k)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        target = Path(event.value.strip() or self.project).expanduser()
+        opener = getattr(self.app, "open_launcher", None)
+        if not target.is_dir():
+            d = Text("  ")
+            d.append("✗ ", style=ERR)
+            d.append(f"not a directory: {target}", style=HINT)
+            self.query_one("#detail", Static).update(d)
+            return
+        if opener:
+            self.app.switch_screen(opener(target))
+        else:
+            self.app.pop_screen()
+
+    def key_escape(self, event) -> None:
+        event.stop()
+        self.app.pop_screen()
+
+
 class MenuRow(Static):
     def __init__(self, index: int, **kw) -> None:
         super().__init__(**kw)
@@ -1404,6 +1561,11 @@ class MenuScreen(Responsive):
 
 class VirtSurvApp(App):
     CSS_PATH = "ui.tcss"
+
+    # The launcher's stdout contract, so the screen-only app answers it too rather
+    # than raising the moment a launcher row is chosen.
+    decision = None
+    engage_cmd = "/compliance-surveillance-team:engage"
 
     def __init__(self, start: str = "decide", frozen: bool = False, done: bool = False,
                  project=None, rows=None, note: str = "") -> None:
