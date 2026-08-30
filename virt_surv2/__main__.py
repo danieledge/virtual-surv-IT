@@ -167,7 +167,16 @@ def main(argv=None) -> int:
         print("  run it from inside the clone, or pass --repo PATH", file=sys.stderr)
         return 2
 
+    # The Windows guard, before the engine can touch the clone: git checkout cannot
+    # overwrite a running install_helper.py, and v2 is MORE exposed than v1 - it imports
+    # the module from the clone and runs the sync in that same process.
+    note = E.guard_running_inside_target(ih, repo)
+    if note:
+        print(f"  ! relocate guard: {note}", file=sys.stderr)
+
     if launching:
+        # A pre-v7 wrapper ignores exit 97, so Esc would open an unexplained session.
+        E.warn_if_abort_ignored(repo)
         # Self-heal the shortcut, exactly as `virt-surv go` does on its own entry point:
         # both functions live in one stamped block, so a stale block means a stale
         # virt-surv2 too - and until this, only running v1 could fix v2's shortcut.
@@ -250,6 +259,12 @@ def main(argv=None) -> int:
              "diagnostics" if a.diagnostics else
              "decide" if a.install else
              "menu")
+    # "There's an update" should be visible no matter which menu option you pick - v1
+    # shows it right after the banner; v2's menu never mentioned one.
+    if start == "menu":
+        line = E.update_available(ih, a)
+        if line:
+            print(line, file=sys.stderr)
     app = InstallerTuiApp(ih, repo, a.demo, start=start)
     if a.update:
         app.start = "menu"

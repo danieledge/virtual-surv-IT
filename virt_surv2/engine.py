@@ -456,6 +456,80 @@ def run_prelaunch(repo: Optional[Path], project: Path, report=None) -> list:
     return out
 
 
+def guard_running_inside_target(ih, repo: Optional[Path]) -> str:
+    """v1's Windows guard, run before the engine touches the clone.
+
+    _relocate_if_running_inside_target_repo exists because on Windows `git checkout`
+    cannot overwrite a running install_helper.py. v2 is MORE exposed than v1, not less:
+    it imports the module from the clone and then runs the sync in that same process.
+    """
+    fn = getattr(ih, "_relocate_if_running_inside_target_repo", None)
+    if fn is None or repo is None:
+        return ""
+    try:
+        fn(Path(repo))
+        return ""
+    except SystemExit:
+        raise
+    except Exception as exc:            # noqa: BLE001 — advisory, never fatal
+        return f"{type(exc).__name__}: {exc}"
+
+
+def update_available(ih, cfg_args) -> str:
+    """Whether a newer version is on the channel this machine tracks.
+
+    v1 shows this right after the banner and before the menu, "so 'there's an update'
+    is visible no matter which option you pick". v2's menu never mentioned one.
+    """
+    checker = getattr(ih, "check_for_update_upfront", None)
+    if checker is None:
+        return ""
+    import io as _io
+
+    buf = _io.StringIO()
+    saved = sys.stdout
+    sys.stdout = buf
+    try:
+        checker(ih.load_config(ih.config_path()), ih.Style(False), cfg_args)
+    except Exception:                   # noqa: BLE001 — never block the menu
+        return ""
+    finally:
+        sys.stdout = saved
+    return buf.getvalue().strip()
+
+
+def warn_if_abort_ignored(repo: Optional[Path]) -> None:
+    """A pre-v7 wrapper ignores exit 97, so Esc would open an unexplained session."""
+    try:
+        _launcher(repo)._warn_if_abort_will_be_ignored()
+    except Exception:                   # noqa: BLE001
+        pass
+
+
+def recent_projects(repo: Optional[Path]) -> list:
+    """Folders the launcher has seen, newest first - what v1's explorer offers."""
+    try:
+        return [p for p in (_launcher(repo)._recent_projects() or []) if p]
+    except Exception:                   # noqa: BLE001
+        return []
+
+
+def jira_needs_key(repo: Optional[Path], project: Path) -> bool:
+    try:
+        return bool(_launcher(repo)._jira_needs_key(Path(project)))
+    except Exception:                   # noqa: BLE001
+        return False
+
+
+def set_jira_key(repo: Optional[Path], project: Path, key: str) -> str:
+    """Jira write-back is unusable in the "on (key UNSET)" state, and v2 had no way to
+    leave it - it could only start work FROM a ticket, never name the project key."""
+    try:
+        return _launcher(repo).set_jira_project_key(Path(project), key) or ""
+    except Exception as exc:            # noqa: BLE001
+        return f"could not set the project key: {exc}"
+
+
 def dispatch_decision(repo: Optional[Path], project: Path, decision: str,
                       report=None) -> bool:
     """v1's post-decision dispatch: headless, or a new window, or neither.
@@ -821,8 +895,8 @@ RUN_FUNCTIONS = {
     # prompt_toolkit app fighting this one for the terminal.
     "watch":        lambda ih, st, mk, repo, project=None, demo=False: _launcher_call(
         repo, "_watch_running_engagement", Path(project or ".")),
-    "artifacts":    lambda ih, st, mk, repo, project=None, demo=False: _launcher_artifacts(
-        repo, Path(project or ".")),
+    "artifacts":    lambda ih, st, mk, repo, project=None, demo=False, slug="":
+        _launcher_artifacts(repo, Path(project or "."), slug),
     "relocate":     lambda ih, st, mk, repo, project=None, demo=False: ih.run_relocate_to_vsit(st, mk),
 }
 
@@ -846,14 +920,19 @@ def _launcher_call(repo, name: str, *args) -> int:
     return 0
 
 
-def _launcher_artifacts(repo, project: Path) -> int:
-    """The artifacts view for the most recent open engagement in this folder."""
+def _launcher_artifacts(repo, project: Path, slug: str = "") -> int:
+    """The artifacts view for a NAMED engagement, or the most recent if none given.
+
+    v1 asks which one when several are open; v2 hardcoded rows[0], so with three open
+    packs it always showed the same one regardless of what you had highlighted.
+    """
     launcher = _launcher(repo)
-    rows, _note = load_engagements(repo, project)
-    if not rows:
-        print("  no open engagements in this folder")
-        return 0
-    slug = resume_token(repo, rows[0])
+    if not slug:
+        rows, _note = load_engagements(repo, project)
+        if not rows:
+            print("  no open engagements in this folder")
+            return 0
+        slug = resume_token(repo, rows[0])
     if not slug:
         print("  could not identify an engagement to show artifacts for")
         return 0
@@ -877,7 +956,7 @@ def jira_decision(repo: Optional[Path], project: Path, ref: str) -> str:
 
 def run_action(ih, app, screen, action: str, choices: dict, repo: Optional[Path],
                demo: bool, broker: "PromptBroker | None" = None,
-               project: Optional[Path] = None) -> int:
+               project: Optional[Path] = None, slug: str = "") -> int:
     """One advanced/diagnostics item. Blocking; call on a worker thread.
 
     Same guarantees as run_installer: engine_finished always lands, streams and the
@@ -904,8 +983,9 @@ def run_action(ih, app, screen, action: str, choices: dict, repo: Optional[Path]
                     observer.step(1, 1, action)
                     # The real demo flag, not a hardcoded False: these five write to
                     # settings.json, ~/.bashrc, ~/.bash_profile and the archive.
+                    kw = {"slug": slug} if "slug" in fn.__code__.co_varnames else {}
                     code = fn(ih, ih.Style(False), ih.marks(), args.repo,
-                              str(project) if project else None, dry) or 0
+                              str(project) if project else None, dry, **kw) or 0
                 else:
                     subset = "full" if action == "demo" else action
                     inst = ih.Installer(args, ih.Style(False), ih.marks(), subset=subset)

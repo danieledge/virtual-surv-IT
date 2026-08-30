@@ -730,6 +730,46 @@ def test_every_screen_survives_a_resize() -> None:
     asyncio.run(run())
 
 
+def test_remaining_v1_guards() -> None:
+    """The guards and affordances v1 runs that v2 was skipping."""
+    import inspect
+
+    from virt_surv2 import engine as E
+    from virt_surv2 import ui as A
+    section("V  v1's guards and affordances")
+
+    import install_helper as ih
+    repo = Path(ih.__file__).resolve().parent
+    launcher_src = (repo / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
+    helper_src = (repo / "install_helper.py").read_text(encoding="utf-8")
+
+    check("relocate guard exists in v1",
+          "def _relocate_if_running_inside_target_repo(" in helper_src, True)
+    check("update check exists in v1", "def check_for_update_upfront(" in helper_src, True)
+    for fn in ("_warn_if_abort_will_be_ignored", "_recent_projects",
+               "_jira_needs_key", "set_jira_project_key"):
+        check(f"{fn} exists in v1", f"def {fn}(" in launcher_src, True)
+
+    main_src = inspect.getsource(
+        __import__("virt_surv2.__main__", fromlist=["main"]).main)
+    check("v2 runs the relocate guard", "guard_running_inside_target" in main_src, True)
+    check("v2 shows an available update", "update_available" in main_src, True)
+    check("v2 warns when abort will be ignored", "warn_if_abort_ignored" in main_src, True)
+
+    check("recents are offered when opening a folder",
+          "recent_projects" in inspect.getsource(A.OpenProjectScreen.on_mount), True)
+    check("recent_projects returns a list", isinstance(E.recent_projects(repo), list), True)
+
+    # Artifacts must follow the highlighted engagement, not row[0].
+    src = inspect.getsource(E._launcher_artifacts)
+    check("artifacts takes a slug", "slug" in E._launcher_artifacts.__code__.co_varnames,
+          True)
+    check("artifacts only falls back to the most recent",
+          "if not slug:" in src, True)
+    check("the launcher passes the highlighted token",
+          "slug=token" in inspect.getsource(A.LaunchScreen._choose), True)
+
+
 def test_headless_and_new_window() -> None:
     """The new_window preference must be honoured, and every decline must SAY SO.
 
@@ -1159,6 +1199,7 @@ if __name__ == "__main__":
     test_step_labels_make_sense()
     test_every_launcher_row_is_wired()
     test_every_screen_survives_a_resize()
+    test_remaining_v1_guards()
     test_headless_and_new_window()
     test_browse_review_and_signoff()
     test_cli_passthrough()

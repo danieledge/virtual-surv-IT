@@ -766,7 +766,6 @@ class LaunchScreen(Responsive):
 
     # Launcher rows that hand a DECISION to the shell wrapper, which then starts
     # Claude Code with it - the same stdout contract `virt-surv go` uses.
-    DECISIONS = {"n": "--new", "": ""}
     # Rows that run engine work in this process instead.
     # [b] is a SCREEN now, not a listing: it has to return a token so --review and
     # sign-off are reachable.
@@ -826,6 +825,15 @@ class LaunchScreen(Responsive):
         runner = getattr(self.app, "start_action", None)
         engine_action = self.ENGINE_ACTIONS.get(key)
         if engine_action and runner:
+            # Pass the HIGHLIGHTED engagement so artifacts shows the one you picked.
+            token = ""
+            sel = self.rows[self.selectable[self.cursor]]
+            if sel[0] == "eng":
+                getter = getattr(self.app, "resume_token", None)
+                token = getter(self.engagements[sel[1]]) if getter else ""
+            runner(engine_action, project=self.project, back=True, slug=token)
+            return
+        if False:
             # back=True: none of these starts a session, so they return here rather
             # than ending the launcher.
             runner(engine_action, project=self.project, back=True)
@@ -1633,6 +1641,14 @@ class OpenProjectScreen(Responsive):
         h.append("  The launcher re-reads engagements for whatever you name here.\n",
                  style=TEXT)
         h.append("  Blank keeps the current one.\n", style=HINT)
+        # v1's explorer offers the folders it has seen; a bare Input made you retype a
+        # path you have already been in.
+        getter = getattr(self.app, "recent_projects", None)
+        recents = getter() if getter else []
+        if recents:
+            h.append("\n  Recent\n", style=f"bold {HINT}")
+            for r in recents[:6]:
+                h.append(f"    {r}\n", style=DIM)
         self.query_one("#open-help", Static).update(h)
         inp = self.query_one("#edit", Input)
         inp.value = str(self.project)
@@ -1782,6 +1798,7 @@ class VirtSurvApp(App):
     settings_apply = None
     settings_restore = None
     finished_engagements = None
+    recent_projects = None
 
 
     def _fatal_error(self) -> None:

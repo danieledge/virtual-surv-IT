@@ -462,6 +462,10 @@ class InstallerTuiApp(App):
         from . import engine as E
         return E.jira_decision(self.repo, project, ref)
 
+    def recent_projects(self):
+        from . import engine as E
+        return E.recent_projects(self.repo)
+
     def finished_engagements(self, project):
         from . import engine as E
         return E.finished_engagements(self.repo, project)
@@ -498,7 +502,8 @@ class InstallerTuiApp(App):
         """The decide screen, seeded with the clone the engine was loaded from."""
         return DecideScreen({"clone": str(self.repo) if self.repo else None})
 
-    def start_action(self, action: str, project=None, back: bool = False) -> None:
+    def start_action(self, action: str, project=None, back: bool = False,
+                     slug: str = "") -> None:
         """An Advanced/Diagnostics/first-run item, on the same live screen."""
         from . import engine as E
 
@@ -510,7 +515,7 @@ class InstallerTuiApp(App):
         self.run_worker(
             lambda: E.run_action(self.ih, self, screen, action, {"channel": "dev"},
                                  self.repo, self.demo, broker=self.broker,
-                                 project=target),
+                                 project=target, slug=slug),
             thread=True, name=f"action:{action}")
 
     def action_quit(self) -> None:
