@@ -730,6 +730,42 @@ def test_every_screen_survives_a_resize() -> None:
     asyncio.run(run())
 
 
+def test_headless_and_new_window() -> None:
+    """The new_window preference must be honoured, and every decline must SAY SO.
+
+    v1 honours it; v2 ignored it silently - "a control that quietly does nothing is
+    the defect class this repo has met five times in a week."
+    """
+    import inspect
+    import tempfile as _tf
+
+    from virt_surv2 import engine as E
+    section("U  headless / new window")
+
+    import install_helper as ih
+    repo = Path(ih.__file__).resolve().parent
+    launcher_src = (repo / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
+    for fn in ("_pending_auto", "_start_headless", "_new_window_wanted", "_launch_in_window"):
+        check(f"{fn} exists in v1", f"def {fn}(" in launcher_src, True)
+
+    src = inspect.getsource(E.dispatch_decision)
+    for fn in ("_pending_auto", "_start_headless", "_new_window_wanted", "_launch_in_window"):
+        check(f"dispatch uses {fn}", fn in src, True)
+
+    with _tf.TemporaryDirectory() as td:
+        said = []
+        started = E.dispatch_decision(repo, Path(td), "/engage --new", report=said.append)
+        check("nothing started for a plain project", started, False)
+        check("the decline is spoken, not silent", bool(said), True)
+        check("and it says how to change it", any("[c]" in m for m in said), True)
+
+    # If a session was started here, the wrapper must launch nothing.
+    main_src = inspect.getsource(
+        __import__("virt_surv2.__main__", fromlist=["main"]).main)
+    check("a started session returns the abort code",
+          "if started:" in main_src and "ABORT_EXIT_CODE" in main_src, True)
+
+
 def test_browse_review_and_signoff() -> None:
     """[b] must return a token so --review and human sign-off are reachable.
 
@@ -1123,6 +1159,7 @@ if __name__ == "__main__":
     test_step_labels_make_sense()
     test_every_launcher_row_is_wired()
     test_every_screen_survives_a_resize()
+    test_headless_and_new_window()
     test_browse_review_and_signoff()
     test_cli_passthrough()
     test_prelaunch_and_return_path()

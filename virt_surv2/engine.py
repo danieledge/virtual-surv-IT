@@ -456,6 +456,75 @@ def run_prelaunch(repo: Optional[Path], project: Path, report=None) -> list:
     return out
 
 
+def dispatch_decision(repo: Optional[Path], project: Path, decision: str,
+                      report=None) -> bool:
+    """v1's post-decision dispatch: headless, or a new window, or neither.
+
+    Returns True when the session has ALREADY been started here - the caller must then
+    exit 97 so the shell wrapper launches nothing, exactly as v1 does. False means "hand
+    it to the wrapper as usual".
+
+    Without this the `new_window` project preference was silently ignored - honoured by
+    virt-surv, dropped by virt-surv2 - and an unattended run had nowhere to go. v1's own
+    comment on this block: "a control that quietly does nothing is the defect class this
+    repo has met five times in a week; the fix each time is to make it speak." So every
+    reason NOT to open a window is reported.
+    """
+    try:
+        launcher = _launcher(repo)
+    except Exception:                   # noqa: BLE001
+        return False
+
+    def say(msg: str) -> None:
+        if report:
+            report(msg)
+
+    try:
+        pending = launcher._pending_auto(Path(project)) or {}
+    except Exception:                   # noqa: BLE001
+        pending = {}
+    unattended = bool(pending.get("auto")) and "--auto" in (decision or "").split()
+
+    try:
+        if pending.get("run_mode") == "headless" and decision:
+            # Started HERE, not handed to the shell: a headless run has no terminal for
+            # the shell to launch into, and the launcher is what will watch it.
+            if launcher._start_headless(Path(project), decision, pending):
+                say("started headless - watch it from the launcher")
+                return True
+    except Exception as exc:            # noqa: BLE001
+        say(f"could not start headless: {exc}")
+
+    try:
+        wants_window = bool(launcher._new_window_wanted(Path(project)))
+    except Exception:                   # noqa: BLE001
+        wants_window = False
+
+    if not wants_window:
+        say("new window off - opening here ([c] -> open the session in a new window)")
+        return False
+
+    try:
+        if launcher._launch_in_window(Path(project), decision, pending.get("slug", "")):
+            say("opened in a new window")
+            return True
+    except Exception as exc:            # noqa: BLE001
+        say(f"could not open a window: {exc}")
+
+    if unattended and decision:
+        # No window and the run is UNATTENDED. Falling back in place would hand the
+        # terminal to Claude Code and take the launcher - and the monitor - with it,
+        # leaving a run nobody can watch or stop. Headless keeps the launcher, and an
+        # unattended run answers no questions anyway.
+        say("no window available - running headless instead so you can still watch it")
+        try:
+            if launcher._start_headless(Path(project), decision, pending):
+                return True
+        except Exception as exc:        # noqa: BLE001
+            say(f"could not start headless: {exc}")
+    return False
+
+
 def finished_engagements(repo: Optional[Path], project: Path):
     """DONE and ARCHIVED packs - the ones the resume menu never shows.
 

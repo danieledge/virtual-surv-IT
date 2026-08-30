@@ -214,6 +214,15 @@ def main(argv=None) -> int:
         decision = getattr(app, "decision", None)
         if decision is None:
             return E.ABORT_EXIT_CODE
+
+        # Headless / new-window, exactly as virt-surv go decides it. If the session has
+        # already been started here, 97 tells the wrapper to launch nothing - otherwise
+        # the user gets two.
+        started = E.dispatch_decision(
+            repo, Path(getattr(app, "project", project) or project), decision,
+            report=lambda m: print(f"    {m}", file=sys.stderr))
+        if started:
+            return E.ABORT_EXIT_CODE
         if decision:
             if sys.stdout.isatty():
                 # Nothing is capturing stdout, so no wrapper is going to act on this.
