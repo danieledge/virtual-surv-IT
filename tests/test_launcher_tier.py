@@ -466,6 +466,44 @@ def test_the_list_follows_the_cursor():
     asyncio.run(run())
 
 
+def test_every_screen_leaves_on_esc():
+    """Esc must actually CLOSE each screen.
+
+    This is the test that was missing when the base BINDINGS were removed: each screen
+    took over its own exits, settings was not given one, and Esc did nothing there
+    (live report, 2026-08-30). The old settings test pressed Esc and passed anyway,
+    because run_test tears the app down at the end of the block regardless - so the
+    assertion has to be made INSIDE it, on is_running.
+    """
+    import shutil
+
+    import virt_team_launcher as L
+    from launcher_tiers import MenuApp, RequestApp, SettingsApp
+
+    d = _scratch_project()
+    actions = [(("new",), "a new engagement", "n")]
+    screens = {
+        "menu": lambda: MenuApp(Path("/tmp/p"), [], actions, {}),
+        "composer": lambda: RequestApp(Path("/tmp/p"), auto_offered=True),
+        "settings": lambda: SettingsApp(d, L),
+    }
+
+    async def still_running_after(make, key):
+        app = make()
+        async with app.run_test(size=(80, 26)) as p_:
+            await p_.pause()
+            await p_.press(key)
+            await p_.pause()
+            return app.is_running
+
+    async def run():
+        for name, make in screens.items():
+            check(f"{name}: esc leaves", await still_running_after(make, "escape"), False)
+
+    asyncio.run(run())
+    shutil.rmtree(d, ignore_errors=True)
+
+
 def test_a_broken_tier_costs_nothing():
     """Any failure degrades to the tier below, never breaks the launch."""
     import launcher_app
@@ -489,6 +527,7 @@ if __name__ == "__main__":
                test_the_composer_matches_launcher_app,
                test_the_settings_screen_matches_launcher_app,
                test_the_list_follows_the_cursor,
+               test_every_screen_leaves_on_esc,
                test_a_broken_tier_costs_nothing):
         print(f"\n{fn.__name__}")
         fn()

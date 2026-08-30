@@ -411,7 +411,7 @@ class MenuApp(TierApp):
     def on_key(self, event) -> None:
         # A list has no text to type into, so `q` is a second way out of it alongside
         # Esc. Both leave `pick` as None, which the caller reads as "launch nothing".
-        if event.key in ("escape", "q"):
+        if event.key in ("escape", "q", "ctrl+c"):
             event.stop()
             self.exit()
             return
@@ -551,7 +551,7 @@ class RequestApp(TierApp):
 
     def on_key(self, event) -> None:
         key = event.key
-        if key == "escape":
+        if key in ("escape", "ctrl+c"):
             event.stop()
             self.exit()                 # value stays None: the plain launch
             return
@@ -791,6 +791,14 @@ class SettingsApp(TierApp):
             self.paint()
             return
 
+        if key in ("escape", "q", "ctrl+c"):
+            # Checked BEFORE the row guard: a screen with no rows still has to be
+            # possible to leave. Handled here rather than by a binding because Esc
+            # means "cancel the edit" while the Jira key is being typed, and a binding
+            # fires even when a handler has already consumed the key.
+            event.stop()
+            self.exit()
+            return
         if not self.rows:
             return
         if key == "down":
@@ -813,10 +821,6 @@ class SettingsApp(TierApp):
             # Change an already-set key without toggling Jira off and on again.
             if self._is_jira_row():
                 self._start_editing()
-        elif key == "q":
-            event.stop()
-            self.exit()
-            return
         else:
             return
         event.stop()
