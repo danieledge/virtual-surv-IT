@@ -259,7 +259,7 @@ def settings_screen(project_dir: Path, mod, output=None):
     return bool(getattr(app, "changed", False))
 
 
-def chooser_screen(options, ih, *, title: str, actions=None, repo=None, output=None):
+def chooser_screen(options, ih, *, title: str, actions=None, repo=None, output=None, rows=None):
     """One installer menu as a full-screen picker, rendered in Textual.
 
     Same contract as installer_app.chooser_screen: the chosen key, "" for back/Esc, or
@@ -281,7 +281,9 @@ def chooser_screen(options, ih, *, title: str, actions=None, repo=None, output=N
     try:
         import installer_app
 
-        rows = installer_app._rows(options, ih, actions)
+        # Pre-built rows mean the caller is ask(), not an installer menu: its options
+        # already carry their own help and touch nothing outside the repo.
+        rows = list(rows) if rows is not None else installer_app._rows(options, ih, actions)
         marker_kind = installer_app._marker_kind
     except Exception:  # noqa: BLE001
         return None
@@ -747,3 +749,19 @@ def grid_screen(rows_fn, apply_fn, help_fn, ih, *, title, repo=None, output=None
     if not getattr(app, "ran", False):
         return None
     return bool(getattr(app, "changed", False))
+
+
+def render_question(question, mod):
+    """An ask() Question, drawn in Textual. Answer, or None when this tier cannot draw.
+
+    Thin on purpose. The chooser above already knows how to draw a titled list with a help
+    pane and how to report Esc as "" - this adds no drawing, only the translation between
+    that screen's keys and the caller's own values.
+    """
+    import questions as _ask
+
+    if question.kind not in (_ask.CHOOSE, _ask.CONFIRM):
+        return None
+    rows, back = _ask.chooser_rows(question)
+    picked = chooser_screen((), mod, title=question.title, repo=question.project_dir, rows=rows)
+    return _ask.from_chooser(question, picked, back)

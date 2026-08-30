@@ -795,39 +795,55 @@ def test_every_installer_screen_has_a_textual_tier():
         assert callable(getattr(launcher_textual, name, None)), f"{name} is not ported"
 
 
-def test_no_menu_rolls_its_own_numbered_prompt_without_a_tier():
-    """_choose_submenu was tiered, so the three menus using it got the new interface.
-    Two others printed their own numbered list and called input(), so they never did -
-    which is what a user meets as "it fell back again" (owner report, 2026-08-30).
+def test_no_menu_rolls_its_own_numbered_prompt():
+    """These two printed their own numbered list and called input(), so they never got a
+    screen at all - which is what a user meets as "it fell back again" (owner report,
+    2026-08-30). They were tiered by hand first, each carrying its own fallback; they now
+    go through the questions framework, which owns the fall-through instead.
 
-    Asserted on the two that were found rather than by pattern: a heuristic for "is this a
-    menu" produced nothing useful when it was tried, and a checker that reports clean
-    without having looked is worse than no checker."""
+    So the assertion has got STRICTER, not looser. Offering a screen was the old bar and a
+    menu could clear it while still hand-rolling the tier below. The bar now is that the
+    menu does not know how it is drawn at all: no chooser call, no fallback list, no
+    input(). One way to ask, and this is the test that says so."""
     source = (REPO_ROOT / "install_helper.py").read_text(encoding="utf-8")
-    flat = " ".join(source.split())
     for function in ("run_extensions_editor", "run_alias_manage"):
         start = source.index(f"def {function}")
         end = source.find("\ndef ", start + 1)
         body = source[start : end if end != -1 else len(source)]
-        assert "_tiered_installer_screen(" in body, (
-            f"{function} still asks its question without offering a screen"
+        assert "_ask().choose(" in body, f"{function} must ask through the framework"
+        assert "_tiered_installer_screen(" not in body, (
+            f"{function} still picks its own tier - that is the dispatcher's job now"
         )
-    assert (
-        '_tiered_installer_screen( "chooser_screen"' in flat
-        or '_tiered_installer_screen("chooser_screen"' in flat
-    )
+        assert "input(" not in body, f"{function} still rolls its own prompt"
+        assert "answer.cancelled" in body, (
+            f"{function} must read the cancel as a decision, not as an empty string"
+        )
 
 
-def test_a_blank_answer_is_not_a_cancel_at_a_defaulted_prompt():
-    """The two look identical as strings and mean opposite things: pressing Enter at a
-    "[1]" prompt ASKS FOR option 1, while "" from a screen means the human left.
+def test_a_blank_answer_can_no_longer_be_mistaken_for_a_cancel():
+    """The bug this replaces: blank input at a "[1]" prompt means TAKE THE DEFAULT, while
+    "" from a screen means the human left. Identical as strings, opposite in meaning, and
+    conflating them made blank-Enter back out of the alias manager instead of registering
+    the alias (2026-08-30).
 
-    Conflating them made blank-Enter back out of the alias manager instead of registering
-    the alias - caught by an existing test, which is the only reason it is not shipped."""
+    It used to be held off by ordering - the cancel check had to sit on the screen branch
+    and not after the input() fallback - which is a rule someone has to keep remembering.
+    An Answer removes the ambiguity instead of guarding it: cancelled is a flag, so there
+    is no string left for the two meanings to collide in, and no ordering to get right."""
     source = (REPO_ROOT / "install_helper.py").read_text(encoding="utf-8")
     start = source.index("def run_alias_manage")
     end = source.find("\ndef ", start + 1)
     body = source[start:end]
-    # The cancel check must sit on the SCREEN branch, never after the input() fallback.
-    assert "elif choice ==" in body, "the cancel test must be an elif on the screen branch"
-    assert body.index("elif choice ==") < body.index('if choice in ("", "1")')
+    assert "answer.cancelled" in body, "leaving must be read from the flag"
+    assert 'choice in ("", "1")' not in body, "an empty string must no longer mean anything"
+    assert "input(" not in body, "and there is no prompt left to take a default from"
+
+    # The framework itself must keep that true: nothing in an Answer carries "left" as a
+    # value, so no caller can reintroduce the collision by inspecting one.
+    import questions
+
+    assert questions.Answer.left().value is None
+    assert questions.Answer.chosen("").cancelled is False, (
+        'an empty string is a legitimate CHOSEN value - it only ever meant "cancel" '
+        "because the old return channel had nowhere else to put it"
+    )

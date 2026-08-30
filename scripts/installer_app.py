@@ -78,17 +78,36 @@ class InstallerHost:
     wrong: install_helper._can_encode defaults its stream to sys.stdout, and the chrome
     renders to sys.stderr. Handing the module over directly would probe one console and
     draw on another - and that failure is silent, because the two are the same console on
-    every machine where anyone would notice."""
+    every machine where anyone would notice.
+
+    Every method survives `ih` being absent or incomplete. Not defensiveness for its own
+    sake: this host is the first thing chooser_screen builds, so an AttributeError here
+    takes the whole tier down, and the caller sees a silently-skipped tier rather than a
+    bug. That is the same "broken looks unavailable" failure that hid the launcher's
+    screens for a week (2026-08-28), and it was reproduced here on 2026-08-30 by an ask()
+    caller with no installer to hand. Without a host the chrome loses the version line and
+    probes the encoding itself - it does not lose the screen."""
 
     def __init__(self, ih, repo: Path | None = None):
         self._ih = ih
         self._repo = repo
 
     def _can_encode(self, text: str) -> bool:
-        return self._ih._can_encode(text, sys.stderr)
+        try:
+            return self._ih._can_encode(text, sys.stderr)
+        except Exception:
+            pass
+        try:
+            text.encode(sys.stderr.encoding or "utf-8")
+            return True
+        except Exception:
+            return False
 
     def _morgan_line(self) -> str:
-        return self._ih.morgan_intro(sys.stderr)
+        try:
+            return self._ih.morgan_intro(sys.stderr)
+        except Exception:
+            return ""
 
     def _plugin_version(self, *_args) -> str:
         try:
@@ -266,7 +285,9 @@ def _marker_kind(note: str) -> str:
     return "writes"
 
 
-def chooser_screen(options, ih, *, title: str, actions=None, repo: Path | None = None, output=None):
+def chooser_screen(
+    options, ih, *, title: str, actions=None, repo: Path | None = None, output=None, rows=None
+):
     """One menu as a full-screen picker. Returns the chosen key, "" for back/Esc, or
     **None when the screen could not run at all** - the caller then prints its numbered
     menu exactly as before.
@@ -290,7 +311,11 @@ def chooser_screen(options, ih, *, title: str, actions=None, repo: Path | None =
             return None
 
     host = InstallerHost(ih, repo)
-    rows = _rows(options, ih, actions)
+    # `rows` pre-built means the caller is not an installer menu at all - it is the ask()
+    # framework, whose options carry their own help text and touch nothing outside the
+    # repo. Re-encoding that help as "label (help)" just so _rows could split it apart
+    # again would lose any help text that contains a bracket.
+    rows = list(rows) if rows is not None else _rows(options, ih, actions)
     if not rows:
         return None
     g = chrome.glyphs(host)
@@ -816,3 +841,19 @@ def update_decision_screen(ih, repo=None, output=None):
             raise
         return None
     return picked[0]
+
+
+def render_question(question, mod):
+    """An ask() Question, drawn in prompt_toolkit. Answer, or None when it cannot draw.
+
+    Same translation as the Textual tier and deliberately the same shape: the two tiers
+    differ in how they paint and in nothing else, so a question cannot come to mean
+    different things depending on which one the terminal supports.
+    """
+    import questions as _ask
+
+    if question.kind not in (_ask.CHOOSE, _ask.CONFIRM):
+        return None
+    rows, back = _ask.chooser_rows(question)
+    picked = chooser_screen((), mod, title=question.title, repo=question.project_dir, rows=rows)
+    return _ask.from_chooser(question, picked, back)

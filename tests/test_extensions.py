@@ -656,6 +656,36 @@ def test_the_org_menu_entry_is_wired():
     assert callable(ih.run_extensions_editor)
 
 
+def test_the_org_menu_answers_through_the_framework(monkeypatch, capsys):
+    """It printed its own numbered list and called input(), so it never got a screen at
+    all - which is what a user meets as "it fell back again" (owner report, 2026-08-30).
+
+    The point of the test is that each answer reaches the branch it names and a cancel
+    reaches none of them: this menu loops until you leave, so a cancel that was read as an
+    unrecognised choice would redraw it forever."""
+    questions = ih._import_from_scripts("questions")
+    ran = []
+    monkeypatch.setattr(ih, "_show_resolved_extensions", lambda *a, **k: ran.append("review"))
+    monkeypatch.setattr(ih, "_edit_org_extensions", lambda *a, **k: ran.append("edit") or 0)
+    monkeypatch.setattr(ih, "_run_team_script", lambda *a, **k: ran.append("check") or 0)
+
+    for answer, expected in (("1", "review"), ("2", "edit"), ("4", "check")):
+        ran.clear()
+        # ONE script for the whole run, not one per call: _ask() is consulted on every
+        # pass of the loop, so handing back a fresh script each time would re-answer the
+        # same question forever. The script's second entry is the cancel that ends it.
+        asker = questions.scripted([answer, None])
+        monkeypatch.setattr(ih, "_ask", lambda asker=asker: asker)
+        assert ih.run_extensions_editor(ih.Style(False), ih.marks()) == 0
+        assert ran == [expected], f"{answer} should reach {expected}"
+
+    ran.clear()
+    leaver = questions.scripted([None])
+    monkeypatch.setattr(ih, "_ask", lambda: leaver)
+    assert ih.run_extensions_editor(ih.Style(False), ih.marks()) == 0
+    assert ran == [], "leaving must do nothing at all"
+
+
 def test_installing_code_intelligence_clears_the_stale_tool_cache(tmp_path, monkeypatch):
     """The probe caches the tool inventory on a 7-day TTL and Morgan reads it at engagement
     open. Installing tree-sitter and leaving that cache alone meant the team kept reporting

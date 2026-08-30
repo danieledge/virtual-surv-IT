@@ -6168,11 +6168,35 @@ def test_choose_action_configure_direct_and_aliasmanage_via_advanced(monkeypatch
 def test_run_alias_manage_register_path_delegates_to_setup_alias(monkeypatch, capsys):
     import install_helper as ih
 
+    questions = ih._import_from_scripts("questions")
+
     calls = []
     monkeypatch.setattr(ih, "run_setup_alias", lambda *a, **k: calls.append(a) or 0)
-    monkeypatch.setattr("builtins.input", lambda prompt="": "")  # blank = register (default)
+    # Answered through the framework, not by stubbing builtins.input. This test used to
+    # press blank and call it "the default", which is exactly the semantics that made
+    # blank-Enter back OUT of this screen (2026-08-30) - there is no default any more,
+    # only a choice or a cancel.
+    asker = questions.scripted(["1"])
+    monkeypatch.setattr(ih, "_ask", lambda: asker)
     assert ih.run_alias_manage(ih.Style(False), ih.marks()) == 0
     assert len(calls) == 1
+    assert asker.asked[0].title == "Manage the 'virt-surv' alias"
+
+
+def test_run_alias_manage_leaves_without_touching_anything(monkeypatch):
+    """The bug in one line: backing out of this screen must register nothing.
+
+    It shipped as blank-Enter registering the alias, because "" from a prompt (take the
+    default) and "" from a screen (I left) are the same string. There is no string now."""
+    import install_helper as ih
+
+    questions = ih._import_from_scripts("questions")
+
+    calls = []
+    monkeypatch.setattr(ih, "run_setup_alias", lambda *a, **k: calls.append(a) or 0)
+    monkeypatch.setattr(ih, "_ask", lambda: questions.scripted([None]))  # None = they left
+    assert ih.run_alias_manage(ih.Style(False), ih.marks()) == 0
+    assert calls == [], "cancelling must not register the alias"
 
 
 def test_run_alias_manage_change_command_saves_and_offers_refresh(tmp_path, monkeypatch, capsys):
@@ -6185,8 +6209,9 @@ def test_run_alias_manage_change_command_saves_and_offers_refresh(tmp_path, monk
     monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
     refreshed = []
     monkeypatch.setattr(ih, "run_setup_alias", lambda *a, **k: refreshed.append(k) or 0)
-    answers = iter(["2"])
-    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers, ""))
+    questions = ih._import_from_scripts("questions")
+
+    monkeypatch.setattr(ih, "_ask", lambda: questions.scripted(["2"]))
     monkeypatch.setattr(ih, "ask", lambda *a, **k: "cc")
     monkeypatch.setattr(ih, "confirm", lambda *a, **k: True)
     assert ih.run_alias_manage(ih.Style(False), ih.marks()) == 0
@@ -8588,3 +8613,55 @@ def test_auto_is_stored_as_ABSENT_not_as_an_override(tmp_path, monkeypatch):
         ih._machine_apply("review_tools.ruff")
     stored = json.loads((tmp_path / "installer.json").read_text()).get("default_review_tools", {})
     assert "ruff" not in stored, f"auto should be absent, found {stored}"
+
+
+def test_one_menu_item_cannot_take_the_installer_with_it():
+    """Nothing wrapped the menu dispatch and main() catches only Ctrl-C, so any unhandled
+    error in any action ended the session with a traceback - someone who picked the wrong
+    thing lost the menu, not just the action.
+
+    That was survivable while every action was old and well-worn. It stopped being so when
+    two of them started routing through a new module (scripts/questions.py, 2026-08-30):
+    333 lines of new code in the path where five lines of print/input used to be.
+
+    CONTAINED, NOT CONCEALED. The traceback is printed in full, the exit code carries the
+    failure, and the user is told which action broke. A quiet `except Exception: pass`
+    here would turn a crash into a menu item that silently does nothing - the same "broken
+    looks unavailable" failure that hid the launcher's screens for a week, one level up.
+    """
+    import ast
+
+    repo_root = Path(__file__).resolve().parents[1]
+    source = (repo_root / "install_helper.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    # The dispatch line itself, found rather than hard-coded: a line number would rot.
+    dispatch = next(
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and getattr(node.func, "id", "") == "run_alias_manage"
+        and "style" in [getattr(a, "id", "") for a in node.args]
+    )
+    guard = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Try) and node.lineno <= dispatch <= (node.end_lineno or 0):
+            if guard is None or node.lineno > guard.lineno:
+                guard = node
+    assert guard is not None, "the menu dispatch must be wrapped"
+
+    caught = {ast.unparse(h.type) if h.type else "bare" for h in guard.handlers}
+    assert "Exception" in caught, "an unexpected failure must not end the session"
+    assert "bare" not in caught, "a bare except would swallow Ctrl-C and SystemExit too"
+
+    # The three that already mean something specific further up must pass straight through.
+    passthrough = next(h for h in guard.handlers if "KeyboardInterrupt" in (ast.unparse(h.type)))
+    for expected in ("KeyboardInterrupt", "InstallAbort", "SystemExit"):
+        assert expected in ast.unparse(passthrough.type), f"{expected} must be re-raised"
+    assert all(isinstance(stmt, ast.Raise) for stmt in passthrough.body)
+
+    # And the recovery must report rather than hide, and must not claim success.
+    recovery = ast.unparse(next(h for h in guard.handlers if ast.unparse(h.type) == "Exception"))
+    assert "traceback.print_exc()" in recovery, "the error must be shown in full, never eaten"
+    assert "That action failed" in recovery, "the user must be told which action broke"
+    assert "menu_rc = max(menu_rc, 1)" in recovery, "the exit code must carry the failure"

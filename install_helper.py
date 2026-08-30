@@ -1617,6 +1617,48 @@ def app_tier_available() -> bool:
         return False
 
 
+class _PlainQuestions:
+    """The framework's promise - always an answer, never a crash - when scripts/ is not
+    there to keep it.
+
+    install_helper is routinely run as a single downloaded file from a temp directory,
+    before any clone exists. That is rare and it is not nothing: without this, `_ask()`
+    would raise and the caller would be back to writing its own fallback, which is the
+    duplication the framework removed. One fallback, in one place.
+    """
+
+    class _Answer:
+        # No __bool__ here either. A stand-in that is MORE permissive than the real thing
+        # is worse than no stand-in: code would work on the box without scripts/ and fail
+        # on every other one.
+        def __init__(self, value, cancelled):
+            self.value, self.cancelled = value, cancelled
+
+    def choose(self, title, options, **_kw):
+        print("")
+        print(f"  {title}")
+        for number, row in enumerate(options, 1):
+            print(f"    [{number}] {row[1]}")
+        print("    [b] back")
+        try:
+            raw = input("    Choice: ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return self._Answer(None, True)
+        if raw.isdigit() and 1 <= int(raw) <= len(options):
+            return self._Answer(options[int(raw) - 1][0], False)
+        return self._Answer(None, True)
+
+
+def _ask():
+    """The questions framework, or the plain stand-in above. Never raises.
+
+    An accessor rather than a top-level import because install_helper is routinely run as
+    a single downloaded file from a temp directory where `scripts/` does not exist yet -
+    the same reason every other scripts/ import here is resolved late.
+    """
+    return _import_from_scripts("questions") or _PlainQuestions()
+
+
 def _submenu_screen(style: Style, title: str, options: tuple, actions: dict):
     """The full-screen tier of _choose_submenu, or None when it cannot run.
 
@@ -6501,35 +6543,23 @@ def run_alias_manage(
     s = style
     print("")
     print(s.bold("Manage the 'virt-surv' alias"))
-    options = (
-        ("1", "Register or update the alias (recommended after plugin updates)"),
-        ("2", "Change the command 'virt-surv go' uses to launch Claude Code"),
+    # Through the framework, which retires the trap this exact screen fell into on
+    # 2026-08-30: blank input at a "[1]" prompt means TAKE THE DEFAULT, while "" from a
+    # screen means the human left. Identical as strings, opposite in meaning, and folding
+    # them together made blank-Enter back out instead of registering the alias. An Answer
+    # cannot be ambiguous that way: cancelled is a flag, not a value, so there is no
+    # string for the two meanings to collide in.
+    answer = _ask().choose(
+        "Manage the 'virt-surv' alias",
+        [
+            ("1", "Register or update the alias", "recommended after a plugin update"),
+            ("2", "Change the launch command", "what 'virt-surv go' runs to start Claude Code"),
+        ],
     )
-    choice = _tiered_installer_screen(
-        "chooser_screen",
-        options,
-        _this_module(),
-        title="Manage the 'virt-surv' alias",
-        actions={key: key for key, _label in options},
-    )
-    if choice is None:
-        for key, label in options:
-            print(f"  {s.cyan(key + ')')} {label}")
-        try:
-            choice = input(f"{s.cyan('  Which one?')} {s.bold('[1]')}: ").strip()
-        except EOFError:
-            return 0
-        # BLANK IS THE DEFAULT HERE, not a cancel. The two look identical as strings and
-        # mean opposite things: pressing Enter at a "[1]" prompt asks for option 1, while
-        # "" from the screen means the human left. Only the screen's "" is a cancel, which
-        # is why this is decided inside the branch that knows where the answer came from.
-    elif choice == "":
+    if answer.cancelled:
         return 0
-    if choice in ("", "1"):
+    if answer.value == "1":
         return run_setup_alias(style, mark_map, assume_yes, demo, repo_hint)
-    if choice != "2":
-        print("  1 or 2, please - nothing changed.")
-        return 0
     cfg = load_config(config_path())
     current = cfg.get(_CLAUDE_LAUNCH_CMD_KEY) or ""
     picked = ask(
@@ -8401,30 +8431,23 @@ def run_extensions_editor(style: Style, mark_map: dict) -> int:
                     print(style.yellow(f"  {warn} {problem}"))
         else:
             print(style.dim("  not installed"))
-        # The same chooser the Advanced menu uses, so this stops being the one screen in
-        # the flow that drops back to a numbered prompt (2026-08-30). The numbered list
-        # below is the fallback, unchanged, for a console that cannot host a screen.
-        options = (
-            ("1", "Review the resolved contract (org + this directory's project file)"),
-            ("2", "Edit the org contract in $EDITOR"),
-            ("3", "Install one from a file"),
-            ("4", "Check which registry tools are on PATH"),
-            ("5", "Sync now from the configured source"),
-            ("b", "Back"),
+        # Asked through the framework, so there is no fallback to write here and no way
+        # for this screen to answer in its own dialect (scripts/questions.py). Back is
+        # not a row: leaving is what Esc, q and b already do on every tier, and listing
+        # it as well would be two ways to say one thing on one screen.
+        answer = _ask().choose(
+            "Org extensions",
+            [
+                ("1", "Review the resolved contract", "org plus this directory's project file"),
+                ("2", "Edit the org contract", "opens it in $EDITOR, validates on save"),
+                ("3", "Install one from a file", "copies a contract in and validates it"),
+                ("4", "Check registry tools", "which analysers are actually on PATH"),
+                ("5", "Sync now", "re-pulls from the configured source"),
+            ],
         )
-        choice = _tiered_installer_screen(
-            "chooser_screen",
-            options,
-            _this_module(),
-            title="Org extensions",
-            actions={key: key for key, _label in options},
-        )
-        if choice is None:
-            print("")
-            for key, label in options:
-                print(f"    {key}  {label}")
-            choice = ask("  Choose:", "b", assume_yes=False, style=style).strip().lower()
-        choice = (choice or "b").strip().lower()
+        if answer.cancelled:
+            return 0
+        choice = answer.value
 
         if choice == "1":
             _show_resolved_extensions(style)
@@ -10026,84 +10049,115 @@ def _main(argv=None) -> int:
                 else:
                     print("No problem - nothing changed. See you next time.")
                 return menu_rc
-            if action == "configure":
-                # Free-function flow with no need for Installer's clone-management
-                # state - handled directly here rather than added as an Installer subset.
-                raw = ask("  Which project directory?", ".", False, style=style)
-                run_configure(Path(raw), style, marks(), args.yes, args.demo)
-                did_anything = did_anything or not args.demo
-            elif action == "aliasmanage":
-                run_alias_manage(style, marks(), args.yes, args.demo, args.repo)
-                did_anything = did_anything or not args.demo
-            elif action == "howto":
-                run_howto(style)  # read-only narrative - never counts as "did anything"
-            elif action == "extensions":
-                menu_rc = max(menu_rc, run_extensions_editor(style, marks()) or 0)
-                did_anything = did_anything or not args.demo
-            elif action == "reprobe":
-                menu_rc = max(menu_rc, run_tool_reprobe(style, marks()) or 0)
-                did_anything = did_anything or not args.demo
-            elif action == "relocate":
-                menu_rc = max(menu_rc, run_relocate_to_vsit(style, marks()) or 0)
-                did_anything = did_anything or not args.demo
-            elif action == "gitbashperf":
-                run_gitbash_perf(style, marks(), args.yes, args.demo)
-                did_anything = did_anything or not args.demo
-            elif action == "demo":
-                # A one-shot preview of the full flow, not a persistent toggle - restored
-                # afterward so picking "Demo" once doesn't silently keep every LATER menu
-                # choice in demo mode too, which would be a confusing sticky side effect.
-                print(
-                    style.yellow(
-                        "DEMO MODE - the full interactive run; nothing is executed or written."
-                    )
-                )
-                saved_demo, args.demo = args.demo, True
-                saved_run_cmd = run_cmd
-                run_cmd = make_demo_runner(style)
-                try:
-                    Installer(args, style, marks(), subset="full").run()
-                finally:
-                    run_cmd = saved_run_cmd
-                    args.demo = saved_demo
-            else:
-                subset = "full" if action == "full" else action
-                if subset == "update" and not args.demo:
-                    # In-app first (2026-08-29): picking update used to drop straight out
-                    # of the picker into a scrolling step log - the interface the picker
-                    # exists to replace. None means the screen could not run, and only
-                    # then does the streaming Installer below take over.
-                    in_app = run_update_in_app(args, style)
-                    if in_app is not None:
-                        did_anything = True
-                        continue
-                if args.demo:
+            # ONE MENU ITEM MUST NOT TAKE THE INSTALLER WITH IT.
+            #
+            # Nothing wrapped this dispatch and main() catches only Ctrl-C, so any
+            # unhandled error in any action ended the whole session with a traceback -
+            # someone who picked the wrong thing lost the menu, not just the action.
+            # That was survivable while every action was old and well-worn; it stopped
+            # being so when two of them started routing through a new module
+            # (scripts/questions.py, 2026-08-30), which is a lot more new code in the
+            # path than the five-line print/input fallback it replaced.
+            #
+            # CONTAINED, NOT CONCEALED, and the difference is the whole point. The
+            # traceback is printed in full rather than swallowed, the exit code carries
+            # the failure, and the user is told plainly which action broke. A quiet
+            # `except Exception: pass` here would turn a crash into a menu item that
+            # silently does nothing - which is the same "broken looks unavailable"
+            # failure that hid the launcher's screens for a week, one level up.
+            try:
+                if action == "configure":
+                    # Free-function flow with no need for Installer's clone-management
+                    # state - handled directly here rather than added as an Installer subset.
+                    raw = ask("  Which project directory?", ".", False, style=style)
+                    run_configure(Path(raw), style, marks(), args.yes, args.demo)
+                    did_anything = did_anything or not args.demo
+                elif action == "aliasmanage":
+                    run_alias_manage(style, marks(), args.yes, args.demo, args.repo)
+                    did_anything = did_anything or not args.demo
+                elif action == "howto":
+                    run_howto(style)  # read-only narrative - never counts as "did anything"
+                elif action == "extensions":
+                    menu_rc = max(menu_rc, run_extensions_editor(style, marks()) or 0)
+                    did_anything = did_anything or not args.demo
+                elif action == "reprobe":
+                    menu_rc = max(menu_rc, run_tool_reprobe(style, marks()) or 0)
+                    did_anything = did_anything or not args.demo
+                elif action == "relocate":
+                    menu_rc = max(menu_rc, run_relocate_to_vsit(style, marks()) or 0)
+                    did_anything = did_anything or not args.demo
+                elif action == "gitbashperf":
+                    run_gitbash_perf(style, marks(), args.yes, args.demo)
+                    did_anything = did_anything or not args.demo
+                elif action == "demo":
+                    # A one-shot preview of the full flow, not a persistent toggle - restored
+                    # afterward so picking "Demo" once doesn't silently keep every LATER menu
+                    # choice in demo mode too, which would be a confusing sticky side effect.
                     print(
                         style.yellow(
                             "DEMO MODE - the full interactive run; nothing is executed or written."
                         )
                     )
+                    saved_demo, args.demo = args.demo, True
                     saved_run_cmd = run_cmd
                     run_cmd = make_demo_runner(style)
                     try:
-                        Installer(args, style, marks(), subset=subset).run()
+                        Installer(args, style, marks(), subset="full").run()
                     finally:
                         run_cmd = saved_run_cmd
+                        args.demo = saved_demo
                 else:
-                    Installer(args, style, marks(), subset=subset).run()
-                # Read-only diagnostics never change anything regardless of demo -
-                # "nothing changed" stays true after running one of these, unlike the
-                # write-capable subsets.
-                if subset not in (
-                    "check",
-                    "toolcheck",
-                    "envcheck",
-                    "selftest",
-                    "hooklatency",
-                    "adr014smoke",
-                    "daemonstart",
-                ):
-                    did_anything = did_anything or not args.demo
+                    subset = "full" if action == "full" else action
+                    if subset == "update" and not args.demo:
+                        # In-app first (2026-08-29): picking update used to drop straight out
+                        # of the picker into a scrolling step log - the interface the picker
+                        # exists to replace. None means the screen could not run, and only
+                        # then does the streaming Installer below take over.
+                        in_app = run_update_in_app(args, style)
+                        if in_app is not None:
+                            did_anything = True
+                            continue
+                    if args.demo:
+                        print(
+                            style.yellow(
+                                "DEMO MODE - the full interactive run; nothing is executed or written."
+                            )
+                        )
+                        saved_run_cmd = run_cmd
+                        run_cmd = make_demo_runner(style)
+                        try:
+                            Installer(args, style, marks(), subset=subset).run()
+                        finally:
+                            run_cmd = saved_run_cmd
+                    else:
+                        Installer(args, style, marks(), subset=subset).run()
+                    # Read-only diagnostics never change anything regardless of demo -
+                    # "nothing changed" stays true after running one of these, unlike the
+                    # write-capable subsets.
+                    if subset not in (
+                        "check",
+                        "toolcheck",
+                        "envcheck",
+                        "selftest",
+                        "hooklatency",
+                        "adr014smoke",
+                        "daemonstart",
+                    ):
+                        did_anything = did_anything or not args.demo
+            except (KeyboardInterrupt, InstallAbort, SystemExit):
+                raise  # these already mean something specific further up
+            except Exception:
+                import traceback
+
+                print("")
+                print(style.red(f"  That action failed: {action}"))
+                print(style.dim("  The full error follows. Everything else still works -"))
+                print(style.dim("  you are back at the menu, and nothing was half-done by"))
+                print(style.dim("  this failure that was not already done before it."))
+                print("")
+                traceback.print_exc()
+                print("")
+                menu_rc = max(menu_rc, 1)
 
     subset = "full"
     if args.demo:
