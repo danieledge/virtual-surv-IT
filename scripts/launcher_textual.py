@@ -333,3 +333,122 @@ def setup_screen(project_dir: Path, mod, output=None):
     if not getattr(app, "ran", False):
         return None
     return getattr(app, "picked", SETUP_CANCEL)
+
+
+def archive_screen(project_dir: Path, mod, engagement_state, menu: dict, output=None):
+    """The [a] screen, rendered in Textual.
+
+    Returns True when something was archived, False when the user left without acting,
+    and None when this tier cannot draw - the same three answers launcher_app gives, and
+    the same reason they are three: "did nothing" and "could not run" lead somewhere
+    different.
+    """
+    widgets = _widgets()
+    if widgets is None:
+        return None
+    shown = list(menu.get("shown") or [])
+    if not shown:
+        return None  # nothing to archive: the caller owns that message
+    open_rows = list(menu.get("open") or shown)
+    try:
+        views = [mod.row_view(r) for r in shown]
+        app = widgets.ArchiveApp(project_dir, views, len(open_rows))
+        with _true_terminal_size():
+            app.run()
+    except Exception:  # noqa: BLE001 — any failure degrades
+        return None
+    if not getattr(app, "ran", False):
+        return None
+    index = getattr(app, "picked", None)
+    if index is None:
+        return False  # left without archiving - a decision, not a failure
+    targets = open_rows if index >= len(views) else [shown[index]]
+    try:
+        mod._archive_perform(engagement_state, targets)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def finished_screen(project_dir: Path, mod, engagement_state, output=None):
+    """The [b] screen, rendered in Textual. Returns the resume token, a
+    ("supersede", slug) pair, "" for back, or None when this tier cannot draw."""
+    widgets = _widgets()
+    if widgets is None:
+        return None
+    try:
+        from launcher_app import _vsit_paths
+
+        rows = engagement_state.finished_engagements(_vsit_paths().engagements_dir(project_dir))
+    except Exception:  # noqa: BLE001
+        return None
+    if not rows:
+        return None  # the fallback menu owns the "nothing yet" message
+    try:
+        views = [mod.row_view(r) for r in rows]
+        slugs = [mod._row_resume_token(r) or "" for r in rows]
+        app = widgets.FinishedApp(
+            project_dir,
+            views,
+            slugs,
+            lambda slug: mod._record_sign_off(project_dir, slug),
+            lambda slug: mod._sign_off_state(project_dir, slug) if slug else "",
+        )
+        with _true_terminal_size():
+            app.run()
+    except Exception:  # noqa: BLE001
+        return None
+    if not getattr(app, "ran", False):
+        return None
+    return getattr(app, "picked", "")
+
+
+def artifacts_screen(project_dir: Path, mod, slug: str, output=None):
+    """The [v] screen, rendered in Textual. True when it ran, None when it could not."""
+    widgets = _widgets()
+    if widgets is None:
+        return None
+    try:
+        items = mod._engagement_artifacts(project_dir, slug)
+    except Exception:  # noqa: BLE001
+        return None
+    if not items:
+        return None
+    labels = [label for label, _path in items]
+    try:
+        app = widgets.ArtifactsApp(project_dir, labels, f"Artifacts  ·  {slug}")
+        with _true_terminal_size():
+            app.run()
+    except Exception:  # noqa: BLE001
+        return None
+    if not getattr(app, "ran", False):
+        return None
+    index = getattr(app, "picked", None)
+    if index is not None and 0 <= index < len(items):
+        try:
+            mod._open_path(items[index][1])
+        except Exception:  # noqa: BLE001 - failing to open is not a crash
+            pass
+    return True
+
+
+def slug_picker_screen(project_dir: Path, mod, shown: list, output=None):
+    """Pick one open engagement. Returns the slug, or "" on cancel/unavailable."""
+    widgets = _widgets()
+    if widgets is None:
+        return ""  # this screen's unavailable IS its cancel
+    if not shown:
+        return ""
+    try:
+        views = [mod.row_view(r) for r in shown]
+        app = widgets.SlugPickerApp(project_dir, views, "Which engagement?")
+        with _true_terminal_size():
+            app.run()
+    except Exception:  # noqa: BLE001
+        return ""
+    if not getattr(app, "ran", False):
+        return ""
+    index = getattr(app, "picked", None)
+    if index is None or not (0 <= index < len(shown)):
+        return ""
+    return mod._row_resume_token(shown[index]) or ""

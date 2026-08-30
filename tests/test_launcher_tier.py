@@ -13,6 +13,7 @@ picks, and the guards.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import os
 import sys
 from pathlib import Path
@@ -39,26 +40,32 @@ def test_answers_launcher_apps_contract():
     import launcher_app
     import launcher_textual
 
-    check("same fallback sentinel", launcher_textual.APP_FALLBACK,
-          launcher_app.APP_FALLBACK)
+    check("same fallback sentinel", launcher_textual.APP_FALLBACK, launcher_app.APP_FALLBACK)
     check("implements run_app", callable(launcher_textual.run_app), True)
 
-    import inspect
-    check("takes launcher_app's arguments",
-          list(inspect.signature(launcher_textual.run_app).parameters),
-          list(inspect.signature(launcher_app.run_app).parameters))
+    check(
+        "takes launcher_app's arguments",
+        list(inspect.signature(launcher_textual.run_app).parameters),
+        list(inspect.signature(launcher_app.run_app).parameters),
+    )
 
     # No tty means no Textual: run() takes the terminal and waits for a keypress
     # nobody can make, which would hang any non-interactive caller.
-    check("no tty falls through", launcher_textual.run_app(REPO, None, {}, []),
-          launcher_app.APP_FALLBACK)
+    check(
+        "no tty falls through",
+        launcher_textual.run_app(REPO, None, {}, []),
+        launcher_app.APP_FALLBACK,
+    )
     check("available() says no without a tty", launcher_textual.available(), False)
 
     for var in ("VIRT_SURV_NO_TEXTUAL", "VIRT_SURV_NO_APP"):
         os.environ[var] = "1"
         try:
-            check(f"{var} opts out", launcher_textual.run_app(REPO, None, {}, []),
-                  launcher_app.APP_FALLBACK)
+            check(
+                f"{var} opts out",
+                launcher_textual.run_app(REPO, None, {}, []),
+                launcher_app.APP_FALLBACK,
+            )
         finally:
             del os.environ[var]
 
@@ -69,8 +76,7 @@ def test_wired_above_the_other_tiers():
     i_ptk = src.find("from launcher_app import APP_FALLBACK, run_app")
     check("the Textual tier is wired in", i_textual > 0, True)
     check("it runs BEFORE the prompt_toolkit tier", i_textual < i_ptk, True)
-    check("both feed the same _decision_from_pick",
-          src.count("_decision_from_pick(") >= 3, True)
+    check("both feed the same _decision_from_pick", src.count("_decision_from_pick(") >= 3, True)
 
     # The banner must stand down for this tier only: the app owns the alternate screen,
     # so a banner in front of it is still in the scrollback when it releases.
@@ -85,10 +91,11 @@ def test_picks_match_launcher_app_exactly():
 
     views = [{"title": "spoofing-review", "lines": [], "mark": "●"}]
     actions = launcher_textual._actions(Path("/tmp/p"), L, views, jira_on=True)
-    check("actions are built in launcher_app's order",
-          [a[0][0] for a in actions],
-          ["new", "jira", "settings", "open", "artifacts", "archive", "finished",
-           "launch"])
+    check(
+        "actions are built in launcher_app's order",
+        [a[0][0] for a in actions],
+        ["new", "jira", "settings", "open", "artifacts", "archive", "finished", "launch"],
+    )
 
     async def pick_for(key):
         app = MenuApp(Path("/tmp/p"), views, actions, {})
@@ -99,9 +106,15 @@ def test_picks_match_launcher_app_exactly():
         return app.pick
 
     async def run():
-        for key, want in (("n", ("new",)), ("j", ("jira",)), ("c", ("settings",)),
-                          ("o", ("open",)), ("b", ("finished",)), ("a", ("archive",)),
-                          ("v", ("artifacts",))):
+        for key, want in (
+            ("n", ("new",)),
+            ("j", ("jira",)),
+            ("c", ("settings",)),
+            ("o", ("open",)),
+            ("b", ("finished",)),
+            ("a", ("archive",)),
+            ("v", ("artifacts",)),
+        ):
             check(f"[{key}] returns launcher_app's pick", await pick_for(key), want)
         check("enter on a row resumes it", await pick_for("enter"), ("resume", 0))
 
@@ -117,8 +130,7 @@ def test_guards_match_launcher_app():
     check("no artifacts with nothing open", "artifacts" in empty, False)
     check("no archive with nothing open", "archive" in empty, False)
     check("no jira row when not offered", "jira" in empty, False)
-    check("new and launch are always offered",
-          ("new" in empty and "launch" in empty), True)
+    check("new and launch are always offered", ("new" in empty and "launch" in empty), True)
 
 
 def test_menu_renders_at_both_widths():
@@ -127,8 +139,14 @@ def test_menu_renders_at_both_widths():
     from launcher_tiers import NARROW, MenuApp
 
     async def run():
-        views = [{"title": "spoofing-review", "lines": [("status", "open")],
-                  "mark": "●", "recommended": True}]
+        views = [
+            {
+                "title": "spoofing-review",
+                "lines": [("status", "open")],
+                "mark": "●",
+                "recommended": True,
+            }
+        ]
         actions = [(("new",), "a new engagement", "n"), (("launch",), "just launch", None)]
         for width, want_narrow in ((100, False), (62, True)):
             app = MenuApp(Path("/tmp/p"), views, actions, {})
@@ -138,8 +156,7 @@ def test_menu_renders_at_both_widths():
                 body = app.query_one("#rows")
                 text = getattr(body, "content", "")
                 text = text.plain if hasattr(text, "plain") else str(text)
-                check(f"@{width} lists the engagement",
-                      "spoofing-review" in text, True)
+                check(f"@{width} lists the engagement", "spoofing-review" in text, True)
                 check(f"@{width} lists the action", "a new engagement" in text, True)
 
     asyncio.run(run())
@@ -149,15 +166,18 @@ def test_menu_renders_at_both_widths():
     # at all; without this the app laid out for a wide terminal inside a narrow one,
     # content wrapped at the left margin, and the wrapped remnants read as a second,
     # mangled copy of the screen ("IO is mangled", 2026-08-30).
-    import inspect
 
     from launcher_tiers import MenuApp, TierApp
-    check("width is applied at mount",
-          "_apply_width" in inspect.getsource(MenuApp.on_mount), True)
-    check("width is applied on resize",
-          "_apply_width" in inspect.getsource(TierApp.on_resize), True)
-    check("_apply_width reads the CURRENT size, not just the event",
-          "self.size" in inspect.getsource(TierApp._apply_width), True)
+
+    check("width is applied at mount", "_apply_width" in inspect.getsource(MenuApp.on_mount), True)
+    check(
+        "width is applied on resize", "_apply_width" in inspect.getsource(TierApp.on_resize), True
+    )
+    check(
+        "_apply_width reads the CURRENT size, not just the event",
+        "self.size" in inspect.getsource(TierApp._apply_width),
+        True,
+    )
 
 
 def test_cancel_is_not_a_fallback():
@@ -185,15 +205,15 @@ def test_cancel_is_not_a_fallback():
     asyncio.run(run())
 
     # And the adapter must pass that None through rather than the sentinel.
-    import inspect
 
     import launcher_textual
+
     src = inspect.getsource(launcher_textual.run_app)
     check("a screen that never ran falls through", 'if not getattr(app, "ran"' in src, True)
-    check("a cancel is returned as-is",
-          "return getattr(app, \"pick\", None)" in src, True)
-    check("cancel is no longer mapped to the sentinel",
-          "APP_FALLBACK if pick is None" in src, False)
+    check("a cancel is returned as-is", 'return getattr(app, "pick", None)' in src, True)
+    check(
+        "cancel is no longer mapped to the sentinel", "APP_FALLBACK if pick is None" in src, False
+    )
 
 
 def test_it_measures_the_real_terminal():
@@ -217,7 +237,7 @@ def test_it_measures_the_real_terminal():
         # A terminal that is definitively NOT Textual's 80x25 default.
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 66, 0, 0))
         tty = os.fdopen(slave, "w")
-        r, w = os.pipe()                        # stdout, as the alias leaves it
+        r, w = os.pipe()  # stdout, as the alias leaves it
         piped = os.fdopen(w, "w")
 
         real_err, real_out = sys.stderr, sys.__stdout__
@@ -225,14 +245,15 @@ def test_it_measures_the_real_terminal():
         try:
             sys.stderr = tty
             sys.__stdout__ = piped
-            os.environ["COLUMNS"] = "80"        # stale, and it outranks the real size
-            check("a pipe measures as Textual's default",
-                  shutil.get_terminal_size((80, 25)).columns, 80)
+            os.environ["COLUMNS"] = "80"  # stale, and it outranks the real size
+            check(
+                "a pipe measures as Textual's default",
+                shutil.get_terminal_size((80, 25)).columns,
+                80,
+            )
             with launcher_textual._true_terminal_size():
-                check("inside, it measures the tty",
-                      shutil.get_terminal_size((80, 25)).columns, 66)
-                check("inside, COLUMNS cannot outrank it",
-                      os.environ.get("COLUMNS"), None)
+                check("inside, it measures the tty", shutil.get_terminal_size((80, 25)).columns, 66)
+                check("inside, COLUMNS cannot outrank it", os.environ.get("COLUMNS"), None)
             check("COLUMNS is put back", os.environ.get("COLUMNS"), "80")
             check("sys.__stdout__ is put back", sys.__stdout__ is piped, True)
         finally:
@@ -254,10 +275,12 @@ def test_it_measures_the_real_terminal():
             pass
 
     # And it must actually be used, or the measurement changes nothing.
-    import inspect
-    check("run_app draws inside it",
-          "with _true_terminal_size():" in inspect.getsource(launcher_textual.run_app),
-          True)
+
+    check(
+        "run_app draws inside it",
+        "with _true_terminal_size():" in inspect.getsource(launcher_textual.run_app),
+        True,
+    )
 
 
 def test_the_composer_matches_launcher_app():
@@ -267,15 +290,16 @@ def test_the_composer_matches_launcher_app():
     pinned rather than described - Enter that sent silently discarded everything after
     the first line, and a `q` that quit destroyed what was being written.
     """
-    import inspect
 
     import launcher_app
     import launcher_textual
     from launcher_tiers import RequestApp
 
-    check("same signature as launcher_app's",
-          list(inspect.signature(launcher_textual.request_screen).parameters),
-          list(inspect.signature(launcher_app.request_screen).parameters))
+    check(
+        "same signature as launcher_app's",
+        list(inspect.signature(launcher_textual.request_screen).parameters),
+        list(inspect.signature(launcher_app.request_screen).parameters),
+    )
     check("no tty cannot draw", launcher_textual.request_screen(REPO, None), None)
 
     async def send(keys, offered=True, armed=False):
@@ -289,23 +313,31 @@ def test_the_composer_matches_launcher_app():
 
     async def run():
         typed = list("look at spoofing") + ["enter"] + list("in june")
-        check("ctrl-d sends, enter is a line break",
-              await send(typed + ["ctrl+d"]), ("look at spoofing in june", False))
+        check(
+            "ctrl-d sends, enter is a line break",
+            await send(typed + ["ctrl+d"]),
+            ("look at spoofing in june", False),
+        )
         check("an empty send is a plain launch", await send(["ctrl+d"]), None)
         check("esc is a plain launch", await send(list("hi") + ["escape"]), None)
-        check("ctrl-u clears", await send(list("hi") + ["ctrl+u"] + list("bye")
-                                          + ["ctrl+d"]), ("bye", False))
-        check("ctrl-t arms unattended",
-              await send(list("go") + ["ctrl+t", "ctrl+d"]), ("go", True))
-        check("ctrl-t does nothing when not offered",
-              await send(list("go") + ["ctrl+t", "ctrl+d"], offered=False), ("go", False))
-        check("t is text, not a shortcut", await send(list("test") + ["ctrl+d"]),
-              ("test", False))
+        check(
+            "ctrl-u clears",
+            await send(list("hi") + ["ctrl+u"] + list("bye") + ["ctrl+d"]),
+            ("bye", False),
+        )
+        check("ctrl-t arms unattended", await send(list("go") + ["ctrl+t", "ctrl+d"]), ("go", True))
+        check(
+            "ctrl-t does nothing when not offered",
+            await send(list("go") + ["ctrl+t", "ctrl+d"], offered=False),
+            ("go", False),
+        )
+        check("t is text, not a shortcut", await send(list("test") + ["ctrl+d"]), ("test", False))
         # `q` quits the MENU and types on the COMPOSER. Textual merges BINDINGS up the
         # MRO, so a subclass cannot take a binding away - the base must not have it.
         check("q is text, not quit", await send(list("q") + ["ctrl+d"]), ("q", False))
-        check("backspace deletes", await send(list("abcd") + ["backspace", "ctrl+d"]),
-              ("abc", False))
+        check(
+            "backspace deletes", await send(list("abcd") + ["backspace", "ctrl+d"]), ("abc", False)
+        )
 
     asyncio.run(run())
 
@@ -315,6 +347,7 @@ def test_the_composer_matches_launcher_app():
     # a q, and quit-on-Esc closed the settings screen when Esc meant "cancel the edit".
     # Every screen handles its own exits, so there must be no bindings anywhere.
     from launcher_tiers import MenuApp, RequestApp, SettingsApp, TierApp
+
     for cls in (TierApp, MenuApp, RequestApp, SettingsApp):
         check(f"{cls.__name__} declares no bindings", list(cls.BINDINGS), [])
 
@@ -328,6 +361,7 @@ def test_the_composer_matches_launcher_app():
 
 def _scratch_project():
     import tempfile
+
     d = Path(tempfile.mkdtemp(prefix="vs-tier-"))
     (d / ".git").mkdir(parents=True, exist_ok=True)
     return d
@@ -342,7 +376,6 @@ def test_the_settings_screen_matches_launcher_app():
     position 3 showed one setting while the toggle changed another. No test noticed,
     because none asserted it - so this one does.
     """
-    import inspect
     import json
     import shutil
 
@@ -351,9 +384,11 @@ def test_the_settings_screen_matches_launcher_app():
     import virt_team_launcher as L
     from launcher_tiers import SettingsApp
 
-    check("same signature as launcher_app's",
-          list(inspect.signature(launcher_textual.settings_screen).parameters),
-          list(inspect.signature(launcher_app.settings_screen).parameters))
+    check(
+        "same signature as launcher_app's",
+        list(inspect.signature(launcher_textual.settings_screen).parameters),
+        list(inspect.signature(launcher_app.settings_screen).parameters),
+    )
     check("no tty cannot draw", launcher_textual.settings_screen(REPO, L), None)
 
     async def drive(keys, moves=0):
@@ -377,13 +412,10 @@ def test_the_settings_screen_matches_launcher_app():
         changed, ran, wrote, _at, _n = await drive(["escape"])
         check("esc ran and changed nothing", (ran, changed, wrote), (True, False, {}))
         changed, _r, wrote, _at, _n = await drive(["enter", "escape"])
-        check("toggling row 0 writes it", (changed, wrote),
-              (True, {"extra_formats": ["docx"]}))
+        check("toggling row 0 writes it", (changed, wrote), (True, {"extra_formats": ["docx"]}))
         changed, _r, wrote, at, note = await drive(["enter", "escape"], moves=2)
-        check("toggling row 2 writes THAT row", (changed, wrote),
-              (True, {"evidence_room": True}))
-        check("and the note names the row the cursor was on",
-              note.startswith(at + ":"), True)
+        check("toggling row 2 writes THAT row", (changed, wrote), (True, {"evidence_room": True}))
+        check("and the note names the row the cursor was on", note.startswith(at + ":"), True)
         _c, ran, _w, _at, _n = await drive(["q"])
         check("q leaves the screen", ran, True)
 
@@ -412,8 +444,7 @@ def test_the_settings_screen_matches_launcher_app():
             check("the key is saved", L.jira_project_key(d), "SURV")
             await p_.press("e")
             await p_.pause()
-            check("e re-opens the key without toggling jira off",
-                  app.editing is not None, True)
+            check("e re-opens the key without toggling jira off", app.editing is not None, True)
             await p_.press("escape")
             await p_.pause()
             # Esc means "cancel the edit", NOT "close the screen". A base-class Esc
@@ -514,7 +545,6 @@ def test_the_installer_chooser_matches_installer_app():
     to once showed the wrong consequence for the most prominent option on the
     most-seen screen.
     """
-    import inspect
 
     sys.path.insert(0, str(REPO))
     import install_helper as IH
@@ -522,9 +552,11 @@ def test_the_installer_chooser_matches_installer_app():
     import launcher_textual
     from launcher_tiers import ChooserApp
 
-    check("same signature as installer_app's",
-          list(inspect.signature(launcher_textual.chooser_screen).parameters),
-          list(inspect.signature(installer_app.chooser_screen).parameters))
+    check(
+        "same signature as installer_app's",
+        list(inspect.signature(launcher_textual.chooser_screen).parameters),
+        list(inspect.signature(installer_app.chooser_screen).parameters),
+    )
 
     options = (
         ("1", "Install or reconfigure the team (full run - asks everything)"),
@@ -535,8 +567,7 @@ def test_the_installer_chooser_matches_installer_app():
 
     async def pick(keys, opts=options, actions=IH.MENU_ACTIONS):
         rows = installer_app._rows(opts, IH, actions)
-        app = ChooserApp(REPO, rows, "What can I do for you?",
-                         installer_app._marker_kind)
+        app = ChooserApp(REPO, rows, "What can I do for you?", installer_app._marker_kind)
         async with app.run_test(size=(80, 26)) as p_:
             await p_.pause()
             for k in keys:
@@ -556,18 +587,23 @@ def test_the_installer_chooser_matches_installer_app():
         check("q is back/quit too", await pick(["q"]), "")
         # Every row of the longest submenu must be reachable.
         adv = tuple((k, f"option {k}") for k in IH._ADVANCED_ACTIONS)
-        check("the last row of a 16-row submenu is reachable",
-              await pick(["up", "enter"], adv, IH._ADVANCED_ACTIONS), "b")
+        check(
+            "the last row of a 16-row submenu is reachable",
+            await pick(["up", "enter"], adv, IH._ADVANCED_ACTIONS),
+            "b",
+        )
 
     asyncio.run(run())
 
     # And it must be tried BEFORE the prompt_toolkit picker, which is before the
     # numbered menu.
     src = (REPO / "install_helper.py").read_text(encoding="utf-8")
-    check("both tiers are tried in order",
-          'for _tier in ("launcher_textual", "installer_app")' in src, True)
-    check('"" is a real answer and stops the fall-through',
-          "if picked is not None:" in src, True)
+    check(
+        "both tiers are tried in order",
+        'for _tier in ("launcher_textual", "installer_app")' in src,
+        True,
+    )
+    check('"" is a real answer and stops the fall-through', "if picked is not None:" in src, True)
 
 
 def test_a_broken_tier_costs_nothing():
@@ -580,22 +616,29 @@ def test_a_broken_tier_costs_nothing():
             raise RuntimeError("no")
 
     # A mod that cannot build views must fall through, not raise.
-    check("a raising mod falls through",
-          launcher_textual.run_app(REPO, Boom(), {}, [{"slug": "x"}]),
-          launcher_app.APP_FALLBACK)
+    check(
+        "a raising mod falls through",
+        launcher_textual.run_app(REPO, Boom(), {}, [{"slug": "x"}]),
+        launcher_app.APP_FALLBACK,
+    )
 
 
 if __name__ == "__main__":
-    for fn in (test_answers_launcher_apps_contract, test_wired_above_the_other_tiers,
-               test_picks_match_launcher_app_exactly, test_guards_match_launcher_app,
-               test_menu_renders_at_both_widths, test_cancel_is_not_a_fallback,
-               test_it_measures_the_real_terminal,
-               test_the_composer_matches_launcher_app,
-               test_the_settings_screen_matches_launcher_app,
-               test_the_list_follows_the_cursor,
-               test_every_screen_leaves_on_esc,
-               test_the_installer_chooser_matches_installer_app,
-               test_a_broken_tier_costs_nothing):
+    for fn in (
+        test_answers_launcher_apps_contract,
+        test_wired_above_the_other_tiers,
+        test_picks_match_launcher_app_exactly,
+        test_guards_match_launcher_app,
+        test_menu_renders_at_both_widths,
+        test_cancel_is_not_a_fallback,
+        test_it_measures_the_real_terminal,
+        test_the_composer_matches_launcher_app,
+        test_the_settings_screen_matches_launcher_app,
+        test_the_list_follows_the_cursor,
+        test_every_screen_leaves_on_esc,
+        test_the_installer_chooser_matches_installer_app,
+        test_a_broken_tier_costs_nothing,
+    ):
         print(f"\n{fn.__name__}")
         fn()
     print()
@@ -605,3 +648,67 @@ if __name__ == "__main__":
             print("  - " + f)
         raise SystemExit(1)
     print("all passed")
+
+
+# ---------------- tranche 1: the four list screens (2026-08-30) ----------------
+
+
+def test_the_four_list_screens_are_ported():
+    """archive, finished, artifacts and the slug picker share a shape - a list, a detail
+    pane, Enter acts, Esc/q leaves - so they share a base rather than being four
+    near-copies that drift apart."""
+    import launcher_textual
+    import launcher_tiers
+
+    for name in ("archive_screen", "finished_screen", "artifacts_screen", "slug_picker_screen"):
+        assert callable(getattr(launcher_textual, name, None)), f"{name} adapter missing"
+    for widget in ("ListApp", "ArchiveApp", "FinishedApp", "ArtifactsApp", "SlugPickerApp"):
+        assert hasattr(launcher_tiers, widget), f"{widget} missing"
+    for widget in ("ArchiveApp", "FinishedApp", "ArtifactsApp", "SlugPickerApp"):
+        assert issubclass(getattr(launcher_tiers, widget), launcher_tiers.ListApp)
+
+
+def test_signing_off_does_not_leave_the_finished_screen():
+    """s acts IN PLACE. Signing off is something you do to a row while looking at the
+    list, and the row's state changes under the cursor so you can see it took.
+
+    The prompt_toolkit screen has always behaved this way; a port that quietly made s
+    exit - as a first draft of this one did, because the other two keys exit - would be a
+    regression nobody would think to test for."""
+    import launcher_tiers
+
+    source = inspect.getsource(launcher_tiers.FinishedApp.on_key)
+    sign = source.index('if key == "s"')
+    redo = source.index('if key == "r"')
+    assert "self.exit()" not in source[sign:redo], "s must not exit the screen"
+    assert "self.paint()" in source[sign:redo], "s must repaint so the change is visible"
+    assert "self.exit()" in source[redo:], "r, by contrast, does leave"
+
+
+def test_the_tier_fall_through_is_written_once():
+    """The rule is identical for every screen - None means a tier could not draw, so try
+    the next - and four hand-written copies of it is how four screens stop agreeing about
+    what None means."""
+    source = (REPO / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
+    assert "def _tiered_screen(" in source
+    # Whitespace-normalised: the formatter wraps a long call, and an assertion that a
+    # screen name sits on the same line as the helper is an assertion about line length.
+    flat = " ".join(source.split())
+    for name in ("archive_screen", "finished_screen", "artifacts_screen", "slug_picker_screen"):
+        assert f'_tiered_screen( "{name}"' in flat or f'_tiered_screen("{name}"' in flat, (
+            f"{name} is not going through the helper"
+        )
+        assert f"from launcher_app import {name}" not in source, (
+            f"{name} still imports one tier directly, bypassing the fall-through"
+        )
+
+
+def test_the_slug_pickers_empty_answer_is_not_a_fall_through():
+    """ "" is this screen's CANCEL, not "I could not draw". Returning None for a cancel
+    would send it to the next tier, which would draw the same list again under the one
+    just dismissed - the bug the menu tier hit on 2026-08-20."""
+    import launcher_textual
+
+    source = inspect.getsource(launcher_textual.slug_picker_screen)
+    assert 'return ""' in source
+    assert "return None" not in source, "this screen never returns None - '' is its answer"

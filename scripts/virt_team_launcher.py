@@ -1462,9 +1462,7 @@ def _pick_engagement_slug(project_dir: Path, shown: list) -> str:
     own picker so the choice looks like everything else; falls back to the most recent
     rather than asking a question the plain tier cannot render well."""
     try:
-        from launcher_app import slug_picker_screen
-
-        picked = slug_picker_screen(project_dir, _this_module(), shown)
+        picked = _tiered_screen("slug_picker_screen", project_dir, _this_module(), shown)
         if picked:
             return picked
     except Exception:
@@ -2231,6 +2229,31 @@ def _pt_menu_round(
     return _decision_from_pick(pick, project_dir, engagement_state, menu, shown)
 
 
+def _tiered_screen(name: str, *args, **kwargs):
+    """Call `name` on the best tier that can draw it: Textual, then prompt_toolkit.
+
+    None from a tier means "I could not draw this", so the next one is tried; anything
+    else is that screen's real answer and stands. Written once because the rule is the
+    same for every screen, and four hand-written copies of a fall-through is how four
+    screens stop agreeing about what None means.
+
+    Returns None when no tier could draw, which is what every caller already handles by
+    falling back to its plain-text flow.
+    """
+    for module_name in ("launcher_textual", "launcher_app"):
+        try:
+            module = __import__(module_name)
+            screen = getattr(module, name, None)
+            if screen is None:
+                continue
+            answer = screen(*args, **kwargs)
+            if answer is not None:
+                return answer
+        except Exception:
+            continue  # a tier that raises is a tier that cannot draw
+    return None
+
+
 def _decision_from_pick(
     pick, project_dir: Path, engagement_state, menu: dict, shown: list, rich: bool = False
 ) -> str:
@@ -2301,9 +2324,7 @@ def _decision_from_pick(
             slug = _pick_engagement_slug(project_dir, shown) or slug
         if slug:
             try:
-                from launcher_app import artifacts_screen
-
-                if artifacts_screen(project_dir, _this_module(), slug) is None:
+                if _tiered_screen("artifacts_screen", project_dir, _this_module(), slug) is None:
                     _artifacts_plain(project_dir, slug)
             except Exception:
                 try:
@@ -2332,9 +2353,12 @@ def _decision_from_pick(
         return "__again__"
     if pick[0] == "archive":
         try:
-            from launcher_app import archive_screen
-
-            if archive_screen(project_dir, _this_module(), engagement_state, menu) is None:
+            if (
+                _tiered_screen(
+                    "archive_screen", project_dir, _this_module(), engagement_state, menu
+                )
+                is None
+            ):
                 _archive_menu(project_dir, engagement_state, menu)
         except Exception:
             try:
@@ -2348,9 +2372,7 @@ def _decision_from_pick(
         # settings above - conflating them dumped users into the wrong tier once.
         token = None
         try:
-            from launcher_app import finished_screen
-
-            token = finished_screen(project_dir, _this_module(), engagement_state)
+            token = _tiered_screen("finished_screen", project_dir, _this_module(), engagement_state)
         except Exception:
             token = None
         if token is None:

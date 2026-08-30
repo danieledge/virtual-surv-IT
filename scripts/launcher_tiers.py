@@ -1048,3 +1048,270 @@ class SetupApp(TierApp):
         else:
             return
         self.paint()
+
+
+class ListApp(TierApp):
+    """A list, a detail pane, Enter acts, Esc/q leaves.
+
+    Four screens have that shape and differ only in what a row is and what Enter does, so
+    they share this rather than being four near-copies that drift. Subclasses supply
+    `row_line`, `detail`, `footer_keys` and `choose`; everything else - cursor, painting,
+    scrolling, the way out - is the same by construction.
+
+    `picked` is the subclass's own answer, whatever that means for it. `ran` says the
+    screen drew, which the adapters need to tell "the user chose nothing" apart from
+    "this tier could not run" - a distinction the launcher has paid for twice.
+    """
+
+    def __init__(self, project, rows: list, title: str) -> None:
+        super().__init__(project)
+        self.rows = list(rows)
+        self.title_text = title
+        self.picked = None
+        self.ran = False
+
+    # -- what a subclass fills in ------------------------------------------------
+    def row_line(self, index: int, row, selected: bool) -> Text:
+        raise NotImplementedError
+
+    def detail(self, row, width: int) -> Text:
+        raise NotImplementedError
+
+    def footer_keys(self):
+        return (("↑↓", "move"), ("enter", "choose"), ("esc/q", "back"))
+
+    def choose(self, index: int) -> None:
+        """Enter on `index`. Set self.picked; the app exits straight after."""
+        self.picked = index
+
+    def lines_per_row(self) -> int:
+        return 1
+
+    # -- the shared half ---------------------------------------------------------
+    def on_mount(self) -> None:
+        self.ran = True
+        self._apply_width()
+        self.chrome_ready(self.title_text)
+        self.paint()
+
+    def paint(self) -> None:
+        folder = self.folder()
+        self.head(self.title_text if self.narrow else f"{folder}  ·  {self.title_text}")
+
+        body = Text()
+        for i, row in enumerate(self.rows):
+            body.append(self.row_line(i, row, self.cursor == i))
+        self.query_one("#rows", Static).update(body)
+        self.scroll_row(self.cursor * self.lines_per_row())
+
+        width = 26 if not self.narrow else max(20, self.panel_width() - 4)
+        side = self.detail(self.rows[self.cursor] if self.rows else None, width)
+        self.query_one("#side-body", Static).update(side)
+        self.foot(self.footer_keys())
+
+    def on_key(self, event) -> None:
+        key = event.key
+        if key in ("escape", "q", "ctrl+c"):
+            event.stop()
+            self.picked = None  # leaving is an answer, and it is "nothing chosen"
+            self.exit()
+            return
+        if not self.rows:
+            return
+        if key == "down":
+            self.cursor = (self.cursor + 1) % len(self.rows)
+        elif key == "up":
+            self.cursor = (self.cursor - 1) % len(self.rows)
+        elif key == "enter":
+            event.stop()
+            self.choose(self.cursor)
+            self.exit()
+            return
+        else:
+            return
+        self.paint()
+
+
+class ArchiveApp(ListApp):
+    """Pick one engagement to archive, or all of them.
+
+    The last row is "archive ALL", which is why the row list is the views PLUS one: the
+    consequence of that row is different in kind from the others, so it is stated on the
+    row itself rather than only in the pane.
+    """
+
+    def __init__(self, project, views: list, open_count: int) -> None:
+        super().__init__(project, list(views) + [None], "Archive engagements")
+        self.open_count = open_count
+
+    def lines_per_row(self) -> int:
+        return 2
+
+    def row_line(self, index: int, row, selected: bool) -> Text:
+        t = Text()
+        t.append("  ▸ " if selected else "    ", style=ACCENT if selected else HINT)
+        if row is None:
+            t.append(
+                f"archive ALL open engagements ({self.open_count})\n",
+                style=f"bold {GOLD}" if selected else GOLD,
+            )
+            t.append("\n")
+            return t
+        t.append(f"{row['mark']} ", style=GOLD if row["mark_style"] == "warn" else DIM)
+        t.append(f"{row['title']}\n", style=f"bold {TEXT}" if selected else TEXT)
+        t.append(f"      {row['slug']}  {row['detail']}\n", style=DIM)
+        return t
+
+    def detail(self, row, width: int) -> Text:
+        t = Text("\n")
+        t.append("  Archiving\n\n", style=f"bold {ACCENT}")
+        for line in wrap(
+            "In place - nothing is deleted. A marker excludes the pack from every scanner.", width
+        ):
+            t.append(f"  {line}\n", style=DIM)
+        t.append("\n")
+        for line in wrap(
+            "An OPEN pack archives with --force and shows as ARCHIVED-OPEN in checks.", width
+        ):
+            t.append(f"  {line}\n", style=GOLD)
+        return t
+
+    def footer_keys(self):
+        return (("↑↓", "move"), ("enter", "archive"), ("esc/q", "back"))
+
+
+class FinishedApp(ListApp):
+    """Done and archived engagements. Enter opens one, r redoes it, s signs it off.
+
+    s ACTS IN PLACE and does not leave: signing off is something you do to a row while
+    looking at the list, and the row's own state changes under the cursor so you can see
+    it took. Making it exit would match the other two keys and be wrong - the
+    prompt_toolkit screen has always behaved this way, and a port that quietly changed it
+    would be a regression nobody would think to test for.
+
+    Behaviour is injected rather than reached for: `sign_off(slug)` and `signed(slug)` are
+    passed in, so this file keeps knowing only how to draw.
+    """
+
+    def __init__(self, project, views: list, slugs: list, sign_off, signed) -> None:
+        super().__init__(project, views, "Done & archived")
+        self.slugs = list(slugs)
+        self._sign_off = sign_off
+        self._signed = signed
+        self.note = ""
+        self.picked = ""  # "" is this screen's cancel, not None
+
+    def row_line(self, index: int, row, selected: bool) -> Text:
+        t = Text()
+        t.append("  ▸ " if selected else "    ", style=ACCENT if selected else HINT)
+        t.append(f"{row.get('mark', '')} ", style=DIM)
+        t.append(f"{row.get('title', '')}\n", style=f"bold {TEXT}" if selected else TEXT)
+        who = self._signed(self.slugs[index]) if index < len(self.slugs) else ""
+        t.append("      signed off\n" if who else "      unsigned\n", style=OK if who else GOLD)
+        return t
+
+    def lines_per_row(self) -> int:
+        return 2
+
+    def detail(self, row, width: int) -> Text:
+        t = Text("\n")
+        if not row:
+            return t
+        t.append(f"  {row.get('title', '')}\n\n", style=f"bold {ACCENT}")
+        for key in ("slug", "detail"):
+            value = row.get(key)
+            if value:
+                for line in wrap(str(value), width):
+                    t.append(f"  {line}\n", style=DIM)
+        if self.note:
+            t.append("\n")
+            for line in wrap(self.note, width):
+                t.append(f"  {line}\n", style=OK)
+        return t
+
+    def footer_keys(self):
+        return (
+            ("↑↓", "move"),
+            ("enter", "open"),
+            ("s", "sign off"),
+            ("r", "redo"),
+            ("esc/q", "back"),
+        )
+
+    def choose(self, index: int) -> None:
+        self.picked = self.slugs[index] if index < len(self.slugs) else ""
+
+    def on_key(self, event) -> None:
+        key = event.key
+        slug = self.slugs[self.cursor] if self.cursor < len(self.slugs) else ""
+        if key == "s" and slug:
+            # Recorded HERE, by the human at the keyboard - never by a session. An agent
+            # signing off its own work is what the Definition-of-Done gate exists to
+            # prevent, so the signature is taken where a person demonstrably is.
+            event.stop()
+            try:
+                self.note = self._sign_off(slug) or ""
+            except Exception:  # noqa: BLE001 - a failed sign-off is not a crash
+                self.note = ""
+            self.paint()
+            return
+        if key == "r" and slug:
+            event.stop()
+            self.picked = ("supersede", slug)
+            self.exit()
+            return
+        if key in ("escape", "q", "ctrl+c"):
+            event.stop()
+            self.picked = ""  # this screen's cancel is "", not None
+            self.exit()
+            return
+        super().on_key(event)
+
+
+class ArtifactsApp(ListApp):
+    """What an engagement produced. Enter opens the highlighted file."""
+
+    def row_line(self, index: int, row, selected: bool) -> Text:
+        t = Text()
+        t.append("  ▸ " if selected else "    ", style=ACCENT if selected else HINT)
+        t.append(f"{row}\n", style=f"bold {TEXT}" if selected else TEXT)
+        return t
+
+    def detail(self, row, width: int) -> Text:
+        t = Text("\n")
+        t.append("  Artifacts\n\n", style=f"bold {ACCENT}")
+        for line in wrap(
+            "Everything this engagement produced. Enter opens the highlighted "
+            "file with your system viewer.",
+            width,
+        ):
+            t.append(f"  {line}\n", style=DIM)
+        return t
+
+    def footer_keys(self):
+        return (("↑↓", "move"), ("enter", "open"), ("esc/q", "back"))
+
+
+class SlugPickerApp(ListApp):
+    """Pick one open engagement, when several are open and the action needs just one."""
+
+    def row_line(self, index: int, row, selected: bool) -> Text:
+        t = Text()
+        t.append("  ▸ " if selected else "    ", style=ACCENT if selected else HINT)
+        t.append(
+            f"{row.get('title', row.get('slug', ''))}\n", style=f"bold {TEXT}" if selected else TEXT
+        )
+        t.append(f"      {row.get('slug', '')}  {row.get('detail', '')}\n", style=DIM)
+        return t
+
+    def lines_per_row(self) -> int:
+        return 2
+
+    def detail(self, row, width: int) -> Text:
+        t = Text("\n")
+        t.append("  Which engagement?\n\n", style=f"bold {ACCENT}")
+        for line in wrap(
+            "Several are open, and this action works on one. Pick the one you mean.", width
+        ):
+            t.append(f"  {line}\n", style=DIM)
+        return t
