@@ -807,7 +807,7 @@ class LaunchScreen(Responsive):
 
         key, label, _blurb = ACTIONS[payload]
         if key == "n":
-            self._decide(f"{self.engage_cmd} --new")
+            self.app.push_screen(RequestScreen(self.project))
             return
         if key == "":
             # "decide inside the session": launch with no decision, which is what an
@@ -1698,6 +1698,67 @@ class BrowseScreen(Responsive):
             self.app.exit()
 
 
+class RequestScreen(Responsive):
+    """[n] - what is the work?
+
+    v2 launched with a bare --new, so the first thing that happened in-session was
+    Morgan asking what the work is: a question you could have answered here, with a
+    keyboard already under your hands. v1 fixed exactly this on 2026-08-24 after the
+    same report; v2 reproduced it.
+
+    Typing is an OFFER, not a toll gate - Enter on an empty field gives the plain --new.
+    """
+
+    BINDINGS = [("q", "app.quit", "quit")]
+
+    def __init__(self, project) -> None:
+        super().__init__()
+        self.project = Path(project)
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="shell"):
+            yield Brand(id="brand")
+            with Vertical(id="panel"):
+                yield Static(id="open-help")
+            yield Input(placeholder="what should the team work on?", id="edit")
+            yield Static(id="detail")
+            yield Static(id="keys")
+
+    def on_mount(self) -> None:
+        self.query_one("#panel").border_title = "new engagement"
+        h = Text()
+        h.append("\n  What is the work?\n\n", style=f"bold {ACCENT}")
+        h.append("  This becomes the session's opening prompt, so Morgan starts on it\n",
+                 style=TEXT)
+        h.append("  instead of asking you what it is.\n\n", style=TEXT)
+        h.append("  Leave it blank to start a new engagement and decide in the session.\n",
+                 style=HINT)
+        self.query_one("#open-help", Static).update(h)
+        inp = self.query_one("#edit", Input)
+        self.call_after_refresh(inp.focus)
+        d = Text("  ")
+        d.append("│ ", style=TRACK)
+        d.append("typing is optional - enter on an empty field is the plain new "
+                 "engagement", style=HINT)
+        self.query_one("#detail", Static).update(d)
+        k = Text("  ")
+        for name, desc in (("enter", "start"), ("esc", "back")):
+            k.append(name, style=KEY)
+            k.append(f" {desc}   ", style=HINT)
+        self.query_one("#keys", Static).update(k)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        builder = getattr(self.app, "new_decision", None)
+        request = event.value.strip()
+        self.app.decision = (builder(self.project, request) if builder
+                             else f"{getattr(self.app, 'engage_cmd', '')} --new")
+        self.app.exit()
+
+    def key_escape(self, event) -> None:
+        event.stop()
+        self.app.pop_screen()
+
+
 class JiraScreen(Responsive):
     """[j] - start an engagement from a ticket.
 
@@ -1973,6 +2034,7 @@ class VirtSurvApp(App):
     recent_projects = None
     archive_engagements = None
     jira_needs_key = None
+    new_decision = None
 
 
     def _fatal_error(self) -> None:

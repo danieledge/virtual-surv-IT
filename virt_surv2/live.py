@@ -142,9 +142,16 @@ class PromptModal(ModalScreen):
 class LiveInstallScreen(Responsive):
     BINDINGS = [("q", "app.quit", "quit"), ("escape", "app.quit", "back")]
 
-    def __init__(self, choices: dict, demo: bool, back: bool = False) -> None:
+    def __init__(self, choices: dict, demo: bool, back: bool = False,
+                 title: str = "INSTALL", installing: bool = True) -> None:
         super().__init__()
         self.choices, self.demo = choices, demo
+        # Watching a run, listing artifacts and browsing are not installs. They were all
+        # rendered under an "INSTALL" heading with an install progress bar and, on
+        # finish, three next-steps about opening a new terminal - none of which had
+        # anything to do with what had just happened.
+        self.title_text = title
+        self.installing = installing
         # v1's "__again__": watching, archiving and browsing all return you to the
         # menu, because none of them starts a session. Without this every side action
         # ended the launcher and (decision being None) exited 97 - launching nothing
@@ -164,7 +171,8 @@ class LiveInstallScreen(Responsive):
     def compose(self) -> ComposeResult:
         with Vertical(id="shell"):
             yield Brand(id="brand")
-            yield Static("INSTALL" + ("  ·  DRY RUN" if self.demo else ""), id="eyebrow")
+            yield Static(self.title_text + ("  ·  DRY RUN" if self.demo else ""),
+                         id="eyebrow")
             with VerticalScroll(id="panel"):
                 yield Static(id="steps")
             yield Static(id="detail")
@@ -331,9 +339,12 @@ class LiveInstallScreen(Responsive):
         self.query_one("#steps", Static).update(t)
 
         d = Text("  ")
-        if self.code == 0:
+        if self.code == 0 and self.installing:
             self._show_next_steps()
             d.append("", style=DIM)
+        elif self.code == 0:
+            d.append("✓ ", style=OK)
+            d.append(self.detail or "done", style=DIM)
         elif self.code:
             d.append("✗ ", style=ERR)
             d.append(self.detail, style=DIM)
@@ -462,6 +473,10 @@ class InstallerTuiApp(App):
         from . import engine as E
         return E.jira_decision(self.repo, project, ref)
 
+    def new_decision(self, project, request: str = "") -> str:
+        from . import engine as E
+        return E.new_decision(self.repo, project, request)
+
     def jira_needs_key(self, project) -> bool:
         from . import engine as E
         return E.jira_needs_key(self.repo, project)
@@ -514,13 +529,32 @@ class InstallerTuiApp(App):
         """The decide screen, seeded with the clone the engine was loaded from."""
         return DecideScreen({"clone": str(self.repo) if self.repo else None})
 
+    # Actions that install or configure something, so the "installed / next steps"
+    # finish is right for them. Everything else just ran and reports what it found.
+    INSTALLING_ACTIONS = {"setup", "update", "configure", "onboard", "statusline",
+                          "codeintel", "machinedefaults", "aliasmanage", "fixbashrc",
+                          "gitbashperf", "extensions", "relocate", "cleanplugincache",
+                          "demo", "model"}
+
+    ACTION_TITLES = {
+        "watch": "WATCHING", "artifacts": "ARTIFACTS", "finished": "DONE & ARCHIVED",
+        "archive": "ARCHIVE", "howto": "HELP", "reprobe": "RE-PROBING TOOLS",
+        "check": "UPDATE CHECK", "toolcheck": "ANALYSER CHECK",
+        "envcheck": "ENVIRONMENT CHECK", "selftest": "SELF-TEST",
+        "hooklatency": "HOOK LATENCY", "adr014smoke": "SMOKE TEST",
+        "daemonstart": "GUARD DAEMON", "configure": "CONFIGURE",
+        "onboard": "SETTING UP", "update": "UPDATE",
+    }
+
     def start_action(self, action: str, project=None, back: bool = False,
                      slug: str = "") -> None:
         """An Advanced/Diagnostics/first-run item, on the same live screen."""
         from . import engine as E
 
-        screen = LiveInstallScreen({"channel": "dev"}, self.demo or action == "demo",
-                                   back=back)
+        screen = LiveInstallScreen(
+            {"channel": "dev"}, self.demo or action == "demo", back=back,
+            title=self.ACTION_TITLES.get(action, action.upper()),
+            installing=action in self.INSTALLING_ACTIONS)
         self.push_screen(screen)
         self.broker = E.PromptBroker(self, screen)
         target = project or self.project

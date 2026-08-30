@@ -730,6 +730,70 @@ def test_every_screen_survives_a_resize() -> None:
     asyncio.run(run())
 
 
+def test_new_engagement_takes_a_request() -> None:
+    """[n] must offer to pre-seed the prompt, and the text must reach the FILE.
+
+    v2 launched with a bare --new, so the first thing in-session was Morgan asking what
+    the work is. v1 fixed exactly this on 2026-08-24 after the same report; v2 had
+    reproduced it. The request travels in a file, never in the command string, because
+    PowerShell 5.1 mangles embedded quotes - so this asserts the file, not the argv.
+    """
+    import inspect
+    import tempfile as _tf
+
+    from virt_surv2 import engine as E
+    from virt_surv2 import ui as A
+    section("X  new engagement takes a request")
+
+    import install_helper as ih
+    repo = Path(ih.__file__).resolve().parent
+
+    check("[n] opens a screen, not a bare decision",
+          "RequestScreen" in inspect.getsource(A.LaunchScreen._choose), True)
+    check("it is built by v1's _new_command",
+          "_new_command" in inspect.getsource(E.new_decision), True)
+
+    with _tf.TemporaryDirectory() as td:
+        proj = Path(td)
+        plain = E.new_decision(repo, proj)
+        check("an empty request is the plain --new", plain.endswith("--new"), True)
+
+        text = "review the spoofing thresholds for Q3"
+        decision = E.new_decision(repo, proj, text)
+        check("a typed request changes the decision", decision != plain, True)
+        check("the text is NOT in the command string", text in decision, False)
+        written = [f for f in proj.rglob("*")
+                   if f.is_file() and text in f.read_text(encoding="utf-8", errors="ignore")]
+        check("the text is written to a file", len(written), 1)
+
+    async def run():
+        class Stub(A.VirtSurvApp):
+            def new_decision(self, project, request=""):
+                return f"/engage --new{' --request-pending' if request else ''}"
+
+        app = Stub(start="launch", frozen=True, project="/tmp/p", rows=[])
+        async with app.run_test(size=(100, 30)) as p:
+            await p.pause()
+            app.push_screen(A.RequestScreen("/tmp/p"))
+            await p.pause()
+            app.screen.query_one("#edit").value = "do the thing"
+            await p.press("enter")
+            await p.pause()
+            check("typing produces a seeded decision",
+                  app.decision, "/engage --new --request-pending")
+
+        app = Stub(start="launch", frozen=True, project="/tmp/p", rows=[])
+        async with app.run_test(size=(100, 30)) as p:
+            await p.pause()
+            app.push_screen(A.RequestScreen("/tmp/p"))
+            await p.pause()
+            await p.press("enter")
+            await p.pause()
+            check("empty is not a toll gate", app.decision, "/engage --new")
+
+    asyncio.run(run())
+
+
 def test_archive_picks_and_jira_key() -> None:
     """[a] must let you pick, and Jira must be escapable from 'on (key UNSET)'."""
     import inspect
@@ -1250,6 +1314,7 @@ if __name__ == "__main__":
     test_step_labels_make_sense()
     test_every_launcher_row_is_wired()
     test_every_screen_survives_a_resize()
+    test_new_engagement_takes_a_request()
     test_archive_picks_and_jira_key()
     test_remaining_v1_guards()
     test_headless_and_new_window()

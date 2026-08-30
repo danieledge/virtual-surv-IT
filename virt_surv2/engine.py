@@ -456,6 +456,22 @@ def run_prelaunch(repo: Optional[Path], project: Path, report=None) -> list:
     return out
 
 
+def new_decision(repo: Optional[Path], project: Path, request: str = "",
+                 auto: bool = False) -> str:
+    """The opening command for NEW work, with an optional pre-seeded request.
+
+    Built by the launcher's own _new_command, never here: the request travels in a
+    FILE rather than inside the command string, because PowerShell 5.1 hands embedded
+    double quotes to a native .exe unescaped and claude.exe then re-splits the line and
+    keeps the first token. Two users hit that on the same day. An empty request gives
+    exactly the plain --new.
+    """
+    try:
+        return _launcher(repo)._new_command(Path(project), request, auto)
+    except Exception:                   # noqa: BLE001
+        return f"{engage_command(repo, project)} --new"
+
+
 def archive_engagements(repo: Optional[Path], project: Path, views: list) -> str:
     """Archive the packs you PICKED, through the launcher's own _archive_perform.
 
