@@ -179,7 +179,11 @@ _TEAM_SCRIPT_NAMES = (
     # workflow_trace and render_workflow were added the same day and removed the same day
     # with the transcript reader; names for scripts that no longer exist are dead config,
     # and dead config in a SECURITY allow-list is worse than dead config anywhere else.
-    r"|launch_terminal)\.py"
+    # 2026-08-30: tier_probe, the read-only "why is the new interface not drawing?"
+    # diagnostic. It imports and prints; it executes nothing under review. Without the
+    # entry a plugin-mode user is asked for execution consent to run a tool whose whole
+    # job is answering a support question about the plugin itself.
+    r"|launch_terminal|tier_probe)\.py"
 )
 
 # 0.32 (ADR-009): the COMPANY tool allowlist - literal command PREFIXES the human curates in
