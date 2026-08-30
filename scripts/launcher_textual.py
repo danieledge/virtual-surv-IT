@@ -68,6 +68,17 @@ def _ui():
         return None
 
 
+def available() -> bool:
+    """Will this tier actually draw? Asked BEFORE the launcher prints anything.
+
+    The Textual app owns the alternate screen, so v1's banner printed before it and was
+    still in the scrollback after it released - the new UI sandwiched in the old one
+    ("it shows the old interface, then the new, and on exit the old again"). Knowing up
+    front lets the launcher skip the chrome the app is about to replace.
+    """
+    return _ui() is not None
+
+
 def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = False,
             output=None):
     """The engagement menu, rendered in Textual.

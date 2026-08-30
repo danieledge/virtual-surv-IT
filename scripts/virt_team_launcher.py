@@ -1541,6 +1541,18 @@ def _browse_prompt(project_dir: Path):
     return candidate
 
 
+def _textual_tier_available() -> bool:
+    """Whether the Textual tier will draw, so decorative output can stand down."""
+    if os.environ.get("VIRT_SURV_NO_APP") or os.environ.get("VIRT_SURV_NO_TEXTUAL"):
+        return False
+    try:
+        import launcher_textual
+
+        return bool(launcher_textual.available())
+    except Exception:
+        return False
+
+
 def _screen(name: str):
     """The best available implementation of a launcher_app screen.
 
@@ -4322,7 +4334,9 @@ def main() -> int:
         try:
             # No defaults summary here on purpose: the editor below lists every setting
             # with its current value, so printing the summary first said everything twice.
-            _print_banner(target)
+            # Same reason as the menu path: the settings tier draws its own header.
+            if not _textual_tier_available():
+                _print_banner(target)
             _run_settings_editor(target)
         except Exception:
             return 1
@@ -4369,7 +4383,12 @@ def main() -> int:
     if str(scripts_dir) not in sys.path:
         sys.path.insert(0, str(scripts_dir))
     try:
-        _print_banner(project_dir)
+        # The Textual tier draws its own mark and owns the alternate screen, so
+        # printing v1's banner first leaves it in the scrollback on exit - the new UI
+        # bracketed by the old one. Skipped only when that tier will actually draw;
+        # every other tier still gets the banner it has always had.
+        if not _textual_tier_available():
+            _print_banner(project_dir)
     except Exception:
         pass  # cosmetic
     try:
