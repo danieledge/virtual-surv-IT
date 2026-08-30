@@ -213,38 +213,6 @@ def test_screen_keys() -> None:
     asyncio.run(run())
 
 
-def test_settings() -> None:
-    """The screen-only app has no engine, so the settings screen must render EMPTY with
-    a note rather than invent a project's configuration - which is what the generated
-    version did."""
-    from virt_surv2 import ui as A
-
-    async def run():
-        a = A.VirtSurvApp(start="settings", frozen=True, project="/tmp/no-such-project")
-        async with a.run_test(size=(104, 34)) as p:
-            await p.pause()
-            scr = a.screen
-            check("no rows without an engine", scr.rows, [])
-            check("it says why", bool(scr.note), True)
-            # And it must not crash on any key with nothing to show.
-            for key in ("down", "up", "space", "d", "enter"):
-                await p.press(key)
-            check("empty settings survives every key", a._running, True)
-
-        # Reached from the launcher, and Esc returns there rather than quitting.
-        a = A.VirtSurvApp(start="launch", frozen=True, project="/tmp/p", rows=[])
-        async with a.run_test(size=(104, 34)) as p:
-            await p.pause()
-            await p.press("c")
-            await p.pause()
-            check("launcher: c opens settings", type(a.screen).__name__, "SettingsScreen")
-            await p.press("escape")
-            await p.pause()
-            check("settings: esc returns to the launcher",
-                  (type(a.screen).__name__, a._running), ("LaunchScreen", True))
-
-    asyncio.run(run())
-
 
 def test_v1_registers_v2_alias() -> None:
     """`virt-surv`'s own alias step must stamp BOTH shortcuts.
@@ -367,27 +335,34 @@ def test_finish_screen_renders() -> None:
     asyncio.run(run())
 
 
-def test_decision_is_not_dumped_to_a_terminal() -> None:
-    """A decision with no wrapper to act on it must explain itself, not print raw.
+def test_go_delegates_to_the_one_launcher() -> None:
+    """virt-surv2 has no launcher of its own any more.
 
-    Live report: "selecting new engagement just sent /engage --new to the terminal".
-    The output was correct and nothing was reading it - the shell shortcut was a
-    version behind and had no go branch.
+    It had a second implementation of the menu, settings, archive, browse, Jira and
+    request screens - which is where every parity loss in the audit came from. Those
+    are tiers now (virt_surv2/tiers.py, reached through scripts/launcher_textual.py),
+    so `go` runs virt_team_launcher and there is one set of screens, not two.
+
+    The stdout decision contract, exit 97 and VIRT_SURV_CD_FILE therefore live where
+    they always did, in the launcher - see tests/test_launcher_textual_tier.py.
     """
     import inspect
 
     from virt_surv2 import __main__ as M
+    from virt_surv2 import ui as A
 
     src = inspect.getsource(M.main)
-    check("guards on isatty before printing a decision",
-          "sys.stdout.isatty()" in src, True)
-    check("explains rather than emitting", "nothing is set up to launch it" in src, True)
-    check("says how to fix it", "Manage the shell shortcuts" in src, True)
-    check("still prints the decision when something IS capturing it",
-          "print(decision)" in src, True)
+    check("go runs the real launcher", "virt_team_launcher" in src, True)
+    check("it no longer prints a decision itself", "print(decision)" in src, False)
 
-    # And v2 must be able to repair its own shortcut, or only running v1 could.
-    check("go heals a stale alias block", "heal_stale_aliases" in src, True)
+    for gone in ("LaunchScreen", "SettingsScreen", "ArchiveScreen", "BrowseScreen",
+                 "JiraScreen", "RequestScreen", "FirstRunScreen", "OpenProjectScreen"):
+        check(f"{gone} is retired from the installer app", hasattr(A, gone), False)
+
+    # What it DOES still own: the installer front end, and the menu tier's app.
+    for kept in ("DecideScreen", "InstallScreen", "AdvancedScreen", "MenuScreen",
+                 "LauncherTierApp"):
+        check(f"{kept} is still here", hasattr(A, kept), True)
 
 
 def test_crash_reporting_needs_no_pygments() -> None:
@@ -449,32 +424,6 @@ def test_css_paths() -> None:
         check(f"{app_cls.__name__} -> {css} exists", (pkg / str(css)).is_file(), True)
 
 
-def test_retry() -> None:
-    """The failure footer offers 'r'; it must actually do something."""
-    from virt_surv2 import ui as A
-    from virt_surv2.live import LiveInstallScreen
-
-    async def run():
-        app = A.VirtSurvApp(start="decide", frozen=True)
-        async with app.run_test(size=(96, 34)) as p:
-            await p.pause()
-            scr = LiveInstallScreen({"channel": "main"}, True)
-            app.push_screen(scr)
-            await p.pause()
-            # Mid-run: r must be inert, or it would abandon a live worker.
-            await p.press("r")
-            await p.pause()
-            check("r during a run is inert", type(app.screen).__name__, "LiveInstallScreen")
-            scr.engine_finished(1, [], "boom")
-            await p.pause()
-            await p.press("r")
-            await p.pause()
-            check("r after a failure returns to decide",
-                  type(app.screen).__name__, "DecideScreen")
-            check("app still running after retry", app._running, True)
-
-    asyncio.run(run())
-
 
 def test_responsive() -> None:
     from virt_surv2 import ui as A
@@ -498,7 +447,6 @@ if __name__ == "__main__":
     print("\nscreen keys")
     test_screen_keys()
     print("\nsettings")
-    test_settings()
 
     print("\nv1 registers v2")
     test_v1_registers_v2_alias()
@@ -510,7 +458,7 @@ if __name__ == "__main__":
     test_finish_screen_renders()
 
     print("\ndecision output")
-    test_decision_is_not_dumped_to_a_terminal()
+    test_go_delegates_to_the_one_launcher()
 
     print("\ncrash reporting")
     test_crash_reporting_needs_no_pygments()
@@ -519,7 +467,6 @@ if __name__ == "__main__":
     test_css_paths()
 
     print("\nretry")
-    test_retry()
 
     print("\nresponsive")
     test_responsive()

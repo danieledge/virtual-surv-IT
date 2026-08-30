@@ -11,7 +11,6 @@ here unchanged.
     python -m virt_surv2 --update      update only, keeping every setting
     python -m virt_surv2 --demo        dry run: executes nothing, writes nothing
     python -m virt_surv2 --launch      the launcher screen (virt-surv go)
-    python -m virt_surv2 --settings    project settings
     python -m virt_surv2 --repo PATH   point at a specific clone
 
 Exit code is the engine's own, so this substitutes for `install_helper.py` in a script.
@@ -104,12 +103,12 @@ def main(argv=None) -> int:
     ap.add_argument("command", nargs="?", default=None,
                     help="go: the engagement launcher for the folder you are in. "
                          "Any other subcommand is handed to install_helper unchanged.")
-    ap.add_argument("--project", help="folder to read engagements from (default: cwd)")
+    ap.add_argument("--project", help="project folder (default: cwd)")
     ap.add_argument("--repo", help="path to the clone (default: find it)")
     ap.add_argument("--demo", action="store_true",
                     help="dry run — the engine executes nothing and writes nothing")
-    ap.add_argument("--launch", action="store_true", help="open the launcher screen")
-    ap.add_argument("--settings", action="store_true", help="open project settings")
+    ap.add_argument("--launch", action="store_true",
+                    help="the engagement launcher (same as `go`)")
     ap.add_argument("--advanced", action="store_true", help="advanced / one-off settings")
     ap.add_argument("--diagnostics", action="store_true", help="diagnostics")
     ap.add_argument("--install", action="store_true",
@@ -187,78 +186,21 @@ def main(argv=None) -> int:
 
     from .live import InstallerTuiApp
 
-    if launching or a.settings:
-        # Real engagement state for the folder the user is standing in - not a mock,
-        # and it says which folder it read. Engine-backed, because an unconfigured
-        # folder gets the first-time setup offer and that has to be able to run it.
-        project = Path(a.project).expanduser() if a.project else Path.cwd()
-        if launching:
-            # Everything `virt-surv go` does before it shows you anything: caches
-            # warmed, stale request cleared, project remembered. Skipping it left the
-            # probe and tool caches cold, which Morgan then reads at engagement open.
-            for label, ok, detail in E.run_prelaunch(repo, project):
-                if not ok:
-                    print(f"  ! {label}: {detail}", file=sys.stderr)
-        rows, note = E.load_engagements(repo, project) if launching else ([], "")
-        app = InstallerTuiApp(ih, repo, a.demo,
-                              start="launch" if launching else "settings",
-                              project=project, rows=rows, note=note)
+    if launching:
+        # v1's launcher, which now draws in Textual through scripts/launcher_textual.py.
+        # virt-surv2 no longer has a launcher of its own: one behaviour, one set of
+        # screens, and nothing to keep in step.
+        import runpy
+
+        launcher = repo / "scripts" / "virt_team_launcher.py"
+        if not launcher.is_file():
+            print(f"virt-surv2: no launcher at {launcher}", file=sys.stderr)
+            return 2
+        sys.argv = [str(launcher)]
         try:
-            app.run()
-        except Exception as exc:        # noqa: BLE001
-            print(f"virt-surv2 could not start its interface: {exc}", file=sys.stderr)
-            print("  nothing was launched. `virt-surv go` is the fallback.",
-                  file=sys.stderr)
-            return E.ABORT_EXIT_CODE
-        if not launching:
-            return app.exit_code
-        # The launcher's contract, shared with `virt-surv go`: the decision is the ONLY
-        # thing on stdout, and 97 means the human backed out so the wrapper launches
-        # nothing. A bare print of None would put "None" on the decision channel.
-        # If the user opened a different folder in the launcher, ask the parent shell
-        # to cd there - a child process cannot do it, which is exactly why the wrapper
-        # passes a temp file. Same VIRT_SURV_CD_FILE contract virt-surv go uses.
-        cd_file = os.environ.get("VIRT_SURV_CD_FILE")
-        chosen = getattr(app, "project", None)
-        if cd_file and chosen and Path(chosen).resolve() != project.resolve():
-            try:
-                Path(cd_file).write_text(str(Path(chosen).resolve()), encoding="utf-8")
-            except OSError:
-                pass                    # cosmetic - never fail a launch over a cd
-
-        decision = getattr(app, "decision", None)
-        if decision is None:
-            return E.ABORT_EXIT_CODE
-
-        # Headless / new-window, exactly as virt-surv go decides it. If the session has
-        # already been started here, 97 tells the wrapper to launch nothing - otherwise
-        # the user gets two.
-        started = E.dispatch_decision(
-            repo, Path(getattr(app, "project", project) or project), decision,
-            report=lambda m: print(f"    {m}", file=sys.stderr))
-        if started:
-            return E.ABORT_EXIT_CODE
-        if decision:
-            if sys.stdout.isatty():
-                # Nothing is capturing stdout, so no wrapper is going to act on this.
-                # Printing the bare decision here is what "selecting new engagement just
-                # sent /engage --new to the terminal" looked like: correct output, no
-                # reader. Say what happened instead of emitting it into the void.
-                print("", file=sys.stderr)
-                print("  This chose:", file=sys.stderr)
-                print(f"    {decision}", file=sys.stderr)
-                print("", file=sys.stderr)
-                print("  ...but nothing is set up to launch it. The 'virt-surv2' shell",
-                      file=sys.stderr)
-                print("  shortcut is what starts Claude Code with that. Yours is out of",
-                      file=sys.stderr)
-                print("  date or missing.", file=sys.stderr)
-                print("", file=sys.stderr)
-                print("  Fix it:  virt-surv2 --advanced  ->  Manage the shell shortcuts",
-                      file=sys.stderr)
-                print("  then open a new terminal.", file=sys.stderr)
-                return 0
-            print(decision)
+            runpy.run_path(str(launcher), run_name="__main__")
+        except SystemExit as exc:
+            return int(exc.code or 0)
         return 0
 
     start = ("advanced" if a.advanced else

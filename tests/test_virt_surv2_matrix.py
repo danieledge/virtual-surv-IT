@@ -229,49 +229,8 @@ def test_render_reflects_model() -> None:
                 check(f"decide {d.key}: box reflects value",
                       ("✓" in after), bool(d.value))
 
-        # The settings screen renders every row into one block, so "does the view
-        # follow the model" is asserted on the drawn text, with a stub supplying rows
-        # the way the engine-backed app does.
-        class StubSettings(A.VirtSurvApp):
-            store = {"extra_formats": False}
-
-            def settings_rows(self, project):
-                on = self.store["extra_formats"]
-                return [("What the team produces", [{
-                    "key": "extra_formats", "label": "docx export",
-                    "value": "on" if on else "off  (machine default)",
-                    "on": on, "what": "renders .docx too", "off": "markdown only",
-                }])], ""
-
-            def settings_apply(self, project, key):
-                self.store[key] = not self.store[key]
-                return "docx export on" if self.store[key] else "docx export off"
-
-            def settings_restore(self, project):
-                self.store["extra_formats"] = False
-                return "restored"
-
-        app = StubSettings(start="settings", frozen=True, project="/tmp/p")
-        async with app.run_test(size=(104, 40)) as p:
-            await p.pause()
-            scr = app.screen
-            block = scr.query_one("#setting-rows")
-            check("reads the stub's rows", len(scr.rows), 1)
-            before = text_of(block)
-            check("shows the inherited marker", "machine default" in before, True)
-            await p.press("space")
-            await p.pause()
-            after = text_of(block)
-            check("the WRITE happened", app.store["extra_formats"], True)
-            check("the drawn state changed", after != before, True)
-            check("the inherited marker is gone once set", "machine default" in after, False)
-            await p.press("d")
-            await p.pause()
-            check("d restores", app.store["extra_formats"], False)
-
-        # Settings come from the project, so a screen with no engine holds none.
-        s1 = A.SettingsScreen("/tmp/no-such-project")
-        check("no rows without an engine", s1.rows, [])
+        # The settings screen lives in virt_surv2/tiers.py now, reached through
+        # virt_team_launcher - see tests/test_launcher_textual_tier.py.
 
     asyncio.run(run())
 
@@ -356,113 +315,6 @@ def test_decide_rows() -> None:
 
 # ── D. all 18 settings rows ───────────────────────────────────────────────────
 
-def test_settings_are_read_and_written() -> None:
-    """The settings screen must read the project and WRITE on change.
-
-    It previously rendered a generated constant and wrote nothing, while printing
-    "currently: on" and "N changed" - asserting a configuration it had never read and
-    claiming edits it did not keep.
-    """
-    import json
-
-    from virt_surv2 import engine as E
-    section("D  settings are read from, and written to, the project")
-
-    import install_helper as ih
-    repo = Path(ih.__file__).resolve().parent
-
-    with tempfile.TemporaryDirectory() as td:
-        proj = Path(td)
-        (proj / ".claude").mkdir(parents=True)
-        prefs = proj / ".claude" / "team-preferences.json"
-
-        groups, note = E.settings_rows(repo, proj)
-        check("reads real groups", len(groups) >= 5, True)
-        check("no error", note, "")
-        rows = [r for _t, rs in groups for r in rs]
-        check("reads real rows", len(rows) >= 15, True)
-        check("every row has a key", all(r["key"] for r in rows), True)
-        check("values carry provenance",
-              any("machine default" in str(r["value"]) for r in rows), True)
-
-        first = rows[0]
-        before = first["value"]
-        E.settings_apply(repo, proj, first["key"])
-        check("a change is WRITTEN to disk", prefs.is_file(), True)
-        check("the written key is the row's", first["key"] in json.loads(prefs.read_text()),
-              True)
-
-        groups2, _ = E.settings_rows(repo, proj)
-        after = groups2[0][1][0]["value"]
-        check("the new value is read back", after != before, True)
-        check("explicitly set loses the (machine default) marker",
-              "machine default" in str(after), False)
-
-        # 'd' DELETES the project keys so the machine tier applies again - not "write
-        # the defaults back", because key presence is what resolve_preferences reads.
-        E.settings_restore_defaults(repo, proj)
-        check("restore empties the project keys", json.loads(prefs.read_text()), {})
-
-
-# ── E. every launcher row ─────────────────────────────────────────────────────
-
-def test_launcher_rows() -> None:
-    from virt_surv2 import ui as A
-    section("E  launcher — every row and its detail pane")
-
-    async def run():
-        # Real row_view-shaped rows, not the old mock constant.
-        rows = [{"title": "spoofing-review", "status": "in progress", "mark": "●",
-                 "mark_style": "", "recommended": True,
-                 "lines": [("status", "in progress"), ("next", "tune thresholds")]},
-                {"title": "wash-trade-pack", "status": "blocked", "mark": "◐",
-                 "mark_style": "warn", "recommended": False,
-                 "lines": [("status", "blocked"), ("next", "await feed")]}]
-        a = A.VirtSurvApp(start="launch", frozen=True, project="/tmp/proj", rows=rows)
-        async with a.run_test(size=(104, 36)) as p:
-            await p.pause()
-            scr = a.screen
-            n = len(rows) + len(A.ACTIONS)
-            check("every engagement and action is selectable", len(scr.selectable), n)
-            for i in range(len(scr.selectable)):
-                scr.cursor = i
-                scr.paint()          # must not raise for any row
-            check("walked every row", scr.cursor, len(scr.selectable) - 1)
-
-            # From a known position — the loop above left the cursor at the end.
-            n_sel = len(scr.selectable)
-            scr.cursor = 0
-            for _ in range(n_sel + 2):
-                await p.press("down")
-            check("down wraps past the end", scr.cursor, 2)
-            for _ in range(n_sel + 4):
-                await p.press("up")
-            check("up wraps past the start", scr.cursor, (2 - (n_sel + 4)) % n_sel)
-
-            check("every action has a blurb",
-                  all(blurb for _k, _l, blurb in A.ACTIONS), True)
-            check("every engagement has detail lines",
-                  all(r["lines"] for r in rows), True)
-
-        # Empty folder: it must say WHICH folder, not show a bare heading.
-        a = A.VirtSurvApp(start="launch", frozen=True, project="/tmp/empty",
-                          rows=[], note="no open engagements in this folder")
-        async with a.run_test(size=(104, 36)) as p:
-            await p.pause()
-            scr = a.screen
-            check("no phantom resume heading",
-                  any(k == "group" and v == "Resume an engagement" for k, v in scr.rows),
-                  False)
-            check("the folder is named", "/tmp/empty" in scr._folder(), True)
-            detail = scr.query_one("#detail")
-            txt = getattr(detail, "content", "")
-            txt = txt.plain if hasattr(txt, "plain") else str(txt)
-            check("empty state names the folder", "/tmp/empty" in txt, True)
-
-    asyncio.run(run())
-
-
-# ── F. key fuzz — no key may crash a screen ───────────────────────────────────
 
 KEYS = ["up", "down", "left", "right", "enter", "space", "tab", "escape",
         "home", "end", "pageup", "pagedown", "backspace", "delete",
@@ -474,12 +326,12 @@ def test_key_fuzz() -> None:
     section("F  key fuzz — every key on every screen")
 
     async def run():
-        for start in ("decide", "install", "launch", "settings"):
+        for start in ("decide", "install", "menu", "advanced"):
             a = A.VirtSurvApp(start=start, frozen=True)
             # On the launcher, Enter IS how you leave: choosing an engagement or "a new
             # engagement" hands a decision to the shell wrapper and exits, which is the
             # whole contract `virt-surv go` runs on.
-            leaves = {"q", "escape"} | ({"enter"} if start == "launch" else set())
+            leaves = {"q", "escape"} | ({"enter"} if start == "menu" else set())
             async with a.run_test(size=(100, 36)) as p:
                 await p.pause()
                 for key in KEYS:
@@ -502,7 +354,7 @@ def test_responsive_matrix() -> None:
     section("G  responsive — every screen either side of the breakpoint")
 
     async def run():
-        for start in ("decide", "install", "launch", "settings"):
+        for start in ("decide", "install", "menu", "advanced"):
             for width in (40, 62, 75, 76, 100, 140):
                 a = A.VirtSurvApp(start=start, frozen=True)
                 async with a.run_test(size=(width, 36)) as p:
@@ -642,345 +494,27 @@ def test_step_labels_make_sense() -> None:
         check(f"{shown!r} is not jargon-only", shown.strip() != "", True)
 
 
-def test_every_launcher_row_is_wired() -> None:
-    """Every row on the launcher must DO something.
-
-    Enter did nothing at all originally; then some rows worked and the rest said "not
-    wired yet". This asserts the last of that is gone: each action either emits a
-    decision for the shell wrapper, opens a screen, or runs an engine function.
-    """
-    from virt_surv2 import engine as E
-    from virt_surv2 import ui as A
-    section("O  every launcher row is wired")
-
-    opens_a_screen = {"c", "o", "j", "b", "a"}   # b browses, a archives
-    emits_a_decision = {"n", ""}
-    for key, label, _blurb in A.ACTIONS:
-        wired = (key in opens_a_screen
-                 or key in emits_a_decision
-                 or A.LaunchScreen.ENGINE_ACTIONS.get(key) in E.RUN_FUNCTIONS)
-        check(f"[{key or ' '}] {label[:34]}", wired, True)
-
-    # A hotkey that is printed on the row and then ignored is worse than one never
-    # offered: [n] [j] [o] [v] [a] [b] were all advertised and only [c] worked.
-    async def hotkeys():
-        rows = [{"title": "x", "status": "open", "mark": "●", "mark_style": "",
-                 "recommended": True, "lines": [("status", "open")]}]
-        for key, label, _b in A.ACTIONS:
-            if not key:
-                continue
-            app = A.VirtSurvApp(start="launch", frozen=True, project="/tmp/p", rows=rows)
-            async with app.run_test(size=(100, 34)) as p:
-                await p.pause()
-                before = type(app.screen).__name__
-                await p.press(key)
-                await p.pause()
-                moved = (type(app.screen).__name__ != before
-                         or not app._running
-                         or bool(getattr(app.screen, "note", "")))
-                check(f"hotkey [{key}] does something", moved, True)
-
-    asyncio.run(hotkeys())
-
-    for key, action in A.LaunchScreen.ENGINE_ACTIONS.items():
-        check(f"[{key}] -> {action} exists", action in E.RUN_FUNCTIONS, True)
-
-    # The stdout contract, shared with virt-surv go.
-    check("abort code matches the wrapper's", E.ABORT_EXIT_CODE, 97)
-    import install_helper as ih
-    launcher_src = (Path(ih.__file__).resolve().parent / "scripts"
-                    / "virt_team_launcher.py").read_text(encoding="utf-8")
-    check("97 is the launcher's own abort code",
-          "_ABORT_EXIT_CODE = 97" in launcher_src, True)
-
 
 def test_every_screen_survives_a_resize() -> None:
     """Resize is the first event a screen sees in a real terminal.
 
-    Responsive.on_resize called self.paint() unconditionally; the input screens have
-    no paint, so opening one and resizing - or simply opening it under a pty - raised
-    AttributeError from the base class.
+    Responsive.on_resize called self.paint() unconditionally, so a screen that builds
+    itself in on_mount raised AttributeError from the base class on that first event.
     """
     from virt_surv2 import ui as A
     section("P  every screen survives a resize")
 
-    for name in ("JiraScreen", "OpenProjectScreen", "FirstRunScreen"):
-        cls = getattr(A, name)
-        check(f"{name} exists", cls is not None, True)
-
     async def run():
-        for name, make in (
-            ("JiraScreen", lambda: A.JiraScreen("/tmp/p")),
-            ("OpenProjectScreen", lambda: A.OpenProjectScreen("/tmp/p")),
-            ("FirstRunScreen", lambda: A.FirstRunScreen("/tmp/p")),
-        ):
-            app = A.VirtSurvApp(start="launch", frozen=True, project="/tmp/p", rows=[])
+        for start in ("decide", "install", "menu", "advanced", "diagnostics"):
+            app = A.VirtSurvApp(start=start, frozen=True)
             async with app.run_test(size=(100, 34)) as p:
                 await p.pause()
-                app.push_screen(make())
-                await p.pause()
-                check(f"{name} opens", type(app.screen).__name__, name)
-                await app._on_resize_test(60) if False else None
+                check(f"{start} opens", app._running, True)
                 app.screen.post_message(__import__("textual").events.Resize(
                     __import__("textual").geometry.Size(60, 30),
                     __import__("textual").geometry.Size(60, 30)))
                 await p.pause()
-                check(f"{name} survives a resize", app._running, True)
-
-    asyncio.run(run())
-
-
-def test_new_engagement_takes_a_request() -> None:
-    """[n] must offer to pre-seed the prompt, and the text must reach the FILE.
-
-    v2 launched with a bare --new, so the first thing in-session was Morgan asking what
-    the work is. v1 fixed exactly this on 2026-08-24 after the same report; v2 had
-    reproduced it. The request travels in a file, never in the command string, because
-    PowerShell 5.1 mangles embedded quotes - so this asserts the file, not the argv.
-    """
-    import inspect
-    import tempfile as _tf
-
-    from virt_surv2 import engine as E
-    from virt_surv2 import ui as A
-    section("X  new engagement takes a request")
-
-    import install_helper as ih
-    repo = Path(ih.__file__).resolve().parent
-
-    check("[n] opens a screen, not a bare decision",
-          "RequestScreen" in inspect.getsource(A.LaunchScreen._choose), True)
-    check("it is built by v1's _new_command",
-          "_new_command" in inspect.getsource(E.new_decision), True)
-
-    with _tf.TemporaryDirectory() as td:
-        proj = Path(td)
-        plain = E.new_decision(repo, proj)
-        check("an empty request is the plain --new", plain.endswith("--new"), True)
-
-        text = "review the spoofing thresholds for Q3"
-        decision = E.new_decision(repo, proj, text)
-        check("a typed request changes the decision", decision != plain, True)
-        check("the text is NOT in the command string", text in decision, False)
-        written = [f for f in proj.rglob("*")
-                   if f.is_file() and text in f.read_text(encoding="utf-8", errors="ignore")]
-        check("the text is written to a file", len(written), 1)
-
-    async def run():
-        class Stub(A.VirtSurvApp):
-            def new_decision(self, project, request=""):
-                return f"/engage --new{' --request-pending' if request else ''}"
-
-        app = Stub(start="launch", frozen=True, project="/tmp/p", rows=[])
-        async with app.run_test(size=(100, 30)) as p:
-            await p.pause()
-            app.push_screen(A.RequestScreen("/tmp/p"))
-            await p.pause()
-            app.screen.query_one("#edit").value = "do the thing"
-            await p.press("enter")
-            await p.pause()
-            check("typing produces a seeded decision",
-                  app.decision, "/engage --new --request-pending")
-
-        app = Stub(start="launch", frozen=True, project="/tmp/p", rows=[])
-        async with app.run_test(size=(100, 30)) as p:
-            await p.pause()
-            app.push_screen(A.RequestScreen("/tmp/p"))
-            await p.pause()
-            await p.press("enter")
-            await p.pause()
-            check("empty is not a toll gate", app.decision, "/engage --new")
-
-    asyncio.run(run())
-
-
-def test_archive_picks_and_jira_key() -> None:
-    """[a] must let you pick, and Jira must be escapable from 'on (key UNSET)'."""
-    import inspect
-
-    from virt_surv2 import engine as E
-    from virt_surv2 import ui as A
-    section("W  archive selection, and the Jira key")
-
-    check("[a] is a screen, not a bulk engine call",
-          "a" in A.LaunchScreen.ENGINE_ACTIONS, False)
-    check("ArchiveScreen exists", A.ArchiveScreen is not None, True)
-    src = inspect.getsource(A.ArchiveScreen)
-    check("it states the ARCHIVED-OPEN consequence", "ARCHIVED-OPEN" in src, True)
-    check("it says nothing is deleted", "Nothing is deleted" in src, True)
-    check("archiving goes through the launcher's own perform",
-          "_archive_perform" in inspect.getsource(E.archive_engagements), True)
-
-    async def run():
-        rows = [{"title": "a", "status": "open", "row": {"slug": "a"}},
-                {"title": "b", "status": "open", "row": {"slug": "b"}}]
-        captured = {}
-
-        class Stub(A.VirtSurvApp):
-            def archive_engagements(self, project, views):
-                captured["views"] = views
-                return f"archived {len(views)}"
-
-        app = Stub(start="launch", frozen=True, project="/tmp/p", rows=[])
-        async with app.run_test(size=(100, 30)) as p:
-            await p.pause()
-            app.push_screen(A.ArchiveScreen("/tmp/p", rows))
-            await p.pause()
-            await p.press("enter")
-            check("nothing picked archives nothing", "views" in captured, False)
-            await p.press("space")
-            await p.press("enter")
-            await p.pause()
-            check("only the picked one is archived", len(captured.get("views", [])), 1)
-            await p.press("a")
-            await p.press("enter")
-            await p.pause()
-            check("[a] picks them all", len(captured.get("views", [])), 2)
-
-    asyncio.run(run())
-
-    check("jira_needs_key is available", callable(E.jira_needs_key), True)
-    check("set_jira_key is available", callable(E.set_jira_key), True)
-    check("the Jira screen asks for a key when unset",
-          "needs_key" in inspect.getsource(A.JiraScreen), True)
-
-
-def test_remaining_v1_guards() -> None:
-    """The guards and affordances v1 runs that v2 was skipping."""
-    import inspect
-
-    from virt_surv2 import engine as E
-    from virt_surv2 import ui as A
-    section("V  v1's guards and affordances")
-
-    import install_helper as ih
-    repo = Path(ih.__file__).resolve().parent
-    launcher_src = (repo / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
-    helper_src = (repo / "install_helper.py").read_text(encoding="utf-8")
-
-    check("relocate guard exists in v1",
-          "def _relocate_if_running_inside_target_repo(" in helper_src, True)
-    check("update check exists in v1", "def check_for_update_upfront(" in helper_src, True)
-    for fn in ("_warn_if_abort_will_be_ignored", "_recent_projects",
-               "_jira_needs_key", "set_jira_project_key"):
-        check(f"{fn} exists in v1", f"def {fn}(" in launcher_src, True)
-
-    main_src = inspect.getsource(
-        __import__("virt_surv2.__main__", fromlist=["main"]).main)
-    check("v2 runs the relocate guard", "guard_running_inside_target" in main_src, True)
-    check("v2 shows an available update", "update_available" in main_src, True)
-    check("v2 warns when abort will be ignored", "warn_if_abort_ignored" in main_src, True)
-
-    check("recents are offered when opening a folder",
-          "recent_projects" in inspect.getsource(A.OpenProjectScreen.on_mount), True)
-    check("recent_projects returns a list", isinstance(E.recent_projects(repo), list), True)
-
-    # Artifacts must follow the highlighted engagement, not row[0].
-    src = inspect.getsource(E._launcher_artifacts)
-    check("artifacts takes a slug", "slug" in E._launcher_artifacts.__code__.co_varnames,
-          True)
-    check("artifacts only falls back to the most recent",
-          "if not slug:" in src, True)
-    check("the launcher passes the highlighted token",
-          "slug=token" in inspect.getsource(A.LaunchScreen._choose), True)
-
-
-def test_headless_and_new_window() -> None:
-    """The new_window preference must be honoured, and every decline must SAY SO.
-
-    v1 honours it; v2 ignored it silently - "a control that quietly does nothing is
-    the defect class this repo has met five times in a week."
-    """
-    import inspect
-    import tempfile as _tf
-
-    from virt_surv2 import engine as E
-    section("U  headless / new window")
-
-    import install_helper as ih
-    repo = Path(ih.__file__).resolve().parent
-    launcher_src = (repo / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
-    for fn in ("_pending_auto", "_start_headless", "_new_window_wanted", "_launch_in_window"):
-        check(f"{fn} exists in v1", f"def {fn}(" in launcher_src, True)
-
-    src = inspect.getsource(E.dispatch_decision)
-    for fn in ("_pending_auto", "_start_headless", "_new_window_wanted", "_launch_in_window"):
-        check(f"dispatch uses {fn}", fn in src, True)
-
-    with _tf.TemporaryDirectory() as td:
-        said = []
-        started = E.dispatch_decision(repo, Path(td), "/engage --new", report=said.append)
-        check("nothing started for a plain project", started, False)
-        check("the decline is spoken, not silent", bool(said), True)
-        check("and it says how to change it", any("[c]" in m for m in said), True)
-
-    # If a session was started here, the wrapper must launch nothing.
-    main_src = inspect.getsource(
-        __import__("virt_surv2.__main__", fromlist=["main"]).main)
-    check("a started session returns the abort code",
-          "if started:" in main_src and "ABORT_EXIT_CODE" in main_src, True)
-
-
-def test_browse_review_and_signoff() -> None:
-    """[b] must return a token so --review and human sign-off are reachable.
-
-    It routed at run_list_engagements - a read-only listing. No token came back, so
-    --review was unreachable and so was sign-off, the control that exists precisely so
-    an agent cannot sign off its own work.
-    """
-    from virt_surv2 import engine as E
-    from virt_surv2 import ui as A
-    section("T  browse, review and sign-off")
-
-    import install_helper as ih
-    repo = Path(ih.__file__).resolve().parent
-
-    check("[b] is a screen, not an engine listing",
-          "b" in A.LaunchScreen.ENGINE_ACTIONS, False)
-    check("BrowseScreen exists", A.BrowseScreen is not None, True)
-
-    rows, note = E.finished_engagements(repo, repo)
-    check("reads finished packs", isinstance(rows, list), True)
-    if rows:
-        check("carries a token", bool(rows[0].get("token")), True)
-        check("knows archived state", "archived" in rows[0], True)
-        check("reads sign-off state", "signed" in rows[0], True)
-
-    check("review decision shape",
-          E.review_decision(repo, repo, "abc").endswith("--review abc"), True)
-    check("supersede never reopens the closed pack",
-          "--supersedes abc" in E.supersede_decision(repo, repo, "abc"), True)
-
-    async def run():
-        rows = [{"title": "wash-trade-pack", "archived": True, "signed": "",
-                 "token": "wash-trade-pack", "lines": [("status", "done")]}]
-
-        class Stub(A.VirtSurvApp):
-            def review_decision(self, project, token):
-                return f"/engage --review {token}"
-
-            def supersede_decision(self, project, token):
-                return f"/engage --new --supersedes {token}"
-
-        app = Stub(start="launch", frozen=True, project="/tmp/p", rows=[])
-        async with app.run_test(size=(100, 30)) as p:
-            await p.pause()
-            app.push_screen(A.BrowseScreen("/tmp/p", rows, ""))
-            await p.pause()
-            await p.press("enter")
-            await p.pause()
-            check("enter emits a --review decision",
-                  app.decision, "/engage --review wash-trade-pack")
-
-        app = Stub(start="launch", frozen=True, project="/tmp/p", rows=[])
-        async with app.run_test(size=(100, 30)) as p:
-            await p.pause()
-            app.push_screen(A.BrowseScreen("/tmp/p", rows, ""))
-            await p.pause()
-            await p.press("n")
-            await p.pause()
-            check("n supersedes rather than reopening",
-                  app.decision, "/engage --new --supersedes wash-trade-pack")
+                check(f"{start} survives a resize", app._running, True)
 
     asyncio.run(run())
 
@@ -1015,99 +549,6 @@ def test_cli_passthrough() -> None:
     check("an unknown flag gets the ENGINE's usage, not ours",
           "install_helper" in (out.stdout + out.stderr), True)
 
-
-def test_prelaunch_and_return_path() -> None:
-    """go must run its pre-flight, and side actions must come BACK to the launcher."""
-    import inspect
-    import tempfile as _tf
-
-    from virt_surv2 import engine as E
-    from virt_surv2 import ui as A
-    from virt_surv2.live import LiveInstallScreen
-    section("R  pre-flight, and the way back")
-
-    import install_helper as ih
-    repo = Path(ih.__file__).resolve().parent
-    launcher_src = (repo / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
-
-    # Every step v2 claims to run must exist in v1 under that name.
-    for name, _label in E.PRELAUNCH_STEPS:
-        check(f"{name} exists in the launcher", f"def {name}(" in launcher_src, True)
-    check("go runs the pre-flight",
-          "run_prelaunch" in inspect.getsource(__import__(
-              "virt_surv2.__main__", fromlist=["main"]).main), True)
-
-    with _tf.TemporaryDirectory() as td:
-        results = E.run_prelaunch(repo, Path(td))
-        check("pre-flight runs every step", len(results), len(E.PRELAUNCH_STEPS))
-        check("pre-flight does not raise", all(ok for _l, ok, _d in results), True)
-    check("a bad repo is survivable", len(E.run_prelaunch(None, Path("/tmp"))) >= 1, True)
-
-    # The watch row exists now, and its action is real.
-    keys = [k for k, _l, _b in A.ACTIONS]
-    check("[t] watch has a row", "t" in keys, True)
-    check("[t] maps to a real action",
-          A.LaunchScreen.ENGINE_ACTIONS.get("t") in E.RUN_FUNCTIONS, True)
-
-    async def run():
-        app = A.VirtSurvApp(start="launch", frozen=True, project="/tmp/p", rows=[])
-        async with app.run_test(size=(100, 34)) as p:
-            await p.pause()
-            scr = LiveInstallScreen({"channel": "dev"}, True, back=True)
-            app.push_screen(scr)
-            await p.pause()
-            scr.engine_finished(0, [], None)
-            await p.pause()
-            await p.press("enter")
-            await p.pause()
-            check("a side action returns to the launcher",
-                  type(app.screen).__name__, "LaunchScreen")
-            check("and does not exit", app._running, True)
-
-    asyncio.run(run())
-
-
-def test_first_run_offer() -> None:
-    """An unconfigured folder must be offered first-time setup, as virt-surv go does.
-
-    The check is the launcher's own _plugin_enabled, so v1 and v2 cannot disagree
-    about what "set up" means.
-    """
-    from virt_surv2 import engine as E
-    from virt_surv2 import ui as A
-    section("N  first-time setup offer")
-
-    import install_helper as ih
-    repo = Path(ih.__file__).resolve().parent
-    check("the repo reads as configured",
-          E.project_is_configured(repo, repo), True)
-    with tempfile.TemporaryDirectory() as td:
-        check("a bare folder reads as not configured",
-              E.project_is_configured(repo, Path(td)), False)
-    check("no repo means unknown, not 'not set up'",
-          E.project_is_configured(None, Path("/tmp")), None)
-
-    check("three answers, like v1's setup screen", len(A.FIRST_RUN), 3)
-    actions = [a for a, _l, _b in A.FIRST_RUN]
-    check("offers defaults, guided and skip", sorted(actions),
-          ["configure", "onboard", "skip"])
-    check("onboard is runnable", "onboard" in E.RUN_FUNCTIONS, True)
-
-    async def run():
-        app = A.VirtSurvApp(start="launch", frozen=True, project="/tmp/x", rows=[],
-                            note="no open engagements in this folder")
-        async with app.run_test(size=(100, 30)) as p:
-            await p.pause()
-            # VirtSurvApp has no engine, so it shows the launcher directly; the offer
-            # is the engine-backed app's job. Assert the screen at least names the
-            # folder rather than inventing one.
-            check("launcher names the folder", "/tmp/x" in app.screen._folder(), True)
-
-        scr = A.FirstRunScreen("/tmp/unconfigured")
-        check("first-run screen keeps the folder",
-              str(scr.project), "/tmp/unconfigured")
-
-    asyncio.run(run())
 
 
 def test_demo_executes_nothing() -> None:
@@ -1306,22 +747,12 @@ if __name__ == "__main__":
     test_answers_matrix()
     test_render_reflects_model()
     test_decide_rows()
-    test_settings_are_read_and_written()
-    test_launcher_rows()
     test_key_fuzz()
     test_responsive_matrix()
     test_failure_modes()
     test_step_labels_make_sense()
-    test_every_launcher_row_is_wired()
     test_every_screen_survives_a_resize()
-    test_new_engagement_takes_a_request()
-    test_archive_picks_and_jira_key()
-    test_remaining_v1_guards()
-    test_headless_and_new_window()
-    test_browse_review_and_signoff()
     test_cli_passthrough()
-    test_prelaunch_and_return_path()
-    test_first_run_offer()
     test_demo_executes_nothing()
     test_menu_parity_with_v1()
     test_analysers()

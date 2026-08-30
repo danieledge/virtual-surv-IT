@@ -34,7 +34,9 @@ if [ "${1:-}" = "go" ] || [ "${1:-}" = "engage" ]; then
   # for every plugin install.
   # `|| true` because set -e would abort this function on the abort path (rc 97),
   # skipping the cd handshake, the temp-file cleanup and the clean exit below.
-  DECISION="$(cd "$REPO" && VIRT_SURV_CD_FILE="$CDF" "$PY" -m virt_surv2 go --project "$HERE")" || true
+  # The same launcher `virt-surv go` runs - it draws in Textual through
+  # scripts/launcher_textual.py, so there is one set of screens, not two.
+  DECISION="$(VIRT_SURV_CD_FILE="$CDF" "$PY" "$REPO/scripts/virt_team_launcher.py")" || true
   RC=$?
   if [ -s "$CDF" ]; then cd "$(cat "$CDF")" || true; fi
   rm -f "$CDF"

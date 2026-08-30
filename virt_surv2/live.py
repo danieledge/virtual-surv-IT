@@ -416,23 +416,9 @@ class InstallerTuiApp(App):
         self.engage_cmd = "/compliance-surveillance-team:engage"
 
     def on_mount(self) -> None:
-        if self.start == "settings":
-            from .ui import SettingsScreen
-            self.push_screen(SettingsScreen(str(self.project) if self.project else "."))
-            return
         if self.start in ("advanced", "diagnostics"):
             from .ui import AdvancedScreen
             self.push_screen(AdvancedScreen(self.start))
-            return
-        if self.start == "launch":
-            from . import engine as E
-            from .ui import FirstRunScreen
-            # Same check virt-surv go makes: an unconfigured folder gets the offer, not
-            # a launcher listing nothing with no explanation.
-            if E.project_is_configured(self.repo, self.project) is False:
-                self.push_screen(FirstRunScreen(self.project))
-            else:
-                self.push_screen(self.open_launcher())
             return
         if self.start == "menu":
             from .ui import MenuScreen
@@ -458,72 +444,6 @@ class InstallerTuiApp(App):
             thread=True,
             name="installer",
         )
-
-    def open_launcher(self, project=None):
-        from . import engine as E
-        from .ui import LaunchScreen
-
-        if project is not None:
-            self.project = Path(project)
-            self.rows, self.note = E.load_engagements(self.repo, self.project)
-        self.engage_cmd = E.engage_command(self.repo, self.project or Path.cwd())
-        return LaunchScreen(self.project, self.rows, self.note)
-
-    def jira_decision(self, project, ref: str) -> str:
-        from . import engine as E
-        return E.jira_decision(self.repo, project, ref)
-
-    def new_decision(self, project, request: str = "") -> str:
-        from . import engine as E
-        return E.new_decision(self.repo, project, request)
-
-    def jira_needs_key(self, project) -> bool:
-        from . import engine as E
-        return E.jira_needs_key(self.repo, project)
-
-    def set_jira_key(self, project, key: str) -> str:
-        from . import engine as E
-        return E.set_jira_key(self.repo, project, key)
-
-    def archive_engagements(self, project, views):
-        from . import engine as E
-        return E.archive_engagements(self.repo, project, views)
-
-    def recent_projects(self):
-        from . import engine as E
-        return E.recent_projects(self.repo)
-
-    def finished_engagements(self, project):
-        from . import engine as E
-        return E.finished_engagements(self.repo, project)
-
-    def sign_off(self, project, token: str) -> str:
-        from . import engine as E
-        return E.sign_off(self.repo, project, token)
-
-    def review_decision(self, project, token: str) -> str:
-        from . import engine as E
-        return E.review_decision(self.repo, project, token)
-
-    def supersede_decision(self, project, token: str) -> str:
-        from . import engine as E
-        return E.supersede_decision(self.repo, project, token)
-
-    def settings_rows(self, project):
-        from . import engine as E
-        return E.settings_rows(self.repo, project)
-
-    def settings_apply(self, project, row_key: str) -> str:
-        from . import engine as E
-        return E.settings_apply(self.repo, project, row_key)
-
-    def settings_restore(self, project) -> str:
-        from . import engine as E
-        return E.settings_restore_defaults(self.repo, project)
-
-    def resume_token(self, view: dict) -> str:
-        from . import engine as E
-        return E.resume_token(self.repo, view)
 
     def open_decide(self):
         """The decide screen, seeded with the clone the engine was loaded from."""
