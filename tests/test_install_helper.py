@@ -8780,16 +8780,24 @@ def test_relocate_asks_on_screens_not_at_a_bare_prompt():
     import install_helper as ih
 
     body = inspect.getsource(ih.run_relocate_to_vsit)
-    assert "_pick_project_to_relocate" in body, "the path question must go through a screen"
+    assert "_pick_project(" in body, "the path question must go through a screen"
     assert "decision_screen" in body, "and so must the plan"
 
     # The typed prompt survives only as the fallback when no screen can draw, which is
     # what makes this safe on a console that cannot host one.
     assert body.index("decision_screen") < body.index("confirm(")
 
-    picker = inspect.getsource(ih._pick_project_to_relocate)
+    picker = inspect.getsource(ih._pick_project)
     assert "_ask().choose(" in picker, "the picker must use the one framework"
     assert "somewhere else" in picker, "a typed path must stay reachable"
+
+    # ONE picker, not one per screen. Re-probe asks the identical question and was the
+    # other half of the same report, so a copy here would be two screens that drift.
+    assert "_pick_project(" in inspect.getsource(ih.run_tool_reprobe)
+    assert (
+        "Project to re-probe:"
+        not in inspect.getsource(ih.run_tool_reprobe).split("_pick_project(")[0]
+    ), "the bare prompt must not come first"
 
 
 def test_relocate_keeps_cancel_apart_from_no_screen():
@@ -8833,3 +8841,41 @@ def test_both_tiers_draw_a_decision_the_same_way():
     textual = inspect.getsource(launcher_textual.decision_screen)
     for role in roles:
         assert f'"{role}"' in textual, f"the Textual tier cannot paint the {role!r} role"
+
+
+def test_the_yes_no_decisions_that_edit_your_files_name_both_answers():
+    """Git Bash perf appends to a shell profile you own and writes git config, and asked
+    "Add it? [Y/n]" with the default at YES, after printing the snippet above the question
+    where it had already scrolled past on a small terminal.
+
+    _agreed puts the thing being agreed to in the pane, so it is on screen WHILE the
+    answer is given, and names both answers. "add it" / "leave the profile alone" is a
+    decision someone makes at a glance; "[Y/n]" is one they make by guessing which way
+    round the default reads."""
+    import inspect
+
+    import install_helper as ih
+
+    body = inspect.getsource(ih.run_gitbash_perf)
+    assert "_agreed(" in body, "both questions must go through the screen helper"
+    assert "confirm(" not in body, "the typed confirm belongs in the fallback, not here"
+
+    helper = inspect.getsource(ih._agreed)
+    assert "decision_screen" in helper
+    assert "if answer is None:" in helper, "no screen must fall back, not decline"
+    assert 'return answer == "yes"' in helper, "anything else must decline"
+    # assume_yes has to be honoured BEFORE any screen, or a scripted run meets one.
+    assert helper.index("if assume_yes:") < helper.index("_tiered_installer_screen")
+
+
+def test_the_stand_in_offers_everything_the_framework_does():
+    """A fallback that offers LESS than the real module is the worst way round to be
+    wrong: the code works on the one box without scripts/ and breaks on every other one.
+    _agreed and the pickers can reach for confirm as readily as choose."""
+    import install_helper as ih
+
+    questions = ih._import_from_scripts("questions")
+    stand_in = ih._PlainQuestions()
+    for name in ("choose", "confirm"):
+        assert callable(getattr(questions, name)), f"the framework must offer {name}"
+        assert callable(getattr(stand_in, name)), f"the stand-in must offer {name} too"

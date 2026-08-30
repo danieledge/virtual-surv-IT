@@ -1648,6 +1648,12 @@ class _PlainQuestions:
             return self._Answer(options[int(raw) - 1][0], False)
         return self._Answer(None, True)
 
+    def confirm(self, title, yes, no, **_kw):
+        # Present for PARITY, not for completeness' sake: a stand-in that offers less than
+        # the real module means code that works on a box without scripts/ and breaks on
+        # every other one, which is the worst way round for a fallback to be wrong.
+        return self.choose(title, [(True, yes, ""), (False, no, "")])
+
 
 def _ask():
     """The questions framework, or the plain stand-in above. Never raises.
@@ -6504,6 +6510,49 @@ _GIT_PERF_SETTINGS = (
 )
 
 
+def _agreed(
+    style: Style,
+    *,
+    title: str,
+    facts: list,
+    detail: list,
+    yes: str,
+    no: str,
+    assume_yes: bool = False,
+    prompt: str,
+) -> bool:
+    """A yes/no decision on a screen, with what it would do beside it. True to go ahead.
+
+    NOT questions.confirm, and the difference is the pane. These decisions carry content
+    someone should read first - a snippet about to be appended to their shell profile,
+    the exact git keys about to be written - and a chooser's one-line help cannot hold it.
+    decision_screen can, so the thing being agreed to is on screen while the answer is
+    given rather than having scrolled past above the question.
+
+    BOTH ANSWERS ARE NAMED. "add it" / "leave the profile alone" is a decision someone can
+    make at a glance, where "Add it? [Y/n]" is one they make by guessing which way round
+    the default reads - and the default here was yes, on a question that edits a file they
+    own.
+
+    Falls back to the typed confirm when no screen can draw, and honours assume_yes first
+    so scripted runs never meet a screen at all.
+    """
+    if assume_yes:
+        return True
+    answer = _tiered_installer_screen(
+        "decision_screen",
+        [("yes", yes), ("no", no)],
+        facts,
+        detail,
+        _this_module(),
+        title=title,
+        repo=_repo_hint(),
+    )
+    if answer is None:  # no screen anywhere - the typed question it has always had
+        return bool(confirm(prompt, default=True, assume_yes=False, style=style))
+    return answer == "yes"
+
+
 def run_gitbash_perf(
     style: Style, mark_map: dict, assume_yes: bool = False, demo: bool = False
 ) -> int:
@@ -6541,7 +6590,28 @@ def run_gitbash_perf(
         print(s.dim("    " + _GITBASH_PERF_SNIPPET.strip().replace("\n", "\n    ")))
         if demo:
             print(s.dim("    (demo mode - nothing written)"))
-        elif confirm("  Add it?", default=True, assume_yes=assume_yes, style=s):
+        elif _agreed(
+            style,
+            title="Git Bash performance fix",
+            facts=[
+                ("head", f"  Append the fix to {profile.name}?\n"),
+                ("dim", f"  {profile}\n"),
+            ],
+            detail=[
+                ("head", "What gets appended"),
+                ("plain", _GITBASH_PERF_SNIPPET.strip()),
+                (
+                    "dim",
+                    "Gated on $CLAUDECODE, so your interactive terminals keep their "
+                    "completions. Measured on the box this came from: a Bash snapshot "
+                    "went from ~6,200ms to ~261ms.",
+                ),
+            ],
+            yes="add it",
+            no="leave the profile alone",
+            assume_yes=assume_yes,
+            prompt="  Add it?",
+        ):
             try:
                 with profile.open("a", encoding="utf-8") as fh:
                     if create_new:
@@ -6558,11 +6628,26 @@ def run_gitbash_perf(
                     f"    would set git perf flags on {repo} (fscache/preloadindex/untrackedcache)"
                 )
             )
-        elif confirm(
-            f"  Also set git performance flags on this repo ({repo.name})?",
-            default=True,
+        elif _agreed(
+            style,
+            title="Git performance flags",
+            facts=[
+                ("head", f"  Set git performance flags on {repo.name}?\n"),
+                ("dim", f"  {repo}\n"),
+            ],
+            detail=[
+                ("head", "What gets set"),
+                *[("plain", f"{key} = {val}") for key, val in _GIT_PERF_SETTINGS],
+                (
+                    "dim",
+                    "Per-repository git config on this repo only. Nothing global, and "
+                    "nothing outside it.",
+                ),
+            ],
+            yes="set them",
+            no="leave this repo's config alone",
             assume_yes=assume_yes,
-            style=s,
+            prompt=f"  Also set git performance flags on this repo ({repo.name})?",
         ):
             for key, val in _GIT_PERF_SETTINGS:
                 run_cmd(["git", "-C", str(repo), "config", key, val])
@@ -8394,8 +8479,8 @@ Nothing here is required for your project to build or run.
 """
 
 
-def _pick_project_to_relocate(style: Style):
-    """Which project to restructure, asked on a screen. A Path, or None if they left.
+def _pick_project(style: Style, title: str, prompt: str):
+    """Which project, asked on a screen. A Path, or None if they left.
 
     A CHOOSER OVER REAL CANDIDATES rather than a file browser. What someone wants here is
     almost always a project they have already used, so offering those by name is both
@@ -8424,12 +8509,12 @@ def _pick_project_to_relocate(style: Style):
         pass
     options.append(("", "somewhere else", "type the path instead"))
 
-    answer = _ask().choose("Which project?", options)
+    answer = _ask().choose(title, options)
     if answer.cancelled:
         return None
     if answer.value:
         return Path(answer.value).resolve()
-    typed = ask("  Project to relocate:", os.getcwd(), assume_yes=False, style=style).strip()
+    typed = ask(prompt, os.getcwd(), assume_yes=False, style=style).strip()
     return Path(typed or os.getcwd()).expanduser().resolve()
 
 
@@ -8450,7 +8535,7 @@ def run_relocate_to_vsit(style: Style, mark_map: dict) -> int:
     # "clicked 12 and 15, both dropped out of the new interface to the terminal-only
     # question prompt"). This screen asked for a path at a bare prompt and then printed
     # its plan into the scrollback, which is exactly the experience the picker replaces.
-    project = _pick_project_to_relocate(style)
+    project = _pick_project(style, "Which project to restructure?", "  Project to relocate:")
     if project is None:
         return 0  # they left
     if not project.is_dir():
@@ -8556,9 +8641,12 @@ def run_tool_reprobe(style: Style, mark_map: dict) -> int:
     ShellCheck, gitleaks or ctags by hand needs a way to say "look again".
     """
     ok, warn = mark_map.get("ok") or "OK", mark_map.get("warn") or "!"
-    default = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
-    answer = ask("  Project to re-probe:", default, assume_yes=False, style=style).strip()
-    project = Path(answer or default).expanduser().resolve()
+    # The same question relocate asks, asked the same way (owner report, 2026-08-30): a
+    # bare prompt here was the other half of "dropped out of the new interface". The probe
+    # OUTPUT still streams, deliberately - it is what someone opened this for.
+    project = _pick_project(style, "Which project to re-probe?", "  Project to re-probe:")
+    if project is None:
+        return 0
     if not project.is_dir():
         print(style.yellow(f"  {warn} not a directory: {project}"))
         return 1
