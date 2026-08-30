@@ -1713,6 +1713,12 @@ _IN_APP_SUBSETS = {
     # One step, a soft probe, and it asks nothing - it reports "already available" and
     # moves on rather than prompting for anything.
     "codeintel": "Code intelligence",
+    # Two steps, and no prompt is reachable from either. Established by walking the call
+    # graph out of each step rather than by reading the step itself: fixbashrc and
+    # cleanplugincache both LOOK quiet and both ask, one and two calls down, and a wrong
+    # answer here does not degrade - it hangs, against a screen that can never show the
+    # prompt (2026-08-30).
+    "dashboard": "Rebuilding the team dashboard",
 }
 
 

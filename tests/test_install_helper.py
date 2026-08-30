@@ -8879,3 +8879,60 @@ def test_the_stand_in_offers_everything_the_framework_does():
     for name in ("choose", "confirm"):
         assert callable(getattr(questions, name)), f"the framework must offer {name}"
         assert callable(getattr(stand_in, name)), f"the stand-in must offer {name} too"
+
+
+def test_the_in_app_allow_list_matches_what_the_call_graph_says():
+    """The allow-list is a claim about questions, and a wrong entry does not degrade - it
+    HANGS, against a screen that can never show the prompt. So the claim is checked
+    against the code rather than trusted.
+
+    Reading the step function alone is not enough, and that is the point of this test:
+    fixbashrc and cleanplugincache both look quiet and both ask, one and two calls down."""
+    import ast
+
+    import install_helper as ih
+
+    repo_root = Path(__file__).resolve().parents[1]
+    tree = ast.parse((repo_root / "install_helper.py").read_text(encoding="utf-8"))
+    functions = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+    for cls in tree.body:
+        if isinstance(cls, ast.ClassDef):
+            for n in cls.body:
+                if isinstance(n, ast.FunctionDef):
+                    functions.setdefault(n.name, n)
+
+    def prompts_reachable(name, seen):
+        if name in seen or name not in functions:
+            return []
+        seen.add(name)
+        found = []
+        for call in ast.walk(functions[name]):
+            if not isinstance(call, ast.Call):
+                continue
+            target = getattr(call.func, "id", None)
+            if target in ("ask", "confirm", "input"):
+                found.append(f"{name} calls {target}()")
+            elif target and target in functions:
+                found += prompts_reachable(target, seen)
+            attr = getattr(call.func, "attr", None)
+            if attr and attr in functions:
+                found += prompts_reachable(attr, seen)
+        return found
+
+    class _Args:
+        def __getattr__(self, _name):
+            return None
+
+    for subset in ih._IN_APP_SUBSETS:
+        plan = ih.Installer(_Args(), ih.Style(False), ih.marks(), subset=subset).build_plan()
+        assert plan, f"{subset} has no plan to run"
+        for _title, step in plan:
+            found = prompts_reachable(step.__name__, set())
+            assert not found, f"{subset} would hang inside a screen: {found[:3]}"
+
+    # And the two that look quiet but are not must stay out, or this test proves nothing.
+    for asks in ("fixbashrc", "cleanplugincache"):
+        assert asks not in ih._IN_APP_SUBSETS
+        plan = ih.Installer(_Args(), ih.Style(False), ih.marks(), subset=asks).build_plan()
+        found = [h for _t, s in plan for h in prompts_reachable(s.__name__, set())]
+        assert found, f"{asks} was expected to ask - if it no longer does, let it in"
