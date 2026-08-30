@@ -8734,3 +8734,34 @@ def test_install_helper_defines_each_name_once():
     )
     duplicates = {name: count for name, count in names.items() if count > 1}
     assert not duplicates, f"defined more than once, so only the last one runs: {duplicates}"
+
+
+def test_code_intelligence_runs_inside_the_interface():
+    """Picking it from the picker dropped straight out to a scrolling step log - the
+    interface the picker exists to replace (owner report with screenshot, 2026-08-30, the
+    same complaint the update flow drew on 2026-08-29).
+
+    The allow-list is the part worth pinning. Membership is a judgement about QUESTIONS,
+    not about tidiness: a worker thread cannot prompt while a full-screen app owns the
+    keyboard, so a subset that asks mid-run would hang against a screen that can never
+    show the prompt. `update` must stay out because it asks two - it answers them on a
+    decision screen in front instead."""
+    import inspect
+
+    import install_helper as ih
+
+    assert "codeintel" in ih._IN_APP_SUBSETS
+    assert "update" not in ih._IN_APP_SUBSETS, "update asks two questions; it has its own flow"
+    for streaming in ("check", "toolcheck", "envcheck", "selftest"):
+        assert streaming not in ih._IN_APP_SUBSETS, (
+            f"{streaming} output IS the deliverable - a bounded pane would hide it"
+        )
+
+    # The one step it runs must genuinely ask nothing, or the allow-list is a lie.
+    step = inspect.getsource(ih.Installer.code_intel_step)
+    for prompt in ("ask(", "confirm(", "input("):
+        assert prompt not in step, f"code_intel_step must not {prompt} inside a screen"
+
+    helper = inspect.getsource(ih.run_subset_in_app)
+    assert "progress_screen" in helper
+    assert "return None" in helper, "it must fall back to streaming when it cannot draw"

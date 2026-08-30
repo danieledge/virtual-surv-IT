@@ -1692,6 +1692,66 @@ def _submenu_screen(style: Style, title: str, options: tuple, actions: dict):
     return None
 
 
+# Subsets that may run inside a progress screen, and the title each one wears there.
+#
+# MEMBERSHIP IS A JUDGEMENT ABOUT QUESTIONS, not about tidiness. A subset here must ask
+# the human nothing once it starts: a worker thread cannot prompt while a full-screen app
+# owns the keyboard, so a subset that asks would hang against a screen that can never show
+# the prompt. `update` is absent because it asks two questions, and answers them on a
+# decision screen in front instead (run_update_in_app).
+#
+# The diagnostics are absent for a different reason and deliberately still stream: their
+# OUTPUT is the deliverable, meant to be read and scrolled back through, and a bounded
+# pane would hide the thing someone opened them for.
+_IN_APP_SUBSETS = {
+    # One step, a soft probe, and it asks nothing - it reports "already available" and
+    # moves on rather than prompting for anything.
+    "codeintel": "Code intelligence",
+}
+
+
+def run_subset_in_app(args, style: Style, subset: str, title: str) -> "Optional[int]":
+    """One Installer subset, rendered as a live progress screen instead of a scrolling log.
+
+    Returns the exit code, or None when the screen could not run and the caller should
+    stream as it always has.
+
+    ONLY FOR SUBSETS THAT ASK NOTHING, and that is a hard constraint rather than a
+    preference: a question cannot be asked from a worker thread while a full-screen app
+    owns the keyboard, so a subset that prompts mid-run would hang against a screen that
+    can never show the prompt. The update solves this by moving its two questions to a
+    decision screen in front (run_update_in_app); anything routed here must simply have
+    none. The allow-list at the call site is where that judgement is recorded.
+
+    Nor is it for every quiet subset. The diagnostics deliberately still stream: their
+    output is the deliverable, meant to be read and scrolled back through, and a bounded
+    pane would hide the very thing someone opened them for.
+    """
+    if _import_from_scripts("installer_app") is None:
+        return None
+    try:
+        probe = Installer(args, style, marks(), subset=subset)
+        titles = [(name() if callable(name) else name) for name, _step in probe.build_plan()]
+    except Exception:
+        return None
+    if not titles:
+        return None
+
+    def _run(observer):
+        inst = Installer(copy.copy(args), style, marks(), subset=subset)
+        inst.observer = observer
+        return inst.run()
+
+    return _tiered_installer_screen(
+        "progress_screen",
+        titles,
+        _run,
+        _this_module(),
+        title=title,
+        repo=_repo_hint(),
+    )
+
+
 def run_update_in_app(args, style: Style) -> "Optional[int]":
     """The update, rendered as a live progress screen instead of a scrolling log.
 
@@ -10165,6 +10225,16 @@ def _main(argv=None) -> int:
                         # then does the streaming Installer below take over.
                         in_app = run_update_in_app(args, style)
                         if in_app is not None:
+                            did_anything = True
+                            continue
+                    elif subset in _IN_APP_SUBSETS and not args.demo:
+                        # Same complaint, same fix (owner report + screenshot,
+                        # 2026-08-30): picking Code intelligence from the picker dropped
+                        # straight out to a scrolling step log, which is the interface
+                        # the picker exists to replace.
+                        in_app = run_subset_in_app(args, style, subset, _IN_APP_SUBSETS[subset])
+                        if in_app is not None:
+                            menu_rc = max(menu_rc, in_app or 0)
                             did_anything = True
                             continue
                     if args.demo:
