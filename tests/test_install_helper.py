@@ -3691,6 +3691,18 @@ def _confirm_by_prompt(answers: dict):
     return _fn
 
 
+def _pick_typed_path(monkeypatch, ih):
+    """Answer the project chooser with its "somewhere else" option.
+
+    That option's value is "", which sends the picker on to the typed prompt - so a test
+    that already stubs ih.ask to return a path keeps working, and does so THROUGH the real
+    chooser rather than around it. Scripting a concrete path instead would depend on the
+    machine's cwd and recent-projects list being what the test expects.
+    """
+    questions = ih._import_from_scripts("questions")
+    monkeypatch.setattr(ih, "_ask", lambda: questions.scripted([""]))
+
+
 def test_format_preferences_step_shows_current_and_writes_on_change(tmp_path, monkeypatch, capsys):
     """Menu option 6: re-runnable any time, independent of project enablement. Both
     preferences are project-wide (team-preferences.json), asked in one pass."""
@@ -3704,6 +3716,7 @@ def test_format_preferences_step_shows_current_and_writes_on_change(tmp_path, mo
     _isolate_home(monkeypatch, tmp_path)
     project = tmp_path / "proj"
     project.mkdir()
+    _pick_typed_path(monkeypatch, ih)
     monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
     monkeypatch.setattr(
         ih, "confirm", _confirm_by_prompt({"docx": True, "citations": True})
@@ -3728,6 +3741,7 @@ def test_format_preferences_step_can_turn_on_citations(tmp_path, monkeypatch, ca
     _isolate_home(monkeypatch, tmp_path)
     project = tmp_path / "proj"
     project.mkdir()
+    _pick_typed_path(monkeypatch, ih)
     monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
     monkeypatch.setattr(ih, "confirm", _confirm_by_prompt({"docx": False, "citations": True}))
     inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="formats")
@@ -3764,6 +3778,7 @@ def test_format_preferences_step_can_turn_docx_off_again(tmp_path, monkeypatch):
     project = tmp_path / "proj"
     project.mkdir()
     write_team_preferences(project, extra_formats=["docx"])
+    _pick_typed_path(monkeypatch, ih)
     monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
     monkeypatch.setattr(ih, "confirm", _confirm_by_prompt({"docx": False, "citations": True}))
     inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="formats")
@@ -4851,6 +4866,7 @@ def test_model_step_never_offers_global_scope(monkeypatch, tmp_path):
 
     project = tmp_path / "proj"
     project.mkdir()
+    _pick_typed_path(monkeypatch, ih)
     monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
     calls = []
     monkeypatch.setattr(
@@ -6956,6 +6972,7 @@ def test_format_preferences_step_review_tools_save_as_default(tmp_path, monkeypa
 
     project = tmp_path / "proj"
     project.mkdir()
+    _pick_typed_path(monkeypatch, ih)
     monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
     monkeypatch.setattr(ih, "confirm", _confirm_by_prompt({"docx": False, "citations": True}))
     monkeypatch.setattr(ih, "_ask_review_tool_overrides", lambda *a, **k: {"gitleaks": "off"})
@@ -8936,3 +8953,76 @@ def test_the_in_app_allow_list_matches_what_the_call_graph_says():
         plan = ih.Installer(_Args(), ih.Style(False), ih.marks(), subset=asks).build_plan()
         found = [h for _t, s in plan for h in prompts_reachable(s.__name__, set())]
         assert found, f"{asks} was expected to ask - if it no longer does, let it in"
+
+
+def test_the_full_install_still_asks_exactly_as_it_did():
+    """The owner asked for the full install to stay as it is (2026-08-31), and these steps
+    are SHARED with it - statusline, formats and model all appear in the full plan. So the
+    screens are gated on the subset having been chosen on purpose.
+
+    That is a reasonable thing to want: the full run is the most load-bearing path in the
+    product and asks a dozen questions in a deliberate order. Lifting those onto screens is
+    a change to make on its own, not a side effect of fixing the one-off items."""
+    import install_helper as ih
+
+    class _Args:
+        def __getattr__(self, _name):
+            return None
+
+    for shared in ("full", "setup", None):
+        inst = ih.Installer(_Args(), ih.Style(False), ih.marks(), subset=shared)
+        assert inst.asks_on_screen is False, f"{shared} must ask exactly as it did"
+    for chosen in ("statusline", "formats", "model", "codeintel"):
+        inst = ih.Installer(_Args(), ih.Style(False), ih.marks(), subset=chosen)
+        assert inst.asks_on_screen is True, f"{chosen} was picked on purpose - it gets a screen"
+
+
+def test_a_screenless_console_keeps_each_questions_own_default():
+    """Introduced and caught the same hour, 2026-08-31. _agreed's fallback hardcoded
+    default=True, so on a console that cannot draw a screen the status-line CONFLICT
+    question - "replace the status line you already have?" - would have defaulted to YES.
+    It has always defaulted to no, deliberately, because it overwrites a setting the user
+    configured themselves.
+
+    A screen names both answers, so which is "the default" is a question nobody is asked.
+    A typed [Y/n] is the opposite: the default IS the answer for anyone pressing Enter."""
+    import inspect
+
+    import install_helper as ih
+
+    helper = inspect.getsource(ih._agreed)
+    assert "default: bool = True" in helper, "the fallback default must be a parameter"
+    assert "confirm(prompt, default=default" in helper, "and must reach the typed question"
+    assert "default=True," not in helper, "never hardcoded past the caller"
+
+    # The three destructive ones must not proceed on a bare Enter.
+    for function in (ih.run_fix_bashrc, ih.run_clean_plugin_cache, ih._offer_registry_repair):
+        body = inspect.getsource(function)
+        assert "default=assume_yes" in body, (
+            f"{function.__name__} writes or deletes - a bare Enter must decline, and only "
+            "an explicit --yes should proceed"
+        )
+
+
+def test_leaving_the_project_picker_does_nothing_at_all():
+    """A cancel must never fall back to a default directory. The whole point of asking
+    which project is that acting on the wrong one is not recoverable - and 'they pressed
+    Esc' is the least likely moment to have meant 'use whatever I happen to be cd'd into'.
+    """
+    import inspect
+
+    import install_helper as ih
+
+    picker = inspect.getsource(ih.Installer.pick_project)
+    assert "return _pick_project(" in picker
+    assert 'never as "use the current directory"' in picker, "the rule must be written down"
+
+    for step in (ih.Installer.format_preferences_step, ih.Installer.model_step):
+        body = inspect.getsource(step)
+        assert "if project is None:" in body, f"{step.__name__} must handle a cancel"
+        assert body.index("if project is None:") < body.index("is_dir()"), (
+            "the cancel must be checked before the path is used for anything"
+        )
+        assert "step_skip" in body.split("if project is None:")[1][:200], (
+            "a cancel is a skip, not a failure and not a silent default"
+        )

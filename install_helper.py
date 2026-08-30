@@ -3404,6 +3404,54 @@ class Installer:
         if self.demo:
             self.say(self.style.yellow("DEMO MODE ended - nothing was executed or written."))
 
+    @property
+    def asks_on_screen(self) -> bool:
+        """Whether this run's questions should be put on a screen rather than typed.
+
+        TRUE ONLY WHEN THE SUBSET WAS CHOSEN ON PURPOSE. These steps are shared with the
+        full install, which the owner has asked stays exactly as it is (2026-08-31) - and
+        that is a reasonable thing to want: it is the most load-bearing path in the
+        product, it asks a dozen questions in a deliberate order, and lifting them onto
+        screens is a change to make on its own rather than as a side effect of fixing the
+        one-off items.
+
+        So a step reached from "Advanced -> Morgan's model" asks on a screen, and the same
+        step reached as part of a full run asks exactly as it did yesterday.
+        """
+        return self.subset not in ("full", "setup", None)
+
+    def agree(self, *, title, facts, detail, yes, no, prompt, default) -> bool:
+        """A yes/no decision, on a screen when this subset was chosen on purpose."""
+        if self.args.yes:
+            return bool(default)
+        if not self.asks_on_screen:
+            return bool(confirm(prompt, default=default, assume_yes=False, style=self.style))
+        return _agreed(
+            self.style,
+            title=title,
+            facts=facts,
+            detail=detail,
+            yes=yes,
+            no=no,
+            assume_yes=False,
+            prompt=prompt,
+            default=default,
+        )
+
+    def pick_project(self, title: str, prompt: str):
+        """Which project, on a screen when this subset was chosen on purpose.
+
+        A Path, or None if the human left - which callers must treat as "do nothing",
+        never as "use the current directory". Falling back to a default on a cancel is how
+        a screen ends up acting on a project nobody named.
+        """
+        if not self.asks_on_screen:
+            raw = ask(
+                f"  Which project directory? (blank = {Path.cwd()})", ".", False, style=self.style
+            )
+            return Path(raw).expanduser().resolve()
+        return _pick_project(self.style, title, prompt)
+
     def statusline_step(self) -> None:
         """Optional: wire the team status line into the USER-level Claude settings so it
         shows in every project. Opt-in (interactive yes, --statusline with --yes, or the
@@ -3483,11 +3531,27 @@ class Installer:
                     f"      {existing}"
                 )
             )
-            keep = confirm(
-                "  Shall I replace it with the team's status line?",
+            keep = self.agree(
+                title="Status line",
+                facts=[
+                    ("head", "  Replace the status line you already have?\n"),
+                    ("dim", f"  {target}\n"),
+                ],
+                detail=[
+                    ("head", "Yours, now"),
+                    ("plain", existing or "(none)"),
+                    ("head", "The team's"),
+                    ("plain", command),
+                    (
+                        "dim",
+                        "A dated backup of settings.json is written before anything "
+                        "is changed, either way.",
+                    ),
+                ],
+                yes="replace it with the team's",
+                no="keep the one I have",
+                prompt="  Shall I replace it with the team's status line?",
                 default=False,
-                assume_yes=self.args.yes,
-                style=self.style,
             )
             if not keep:
                 self.step_skip("Status line", "your existing statusLine kept")
@@ -3586,10 +3650,10 @@ class Installer:
             "question offers to also make these THIS MACHINE's default for other new "
             "projects you configure later."
         )
-        raw = ask(
-            f"  Which project directory? (blank = {Path.cwd()})", ".", False, style=self.style
-        )
-        project = Path(raw).expanduser().resolve()
+        project = self.pick_project("Which project?", "  Which project directory?")
+        if project is None:
+            self.step_skip("Project preferences", "nothing chosen")
+            return
         if not project.is_dir():
             self.step_fail("Project preferences", f"not a directory: {project}")
             return
@@ -3629,18 +3693,48 @@ class Installer:
                 f"regulatory citations = {'on' if citations_current else 'off'}"
             )
         )
-        docx_wanted = confirm(
-            "  Produce .docx by default for controlled documents in this project?",
+        docx_wanted = self.agree(
+            title="Document formats",
+            facts=[
+                ("head", "  Produce .docx by default?\n"),
+                ("dim", f"  for {project.name}\n"),
+                ("dim", f"  currently {'on' if docx_current else 'off'}\n"),
+            ],
+            detail=[
+                ("head", "What this changes"),
+                (
+                    "dim",
+                    "Controlled documents in this project are also written as .docx "
+                    "alongside the markdown and HTML. It is per-project: other projects "
+                    "keep their own answer, and nothing already written is changed.",
+                ),
+            ],
+            yes="yes, produce .docx",
+            no="no, markdown and HTML only",
+            prompt="  Produce .docx by default for controlled documents in this project?",
             default=docx_current,
-            assume_yes=False,
-            style=self.style,
         )
-        citations_wanted = confirm(
-            "  Detection-logic work in this project cites regulatory obligations by "
+        citations_wanted = self.agree(
+            title="Regulatory citations",
+            facts=[
+                ("head", "  Cite regulatory obligations by default?\n"),
+                ("dim", f"  for {project.name}\n"),
+                ("dim", f"  currently {'on' if citations_current else 'off'}\n"),
+            ],
+            detail=[
+                ("head", "What this changes"),
+                (
+                    "dim",
+                    "Detection-logic work in this project names the specific obligation "
+                    "each rule serves. Leave it on unless this project's work is not "
+                    "regulatory.",
+                ),
+            ],
+            yes="yes, cite obligations",
+            no="no, leave them out",
+            prompt="  Detection-logic work in this project cites regulatory obligations by "
             "default - keep that on?",
             default=citations_current,
-            assume_yes=False,
-            style=self.style,
         )
         review_tools_wanted = _ask_review_tool_overrides(self.style, False, review_tools_current)
         # Read-only against a throwaway synthetic file - runs even in demo mode, same as
@@ -3655,13 +3749,28 @@ class Installer:
             f"review-tools={_format_review_tools(review_tools_wanted)}"
         )
         self.say(self.style.bold("\n  Separately - this machine's default:"))
-        save_as_default = confirm(
-            f"  You just set {summary} for {project.name}. Also make THESE SAME "
+        save_as_default = self.agree(
+            title="Also this machine's default?",
+            facts=[
+                ("head", "  Reuse these choices for future projects?\n"),
+                ("dim", f"  you just set {summary}\n"),
+                ("dim", f"  for {project.name}\n"),
+            ],
+            detail=[
+                ("head", "What this changes"),
+                (
+                    "dim",
+                    "Only what a DIFFERENT, new project starts with when you configure one "
+                    "later. This project is already set either way, and no existing project "
+                    "is touched.",
+                ),
+            ],
+            yes="yes, make them the default",
+            no=f"no, just {project.name}",
+            prompt=f"  You just set {summary} for {project.name}. Also make THESE SAME "
             "choices this machine's default whenever you configure a DIFFERENT, new "
             "project later (not this one, which is already set above)?",
             default=False,
-            assume_yes=False,
-            style=self.style,
         )
         if self.demo:
             self.step_ok(
@@ -4074,10 +4183,10 @@ class Installer:
             "reset back to sonnet. (This machine's own default model lives under "
             "Advanced -> Machine defaults instead.)"
         )
-        raw = ask(
-            f"  Which project directory? (blank = {Path.cwd()})", ".", False, style=self.style
-        )
-        project = Path(raw).expanduser().resolve()
+        project = self.pick_project("Which project?", "  Which project directory?")
+        if project is None:
+            self.step_skip("Morgan's model", "nothing chosen")
+            return
         if not project.is_dir():
             self.step_fail("Morgan's model", f"not a directory: {project}")
             return
@@ -6526,6 +6635,7 @@ def _agreed(
     no: str,
     assume_yes: bool = False,
     prompt: str,
+    default: bool = True,
 ) -> bool:
     """A yes/no decision on a screen, with what it would do beside it. True to go ahead.
 
@@ -6542,9 +6652,16 @@ def _agreed(
 
     Falls back to the typed confirm when no screen can draw, and honours assume_yes first
     so scripted runs never meet a screen at all.
+
+    `default` is for that fallback ONLY, and it is not decoration: a screen names both
+    answers, so which one is "the default" is a question nobody is asked. A typed [Y/n] is
+    the opposite - the default IS the answer for anyone pressing Enter - so a caller whose
+    question overwrites something the user configured themselves must be able to say no is
+    the safe side. Hardcoding True here made the status-line conflict question default to
+    replacing an existing status line (introduced and caught 2026-08-31).
     """
     if assume_yes:
-        return True
+        return bool(default)
     answer = _tiered_installer_screen(
         "decision_screen",
         [("yes", yes), ("no", no)],
@@ -6555,7 +6672,7 @@ def _agreed(
         repo=_repo_hint(),
     )
     if answer is None:  # no screen anywhere - the typed question it has always had
-        return bool(confirm(prompt, default=True, assume_yes=False, style=style))
+        return bool(confirm(prompt, default=default, assume_yes=False, style=style))
     return answer == "yes"
 
 
@@ -6896,7 +7013,31 @@ def run_fix_bashrc(
     # confirm()'s assume_yes-shortcuts-to-default path. A genuinely interactive session
     # (assume_yes=False, real TTY) still shows the prompt and defaults to declining if the
     # user just presses Enter - the write is consequential enough to want an explicit yes.
-    if not confirm("  Add it?", default=assume_yes, assume_yes=assume_yes, style=style):
+    if not _agreed(
+        style,
+        title="Fix a slow ~/.bashrc",
+        facts=[
+            ("head", "  Add the guard to ~/.bashrc?\n"),
+            ("dim", f"  {bashrc}\n"),
+        ],
+        detail=[
+            ("head", "What gets added"),
+            ("plain", _BASHRC_GUARD_SNIPPET.strip()),
+            (
+                "dim",
+                "A dated backup of ~/.bashrc is written first. Your interactive shells are "
+                "unaffected - the guard only short-circuits the non-interactive shells "
+                "Claude Code spawns for every Bash call.",
+            ),
+        ],
+        yes="add the guard",
+        no="leave ~/.bashrc alone",
+        assume_yes=assume_yes,
+        prompt="  Add it?",
+        # An explicit --yes IS consent for a flag the user named on purpose; a bare Enter
+        # at the typed prompt is not, because the write is consequential.
+        default=assume_yes,
+    ):
         print(f"{style.dim('-')} ~/.bashrc: skipped")
         return 0
     today = datetime.now().strftime("%Y-%m-%d")
@@ -7123,11 +7264,24 @@ def _offer_registry_repair(
     if demo:
         print(style.dim("    (demo mode - the registry would be repaired, .bak kept)"))
         return
-    if not confirm(
-        "  Repair the registry now (remove those dead entries; a .bak of each file is kept)?",
-        default=assume_yes,
+    if not _agreed(
+        style,
+        title="Repair the plugin registry",
+        facts=[
+            ("head", f"  Remove {len(stale_entries)} dead entr(y/ies)?\n"),
+            ("dim", "  they point at installs that no longer exist\n"),
+        ],
+        detail=[
+            ("head", "What would be removed"),
+            *[("plain", str(rp)) for rp in stale_entries],
+            ("dim", "A .bak of each registry file is kept, so this one does undo."),
+        ],
+        yes="repair the registry",
+        no="leave the registry as it is",
         assume_yes=assume_yes,
-        style=style,
+        prompt="  Repair the registry now (remove those dead entries; a .bak of each "
+        "file is kept)?",
+        default=assume_yes,
     ):
         print(
             style.dim("  - left as-is. Manual fix: reinstall (option 1) or /plugin in Claude Code.")
@@ -7251,7 +7405,28 @@ def run_clean_plugin_cache(
     if demo:
         print(style.dim("    (demo mode - nothing removed)"))
         return 0
-    if not confirm("  Remove them?", default=assume_yes, assume_yes=assume_yes, style=style):
+    if not _agreed(
+        style,
+        title="Clean stale plugin cache",
+        facts=[
+            ("head", f"  Remove {len(stale)} stale install(s)?\n"),
+            ("dim", f"  frees {_human_size(total)}\n"),
+        ],
+        detail=[
+            ("head", "What would be deleted"),
+            *[("plain", str(d)) for d in stale],
+            (
+                "dim",
+                "The active install is not in that list and is not touched. These are "
+                "deleted outright rather than moved, so this one does not undo.",
+            ),
+        ],
+        yes=f"remove {len(stale)} install(s)",
+        no="keep them all",
+        assume_yes=assume_yes,
+        prompt="  Remove them?",
+        default=assume_yes,  # deleting outright: a bare Enter must not do it
+    ):
         print(f"{style.dim('-')} skipped")
         return 0
     removed = 0
