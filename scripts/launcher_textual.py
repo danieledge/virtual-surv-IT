@@ -765,3 +765,59 @@ def render_question(question, mod):
     rows, back = _ask.chooser_rows(question)
     picked = chooser_screen((), mod, title=question.title, repo=question.project_dir, rows=rows)
     return _ask.from_chooser(question, picked, back)
+
+
+def decision_screen(options, facts, detail, ih, *, title, repo=None, output=None):
+    """A short question with the facts beside it, in Textual.
+
+    Same signature and same role vocabulary as installer_app.decision_screen: the CONTENT
+    is built once by the caller and painted twice, so the two tiers cannot come to show
+    different things. Returns the chosen key, "" for Esc, or None when it cannot draw.
+    """
+    widgets = _widgets()
+    if widgets is None or not options:
+        return None
+    try:
+        from rich.text import Text as _Text
+    except Exception:  # noqa: BLE001
+        return None
+
+    # The palette lives in launcher_tiers, with the widgets it paints - imported here
+    # rather than restated, so this screen cannot drift from every other one.
+    styles = {
+        "plain": widgets.TEXT,
+        "dim": widgets.HINT,
+        "good": widgets.ACCENT,
+        "warn": "yellow",
+        "head": f"bold {widgets.TEXT}",
+    }
+    default = widgets.TEXT
+
+    def _facts():
+        out = _Text()
+        for role, text in facts:
+            out.append(text, style=styles.get(role, default))
+        return out
+
+    def _detail(_width):
+        out = _Text("\n")
+        for role, text in detail:
+            out.append(text + "\n", style=styles.get(role, default))
+        return out
+
+    try:
+        app = widgets.DecisionApp(
+            Path(repo) if repo else Path.cwd(),
+            list(options),
+            _facts,
+            _detail,
+            title,
+            cancel="",
+        )
+        with _true_terminal_size():
+            app.run()
+    except Exception:  # noqa: BLE001
+        return None
+    if not getattr(app, "ran", False):
+        return None
+    return getattr(app, "picked", "")

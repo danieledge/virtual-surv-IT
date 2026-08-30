@@ -736,6 +736,100 @@ def _update_facts(ih, repo=None):
     return local, remote, headlines, dirty
 
 
+# What a decision screen's text can be, in words rather than in either tier's palette.
+# The CONTENT is built once by the caller and painted twice; a caller that spoke
+# prompt_toolkit's class names directly could not be drawn by Textual, and the two
+# renderings would drift the moment either was edited.
+_ROLES = {
+    "plain": "",
+    "dim": "class:dim",
+    "good": "class:on",
+    "warn": "class:warn",
+    "head": "class:group",
+}
+
+
+def decision_screen(options, facts, detail, ih, *, title, repo=None, output=None):
+    """A short question with the facts beside it. Returns the chosen key, or None if it
+    could not draw.
+
+    `options` is [(key, label)]; `facts` and `detail` are [(role, text)] using _ROLES
+    above. Generic on purpose: the update screen was the first of these and hardcoded its
+    own content, so the second one would have been a copy - and a copied screen is two
+    screens that drift.
+    """
+    try:
+        chrome = _chrome()
+        _vendor_on_path()
+        from prompt_toolkit.key_binding import KeyBindings
+    except Exception:
+        return None
+    if not os.environ.get("VIRT_SURV_FORCE_PTK"):
+        if not (sys.stdin.isatty() and sys.stderr.isatty()):
+            return None
+    if not options:
+        return None
+
+    host = InstallerHost(ih, repo)
+    g = chrome.glyphs(host)
+    idx = [0]
+    picked = [None]
+
+    def _body():
+        out = [(_ROLES.get(role, ""), text) for role, text in facts]
+        out.append(("", "\n"))
+        for i, (_key, label) in enumerate(options):
+            sel = idx[0] == i
+            out.append(("class:sel" if sel else "", f"  {g['point']} " if sel else "    "))
+            out.append(("class:sel" if sel else "", f"{label}\n"))
+        return out
+
+    def _right():
+        return [(_ROLES.get(role, ""), _wrap(text) + "\n") for role, text in detail]
+
+    def _footer():
+        return [("class:hint", chrome.ui_text(host, "  up/down move - Enter choose - Esc cancel"))]
+
+    kb = KeyBindings()
+
+    @kb.add("up")
+    def _up(event):
+        idx[0] = (idx[0] - 1) % len(options)
+
+    @kb.add("down")
+    def _down(event):
+        idx[0] = (idx[0] + 1) % len(options)
+
+    @kb.add("enter")
+    def _enter(event):
+        picked[0] = options[idx[0]][0]
+        event.app.exit()
+
+    @kb.add("escape", eager=True)
+    @kb.add("c-c")
+    @kb.add("q")
+    def _esc(event):
+        picked[0] = ""  # a cancel, and NOT the same as None - see chooser_screen
+        event.app.exit()
+
+    try:
+        chrome.screen(
+            host,
+            title=title,
+            body_fn=_body,
+            right_fn=_right,
+            footer_fn=_footer,
+            key_bindings=kb,
+            output=output,
+            header_fn=lambda: brand_header(ih),
+        )
+    except Exception:
+        if os.environ.get("VIRT_SURV_DEBUG_APP"):
+            raise
+        return None
+    return picked[0]
+
+
 def update_decision_screen(ih, repo=None, output=None):
     """What the update would bring, and the one question worth asking. Returns "update",
     "cancel", or None when the screen could not run.

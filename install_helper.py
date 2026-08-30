@@ -8394,6 +8394,45 @@ Nothing here is required for your project to build or run.
 """
 
 
+def _pick_project_to_relocate(style: Style):
+    """Which project to restructure, asked on a screen. A Path, or None if they left.
+
+    A CHOOSER OVER REAL CANDIDATES rather than a file browser. What someone wants here is
+    almost always a project they have already used, so offering those by name is both
+    faster and safer than typing a path - and it works on all three tiers for free,
+    because questions.choose does. The typed path stays as the escape hatch for the case
+    the list cannot cover.
+    """
+    seen, options = set(), []
+    for label, raw in (
+        ("this directory", os.getcwd()),
+        ("the project Claude Code is in", os.environ.get("CLAUDE_PROJECT_DIR")),
+    ):
+        if not raw:
+            continue
+        path = Path(raw).expanduser()
+        if path.is_dir() and str(path) not in seen:
+            seen.add(str(path))
+            options.append((str(path), path.name or str(path), f"{label} - {path}"))
+    try:
+        for raw in load_config(config_path()).get("recent_projects") or []:
+            path = Path(raw).expanduser()
+            if path.is_dir() and str(path) not in seen:
+                seen.add(str(path))
+                options.append((str(path), path.name or str(path), f"recently used - {path}"))
+    except Exception:
+        pass
+    options.append(("", "somewhere else", "type the path instead"))
+
+    answer = _ask().choose("Which project?", options)
+    if answer.cancelled:
+        return None
+    if answer.value:
+        return Path(answer.value).resolve()
+    typed = ask("  Project to relocate:", os.getcwd(), assume_yes=False, style=style).strip()
+    return Path(typed or os.getcwd()).expanduser().resolve()
+
+
 def run_relocate_to_vsit(style: Style, mark_map: dict) -> int:
     """Move a project's team files into VSIT/, after showing exactly what would move.
 
@@ -8406,9 +8445,14 @@ def run_relocate_to_vsit(style: Style, mark_map: dict) -> int:
     it refuses rather than guesses whenever anything looks unexpected.
     """
     ok, warn = mark_map.get("ok") or "OK", mark_map.get("warn") or "!"
-    default = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
-    answer = ask("  Project to relocate:", default, assume_yes=False, style=style).strip()
-    project = Path(answer or default).expanduser().resolve()
+
+    # BOTH QUESTIONS INSIDE THE INTERFACE (owner report with screenshot, 2026-08-30:
+    # "clicked 12 and 15, both dropped out of the new interface to the terminal-only
+    # question prompt"). This screen asked for a path at a bare prompt and then printed
+    # its plan into the scrollback, which is exactly the experience the picker replaces.
+    project = _pick_project_to_relocate(style)
+    if project is None:
+        return 0  # they left
     if not project.is_dir():
         print(style.yellow(f"  {warn} not a directory: {project}"))
         return 1
@@ -8418,20 +8462,55 @@ def run_relocate_to_vsit(style: Style, mark_map: dict) -> int:
         print(style.dim("  nothing to move - this project is already on the VSIT layout"))
         return 0
 
-    print("")
-    print(style.bold(f"  Would move {len(plan)} item(s) in {project}:"))
+    # The plan goes in the pane, where it can be READ before the keypress, rather than
+    # scrolling past above the question. Same content either way - that is the point of
+    # decision_screen taking roles rather than one tier's colours.
+    facts = [
+        ("head", f"  Would move {len(plan)} item(s)\n"),
+        ("dim", f"  in {project}\n"),
+    ]
+    detail = [("head", "What would move")]
     for src, dst, label in plan:
-        print(f"    {src.relative_to(project)}")
-        print(style.dim(f"      -> {dst.relative_to(project)}   ({label})"))
-    print("")
-    print(
-        style.dim(
-            "  Nothing else is touched. Your own docs/ keeps everything that is "
-            "yours, and .claude/ keeps what Claude Code reads by path. Git history "
-            "follows a move, so committed files keep their history."
+        detail.append(("plain", f"- {src.relative_to(project)}"))
+        detail.append(("dim", f"    -> {dst.relative_to(project)}  ({label})"))
+    detail.append(
+        (
+            "dim",
+            "Nothing else is touched. Your own docs/ keeps everything that is yours, and "
+            ".claude/ keeps what Claude Code reads by path. Git history follows a move, so "
+            "committed files keep their history.",
         )
     )
-    if not confirm("  Move them now?", default=False, assume_yes=False, style=style):
+    answer = _tiered_installer_screen(
+        "decision_screen",
+        [("move", f"move {len(plan)} item(s) now"), ("cancel", "leave everything where it is")],
+        facts,
+        detail,
+        _this_module(),
+        title="Move team files into VSIT/",
+        repo=_repo_hint(),
+    )
+    if answer is None:
+        # No screen available - the printed plan and typed confirm it has always had.
+        print("")
+        print(style.bold(f"  Would move {len(plan)} item(s) in {project}:"))
+        for src, dst, label in plan:
+            print(f"    {src.relative_to(project)}")
+            print(style.dim(f"      -> {dst.relative_to(project)}   ({label})"))
+        print("")
+        print(
+            style.dim(
+                "  Nothing else is touched. Your own docs/ keeps everything that is "
+                "yours, and .claude/ keeps what Claude Code reads by path. Git history "
+                "follows a move, so committed files keep their history."
+            )
+        )
+        if not confirm("  Move them now?", default=False, assume_yes=False, style=style):
+            print(style.dim("  nothing moved."))
+            return 0
+    elif answer != "move":
+        # "" is Esc and "cancel" is the row; both mean the same thing here, and neither
+        # is the same as None, which means no screen ran at all.
         print(style.dim("  nothing moved."))
         return 0
 

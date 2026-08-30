@@ -8765,3 +8765,71 @@ def test_code_intelligence_runs_inside_the_interface():
     helper = inspect.getsource(ih.run_subset_in_app)
     assert "progress_screen" in helper
     assert "return None" in helper, "it must fall back to streaming when it cannot draw"
+
+
+def test_relocate_asks_on_screens_not_at_a_bare_prompt():
+    """It asked for a path at a bare prompt and printed its plan into the scrollback -
+    "clicked 12 and 15, both dropped out of the new interface to the terminal-only
+    question prompt" (owner report with screenshot, 2026-08-30).
+
+    Both questions now have a screen: which project (a chooser over real candidates, so it
+    works on every tier for free) and the plan itself, with the moves in the pane where
+    they can be READ before the keypress rather than scrolling past above the question."""
+    import inspect
+
+    import install_helper as ih
+
+    body = inspect.getsource(ih.run_relocate_to_vsit)
+    assert "_pick_project_to_relocate" in body, "the path question must go through a screen"
+    assert "decision_screen" in body, "and so must the plan"
+
+    # The typed prompt survives only as the fallback when no screen can draw, which is
+    # what makes this safe on a console that cannot host one.
+    assert body.index("decision_screen") < body.index("confirm(")
+
+    picker = inspect.getsource(ih._pick_project_to_relocate)
+    assert "_ask().choose(" in picker, "the picker must use the one framework"
+    assert "somewhere else" in picker, "a typed path must stay reachable"
+
+
+def test_relocate_keeps_cancel_apart_from_no_screen():
+    """The distinction the whole questions framework exists for, in the one place here
+    where a wrong reading would move someone's files. None means no screen ran and the
+    printed plan takes over; "" and "cancel" both mean the human looked and declined."""
+    import inspect
+
+    import install_helper as ih
+
+    body = inspect.getsource(ih.run_relocate_to_vsit)
+    assert "if answer is None:" in body, "no screen must fall back, not cancel"
+    assert 'elif answer != "move":' in body, "anything else must decline, never proceed"
+    assert body.index("if answer is None:") < body.index('elif answer != "move":')
+
+
+def test_both_tiers_draw_a_decision_the_same_way():
+    """The update screen was the first of these and hardcoded its own content, so a second
+    one would have been a copy - and a copied screen is two screens that drift.
+
+    The content is built ONCE by the caller, in role names rather than either tier's
+    palette, and painted twice. A caller that spoke prompt_toolkit's class names could not
+    be drawn by Textual at all."""
+    import inspect
+
+    import install_helper as ih
+
+    # Resolved the way install_helper itself does, so this cannot pass against a copy the
+    # installer would never have found (the bug in dedfb05, one layer down).
+    installer_app = ih._import_from_scripts("installer_app")
+    launcher_textual = ih._import_from_scripts("launcher_textual")
+    assert installer_app and launcher_textual, "both tiers must be importable"
+
+    signatures = {
+        module.__name__: list(inspect.signature(module.decision_screen).parameters)
+        for module in (installer_app, launcher_textual)
+    }
+    assert len(set(map(tuple, signatures.values()))) == 1, f"tiers disagree: {signatures}"
+
+    roles = set(installer_app._ROLES)
+    textual = inspect.getsource(launcher_textual.decision_screen)
+    for role in roles:
+        assert f'"{role}"' in textual, f"the Textual tier cannot paint the {role!r} role"
