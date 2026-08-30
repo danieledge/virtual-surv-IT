@@ -196,6 +196,70 @@ def test_cancel_is_not_a_fallback():
           "APP_FALLBACK if pick is None" in src, False)
 
 
+def test_it_measures_the_real_terminal():
+    """The size must come from the tty, not from a piped stdout or a stale COLUMNS.
+
+    The alias captures the decision with `$(...)`, so stdout is a PIPE. Textual sizes
+    itself with shutil.get_terminal_size(), which measures sys.__stdout__ - measuring
+    a pipe raises, so Textual fell back to its 80x25 default and drew a two-pane
+    layout into a 66-column phone pane, wrapping every line ("IO is mangled",
+    2026-08-30).
+    """
+    import fcntl
+    import shutil
+    import struct
+    import termios
+
+    import launcher_textual
+
+    master, slave = os.openpty()
+    try:
+        # A terminal that is definitively NOT Textual's 80x25 default.
+        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 66, 0, 0))
+        tty = os.fdopen(slave, "w")
+        r, w = os.pipe()                        # stdout, as the alias leaves it
+        piped = os.fdopen(w, "w")
+
+        real_err, real_out = sys.stderr, sys.__stdout__
+        saved_cols = os.environ.get("COLUMNS")
+        try:
+            sys.stderr = tty
+            sys.__stdout__ = piped
+            os.environ["COLUMNS"] = "80"        # stale, and it outranks the real size
+            check("a pipe measures as Textual's default",
+                  shutil.get_terminal_size((80, 25)).columns, 80)
+            with launcher_textual._true_terminal_size():
+                check("inside, it measures the tty",
+                      shutil.get_terminal_size((80, 25)).columns, 66)
+                check("inside, COLUMNS cannot outrank it",
+                      os.environ.get("COLUMNS"), None)
+            check("COLUMNS is put back", os.environ.get("COLUMNS"), "80")
+            check("sys.__stdout__ is put back", sys.__stdout__ is piped, True)
+        finally:
+            sys.stderr, sys.__stdout__ = real_err, real_out
+            if saved_cols is None:
+                os.environ.pop("COLUMNS", None)
+            else:
+                os.environ["COLUMNS"] = saved_cols
+            for f in (tty, piped):
+                try:
+                    f.close()
+                except Exception:
+                    pass
+            os.close(r)
+    finally:
+        try:
+            os.close(master)
+        except Exception:
+            pass
+
+    # And it must actually be used, or the measurement changes nothing.
+    import inspect
+    check("run_app draws inside it",
+          "with _true_terminal_size():" in inspect.getsource(launcher_textual.run_app),
+          True)
+
+
 def test_a_broken_tier_costs_nothing():
     """Any failure degrades to the tier below, never breaks the launch."""
     import launcher_app
@@ -215,7 +279,7 @@ if __name__ == "__main__":
     for fn in (test_answers_launcher_apps_contract, test_wired_above_the_other_tiers,
                test_picks_match_launcher_app_exactly, test_guards_match_launcher_app,
                test_menu_renders_at_both_widths, test_cancel_is_not_a_fallback,
-               test_a_broken_tier_costs_nothing):
+               test_it_measures_the_real_terminal, test_a_broken_tier_costs_nothing):
         print(f"\n{fn.__name__}")
         fn()
     print()

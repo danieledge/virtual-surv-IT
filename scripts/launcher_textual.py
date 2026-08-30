@@ -23,6 +23,7 @@ full-screen tier, as it always has.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 from pathlib import Path
@@ -74,6 +75,49 @@ def _widgets():
         return None
 
 
+@contextlib.contextmanager
+def _true_terminal_size():
+    """Let Textual measure the REAL terminal for as long as it is drawing.
+
+    Textual sizes itself with shutil.get_terminal_size(), which reads COLUMNS/LINES
+    from the environment first and otherwise measures `sys.__stdout__`. Neither is
+    usable here:
+
+      * The launcher's stdout is a PIPE. The alias captures the decision string with
+        `$(...)`, so measuring stdout raises and Textual falls back to its 80x25
+        default. Drawn into a 66-column phone pane that wrapped every line, and the
+        wrapped remnants read as a second, mangled copy of the screen.
+      * COLUMNS/LINES, if exported at all, are whatever they were when some ancestor
+        shell last looked, and they OUTRANK the real measurement - including on a
+        resize, which would leave the app permanently wrong.
+
+    So for the duration of the run, point the measurement at the tty we already
+    require and drop the two variables. Both are restored afterwards. This is
+    deliberately dynamic rather than a one-off COLUMNS export: Textual re-measures on
+    SIGWINCH, and a pinned value would break resizing to fix sizing.
+    """
+    tty = None
+    for stream in (sys.stderr, sys.stdin):
+        try:
+            if stream is not None and stream.isatty():
+                stream.fileno()
+                tty = stream
+                break
+        except Exception:               # noqa: BLE001 — a stream that cannot answer is a no
+            continue
+    saved_stdout = sys.__stdout__
+    saved_env = {k: os.environ[k] for k in ("COLUMNS", "LINES") if k in os.environ}
+    try:
+        if tty is not None:
+            sys.__stdout__ = tty
+            for k in saved_env:
+                os.environ.pop(k, None)
+        yield
+    finally:
+        sys.__stdout__ = saved_stdout
+        os.environ.update(saved_env)
+
+
 def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = False,
             output=None):
     """The engagement menu, rendered in Textual.
@@ -96,7 +140,8 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
     try:
         app = widgets.MenuApp(project_dir, views, _actions(project_dir, mod, shown,
                                                            jira_on), menu)
-        app.run()
+        with _true_terminal_size():
+            app.run()
     except Exception:                   # noqa: BLE001 — any failure degrades
         return APP_FALLBACK
     if not getattr(app, "ran", False):
