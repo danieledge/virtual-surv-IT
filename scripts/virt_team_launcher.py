@@ -2276,9 +2276,9 @@ def _decision_from_pick(
             # tear the app down and drop to a bare input()). Same None/cancel contract the
             # settings screen learned the hard way: None means the screen could not run
             # and the plain prompt takes over; a cancel is NOT unavailability.
-            from launcher_app import JIRA_CANCELLED, jira_screen
+            from launcher_app import JIRA_CANCELLED
 
-            ref = jira_screen(project_dir, _this_module())
+            ref = _tiered_screen("jira_screen", project_dir, _this_module())
             if ref == JIRA_CANCELLED:
                 return "__again__"
             auto = False
@@ -4308,9 +4308,7 @@ def _watch_after_launch(project_dir: Path, slug: str) -> None:
     ink = _Ink()
     try:
         if slug:
-            from launcher_app import monitor_screen
-
-            monitor_screen(project_dir, _this_module(), slug)
+            _tiered_screen("monitor_screen", project_dir, _this_module(), slug)
             return
     except Exception:
         pass

@@ -771,3 +771,68 @@ def test_a_recent_project_is_a_destination_not_a_folder_to_enter():
     recent = source.index('kind == "recent"')
     tail = source[recent:]
     assert "self.picked = payload" in tail.split("self._reload")[0]
+
+
+# ---------------- tranche 3: the composer and the live monitor ----------------
+
+
+def test_every_go_screen_is_ported():
+    """The whole point: `virt-surv go` should not change renderer depending on which key
+    you pressed. request_screen and help_screen are the two exceptions and are deliberate -
+    request is already Textual via its own adapter, and help exits on any key."""
+    import launcher_textual
+
+    for name in (
+        "run_app",
+        "setup_screen",
+        "settings_screen",
+        "chooser_screen",
+        "request_screen",
+        "archive_screen",
+        "finished_screen",
+        "artifacts_screen",
+        "slug_picker_screen",
+        "browse_screen",
+        "auto_preflight_screen",
+        "jira_screen",
+        "monitor_screen",
+    ):
+        assert callable(getattr(launcher_textual, name, None)), f"{name} is not ported"
+
+
+def test_enter_submits_on_the_ticket_screen_and_not_on_the_request_screen():
+    """The two composers differ ON PURPOSE and a port is where that gets flattened.
+
+    A brief is prose that wants paragraphs, so Enter is a newline there and Ctrl-D sends.
+    A ticket reference is one short token, so the key that ends a line is the key that
+    finishes. Harmonising them would make one of the two screens wrong."""
+    import launcher_tiers
+
+    jira = inspect.getsource(launcher_tiers.JiraApp.on_key)
+    request = inspect.getsource(launcher_tiers.RequestApp.on_key)
+    assert 'if key == "enter"' in jira and "self.exit()" in jira.split('if key == "enter"')[1]
+    assert 'self.buf += "\\n"' in request, "the request composer keeps Enter as a newline"
+
+
+def test_watching_is_read_only_and_says_so():
+    """Nothing on the monitor changes anything - it watches another process work. Leaving
+    must therefore never read as cancelling, which is why the footer says the run
+    continues rather than leaving the user to assume it."""
+    import launcher_tiers
+
+    source = inspect.getsource(launcher_tiers.MonitorApp)
+    assert "the run continues either way" in source
+    keys = inspect.getsource(launcher_tiers.MonitorApp.on_key)
+    for mutating in ("_perform", "_record", "_write", "set_status"):
+        assert mutating not in keys, f"the monitor must not {mutating}"
+
+
+def test_the_monitor_re_reads_rather_than_caching():
+    """Another PROCESS writes the state file, so anything held in memory here is stale by
+    definition - the same reason _monitor_read re-reads. A timer, not a keypress loop."""
+    import launcher_tiers
+
+    mount = inspect.getsource(launcher_tiers.MonitorApp.on_mount)
+    assert "set_interval" in mount, "the monitor must refresh on a clock"
+    paint = inspect.getsource(launcher_tiers.MonitorApp.paint)
+    assert "self._read()" in paint, "and re-read on every paint, never cache"

@@ -546,3 +546,73 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
     if not getattr(app, "confirmed", False):
         return AUTO_CANCELLED
     return model["answers"](app.state)
+
+
+def jira_screen(project_dir: Path, mod, output=None):
+    """Start an engagement from a ticket, rendered in Textual.
+
+    Returns the ref, (ref, True) when unattended was armed, JIRA_CANCELLED on Esc, or None
+    when this tier cannot draw. The pair form exists so a caller cannot start an
+    unattended run without noticing that it did - a bare string could be passed on by
+    accident, a tuple cannot.
+    """
+    widgets = _widgets()
+    if widgets is None:
+        return None
+    try:
+        from launcher_app import JIRA_CANCELLED
+    except Exception:  # noqa: BLE001
+        return None
+    try:
+        auto_offered = bool(mod._auto_offered(project_dir))
+    except Exception:  # noqa: BLE001
+        auto_offered = False
+
+    def key_of(text: str) -> str:
+        """What this text reads as, using the launcher's own pattern - so the screen and
+        the caller can never disagree about what counts as a ticket key."""
+        try:
+            found = mod._JIRA_KEY_RE.search(text or "")
+            return found.group(1).upper() if found else ""
+        except Exception:  # noqa: BLE001
+            return ""
+
+    try:
+        app = widgets.JiraApp(project_dir, auto_offered, key_of)
+        with _true_terminal_size():
+            app.run()
+    except Exception:  # noqa: BLE001
+        return None
+    if not getattr(app, "ran", False):
+        return None
+    value = getattr(app, "value", None)
+    return JIRA_CANCELLED if value is None else value
+
+
+def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None):
+    """Watch an unattended run, rendered in Textual.
+
+    Returns MONITOR_CLOSED, or None when this tier cannot draw. Watching changes nothing,
+    so there is only one way for it to end.
+    """
+    widgets = _widgets()
+    if widgets is None:
+        return None
+    try:
+        from launcher_app import MONITOR_CLOSED, _MONITOR_REFRESH, _monitor_read
+    except Exception:  # noqa: BLE001
+        return None
+    try:
+        app = widgets.MonitorApp(
+            project_dir,
+            slug,
+            lambda: _monitor_read(project_dir, slug),
+            _MONITOR_REFRESH,
+        )
+        with _true_terminal_size():
+            app.run()
+    except Exception:  # noqa: BLE001
+        return None
+    if not getattr(app, "ran", False):
+        return None
+    return MONITOR_CLOSED

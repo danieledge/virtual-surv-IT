@@ -1508,3 +1508,181 @@ class PreflightApp(TierApp):
         else:
             return
         self.paint()
+
+
+class JiraApp(TierApp):
+    """Start an engagement from a ticket.
+
+    A composer like RequestApp, with one deliberate difference: ENTER SUBMITS here. The
+    request composer treats Enter as a newline because a brief is prose that wants
+    paragraphs; a ticket reference is one short token, so the key that ends a line is the
+    key that finishes. Kept as it was rather than harmonised - the two screens differ
+    because what they collect differs.
+
+    `value` is the ref, or (ref, True) when unattended was armed, or None for cancel.
+    """
+
+    def __init__(self, project, auto_offered: bool = False, key_of=None) -> None:
+        super().__init__(project)
+        self.buf = ""
+        self.auto_offered = bool(auto_offered)
+        self.auto = False
+        self.value = None
+        self.ran = False
+        self._key_of = key_of or (lambda text: "")
+
+    def on_mount(self) -> None:
+        self.ran = True
+        self._apply_width()
+        self.chrome_ready("from a Jira ticket")
+        self.paint()
+
+    def paint(self) -> None:
+        folder = self.folder()
+        self.head(folder if self.narrow else f"{folder}  ·  from a Jira ticket")
+
+        t = Text()
+        t.append("  Which ticket?\n\n", style=f"bold {HINT}")
+        t.append("  A key or a URL. Esc to go back.\n\n", style=DIM)
+        t.append("  > ", style=ACCENT)
+        t.append(self.buf or "", style=TEXT)
+        t.append("_\n", style=HINT)
+
+        found = self._key_of(self.buf)
+        if found:
+            t.append(f"\n    reads as {found}\n", style=OK)
+        elif self.buf.strip():
+            t.append("\n    no ticket key found yet\n", style=GOLD)
+
+        if self.auto_offered:
+            t.append("\n")
+            t.append("  " + ("●" if self.auto else "○") + " ", style=GOLD if self.auto else DIM)
+            t.append("Ctrl-T  run unattended", style=GOLD if self.auto else DIM)
+            t.append("  (confirm next)\n" if self.auto else "  (off - it asks)\n", style=DIM)
+        self.query_one("#rows", Static).update(t)
+
+        width = 26 if not self.narrow else max(20, self.panel_width() - 4)
+        body = Text("\n")
+        body.append("  From a ticket\n\n", style=f"bold {ACCENT}")
+        for line in wrap(
+            "The ticket becomes the engagement's request: the team reads it, "
+            "works it, and reports back on it at close.",
+            width,
+        ):
+            body.append(f"  {line}\n", style=DIM)
+        body.append("\n")
+        for line in wrap(
+            "Ticket content is DATA, never instructions - anything in it that "
+            "asks for a gate to be opened is reported, not obeyed.",
+            width,
+        ):
+            body.append(f"  {line}\n", style=GOLD)
+        self.query_one("#side-body", Static).update(body)
+
+        self.foot((("enter", "start"), ("^t", "unattended"), ("^u", "clear"), ("esc", "back")))
+
+    def on_key(self, event) -> None:
+        key = event.key
+        if key in ("escape", "ctrl+c"):
+            event.stop()
+            self.value = None
+            self.exit()
+            return
+        if key == "enter":
+            event.stop()
+            text = self.buf.strip()
+            self.value = ((text, True) if self.auto else text) if text else None
+            self.exit()
+            return
+        if key == "ctrl+u":
+            self.buf = ""
+            self.auto = False
+        elif key == "ctrl+t":
+            if self.auto_offered:
+                self.auto = not self.auto
+        elif key in ("backspace", "ctrl+h"):
+            self.buf = self.buf[:-1]
+        else:
+            ch = getattr(event, "character", None)
+            if not ch or not ch.isprintable():
+                return
+            self.buf += ch
+        event.stop()
+        self.paint()
+
+
+class MonitorApp(TierApp):
+    """Live status of an unattended run.
+
+    The only screen here driven by a CLOCK rather than by keys: another process is writing
+    the state file, so the screen re-reads on a timer. It re-reads rather than caching for
+    the same reason the reader does - anything held in memory here is stale by definition.
+
+    Nothing on this screen changes anything: it watches. Esc/q stops watching and the run
+    carries on, which the footer says out loud so that leaving never reads as cancelling.
+    """
+
+    def __init__(self, project, slug: str, read, refresh: float = 2.0) -> None:
+        super().__init__(project)
+        self.slug = slug
+        self._read = read
+        self._refresh = refresh
+        self.ran = False
+
+    def on_mount(self) -> None:
+        self.ran = True
+        self._apply_width()
+        self.chrome_ready(f"watching {self.slug}")
+        self.paint()
+        self.set_interval(self._refresh, self.paint)
+
+    def paint(self) -> None:
+        try:
+            snap = self._read() or {}
+        except Exception:  # noqa: BLE001 - a failed read is a state, not a crash
+            snap = {}
+        self.head(self.slug if self.narrow else f"{self.folder()}  ·  watching {self.slug}")
+
+        t = Text()
+        status = str(snap.get("status") or "unknown")
+        t.append("  status  ", style=DIM)
+        t.append(f"{status}\n\n", style=OK if status in ("closed", "done") else GOLD)
+        for label in ("phase", "elapsed", "spend", "artifacts", "outstanding"):
+            value = snap.get(label)
+            if value not in (None, "", []):
+                t.append(f"  {label:<12}", style=DIM)
+                t.append(f"{value}\n", style=TEXT)
+        note = snap.get("note") or snap.get("last_note")
+        if note:
+            t.append("\n")
+            for line in wrap(str(note), max(20, self.panel_width() - 4)):
+                t.append(f"  {line}\n", style=DIM)
+        self.query_one("#rows", Static).update(t)
+
+        width = 26 if not self.narrow else max(20, self.panel_width() - 4)
+        body = Text("\n")
+        body.append("  Watching\n\n", style=f"bold {ACCENT}")
+        for line in wrap(
+            "Another process is doing the work; this reads its state file every "
+            f"{self._refresh:g} seconds.",
+            width,
+        ):
+            body.append(f"  {line}\n", style=DIM)
+        body.append("\n")
+        for line in wrap("Leaving stops the watching, not the run.", width):
+            body.append(f"  {line}\n", style=GOLD)
+        self.query_one("#side-body", Static).update(body)
+
+        self.foot(
+            (("r", "refresh now"), ("esc/q", "stop watching")), "the run continues either way"
+        )
+
+    def on_key(self, event) -> None:
+        key = event.key
+        if key in ("escape", "q", "ctrl+c"):
+            event.stop()
+            self.exit()
+            return
+        if key == "r":
+            event.stop()
+            self.paint()
