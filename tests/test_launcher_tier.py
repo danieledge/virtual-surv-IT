@@ -712,3 +712,62 @@ def test_the_slug_pickers_empty_answer_is_not_a_fall_through():
     source = inspect.getsource(launcher_textual.slug_picker_screen)
     assert 'return ""' in source
     assert "return None" not in source, "this screen never returns None - '' is its answer"
+
+
+# ---------------- tranche 2: explorer and the authorisation gate ----------------
+
+
+def test_the_explorer_and_the_gate_are_ported():
+    import launcher_textual
+    import launcher_tiers
+
+    assert callable(launcher_textual.browse_screen)
+    assert callable(launcher_textual.auto_preflight_screen)
+    assert hasattr(launcher_tiers, "BrowseApp")
+    assert hasattr(launcher_tiers, "PreflightApp")
+
+
+def test_the_gate_has_ONE_model_shared_by_both_tiers():
+    """What is being AUTHORISED - the rows, the defaults, the vocabularies, the answer
+    shape - lives in _preflight_model and nowhere else.
+
+    Two copies of that, on the single gate that arms a run nobody is watching, is the last
+    duplication this repo should carry: the two screens could come to disagree about what
+    "allow exec" means and nothing would notice."""
+    import launcher_app
+    import launcher_textual
+
+    model = launcher_app._preflight_model()
+    assert set(model) == {"rows", "state", "caps", "on_budget", "modes", "value_of", "answers"}
+    # The Textual adapter must consume it rather than restate it.
+    source = inspect.getsource(launcher_textual.auto_preflight_screen)
+    assert "_preflight_model" in source
+    for restated in ("(0, 10, 25, 35", '"park", "light"', '"window", "headless"'):
+        assert restated not in source, f"the Textual tier restates {restated!r}"
+
+
+def test_enter_does_not_arm_an_unattended_run():
+    """On this screen of all screens the most reflexive key on the keyboard must not be
+    the one that starts a run nobody is watching. Enter acts on the highlighted row;
+    Ctrl-D commits (owner, 2026-08-25: "enter is too easy to press... user may press enter
+    thinking it toggles options"). Preserved through the port deliberately."""
+    import launcher_tiers
+
+    source = inspect.getsource(launcher_tiers.PreflightApp.on_key)
+    commit = source.index('key == "ctrl+d"')
+    toggle = source.index('key in ("enter", "space")')
+    assert "self.confirmed = True" in source[commit:toggle] or commit < toggle
+    after_toggle = source[toggle:]
+    assert "self.confirmed = True" not in after_toggle, "Enter must never confirm"
+    assert "self.exit()" not in after_toggle.split("self.paint()")[0], "Enter must not leave"
+
+
+def test_a_recent_project_is_a_destination_not_a_folder_to_enter():
+    """You picked a recent because you already know it is the project you want, so Enter
+    on it chooses it rather than browsing into it."""
+    import launcher_tiers
+
+    source = inspect.getsource(launcher_tiers.BrowseApp.on_key)
+    recent = source.index('kind == "recent"')
+    tail = source[recent:]
+    assert "self.picked = payload" in tail.split("self._reload")[0]

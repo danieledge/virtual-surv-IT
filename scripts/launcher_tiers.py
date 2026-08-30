@@ -1315,3 +1315,196 @@ class SlugPickerApp(ListApp):
         ):
             t.append(f"  {line}\n", style=DIM)
         return t
+
+
+class BrowseApp(TierApp):
+    """Choose a project folder.
+
+    Rows are rebuilt on every move because the list IS the current directory: "use this
+    folder", "up", the recent projects, then the children. A row therefore carries what
+    it means - use / up / recent / dir - rather than the caller inferring it from the
+    index, which would break the moment the row order changed.
+
+    `picked` is the chosen Path, or None for cancel.
+    """
+
+    def __init__(self, project, start, rows_for, recents: list) -> None:
+        super().__init__(
+            project,
+        )
+        self.here = start
+        self._rows_for = rows_for  # (directory) -> [(label, kind, payload)]
+        self.recents = list(recents)
+        self.rows = self._rows_for(self.here)
+        self.picked = None
+        self.ran = False
+
+    def on_mount(self) -> None:
+        self.ran = True
+        self._apply_width()
+        self.chrome_ready("Choose a project folder")
+        self.paint()
+
+    def _reload(self, new_dir) -> None:
+        self.here = new_dir
+        self.rows = self._rows_for(new_dir)
+        self.cursor = 0
+
+    def paint(self) -> None:
+        self.head(str(self.here) if self.narrow else f"{self.here}")
+        t = Text()
+        for i, (label, kind, _payload) in enumerate(self.rows):
+            sel = self.cursor == i
+            t.append("  ▸ " if sel else "    ", style=ACCENT if sel else HINT)
+            style = f"bold {TEXT}" if sel else (GOLD if kind in ("use", "recent") else TEXT)
+            t.append(f"{label}\n", style=style)
+        self.query_one("#rows", Static).update(t)
+        self.scroll_row(self.cursor)
+
+        width = 26 if not self.narrow else max(20, self.panel_width() - 4)
+        side = Text("\n")
+        side.append("  Where to work\n\n", style=f"bold {ACCENT}")
+        for line in wrap(
+            "Enter opens a folder. The first row uses the folder you are in. "
+            "Recent projects jump straight there.",
+            width,
+        ):
+            side.append(f"  {line}\n", style=DIM)
+        self.query_one("#side-body", Static).update(side)
+        self.foot((("↑↓", "move"), ("enter", "open"), ("bksp", "up"), ("esc/q", "cancel")))
+
+    def on_key(self, event) -> None:
+        key = event.key
+        if key in ("escape", "q", "ctrl+c"):
+            event.stop()
+            self.picked = None
+            self.exit()
+            return
+        if key in ("backspace", "left"):
+            event.stop()
+            if self.here.parent != self.here:
+                self._reload(self.here.parent)
+                self.paint()
+            return
+        if not self.rows:
+            return
+        if key == "down":
+            self.cursor = (self.cursor + 1) % len(self.rows)
+        elif key == "up":
+            self.cursor = (self.cursor - 1) % len(self.rows)
+        elif key == "enter":
+            event.stop()
+            _label, kind, payload = self.rows[self.cursor]
+            if kind == "use":
+                self.picked = self.here
+                self.exit()
+                return
+            if kind == "up":
+                if self.here.parent != self.here:
+                    self._reload(self.here.parent)
+                self.paint()
+                return
+            if kind == "recent":
+                # A recent entry is a DESTINATION, not a place to browse into: you picked
+                # it because you already know it is the project you want.
+                self.picked = payload
+                self.exit()
+                return
+            self._reload(payload[0])
+            self.paint()
+            return
+        else:
+            return
+        self.paint()
+
+
+class PreflightApp(TierApp):
+    """The single authorisation gate for an unattended run.
+
+    ENTER TOGGLES, IT DOES NOT COMMIT. On this screen of all screens the most reflexive
+    key on the keyboard must not be the one that arms an unattended run, so Enter does the
+    harmless thing people expect - it acts on the highlighted row - and committing is
+    Ctrl-D, the same send key the request composer uses. Preserved deliberately from the
+    prompt_toolkit screen (owner, 2026-08-25: "enter is too easy to press... user may
+    press enter thinking it toggles options").
+
+    `confirmed` says whether Ctrl-D was pressed; the caller reads the answers off `state`.
+    """
+
+    def __init__(self, project, rows: list, state: dict, value_of, caps, on_budget, modes) -> None:
+        super().__init__(project)
+        self.rows = list(rows)
+        self.state = state
+        self._value_of = value_of
+        self._caps = caps
+        self._on_budget = on_budget
+        self._modes = modes
+        self.confirmed = False
+        self.ran = False
+
+    def on_mount(self) -> None:
+        self.ran = True
+        self._apply_width()
+        self.chrome_ready("Authorise this run")
+        self.paint()
+
+    def paint(self) -> None:
+        self.head("Auto mode" if self.narrow else f"{self.folder()}  ·  Auto mode")
+        t = Text()
+        for i, (key, kind, label, _hint) in enumerate(self.rows):
+            sel = self.cursor == i
+            t.append("  ▸ " if sel else "    ", style=ACCENT if sel else HINT)
+            if kind == "toggle":
+                on = bool(self.state[key])
+                t.append("✓ " if on else "· ", style=OK if on else DIM)
+            else:
+                t.append("• ", style=KEY)
+            t.append(f"{label}", style=f"bold {TEXT}" if sel else TEXT)
+            if kind != "toggle":
+                t.append(f"   {self._value_of(key)}", style=GOLD)
+            t.append("\n")
+        self.query_one("#rows", Static).update(t)
+        self.scroll_row(self.cursor)
+
+        width = 26 if not self.narrow else max(20, self.panel_width() - 4)
+        side = Text("\n")
+        key, _kind, label, hint = self.rows[self.cursor]
+        side.append(f"  {label}\n\n", style=f"bold {ACCENT}")
+        for line in wrap(hint, width):
+            side.append(f"  {line}\n", style=DIM)
+        self.query_one("#side-body", Static).update(side)
+        self.foot(
+            (("↑↓", "move"), ("space/enter", "change"), ("^d", "START"), ("esc/q", "cancel")),
+            "nothing starts until Ctrl-D",
+        )
+
+    def on_key(self, event) -> None:
+        key = event.key
+        if key in ("escape", "q", "ctrl+c"):
+            event.stop()
+            self.confirmed = False
+            self.exit()
+            return
+        if key == "ctrl+d":
+            event.stop()
+            self.confirmed = True
+            self.exit()
+            return
+        if key == "down":
+            self.cursor = (self.cursor + 1) % len(self.rows)
+        elif key == "up":
+            self.cursor = (self.cursor - 1) % len(self.rows)
+        elif key in ("enter", "space"):
+            event.stop()
+            name, kind = self.rows[self.cursor][0], self.rows[self.cursor][1]
+            if kind == "toggle":
+                self.state[name] = not self.state[name]
+            elif name == "cap":
+                self.state["cap"] = (self.state["cap"] + 1) % len(self._caps)
+            elif name == "mode":
+                self.state["mode"] = (self.state["mode"] + 1) % len(self._modes)
+            else:
+                self.state["on_budget"] = (self.state["on_budget"] + 1) % len(self._on_budget)
+        else:
+            return
+        self.paint()

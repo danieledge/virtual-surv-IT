@@ -862,7 +862,7 @@ def _preflight_source():
 def test_the_spend_ceiling_defaults_to_35():
     src = _preflight_source()
     assert "CAPS = (0, 10, 25, 35, 50, 100)" in src, "$35 must be an offered rung"
-    body = src.split("def auto_preflight_screen", 1)[1]
+    body = src.split("_PREFLIGHT_CAPS = ", 1)[1]
     state = body.split("state = {", 1)[1].split("}", 1)[0]
     assert '"cap": 3' in state, "index 3 of CAPS is $35"
 
@@ -874,8 +874,8 @@ def test_at_the_ceiling_it_defaults_to_parking():
     "closing" with no verdict at all. Parking happens AT A GATE, which is a resumable place;
     a cap that fires wherever the run happens to be is not."""
     src = _preflight_source()
-    body = src.split("def auto_preflight_screen", 1)[1]
-    assert 'ON_BUDGET = ("park", "light", "continue", "stop")' in body, (
+    body = src.split("_PREFLIGHT_CAPS = ", 1)[1]
+    assert '_PREFLIGHT_ON_BUDGET = ("park", "light", "continue", "stop")' in body, (
         "four rungs: three advisory, one enforced"
     )
     state = body.split("state = {", 1)[1].split("}", 1)[0]
@@ -887,7 +887,7 @@ def test_enter_cannot_start_an_unattended_run():
     """2026-08-25: "enter is too easy to press ... user may press enter thinking it toggles
     options". On the single authorisation gate for an unattended run, the most reflexive key
     on the keyboard must not be the one that arms it."""
-    body = _preflight_source().split("def auto_preflight_screen", 1)[1]
+    body = _preflight_source().split("_PREFLIGHT_CAPS = ", 1)[1]
     commit = body.split("def _start(event):", 1)[0]
     tail = commit.rsplit("@kb.add(", 1)[1]
     assert tail.startswith('"c-d"'), f"the commit key must be Ctrl-D, found {tail[:20]!r}"
@@ -991,7 +991,7 @@ def test_the_enforced_cap_is_separate_from_the_advisory_ceiling():
     """Two fields, because they are two different promises and a caller must never have to
     infer which one was made."""
     src = _preflight_source()
-    body = src.split("def auto_preflight_screen", 1)[1]
+    body = src.split("_PREFLIGHT_CAPS = ", 1)[1]
     assert '"engagement_usd": ceiling' in body
     assert '"hard_cap_usd"' in body
 
@@ -1000,7 +1000,7 @@ def test_a_hard_cap_is_only_produced_when_it_can_actually_be_enforced():
     """--max-budget-usd exists in print mode only. Handing a caller a cap that nothing will
     honour is the worst kind of setting: it reads as a guarantee and is a preference."""
     src = _preflight_source()
-    body = src.split("def auto_preflight_screen", 1)[1]
+    body = src.split("_PREFLIGHT_CAPS = ", 1)[1]
     # The value is a multi-line expression now (the wall carries headroom above the
     # ceiling), so read the whole block rather than the first line of it.
     condition = body.split('"hard_cap_usd":', 1)[1].split("}", 1)[0]
@@ -1011,7 +1011,7 @@ def test_a_hard_cap_is_only_produced_when_it_can_actually_be_enforced():
 
 def test_choosing_a_hard_cap_on_a_windowed_run_says_why_it_cannot_apply():
     """Silently not enforcing it would be the failure. The screen names the fix."""
-    body = _preflight_source().split("def auto_preflight_screen", 1)[1]
+    body = _preflight_source().split("_PREFLIGHT_CAPS = ", 1)[1]
     assert "A hard cap needs a headless run" in body
     assert "Switch 'How it runs' to headless" in body
 
@@ -1042,7 +1042,7 @@ def test_web_search_is_off_unless_the_human_says_otherwise():
     fetches, or what a fetched page tells it to do - and reviewed content is DATA, never
     instruction (CLAUDE.md §7). So it is a pre-flight question with the cautious default."""
     src = _preflight_source()
-    body = src.split("def auto_preflight_screen", 1)[1]
+    body = src.split("_PREFLIGHT_CAPS = ", 1)[1]
     state = body.split("state = {", 1)[1].split("}", 1)[0]
     assert '"web": False' in state, "off by default"
     assert '("web", "toggle", "Allow web search"' in body, "and asked, not assumed"
@@ -1069,7 +1069,7 @@ def test_the_answer_travels_to_the_run(tmp_path):
 def test_a_report_written_without_the_web_is_not_silently_presented_as_researched():
     """The live case: a vendor report was produced with WebSearch refused and nothing said
     so. The pre-flight row states the consequence rather than only the setting."""
-    body = _preflight_source().split("def auto_preflight_screen", 1)[1]
+    body = _preflight_source().split("_PREFLIGHT_CAPS = ", 1)[1]
     assert "writes from what it knows" in body
 
 
@@ -1079,7 +1079,7 @@ def test_the_enforced_wall_sits_above_the_pacing_ceiling():
     verdict. The ceiling is what a run paces against; the wall exists to stop a runaway, not
     to adjudicate the last document."""
     src = _preflight_source()
-    body = src.split("def auto_preflight_screen", 1)[1]
+    body = src.split("_PREFLIGHT_CAPS = ", 1)[1]
     assert "_WALL_HEADROOM" in body, "the wall must be derived from the ceiling, not equal it"
     headroom = float(src.split("_WALL_HEADROOM = ", 1)[1].split("\n", 1)[0])
     assert headroom > 1.0, "no headroom is the bug"

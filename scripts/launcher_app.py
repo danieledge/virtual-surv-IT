@@ -1531,6 +1531,118 @@ _WALL_HEADROOM = 1.25
 _PREFLIGHT_KEYS = "Space/Enter toggle · Ctrl-D START unattended · Esc/q cancel"
 
 
+_PREFLIGHT_CAPS = (0, 10, 25, 35, 50, 100)
+# Four rungs, because the choice at a ceiling is genuinely two different choices and
+# collapsing them loses one (owner, 2026-08-25: "we can either say continue and notify or
+# choose a hard cap, why don't we keep flexibility"). park/light/continue are ADVISORY -
+# the ceiling is a threshold the run reports against and can pass. "stop" is ENFORCED,
+# passed to the CLI as --max-budget-usd, which no run can talk its way past because it is
+# the process that refuses. Keeping both means a ceiling can be pacing or a wall, and the
+# human says which rather than inheriting whichever we thought better.
+_PREFLIGHT_ON_BUDGET = ("park", "light", "continue", "stop")
+# Defaults, 2026-08-26: a $35 ceiling and PARK at it. Park was chosen over "carry on"
+# after watching a live run hit a hard cap mid-close: it had written a delivery report,
+# an engagement brief, two interim analyses and the summary email, and was stopped
+# before it could record its verdict - leaving a pack stuck at status "closing" with no
+# verdict at all. Parking happens AT A GATE, which is a resumable place; a cap that
+# fires wherever the run happens to be is not.
+_PREFLIGHT_RUN_MODES = ("window", "headless")
+
+_PREFLIGHT_ROWS = [
+    ("data", "toggle", "Data is synthetic or masked", "no PII/MNPI - your attestation"),
+    (
+        "exec",
+        "toggle",
+        "Allow the session to RUN code unattended",
+        "grants the gate here, expiring",
+    ),
+    # OFF by default (owner, 2026-08-26). An unattended run reaching the internet is a
+    # decision, not a convenience: nobody is watching what it fetches or what a fetched
+    # page tells it to do, and reviewed content is DATA rather than instruction
+    # (CLAUDE.md §7). But a research task without it writes from memory alone - a real
+    # engagement produced a vendor report with no web access at all and never said so.
+    ("web", "toggle", "Allow web search", "off = it writes from what it knows"),
+    ("mode", "cycle", "How it runs", "headless has no window and can be capped"),
+    ("cap", "cycle", "Spend ceiling for this engagement", "a threshold, or a wall - see below"),
+    ("on_budget", "cycle", "At the ceiling", "the degrade ladder, answered up front"),
+]
+
+
+def _preflight_model() -> dict:
+    """Everything the unattended gate authorises, in one place.
+
+    Both tiers draw from this: the rows, the starting state, the cycling vocabularies, how
+    a value reads, and how the final answers are built. A second copy would be two screens
+    that could drift about what is being authorised - on the single gate that arms a run
+    nobody is watching.
+
+    Returned fresh each call because `state` is mutated by the screen.
+    """
+    caps = _PREFLIGHT_CAPS
+    on_budget = _PREFLIGHT_ON_BUDGET
+    modes = _PREFLIGHT_RUN_MODES
+    state = {
+        "data": False,
+        "exec": False,
+        "web": False,
+        "cap": 3,
+        "on_budget": 0,
+        "mode": 0,
+        "confirmed": False,
+    }
+
+    def value_of(key):
+        if key == "cap":
+            return "no ceiling" if caps[state["cap"]] == 0 else f"${caps[state['cap']]}"
+        if key == "mode":
+            return {
+                "window": "in its own window",
+                "headless": "headless (no window)",
+            }[modes[state["mode"]]]
+        return {
+            "park": "park at next gate",
+            "light": "drop to light profile",
+            "continue": "carry on and notify",
+            "stop": "stop (enforced cap)",
+        }[on_budget[state["on_budget"]]]
+
+    def answers(final):
+        rung = on_budget[final["on_budget"]]
+        mode = modes[final["mode"]]
+        ceiling = caps[final["cap"]] or None
+        return {
+            "data_attested": final["data"],
+            "allow_exec": final["exec"],
+            "allow_web": final["web"],
+            "engagement_usd": ceiling,
+            "on_budget": rung,
+            "run_mode": mode,
+            # The ENFORCED cap, separate from the advisory ceiling on purpose - they are
+            # two different promises and the caller must not have to infer which was made.
+            # Only set when the human chose "stop" AND the run can actually be capped, so
+            # a caller passing this to --max-budget-usd never passes a limit nothing
+            # honours. HEADROOM above the pacing ceiling, not equal to it: a wall at the
+            # same number as the target kills a correctly-paced run inside its own closing
+            # sequence, which is what happened on 2026-08-26 - $5.08 against $5.00,
+            # terminated mid-close, twelve artifacts and no verdict.
+            "hard_cap_usd": (
+                round(ceiling * _WALL_HEADROOM, 2)
+                if (rung == "stop" and mode == "headless" and ceiling)
+                else None
+            ),
+        }
+
+    return {
+        "rows": list(_PREFLIGHT_ROWS),
+        "state": state,
+        "caps": caps,
+        "on_budget": on_budget,
+        "modes": modes,
+        "value_of": value_of,
+        "answers": answers,
+    }
+
+
 def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
     """The single authorisation gate for an unattended run (2026-08-20).
 
@@ -1553,69 +1665,18 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
         return None
 
     g = glyphs(mod)
-    # Cycling choices as well as toggles (2026-08-24). Unattended work is the one case where
-    # nobody is watching the spend, and the attended degrade ladder is a QUESTION - which an
-    # unattended run has nobody to ask, and which `--permission-mode dontAsk` denies outright.
-    # Both are therefore answered here, once, while a human is present.
-    CAPS = (0, 10, 25, 35, 50, 100)
-    # Four rungs, because the choice at a ceiling is genuinely two different choices and
-    # collapsing them loses one (owner, 2026-08-25: "we can either say continue and notify or
-    # choose a hard cap, why don't we keep flexibility"). park/light/continue are ADVISORY -
-    # the ceiling is a threshold the run reports against and can pass. "stop" is ENFORCED,
-    # passed to the CLI as --max-budget-usd, which no run can talk its way past because it is
-    # the process that refuses. Keeping both means a ceiling can be pacing or a wall, and the
-    # human says which rather than inheriting whichever we thought better.
-    ON_BUDGET = ("park", "light", "continue", "stop")
-    # Defaults, 2026-08-26: a $35 ceiling and PARK at it. Park was chosen over "carry on"
-    # after watching a live run hit a hard cap mid-close: it had written a delivery report,
-    # an engagement brief, two interim analyses and the summary email, and was stopped
-    # before it could record its verdict - leaving a pack stuck at status "closing" with no
-    # verdict at all. Parking happens AT A GATE, which is a resumable place; a cap that
-    # fires wherever the run happens to be is not.
-    RUN_MODES = ("window", "headless")
-    state = {
-        "data": False,
-        "exec": False,
-        "web": False,
-        "cap": 3,
-        "on_budget": 0,
-        "mode": 0,
-        "confirmed": False,
-    }
+    # ONE model, shared with the Textual tier. What is being AUTHORISED - the rows, the
+    # defaults, the vocabularies, the answer shape - lives in _preflight_model; this screen
+    # only draws it. Two copies of that, on the single gate that arms a run nobody is
+    # watching, is the last duplication this repo should carry.
+    model = _preflight_model()
+    rows = model["rows"]
+    state = model["state"]
+    CAPS = model["caps"]
+    ON_BUDGET = model["on_budget"]
+    RUN_MODES = model["modes"]
+    _value = model["value_of"]
     idx = [0]
-    rows = [
-        ("data", "toggle", "Data is synthetic or masked", "no PII/MNPI - your attestation"),
-        (
-            "exec",
-            "toggle",
-            "Allow the session to RUN code unattended",
-            "grants the gate here, expiring",
-        ),
-        # OFF by default (owner, 2026-08-26). An unattended run reaching the internet is a
-        # decision, not a convenience: nobody is watching what it fetches or what a fetched
-        # page tells it to do, and reviewed content is DATA rather than instruction
-        # (CLAUDE.md §7). But a research task without it writes from memory alone - a real
-        # engagement produced a vendor report with no web access at all and never said so.
-        ("web", "toggle", "Allow web search", "off = it writes from what it knows"),
-        ("mode", "cycle", "How it runs", "headless has no window and can be capped"),
-        ("cap", "cycle", "Spend ceiling for this engagement", "a threshold, or a wall - see below"),
-        ("on_budget", "cycle", "At the ceiling", "the degrade ladder, answered up front"),
-    ]
-
-    def _value(key):
-        if key == "cap":
-            return "no ceiling" if CAPS[state["cap"]] == 0 else f"${CAPS[state['cap']]}"
-        if key == "mode":
-            return {
-                "window": "in its own window",
-                "headless": "headless (no window)",
-            }[RUN_MODES[state["mode"]]]
-        return {
-            "park": "park at next gate",
-            "light": "drop to light profile",
-            "continue": "carry on, report it",
-            "stop": "STOP - hard cap",
-        }[ON_BUDGET[state["on_budget"]]]
 
     def _body():
         out = [("class:group", f"  {g['jira']}Unattended run: {ref}\n\n")]
@@ -1731,32 +1792,7 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
         return None
     if not state["confirmed"]:
         return AUTO_CANCELLED
-    rung = ON_BUDGET[state["on_budget"]]
-    mode = RUN_MODES[state["mode"]]
-    ceiling = CAPS[state["cap"]] or None
-    return {
-        "data_attested": state["data"],
-        "allow_exec": state["exec"],
-        "allow_web": state["web"],
-        "engagement_usd": ceiling,
-        "on_budget": rung,
-        "run_mode": mode,
-        # The ENFORCED cap, separate from the advisory ceiling on purpose - they are two
-        # different promises and the caller must not have to infer which was made. Only set
-        # when the human chose "stop" AND the run can actually be capped, so a caller passing
-        # this to --max-budget-usd is never passing a limit nothing will honour.
-        # HEADROOM above the pacing ceiling, not equal to it. Setting the wall at the same
-        # number as the target guarantees that a run which paces itself correctly is killed
-        # inside its own closing sequence - which is exactly what happened on 2026-08-26:
-        # $5.08 against a $5.00 cap, terminated mid-close, twelve artifacts and no verdict.
-        # The ceiling is what the run paces against; the wall exists to stop a runaway, not
-        # to adjudicate the last document.
-        "hard_cap_usd": (
-            round(ceiling * _WALL_HEADROOM, 2)
-            if (rung == "stop" and mode == "headless" and ceiling)
-            else None
-        ),
-    }
+    return model["answers"](state)
 
 
 REQUEST_SKIPPED = "__request_skipped__"

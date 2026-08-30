@@ -1504,9 +1504,9 @@ def _browse_decision(project_dir: Path):
     plain fallback below is a single typed path, because a numbered directory walker in
     input() is worse than just pasting the path you already know."""
     try:
-        from launcher_app import BROWSE_CANCELLED, browse_screen
+        from launcher_app import BROWSE_CANCELLED
 
-        chosen = browse_screen(project_dir, _this_module())
+        chosen = _tiered_screen("browse_screen", project_dir, _this_module())
         if chosen is None:
             return _browse_prompt(project_dir)
         if chosen == BROWSE_CANCELLED:
@@ -1768,9 +1768,9 @@ def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> s
     ink = _Ink()
     err = sys.stderr
     try:
-        from launcher_app import AUTO_CANCELLED, auto_preflight_screen
+        from launcher_app import AUTO_CANCELLED
 
-        answers = auto_preflight_screen(project_dir, _this_module(), ref)
+        answers = _tiered_screen("auto_preflight_screen", project_dir, _this_module(), ref)
     except Exception:
         return ""
     if answers is None:

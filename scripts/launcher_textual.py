@@ -452,3 +452,97 @@ def slug_picker_screen(project_dir: Path, mod, shown: list, output=None):
     if index is None or not (0 <= index < len(shown)):
         return ""
     return mod._row_resume_token(shown[index]) or ""
+
+
+def browse_screen(start_dir: Path, mod, output=None):
+    """The project explorer, rendered in Textual.
+
+    Returns the chosen Path, BROWSE_CANCELLED on Esc, or None when this tier cannot draw -
+    the same three answers launcher_app gives, and all three are different: a cancel must
+    not fall through to the next tier, which would draw the same explorer again.
+    """
+    widgets = _widgets()
+    if widgets is None:
+        return None
+    try:
+        from launcher_app import BROWSE_CANCELLED, _dir_entries
+    except Exception:  # noqa: BLE001
+        return None
+    try:
+        here = start_dir.resolve()
+    except Exception:  # noqa: BLE001
+        here = start_dir
+    try:
+        recents = mod._recent_projects()
+    except Exception:  # noqa: BLE001
+        recents = []
+
+    def rows_for(directory):
+        """(label, kind, payload) - the same four kinds launcher_app builds, from the
+        same helper, so the two explorers cannot disagree about what a row is."""
+        rows = [(f"use this folder  ({directory.name or directory})", "use", directory)]
+        if directory.parent != directory:
+            rows.append(
+                (".. up to " + (directory.parent.name or str(directory.parent)), "up", None)
+            )
+        for recent in recents:
+            if recent != directory:
+                rows.append((f"{recent.name}", "recent", recent))
+        try:
+            for child, is_project in _dir_entries(directory, mod):
+                rows.append((child.name, "dir", (child, is_project)))
+        except Exception:  # noqa: BLE001 - an unreadable directory is still browsable
+            pass
+        return rows
+
+    try:
+        app = widgets.BrowseApp(start_dir, here, rows_for, recents)
+        with _true_terminal_size():
+            app.run()
+    except Exception:  # noqa: BLE001
+        return None
+    if not getattr(app, "ran", False):
+        return None
+    picked = getattr(app, "picked", None)
+    return BROWSE_CANCELLED if picked is None else picked
+
+
+def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
+    """The unattended authorisation gate, rendered in Textual.
+
+    Returns the authorisations dict, AUTO_CANCELLED, or None when this tier cannot draw.
+
+    The rows, the defaults and the answer shape all come from launcher_app: this is the
+    single gate that arms an unattended run, and a second copy of WHAT is being authorised
+    is the last thing that should exist. Only the drawing is here.
+    """
+    widgets = _widgets()
+    if widgets is None:
+        return None
+    try:
+        from launcher_app import AUTO_CANCELLED, _preflight_model
+    except Exception:  # noqa: BLE001
+        return None
+    try:
+        model = _preflight_model()
+    except Exception:  # noqa: BLE001
+        return None
+    try:
+        app = widgets.PreflightApp(
+            project_dir,
+            model["rows"],
+            model["state"],
+            model["value_of"],
+            model["caps"],
+            model["on_budget"],
+            model["modes"],
+        )
+        with _true_terminal_size():
+            app.run()
+    except Exception:  # noqa: BLE001
+        return None
+    if not getattr(app, "ran", False):
+        return None
+    if not getattr(app, "confirmed", False):
+        return AUTO_CANCELLED
+    return model["answers"](app.state)
