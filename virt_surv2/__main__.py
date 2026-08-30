@@ -203,7 +203,13 @@ def main(argv=None) -> int:
         app = InstallerTuiApp(ih, repo, a.demo,
                               start="launch" if launching else "settings",
                               project=project, rows=rows, note=note)
-        app.run()
+        try:
+            app.run()
+        except Exception as exc:        # noqa: BLE001
+            print(f"virt-surv2 could not start its interface: {exc}", file=sys.stderr)
+            print("  nothing was launched. `virt-surv go` is the fallback.",
+                  file=sys.stderr)
+            return E.ABORT_EXIT_CODE
         if not launching:
             return app.exit_code
         # The launcher's contract, shared with `virt-surv go`: the decision is the ONLY

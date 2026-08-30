@@ -627,6 +627,11 @@ class LaunchScreen(Responsive):
         self.project = Path(project) if project else Path.cwd()
         self.engagements = list(rows or [])
         self.note = note
+        # [j] is ALWAYS shown, matching v1's _jira_offered - "it's an available option
+        # always, by default" (2026-08-20). Safe because the launcher never talks to
+        # Jira: picking it collects a ticket ref and pre-seeds the prompt. The outward
+        # actions - creating the issue, mirroring progress - stay behind
+        # integrations.jira.enabled, because those touch someone else's tracker.
         resume: list[tuple[str, Any]] = []
         if self.engagements:
             resume = ([("group", "Resume an engagement")]
