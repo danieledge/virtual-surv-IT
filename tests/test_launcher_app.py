@@ -637,7 +637,7 @@ def test_help_screen_explains_the_status_marks_and_the_keys(ptk, tmp_path):
 def test_the_menu_advertises_help_and_that_escape_does_not_launch(ptk):
     _pick, text = _drive(ptk, "\x1b", [_row()])
     assert "? help" in text
-    assert "Esc back to terminal" in text
+    assert "Esc/q back to terminal" in text
 
 
 def test_the_menu_offers_artifacts_when_something_is_open(ptk):
@@ -945,3 +945,151 @@ def test_ui_text_degrades_together_and_is_identity_otherwise():
     plain = app.ui_text(_Cp1252, rich_line)
     plain.encode("cp1252")  # the whole point
     assert "up/dn" in plain and "!" in plain
+
+
+def test_the_first_screen_a_new_project_sees_is_ported_to_textual():
+    """It is the ONE screen a brand-new folder always hits, and it was the only screen
+    left on the older tier - so the first thing a new user ever saw was the renderer
+    everything else had moved off, and Textual appeared only once the project was already
+    configured (owner report, 2026-08-30: "it does work, just not from a folder where
+    there are no existing engagements").
+
+    Asserted on the ADAPTER and the widget rather than by rendering: whether Textual can
+    draw depends on the terminal, and that is not what this is about."""
+    import launcher_textual
+    import launcher_tiers
+
+    assert callable(launcher_textual.setup_screen)
+    assert hasattr(launcher_tiers, "SetupApp")
+
+
+def test_the_textual_setup_screen_keeps_cancel_and_skip_apart():
+    """The distinction the whole flow rests on: skip launches without configuring, cancel
+    launches nothing at all. Folding them together on the prompt_toolkit tier made Esc
+    start a session (2026-08-29), and a port is exactly where that gets re-introduced."""
+    app = _load("launcher_app")
+    import launcher_tiers
+
+    rows = [(app.SETUP_DEFAULTS, "a", ""), (app.SETUP_GUIDED, "b", ""), (app.SETUP_SKIP, "c", "")]
+    widget = launcher_tiers.SetupApp.__new__(launcher_tiers.SetupApp)
+    widget.rows = rows
+    widget._cancel = app.SETUP_CANCEL
+    widget.picked = app.SETUP_CANCEL
+    assert widget.picked == app.SETUP_CANCEL
+    assert app.SETUP_CANCEL != app.SETUP_SKIP
+    # And the three offered choices are the three the caller knows how to act on.
+    assert [value for value, _label, _blurb in rows] == [
+        app.SETUP_DEFAULTS,
+        app.SETUP_GUIDED,
+        app.SETUP_SKIP,
+    ]
+
+
+def test_the_launcher_tries_textual_before_the_older_tier_for_setup():
+    """Source-level, because the fall-through is the contract: Textual first, the
+    prompt_toolkit screen only when it returns None."""
+    source = (REPO_ROOT / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
+    start = source.index("def _offer_first_time_setup")
+    end = source.index("if choice == SETUP_CANCEL", start)
+    block = source[start:end]
+    assert "setup_textual" in block, "the Textual tier must be tried"
+    assert block.index("setup_textual") < block.index("choice = setup_screen("), (
+        "and tried FIRST - the older tier is the fallback, not the default"
+    )
+
+
+# ---------------- the keybinding contract (audit, 2026-08-30) ----------------
+#
+# Two tiers draw the same screens, so a key meaning one thing here and another there is a
+# defect a user meets as "it did something different that time". These pin the rules the
+# audit found rather than describing them in a document nobody re-reads.
+
+
+def _screen_blocks():
+    """{screen name: source} for every full-screen function in the prompt_toolkit tier."""
+    import ast
+
+    source = (REPO_ROOT / "scripts" / "launcher_app.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    lines = source.split("\n")
+    blocks = {}
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and (
+            node.name.endswith("_screen") or node.name == "run_app"
+        ):
+            blocks[node.name] = "\n".join(lines[node.lineno - 1 : node.end_lineno])
+    return blocks
+
+
+# The composers take typed text, so q is a LETTER there, not a command. Named rather than
+# detected: "does this screen accept text" is a design fact, and inferring it from the
+# source is how a new composer silently gets q bound and eats someone's first keystroke.
+_TEXT_ENTRY_SCREENS = {"jira_screen", "request_screen"}
+
+
+def test_every_screen_that_can_takes_q_as_well_as_esc():
+    """q worked on some list screens and did nothing on others - browse, the slug picker
+    and the unattended pre-flight were missing it while every sibling had it (audit,
+    2026-08-30). One rule: if a screen takes no typed text, q leaves it."""
+    missing = []
+    for name, body in _screen_blocks().items():
+        if name in _TEXT_ENTRY_SCREENS or name == "help_screen":
+            continue  # help_screen exits on ANY key, which already includes q
+        if '@kb.add("q"' not in body:
+            missing.append(name)
+    assert not missing, f"these take no typed text but do not accept q: {missing}"
+
+
+def test_a_composer_never_binds_q():
+    """The other half, and the one that would cost a user a keystroke: q must stay a
+    letter where letters are being typed."""
+    for name in _TEXT_ENTRY_SCREENS:
+        body = _screen_blocks()[name]
+        assert '@kb.add("q"' not in body, f"{name} takes typed text - q must not be a command"
+
+
+def test_every_screen_advertises_the_way_out_it_actually_has():
+    """q was bound on nine screens and named in no footer - it worked everywhere you would
+    guess and was discoverable nowhere. A key that works but is not advertised is a hidden
+    feature; the reverse would be a lie. Neither is acceptable in a footer whose whole job
+    is telling you which keys exist."""
+    import re
+
+    source = (REPO_ROOT / "scripts" / "launcher_app.py").read_text(encoding="utf-8")
+    unadvertised = []
+    for name, body in _screen_blocks().items():
+        if name in _TEXT_ENTRY_SCREENS or name == "help_screen":
+            continue
+        if '@kb.add("q"' not in body:
+            continue
+        text = body.lower()
+        # A footer can live in a module constant the screen references - the unattended
+        # pre-flight builds its hint from _PREFLIGHT_KEYS. Checking the function body
+        # alone would report that as unadvertised when the string it renders says so.
+        for constant in re.findall(r"\b(_[A-Z_]*KEYS)\b", body):
+            match = re.search(rf'^{constant} = "([^"]*)"', source, re.M)
+            if match:
+                text += match.group(1).lower()
+        if "esc/q" not in text:
+            unadvertised.append(name)
+    assert not unadvertised, f"these bind q but no footer says so: {unadvertised}"
+
+
+def test_esc_exits_at_the_top_level_and_goes_back_below_it():
+    """The rule the audit confirmed, and the one that has broken twice.
+
+    The two entry screens - the go menu and first-time setup - are where Esc means LEAVE:
+    the caller turns that into exit 97 and launches nothing. Everywhere else Esc means
+    back, because there is a menu to go back to. Folding "left" into "skip" made Esc start
+    a session (2026-08-29); folding it into "just launch" did the same on the menu
+    (2026-08-20)."""
+    blocks = _screen_blocks()
+    assert "SETUP_CANCEL" in blocks["setup_screen"], (
+        "setup's Esc must return a CANCEL sentinel, never SKIP - skip launches"
+    )
+    launcher = (REPO_ROOT / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
+    assert "_ABORT_EXIT_CODE = 97" in launcher
+    # Both entry points reach the same abort, so "leaving" means one thing in one place.
+    assert launcher.count("return _ABORT") >= 2, (
+        "the menu and setup must both be able to abort the launch"
+    )

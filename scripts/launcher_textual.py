@@ -297,3 +297,39 @@ def chooser_screen(options, ih, *, title: str, actions=None, repo=None, output=N
     if not getattr(app, "ran", False):
         return None
     return getattr(app, "picked", "")
+
+
+def setup_screen(project_dir: Path, mod, output=None):
+    """The first-time-setup screen, rendered in Textual.
+
+    Same contract and the same four sentinels as launcher_app.setup_screen, including the
+    one that matters most: CANCEL is not SKIP. Skip launches without configuring; cancel
+    launches nothing. Returns None only when this tier cannot draw, which is the signal
+    the caller uses to fall through - never to mean "the user declined".
+    """
+    widgets = _widgets()
+    if widgets is None:
+        return None
+    try:
+        from launcher_app import (
+            SETUP_CANCEL,
+            SETUP_DEFAULTS,
+            SETUP_GUIDED,
+            SETUP_SKIP,
+        )
+    except Exception:  # noqa: BLE001
+        return None
+    rows = [
+        (SETUP_DEFAULTS, "set up with recommended defaults", "no questions asked"),
+        (SETUP_GUIDED, "guided setup", "asks questions; leaves this screen"),
+        (SETUP_SKIP, "skip for now", "launch without setting up"),
+    ]
+    try:
+        app = widgets.SetupApp(project_dir, rows, SETUP_CANCEL)
+        with _true_terminal_size():
+            app.run()
+    except Exception:  # noqa: BLE001 — any failure degrades
+        return None
+    if not getattr(app, "ran", False):
+        return None
+    return getattr(app, "picked", SETUP_CANCEL)

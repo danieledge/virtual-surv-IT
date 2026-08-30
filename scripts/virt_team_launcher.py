@@ -3998,7 +3998,19 @@ def _offer_first_time_setup(project_dir: Path):
             setup_screen,
         )
 
-        choice = setup_screen(project_dir, _this_module())
+        # Textual first, exactly as the go menu does. This is the ONE screen a brand-new
+        # folder always hits, so leaving it on the older tier meant the very first thing
+        # a new user saw was the renderer everything else had moved off - and Textual only
+        # appeared once the project was already configured (2026-08-30).
+        choice = None
+        try:
+            from launcher_textual import setup_screen as setup_textual
+
+            choice = setup_textual(project_dir, _this_module())
+        except Exception:
+            choice = None  # same contract as every tier: degrade, never break the launch
+        if choice is None:
+            choice = setup_screen(project_dir, _this_module())
         if choice == SETUP_CANCEL:
             # The human left. Returning _ABORT rather than False is the whole fix: False
             # means "not configured, carry on and launch", which is what made pressing

@@ -399,7 +399,7 @@ class MenuApp(TierApp):
         self.query_one("#side-body", Static).update(body)
 
         self.foot(
-            (("↑↓", "move"), ("enter", "choose"), ("esc", "back to terminal")),
+            (("↑↓", "move"), ("enter", "choose"), ("esc/q", "back to terminal")),
             f"{len(self.views)} open in {folder}",
         )
 
@@ -731,7 +731,7 @@ class SettingsApp(TierApp):
             keys = (("type", "the key"), ("enter", "save"), ("esc", "cancel"))
             note = "editing the Jira project key"
         elif self.narrow:
-            keys = (("↑↓", "move"), ("enter", "toggle"), ("esc", "back"))
+            keys = (("↑↓", "move"), ("enter", "toggle"), ("esc/q", "back"))
             note = name
         else:
             keys = (
@@ -927,9 +927,9 @@ class ChooserApp(TierApp):
         if "deletes" in kinds:
             legend += f"{' · ' if legend else ''}{self.mark_deletes} deletes"
         keys = (
-            (("↑↓", "move"), ("enter", "choose"), ("esc", "back"))
+            (("↑↓", "move"), ("enter", "choose"), ("esc/q", "back"))
             if self.narrow
-            else (("↑↓", "move"), ("enter", "choose"), ("esc", "back"))
+            else (("↑↓", "move"), ("enter", "choose"), ("esc/q", "back"))
         )
         self.foot(keys, legend)
 
@@ -962,4 +962,89 @@ class ChooserApp(TierApp):
                 return
             self.cursor = hit[0]
         event.stop()
+        self.paint()
+
+
+class SetupApp(TierApp):
+    """First-time setup, for a folder the team has never run in.
+
+    THE FIRST SCREEN ANYONE EVER SEES. A brand-new project has no configuration, so this
+    is what greets a new user before the menu exists - which is exactly why it being the
+    last screen on the old renderer was the wrong way round (2026-08-30).
+
+    `picked` is one of the caller's sentinels, or the cancel sentinel for Esc. Cancel is
+    NOT skip: skip launches without configuring, cancel launches nothing at all, and
+    folding the two together once meant that backing out of this screen started a session
+    anyway.
+    """
+
+    def __init__(self, project, rows: list, cancel_value) -> None:
+        super().__init__(project)
+        self.rows = list(rows)  # (value, label, blurb)
+        self._cancel = cancel_value
+        self.picked = cancel_value
+        self.ran = False
+
+    def on_mount(self) -> None:
+        self.ran = True
+        self._apply_width()
+        self.chrome_ready("Set up this project")
+        self.paint()
+
+    def paint(self) -> None:
+        folder = self.folder()
+        self.head(folder if self.narrow else f"{folder}  ·  Set up this project")
+
+        t = Text()
+        t.append("  First-time setup\n\n", style=f"bold {GOLD}")
+        t.append("  No team configuration in this folder yet.\n\n", style=DIM)
+        for i, (_value, label, blurb) in enumerate(self.rows):
+            sel = self.cursor == i
+            t.append("  ▸ " if sel else "    ", style=ACCENT if sel else HINT)
+            t.append(f"{label}\n", style=f"bold {TEXT}" if sel else TEXT)
+            t.append(f"        {blurb}\n\n", style=DIM)
+        self.query_one("#rows", Static).update(t)
+        # Three rows of three lines each, so the cursor's line is not its index.
+        self.scroll_row(self.cursor * 3 + 2)
+
+        w = 26 if not self.narrow else max(20, self.panel_width() - 4)
+        body = Text("\n")
+        body.append("  What setup does\n\n", style=f"bold {ACCENT}")
+        for line in wrap(
+            "Writes this project's own team-preferences.json, so the team knows how you "
+            "want it to work here.",
+            w,
+        ):
+            body.append(f"  {line}\n", style=DIM)
+        body.append("\n")
+        for line in wrap(
+            "Nothing outside this folder is touched, and every setting can be changed "
+            "later from the menu.",
+            w,
+        ):
+            body.append(f"  {line}\n", style=DIM)
+        self.query_one("#side-body", Static).update(body)
+
+        self.foot((("↑↓", "move"), ("enter", "choose"), ("esc/q", "back to the shell")))
+
+    def on_key(self, event) -> None:
+        key = event.key
+        if key in ("escape", "q", "ctrl+c"):
+            event.stop()
+            self.picked = self._cancel  # leaving is a decision, and it launches nothing
+            self.exit()
+            return
+        if not self.rows:
+            return
+        if key == "down":
+            self.cursor = (self.cursor + 1) % len(self.rows)
+        elif key == "up":
+            self.cursor = (self.cursor - 1) % len(self.rows)
+        elif key == "enter":
+            event.stop()
+            self.picked = self.rows[self.cursor][0]
+            self.exit()
+            return
+        else:
+            return
         self.paint()

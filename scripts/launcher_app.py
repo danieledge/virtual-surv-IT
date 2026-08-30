@@ -201,7 +201,10 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
         except Exception:
             hint = ""
         out = [
-            ("class:dim", ui_text(mod, "  ↑↓ move · Enter choose · ? help · Esc back to terminal"))
+            (
+                "class:dim",
+                ui_text(mod, "  ↑↓ move · Enter choose · ? help · Esc/q back to terminal"),
+            )
         ]
         if hint:
             out.append(("class:warn", ui_text(mod, f"   ⚠ {hint}")))
@@ -405,7 +408,7 @@ def settings_screen(project_dir: Path, mod, output=None):
                     if editing[0] is not None
                     else ui_text(
                         mod,
-                        "  ↑↓ move · Enter toggle · e edit key · d defaults · Esc back   "
+                        "  ↑↓ move · Enter toggle · e edit · d defaults · Esc/q back   "
                         f"{project_dir.name}",
                     )
                 ),
@@ -585,7 +588,7 @@ def archive_screen(project_dir: Path, mod, engagement_state, menu: dict, output=
         ]
 
     def _footer():
-        return [("class:hint", ui_text(mod, "  ↑↓ move · Enter archive · Esc back"))]
+        return [("class:hint", ui_text(mod, "  ↑↓ move · Enter archive · Esc/q back"))]
 
     kb = KeyBindings()
     total = len(views) + 1
@@ -723,7 +726,7 @@ def finished_screen(project_dir: Path, mod, engagement_state, output=None):
         return [
             (
                 "class:hint",
-                ui_text(mod, "  ↑↓ move · Enter open · s sign off · r redo (supersede) · Esc back"),
+                ui_text(mod, "  ↑↓ move · Enter open · s sign off · r redo · Esc/q back"),
             )
         ]
 
@@ -1104,7 +1107,9 @@ def browse_screen(start_dir: Path, mod, output=None):
         return out
 
     def _footer():
-        return [("class:hint", ui_text(mod, "  ↑↓ move · Enter open · Backspace up · Esc cancel"))]
+        return [
+            ("class:hint", ui_text(mod, "  ↑↓ move · Enter open · Backspace up · Esc/q cancel"))
+        ]
 
     kb = KeyBindings()
 
@@ -1143,6 +1148,7 @@ def browse_screen(start_dir: Path, mod, output=None):
 
     @kb.add("escape", eager=True)
     @kb.add("c-c")
+    @kb.add("q")
     def _esc(event):
         result["v"] = BROWSE_CANCELLED
         event.app.exit()
@@ -1237,7 +1243,7 @@ def setup_screen(project_dir: Path, mod, output=None):
         return out
 
     def _footer():
-        return [("class:hint", ui_text(mod, "  ↑↓ move · Enter choose · Esc back to the shell"))]
+        return [("class:hint", ui_text(mod, "  ↑↓ move · Enter choose · Esc/q back to the shell"))]
 
     kb = KeyBindings()
 
@@ -1322,7 +1328,7 @@ def artifacts_screen(project_dir: Path, mod, slug: str, output=None):
         return out
 
     def _footer():
-        return [("class:hint", ui_text(mod, f"  ↑↓ move · Enter open · Esc back   {slug}"))]
+        return [("class:hint", ui_text(mod, f"  ↑↓ move · Enter open · Esc/q back   {slug}"))]
 
     kb = KeyBindings()
 
@@ -1473,7 +1479,7 @@ def slug_picker_screen(project_dir: Path, mod, shown: list, output=None):
         return out
 
     def _footer():
-        return [("class:hint", ui_text(mod, "  ↑↓ move · Enter choose · Esc back"))]
+        return [("class:hint", ui_text(mod, "  ↑↓ move · Enter choose · Esc/q back"))]
 
     kb = KeyBindings()
 
@@ -1492,6 +1498,7 @@ def slug_picker_screen(project_dir: Path, mod, shown: list, output=None):
 
     @kb.add("escape", eager=True)
     @kb.add("c-c")
+    @kb.add("q")
     def _esc(event):
         event.app.exit()
 
@@ -1521,7 +1528,7 @@ _WALL_HEADROOM = 1.25
 
 # Left as the rich form; every use site passes it through ui_text, which is where a
 # console is actually in scope to ask.
-_PREFLIGHT_KEYS = "Space/Enter toggle · Ctrl-D START unattended · Esc cancel"
+_PREFLIGHT_KEYS = "Space/Enter toggle · Ctrl-D START unattended · Esc/q cancel"
 
 
 def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
@@ -1705,6 +1712,7 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
 
     @kb.add("escape", eager=True)
     @kb.add("c-c")
+    @kb.add("q")
     def _esc(event):
         event.app.exit()
 
@@ -2180,7 +2188,10 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
 
     def _footer():
         return [
-            ("class:hint", ui_text(mod, "  Esc stop watching (the run continues) · r refresh now"))
+            (
+                "class:hint",
+                ui_text(mod, "  Esc/q stop watching (the run continues) · r refresh now"),
+            )
         ]
 
     kb = KeyBindings()
