@@ -1539,6 +1539,18 @@ def _browse_prompt(project_dir: Path):
     return candidate
 
 
+def _textual_available() -> bool:
+    """Whether the Textual tier will draw, so decorative output can stand down."""
+    if os.environ.get("VIRT_SURV_NO_APP") or os.environ.get("VIRT_SURV_NO_TEXTUAL"):
+        return False
+    try:
+        import launcher_textual
+
+        return bool(launcher_textual.available())
+    except Exception:
+        return False
+
+
 def _jira_offered(project_dir: Path) -> bool:
     """Whether to SHOW the [j] item. Always (2026-08-20 user decision: "it's an available
     option always, by default").
@@ -2373,6 +2385,21 @@ def _menu_round(
     # as an escape hatch for a console where the app misbehaves in a way the internal
     # fallback does not catch.
     if not os.environ.get("VIRT_SURV_NO_APP"):
+        # Tier 0: Textual. Answers the same APP_FALLBACK sentinel as the tier below, so
+        # a console that cannot run it lands on exactly today's behaviour.
+        try:
+            from launcher_app import APP_FALLBACK
+            from launcher_textual import run_app as run_textual
+
+            pick = run_textual(
+                project_dir, _this_module(), menu, shown, jira_on=_jira_offered(project_dir)
+            )
+            if pick != APP_FALLBACK:
+                return _decision_from_pick(
+                    pick, project_dir, engagement_state, menu, shown, rich=True
+                )
+        except Exception:
+            pass  # same contract as the tier below: degrade, never break the launch
         try:
             from launcher_app import APP_FALLBACK, run_app
 
@@ -4311,7 +4338,12 @@ def main() -> int:
     if str(scripts_dir) not in sys.path:
         sys.path.insert(0, str(scripts_dir))
     try:
-        _print_banner(project_dir)
+        # The Textual tier draws its own mark and owns the alternate screen, so a
+        # banner printed in front of it is still in the scrollback when it releases -
+        # the new UI bracketed by the old one. Skipped only when that tier will
+        # actually draw; every other tier keeps the banner it has always had.
+        if not _textual_available():
+            _print_banner(project_dir)
     except Exception:
         pass  # cosmetic
     try:
