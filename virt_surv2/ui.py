@@ -1915,6 +1915,164 @@ class OpenProjectScreen(Responsive):
         self.app.pop_screen()
 
 
+class LauncherTierApp(App):
+    """The Textual tier for `virt-surv go`'s menu.
+
+    It renders and returns a PICK - nothing else. Every consequence of that pick is
+    virt_team_launcher's `_decision_from_pick`: the request composer, Jira, archive,
+    artifacts, watch, review. That is the whole point of being a tier rather than a
+    second launcher - the behaviour stays in one place and only the drawing moves.
+    """
+
+    CSS_PATH = str(Path(__file__).resolve().parent / "ui.tcss")
+    BINDINGS = [("q", "app.quit", "quit"), ("escape", "app.quit", "back")]
+
+    def __init__(self, project, views: list, actions: list, menu: dict) -> None:
+        super().__init__()
+        self.project = Path(project)
+        self.views = list(views)
+        self.actions = list(actions)
+        self.menu = menu or {}
+        self.pick = None
+        self.cursor = 0
+        # One flat list over both regions, so up/down crosses the boundary naturally -
+        # the same shape launcher_app uses.
+        self.items = ([("eng", i) for i in range(len(self.views))]
+                      + [("act", i) for i in range(len(self.actions))])
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="shell"):
+            yield Brand(id="brand")
+            with Horizontal(id="panes"):
+                with VerticalScroll(id="panel"):
+                    yield Static(id="tier-rows")
+                with Vertical(id="side"):
+                    yield Static(id="side-body")
+            yield Static(id="detail")
+            yield Static(id="keys")
+
+    def on_mount(self) -> None:
+        n = len(self.views)
+        self.query_one("#panel").border_title = f"{n} open" if n else "nothing open"
+        self.query_one("#side").border_title = "detail"
+        self.paint()
+
+    def on_resize(self, event) -> None:
+        self.set_class(event.size.width < NARROW, "-narrow")
+        self.paint()
+
+    @property
+    def narrow(self) -> bool:
+        return self.has_class("-narrow")
+
+    def _folder(self) -> str:
+        try:
+            return "~/" + str(self.project.resolve().relative_to(Path.home()))
+        except (ValueError, OSError):
+            return str(self.project)
+
+    def paint(self) -> None:
+        folder = self._folder()
+        self.query_one("#brand", Brand).render_frame(
+            0.0, folder if self.narrow else f"{folder}  ·  engagements in this folder",
+            self.narrow)
+
+        t = Text()
+        if self.views:
+            t.append("  Resume an engagement\n", style=f"bold {HINT}")
+            for i, v in enumerate(self.views):
+                self._row(t, ("eng", i), v.get("title") or "?",
+                          mark=v.get("mark") or "•",
+                          warn=v.get("mark_style") == "warn",
+                          tag="← most recent" if v.get("recommended") else "")
+        else:
+            archived = self.menu.get("archived") or 0
+            note = (f"no open engagements here ({archived} archived)" if archived
+                    else "no open engagements in this folder")
+            t.append(f"  {note}\n", style=HINT)
+
+        t.append("\n  Start something new\n", style=f"bold {HINT}")
+        seen_or = False
+        for i, (pick, label, key) in enumerate(self.actions):
+            if pick[0] in ("settings", "archive", "launch", "open", "artifacts",
+                           "finished", "watch") and not seen_or:
+                t.append("\n  Or\n", style=f"bold {HINT}")
+                seen_or = True
+            self._row(t, ("act", i), label, key=key)
+        self.query_one("#tier-rows", Static).update(t)
+
+        kind, idx = self.items[self.cursor] if self.items else ("act", 0)
+        body = Text("\n")
+        if kind == "eng" and self.views:
+            v = self.views[idx]
+            body.append(f"  {v.get('title') or '?'}\n\n", style=f"bold {ACCENT}")
+            for label, value in v.get("lines") or []:
+                body.append(f"  {label:<10}", style=HINT)
+                warn = v.get("status") == "blocked" and label in ("status", "next")
+                body.append(f"{value}\n", style=GOLD if warn else TEXT)
+        elif self.actions:
+            _pick, label, key = self.actions[idx]
+            for line in _wrap(label, 26):
+                body.append(f"  {line}\n", style=f"bold {ACCENT}")
+            if key:
+                body.append("\n  shortcut  ", style=HINT)
+                body.append(key, style=KEY)
+                body.append("\n")
+        self.query_one("#side-body", Static).update(body)
+
+        d = Text("  ")
+        d.append("│ ", style=TRACK)
+        d.append(f"{len(self.views)} open in {folder}", style=HINT)
+        self.query_one("#detail", Static).update(d)
+
+        k = Text("  ")
+        for name, desc in (("↑↓", "move"), ("enter", "choose"),
+                           ("esc", "back to terminal")):
+            k.append(name, style=KEY)
+            k.append(f" {desc}   ", style=HINT)
+        self.query_one("#keys", Static).update(k)
+
+    def _row(self, t: Text, item, label: str, mark: str = "", warn: bool = False,
+             tag: str = "", key=None) -> None:
+        sel = self.items[self.cursor] == item if self.items else False
+        t.append("  ▸ " if sel else "    ", style=ACCENT if sel else HINT)
+        if mark:
+            t.append(mark + " ", style=GOLD if warn else DIM)
+        if key:
+            t.append(f"[{key}] ", style=KEY)
+        t.append(label, style=f"bold {TEXT}" if sel else TEXT)
+        if tag:
+            t.append("   " + tag, style=OK)
+        t.append("\n")
+
+    def on_key(self, event) -> None:
+        if not self.items:
+            return
+        k = event.key
+        if k == "down":
+            self.cursor = (self.cursor + 1) % len(self.items)
+        elif k == "up":
+            self.cursor = (self.cursor - 1) % len(self.items)
+        elif k == "enter":
+            event.stop()
+            self._choose(*self.items[self.cursor])
+            return
+        else:
+            hot = [i for i, (_p, _l, key) in enumerate(self.actions) if key == k]
+            if hot:
+                event.stop()
+                self._choose("act", hot[0])
+                return
+            return
+        event.stop()
+        self.paint()
+
+    def _choose(self, kind: str, idx: int) -> None:
+        # The pick, and nothing else: v1 decides what it means.
+        self.pick = ("resume", idx) if kind == "eng" else self.actions[idx][0]
+        self.exit()
+
+
 class MenuRow(Static):
     def __init__(self, index: int, **kw) -> None:
         super().__init__(**kw)

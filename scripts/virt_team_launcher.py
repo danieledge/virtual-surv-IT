@@ -2373,6 +2373,22 @@ def _menu_round(
     # as an escape hatch for a console where the app misbehaves in a way the internal
     # fallback does not catch.
     if not os.environ.get("VIRT_SURV_NO_APP"):
+        # Tier 0: Textual. A THIRD tier above the two below, answering the same
+        # APP_FALLBACK sentinel, so a console that cannot run it lands on exactly
+        # today's behaviour. VIRT_SURV_NO_TEXTUAL=1 skips just this one.
+        try:
+            from launcher_app import APP_FALLBACK
+            from launcher_textual import run_app as run_textual_app
+
+            pick = run_textual_app(
+                project_dir, _this_module(), menu, shown, jira_on=_jira_offered(project_dir)
+            )
+            if pick != APP_FALLBACK:
+                return _decision_from_pick(
+                    pick, project_dir, engagement_state, menu, shown, rich=True
+                )
+        except Exception:
+            pass  # same contract as the tier below: degrade, never break the launch
         try:
             from launcher_app import APP_FALLBACK, run_app
 
