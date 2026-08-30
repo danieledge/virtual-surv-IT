@@ -29,11 +29,12 @@ import sys
 from pathlib import Path
 
 try:
-    # The sentinel is launcher_app's, imported rather than restated so the two can
-    # never disagree about what "fall through" means.
-    from launcher_app import APP_FALLBACK
+    # The sentinels are launcher_app's, imported rather than restated so the two can
+    # never disagree about what "fall through" or "skipped" means.
+    from launcher_app import APP_FALLBACK, REQUEST_SKIPPED
 except Exception:                       # pragma: no cover - bare clone
     APP_FALLBACK = "__app_fallback__"
+    REQUEST_SKIPPED = "__request_skipped__"
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -186,3 +187,41 @@ def _actions(project_dir: Path, mod, shown: list, jira_on: bool) -> list:
                 label("launch", "decide inside the session" if shown else "just launch"),
                 None))
     return out
+
+
+def request_screen(project_dir: Path, mod, output=None):
+    """The request for a NEW engagement, rendered in Textual.
+
+    Same contract as launcher_app.request_screen: (request, auto) when text was typed,
+    REQUEST_SKIPPED for the plain launch, or None when this tier cannot draw - which is
+    what sends the caller down to the prompt_toolkit screen.
+
+    Note the asymmetry, which is the same one the menu had to learn: an EMPTY send and
+    an Esc are both REQUEST_SKIPPED (the human chose the plain launch), and only a
+    screen that could not run answers None. Returning None for a deliberate skip would
+    draw the old composer straight after this one closed.
+    """
+    widgets = _widgets()
+    if widgets is None:
+        return None
+
+    # Asked here rather than inside the widget, so the drawing layer keeps knowing
+    # nothing about the project's preferences.
+    try:
+        offered = bool(mod._auto_offered(project_dir))
+    except Exception:                   # noqa: BLE001
+        offered = False
+    try:
+        armed = bool(mod._auto_armed(project_dir)) if offered else False
+    except Exception:                   # noqa: BLE001
+        armed = False
+
+    try:
+        app = widgets.RequestApp(project_dir, auto_offered=offered, auto=armed)
+        with _true_terminal_size():
+            app.run()
+    except Exception:                   # noqa: BLE001 — any failure degrades
+        return None
+    if not getattr(app, "ran", False):
+        return None
+    return getattr(app, "value", None) or REQUEST_SKIPPED

@@ -60,6 +60,30 @@ def wrap(text: str, width: int) -> list[str]:
     return out
 
 
+def wrap_display(text: str, width: int) -> list[str]:
+    """Word-wrap for DISPLAY only, honouring the newlines the human typed.
+
+    Never used to decide what is SENT - the request is flattened on the way out - so
+    this can be purely cosmetic and lossless. Mirrors tui_chrome._wrapped, which the
+    prompt_toolkit tier uses, so the two renderings break lines in the same places.
+    """
+    lines: list[str] = []
+    for paragraph in (text or "").split("\n"):
+        if not paragraph:
+            lines.append("")
+            continue
+        current = ""
+        for word in paragraph.split(" "):
+            candidate = f"{current} {word}".strip() if current else word
+            if len(candidate) <= width or not current:
+                current = candidate
+            else:
+                lines.append(current)
+                current = word
+        lines.append(current)
+    return lines or [""]
+
+
 def bar(pct: float, width: int, fill: str = ACCENT, track: str = TRACK) -> Text:
     """Sub-cell progress bar: eighth-blocks on a shaded track."""
     total = width * 8
@@ -119,7 +143,11 @@ class TierApp(App):
     """Shared chrome: the mark, a list pane, a detail pane, a footer."""
 
     CSS_PATH = str(Path(__file__).resolve().parent / "launcher_tiers.tcss")
-    BINDINGS = [("q", "app.quit", "quit"), ("escape", "app.quit", "back")]
+    # Esc ONLY. `q` is a quit key on a list and a letter on anything that takes text,
+    # and Textual MERGES BINDINGS up the MRO - so a subclass cannot take it away, and
+    # a `q` here silently ended the composer instead of typing (caught under a pty).
+    # Screens that want it add it themselves.
+    BINDINGS = [("escape", "app.quit", "back")]
 
     def __init__(self, project) -> None:
         super().__init__()
@@ -190,6 +218,20 @@ class TierApp(App):
     def narrow(self) -> bool:
         return bool(getattr(self, "_narrow", False))
 
+    def panel_width(self) -> int:
+        """Columns available for text inside the list pane.
+
+        Derived from the screen rather than measured: content_size is 0 on a first
+        paint, and a composer that rewraps a line under the cursor on the second paint
+        is worse than one that is a column conservative.
+        """
+        w = getattr(self.size, "width", 0) or 0
+        if not w:
+            return 40
+        if self.narrow:                 # shell pad 1, border 1, pad 1, each side
+            return max(20, w - 6)
+        return max(20, w - 46)          # ... plus the 32-wide side pane and its margin
+
     def folder(self) -> str:
         """The folder being read, shortened but never guessed at."""
         try:
@@ -221,6 +263,9 @@ class MenuApp(TierApp):
     `_decision_from_pick`: the request composer, Jira, archive, artifacts, watch,
     review. So this screen never learns what any of them mean.
     """
+
+    #: A list has no text to type into, so `q` can be a second way out of it.
+    BINDINGS = [("q", "app.quit", "quit")]
 
     def __init__(self, project, views: list, actions: list, menu: dict) -> None:
         super().__init__(project)
@@ -337,3 +382,144 @@ class MenuApp(TierApp):
     def _choose(self, kind: str, idx: int) -> None:
         self.pick = ("resume", idx) if kind == "eng" else self.actions[idx][0]
         self.exit()
+
+
+class RequestApp(TierApp):
+    """The request for a NEW engagement.
+
+    Typing is an OFFER, never a toll gate: sending an empty field gives exactly the
+    plain launch, so nobody is forced to compose a brief at a prompt. Returns
+    (request, auto) in `value`, or None for "launch plainly" - the caller turns that
+    into its own sentinel.
+
+    The key map is launcher_app's, deliberately, because each binding there is a
+    recorded bug:
+      * Enter inserts a LINE BREAK and Ctrl-D sends. Enter used to send, so composing
+        across lines - the natural way to write a brief - submitted the first line and
+        silently discarded the rest.
+      * Ctrl-T arms unattended, not Ctrl-A (the tmux prefix on many setups, which never
+        reaches the app) and not a bare letter (every printable key is text here).
+      * Paste collapses whitespace instead of dropping unprintables, which used to weld
+        sentences into "extract.Then" - worse than truncation, because it looks like
+        text the human wrote.
+    """
+
+    #: Visible lines of the buffer. Scrolling off the top is normal; hiding what you
+    #: are currently typing is not, so the LAST lines are the ones kept.
+    LINES = 9
+
+    def __init__(self, project, auto_offered: bool = False, auto: bool = False) -> None:
+        super().__init__(project)
+        self.buf = ""
+        self.auto_offered = bool(auto_offered)
+        self.auto = bool(auto) and self.auto_offered
+        self.value = None
+        self.ran = False
+
+    def on_mount(self) -> None:
+        self.ran = True
+        self._apply_width()
+        self.query_one("#panel").border_title = "new engagement"
+        self.query_one("#side").border_title = "detail"
+        self.paint()
+
+    def paint(self) -> None:
+        folder = self.folder()
+        self.head(folder if self.narrow else f"{folder}  ·  a new engagement")
+
+        width = self.panel_width()
+        t = Text()
+        t.append("  What would you like the team to do?\n\n", style=f"bold {HINT}")
+        t.append("  Type it. Esc to decide in session instead.\n\n", style=DIM)
+
+        lines = wrap_display(self.buf, max(10, width - 4))
+        if len(lines) > self.LINES:
+            lines = lines[-self.LINES:]
+            lines[0] = "..." + lines[0]
+        for i, line in enumerate(lines):
+            t.append("  > " if i == 0 else "    ", style=ACCENT if i == 0 else HINT)
+            t.append(line, style=TEXT)
+            if i == len(lines) - 1:
+                t.append("_", style=HINT)      # where the next character lands
+            t.append("\n")
+
+        if self.auto_offered:
+            t.append("\n")
+            t.append("  " + ("●" if self.auto else "○") + " ",
+                     style=GOLD if self.auto else DIM)
+            t.append("Ctrl-T  run unattended", style=GOLD if self.auto else DIM)
+            # Kept SHORT: this row already spends 26 columns on the label, and the full
+            # explanation lives in the pane beside it, which has the room for it.
+            if self.auto and not self.buf.strip():
+                t.append("  (needs a request)", style=GOLD)
+            elif self.auto:
+                t.append("  (confirm next)", style=DIM)
+            else:
+                t.append("  (off - it asks)", style=DIM)
+            t.append("\n")
+        self.query_one("#rows", Static).update(t)
+
+        body = Text("\n")
+        body.append("  Starting new work\n\n", style=f"bold {ACCENT}")
+        for line in wrap("Whatever you type is handed to Morgan as the request, so the "
+                         "session starts on the work instead of asking what it is.", 26):
+            body.append(f"  {line}\n", style=DIM)
+        body.append("\n")
+        for line in wrap("Leave it empty and nothing changes - you get the plain "
+                         "launch.", 26):
+            body.append(f"  {line}\n", style=DIM)
+        if self.auto_offered and self.auto:
+            body.append("\n")
+            for line in wrap("Unattended: you authorise it on the next screen.", 26):
+                body.append(f"  {line}\n", style=GOLD)
+        self.query_one("#side-body", Static).update(body)
+
+        words = len(self.buf.split())
+        note = f"{words} word{'' if words == 1 else 's'}" if words else "nothing typed yet"
+        if self.narrow:
+            keys = ((" ^d", "send"), ("esc", "back"))
+        else:
+            keys = (("^d", "send"), ("enter", "new line"), ("esc", "back"),
+                    ("^u", "clear"))
+        self.foot(keys, note)
+
+    def on_paste(self, event) -> None:
+        # A newline is a WORD BREAK, never nothing: the request travels as one line
+        # anyway, so collapse here and keep every word.
+        text = getattr(event, "text", "") or ""
+        self.buf += " ".join(text.split())
+        if self.buf and text.endswith(("\n", " ", "\t")):
+            self.buf += " "
+        event.stop()
+        self.paint()
+
+    def on_key(self, event) -> None:
+        key = event.key
+        if key == "ctrl+d":
+            event.stop()
+            text = " ".join(self.buf.split())
+            self.value = (text, self.auto) if text else None
+            self.exit()
+            return
+        if key == "ctrl+u":
+            self.buf = ""
+            self.auto = False
+        elif key == "ctrl+t":
+            # Toggles whether or not there is text yet: arming first and then writing
+            # the brief is a natural order, and a guard here made the keypress a SILENT
+            # no-op - the worst answer, since the screen then looked as though
+            # unattended had been declined. An armed toggle with an empty field still
+            # starts nothing; the row says what it needs.
+            if self.auto_offered:
+                self.auto = not self.auto
+        elif key == "enter":
+            self.buf += "\n"
+        elif key in ("backspace", "ctrl+h"):
+            self.buf = self.buf[:-1]    # deletes a newline like any other character
+        else:
+            ch = getattr(event, "character", None)
+            if not ch or not ch.isprintable():
+                return                  # let anything else through to the bindings
+            self.buf += ch
+        event.stop()
+        self.paint()

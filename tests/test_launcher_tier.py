@@ -260,6 +260,70 @@ def test_it_measures_the_real_terminal():
           True)
 
 
+def test_the_composer_matches_launcher_app():
+    """The request composer: same contract, same key map.
+
+    Every binding here is a recorded bug in the prompt_toolkit screen, so they are
+    pinned rather than described - Enter that sent silently discarded everything after
+    the first line, and a `q` that quit destroyed what was being written.
+    """
+    import inspect
+
+    import launcher_app
+    import launcher_textual
+    from launcher_tiers import RequestApp
+
+    check("same signature as launcher_app's",
+          list(inspect.signature(launcher_textual.request_screen).parameters),
+          list(inspect.signature(launcher_app.request_screen).parameters))
+    check("no tty cannot draw", launcher_textual.request_screen(REPO, None), None)
+
+    async def send(keys, offered=True, armed=False):
+        app = RequestApp(Path("/tmp/p"), auto_offered=offered, auto=armed)
+        async with app.run_test(size=(66, 30)) as p_:
+            await p_.pause()
+            for k in keys:
+                await p_.press(k)
+            await p_.pause()
+        return app.value
+
+    async def run():
+        typed = list("look at spoofing") + ["enter"] + list("in june")
+        check("ctrl-d sends, enter is a line break",
+              await send(typed + ["ctrl+d"]), ("look at spoofing in june", False))
+        check("an empty send is a plain launch", await send(["ctrl+d"]), None)
+        check("esc is a plain launch", await send(list("hi") + ["escape"]), None)
+        check("ctrl-u clears", await send(list("hi") + ["ctrl+u"] + list("bye")
+                                          + ["ctrl+d"]), ("bye", False))
+        check("ctrl-t arms unattended",
+              await send(list("go") + ["ctrl+t", "ctrl+d"]), ("go", True))
+        check("ctrl-t does nothing when not offered",
+              await send(list("go") + ["ctrl+t", "ctrl+d"], offered=False), ("go", False))
+        check("t is text, not a shortcut", await send(list("test") + ["ctrl+d"]),
+              ("test", False))
+        # `q` quits the MENU and types on the COMPOSER. Textual merges BINDINGS up the
+        # MRO, so a subclass cannot take a binding away - the base must not have it.
+        check("q is text, not quit", await send(list("q") + ["ctrl+d"]), ("q", False))
+        check("backspace deletes", await send(list("abcd") + ["backspace", "ctrl+d"]),
+              ("abc", False))
+
+    asyncio.run(run())
+
+    from launcher_tiers import MenuApp, TierApp
+    check("the base binds esc only",
+          [b_[0] if isinstance(b_, tuple) else b_.key for b_ in TierApp.BINDINGS],
+          ["escape"])
+    check("the menu adds q for itself",
+          [b_[0] if isinstance(b_, tuple) else b_.key for b_ in MenuApp.BINDINGS], ["q"])
+
+    # And it must be reached BEFORE the prompt_toolkit composer.
+    src = (REPO / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
+    i_textual = src.find("from launcher_textual import request_screen as request_textual")
+    i_ptk = src.find("from launcher_app import request_screen")
+    check("the Textual composer is wired in", i_textual > 0, True)
+    check("it runs before the prompt_toolkit one", i_textual < i_ptk, True)
+
+
 def test_a_broken_tier_costs_nothing():
     """Any failure degrades to the tier below, never breaks the launch."""
     import launcher_app
@@ -279,7 +343,9 @@ if __name__ == "__main__":
     for fn in (test_answers_launcher_apps_contract, test_wired_above_the_other_tiers,
                test_picks_match_launcher_app_exactly, test_guards_match_launcher_app,
                test_menu_renders_at_both_widths, test_cancel_is_not_a_fallback,
-               test_it_measures_the_real_terminal, test_a_broken_tier_costs_nothing):
+               test_it_measures_the_real_terminal,
+               test_the_composer_matches_launcher_app,
+               test_a_broken_tier_costs_nothing):
         print(f"\n{fn.__name__}")
         fn()
     print()

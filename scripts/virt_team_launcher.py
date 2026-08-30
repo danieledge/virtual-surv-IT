@@ -2100,11 +2100,25 @@ def _new_decision(project_dir: Path, engagement_state=None, menu=None, shown=Non
         print(ink.dim("    -> starting new"), file=sys.stderr)
         return _new_command(project_dir)
     try:
-        from launcher_app import REQUEST_SKIPPED, request_screen
+        from launcher_app import REQUEST_SKIPPED
+    except Exception:
+        REQUEST_SKIPPED = "__request_skipped__"
+    answer = None
+    try:
+        # Textual first, prompt_toolkit underneath. None from either means "that tier
+        # could not draw", so the fall-through is the same one the menu uses.
+        from launcher_textual import request_screen as request_textual
 
-        answer = request_screen(project_dir, _this_module())
+        answer = request_textual(project_dir, _this_module())
     except Exception:
         answer = None
+    if answer is None:
+        try:
+            from launcher_app import request_screen
+
+            answer = request_screen(project_dir, _this_module())
+        except Exception:
+            answer = None
     if answer is None or answer == REQUEST_SKIPPED:
         print(ink.dim("    -> starting new"), file=sys.stderr)
         return _new_command(project_dir)
