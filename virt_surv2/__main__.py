@@ -101,8 +101,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="virt-surv2", description=__doc__.splitlines()[0])
     # `go` for parity with `virt-surv go`, which is how everyone already reaches the
     # launcher. Positional so `virt-surv2 go` reads the same as v1.
-    ap.add_argument("command", nargs="?", choices=["go"], default=None,
-                    help="go: the engagement launcher for the folder you are in")
+    ap.add_argument("command", nargs="?", default=None,
+                    help="go: the engagement launcher for the folder you are in. "
+                         "Any other subcommand is handed to install_helper unchanged.")
     ap.add_argument("--project", help="folder to read engagements from (default: cwd)")
     ap.add_argument("--repo", help="path to the clone (default: find it)")
     ap.add_argument("--demo", action="store_true",
@@ -119,7 +120,27 @@ def main(argv=None) -> int:
                     help="register the 'virt-surv2' shell shortcut (idempotent)")
     ap.add_argument("--print-alias", action="store_true",
                     help="print the shell line instead of writing it")
-    a = ap.parse_args(argv)
+    argv = list(sys.argv[1:] if argv is None else argv)
+    a, unknown = ap.parse_known_args(argv)
+
+    # ANYTHING this front end has no screen for goes to the engine's own CLI, verbatim.
+    # v2 claims to substitute for install_helper.py in a script; without this it did
+    # not - --version, --yes, --branch, --configure DIR, --extensions, --permissions,
+    # --archive, --list-engagements and the rest all exited 2 with "unrecognized
+    # arguments", and so did every subcommand except `go`.
+    passthrough = a.command not in (None, "go", "engage")
+    if unknown or passthrough:
+        _bootstrap_path()
+        try:
+            from . import engine as E
+            repo = E.find_repo(a.repo)
+            ih = E.load_engine(repo)
+        except Exception as exc:        # noqa: BLE001
+            print(f"virt-surv2: {exc}", file=sys.stderr)
+            return 2
+        # Its own argv, its own exit code, its own output - the point is that a script
+        # calling virt-surv2 gets exactly what install_helper.py would have given it.
+        return ih.main(argv) or 0
 
     if a.alias or a.print_alias:
         return install_alias(write=a.alias)
@@ -162,6 +183,13 @@ def main(argv=None) -> int:
         # and it says which folder it read. Engine-backed, because an unconfigured
         # folder gets the first-time setup offer and that has to be able to run it.
         project = Path(a.project).expanduser() if a.project else Path.cwd()
+        if launching:
+            # Everything `virt-surv go` does before it shows you anything: caches
+            # warmed, stale request cleared, project remembered. Skipping it left the
+            # probe and tool caches cold, which Morgan then reads at engagement open.
+            for label, ok, detail in E.run_prelaunch(repo, project):
+                if not ok:
+                    print(f"  ! {label}: {detail}", file=sys.stderr)
         rows, note = E.load_engagements(repo, project) if launching else ([], "")
         app = InstallerTuiApp(ih, repo, a.demo,
                               start="launch" if launching else "settings",

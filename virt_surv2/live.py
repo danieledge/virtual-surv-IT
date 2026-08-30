@@ -142,9 +142,14 @@ class PromptModal(ModalScreen):
 class LiveInstallScreen(Responsive):
     BINDINGS = [("q", "app.quit", "quit"), ("escape", "app.quit", "back")]
 
-    def __init__(self, choices: dict, demo: bool) -> None:
+    def __init__(self, choices: dict, demo: bool, back: bool = False) -> None:
         super().__init__()
         self.choices, self.demo = choices, demo
+        # v1's "__again__": watching, archiving and browsing all return you to the
+        # menu, because none of them starts a session. Without this every side action
+        # ended the launcher and (decision being None) exited 97 - launching nothing
+        # and losing the menu.
+        self.back = back
         self.steps: list[dict] = []
         self.total = 0
         self.current = -1
@@ -225,13 +230,24 @@ class LiveInstallScreen(Responsive):
         except Exception:               # noqa: BLE001 — cosmetic only
             pass
         k = Text("  ")
-        for name, desc in (("q", "quit"), ("r", "change & retry")) if code else (("q", "quit"),):
+        if self.back:
+            pairs = (("enter", "back to the launcher"), ("q", "quit"))
+        elif code:
+            pairs = (("q", "quit"), ("r", "change & retry"))
+        else:
+            pairs = (("q", "quit"),)
+        for name, desc in pairs:
             k.append(name, style=KEY)
             k.append(f" {desc}   ", style=HINT)
         self.query_one("#keys", Static).update(k)
         self.paint()
 
     def on_key(self, event) -> None:
+        if self.back and self.code is not None and event.key in ("enter", "escape"):
+            event.stop()
+            if len(self.app.screen_stack) > 2:
+                self.app.pop_screen()
+            return
         # Only once the run is over: r during a run would leave a worker behind.
         if event.key == "r" and self.code is not None:
             event.stop()
@@ -466,11 +482,12 @@ class InstallerTuiApp(App):
         """The decide screen, seeded with the clone the engine was loaded from."""
         return DecideScreen({"clone": str(self.repo) if self.repo else None})
 
-    def start_action(self, action: str, project=None) -> None:
+    def start_action(self, action: str, project=None, back: bool = False) -> None:
         """An Advanced/Diagnostics/first-run item, on the same live screen."""
         from . import engine as E
 
-        screen = LiveInstallScreen({"channel": "dev"}, self.demo or action == "demo")
+        screen = LiveInstallScreen({"channel": "dev"}, self.demo or action == "demo",
+                                   back=back)
         self.push_screen(screen)
         self.broker = E.PromptBroker(self, screen)
         target = project or self.project

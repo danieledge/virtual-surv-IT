@@ -414,6 +414,48 @@ def resume_token(repo: Optional[Path], row: dict) -> str:
         return ""
 
 
+# What `virt-surv go` does BEFORE it shows you anything. None of it was happening in
+# v2, so the probe and tool caches started cold every time (Morgan then reads a cache
+# that was never written), a previous go's request handoff was carried forward, the
+# project never reached the explorer's recent list, and the guard interpreter was
+# resolved lazily mid-session instead of warmed here.
+#
+# Order and names are v1's (virt_team_launcher.main, 4313-4379). Each is best-effort:
+# v1's own comment is that a failure here must cost only the cache refresh, never the
+# resume decision.
+PRELAUNCH_STEPS = (
+    ("_check_plugin_cache_lag", "checking the plugin cache"),
+    ("_expire_stale_auto_consent", "expiring stale auto-consent"),
+    ("_apply_new_recommended_defaults", "applying new recommended defaults"),
+    ("_remember_project", "remembering this project"),
+    ("_prewarm_guard_interpreter", "warming the guard interpreter"),
+    ("_clear_request_handoff", "clearing any stale request"),
+    ("_write_probe_cache", "pre-computing the engagement probe"),
+    ("_refresh_tool_cache", "checking installed tools"),
+)
+
+
+def run_prelaunch(repo: Optional[Path], project: Path, report=None) -> list:
+    """Run go's pre-flight. Returns [(label, ok, detail)] for anything worth showing."""
+    out: list = []
+    try:
+        launcher = _launcher(repo)
+    except Exception as exc:            # noqa: BLE001
+        return [("pre-flight", False, str(exc))]
+    for name, label in PRELAUNCH_STEPS:
+        fn = getattr(launcher, name, None)
+        if fn is None:
+            continue                    # older clone: not a failure
+        try:
+            if report:
+                report(label)
+            fn(Path(project))
+            out.append((label, True, ""))
+        except Exception as exc:        # noqa: BLE001 — never block the launcher
+            out.append((label, False, f"{type(exc).__name__}: {exc}"))
+    return out
+
+
 def settings_rows(repo: Optional[Path], project: Path):
     """The project's REAL settings, grouped, from the launcher's own editor.
 

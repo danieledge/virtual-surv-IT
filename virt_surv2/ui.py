@@ -573,6 +573,8 @@ ACTIONS = [
     ("v", "view an engagement's artifacts", "Browse what the team produced, without starting a session."),
     ("a", "archive engagement(s)", "Close finished work and take it out of the resume list."),
     ("b", "browse done & archived", "Everything already signed off or archived."),
+    ("t", "watch the engagement running",
+     "Follow a run already in progress. Starts nothing - you come back here after."),
     ("", "decide inside the session", "Launch Claude Code and choose there instead."),
 ]
 
@@ -817,7 +819,9 @@ class LaunchScreen(Responsive):
         runner = getattr(self.app, "start_action", None)
         engine_action = self.ENGINE_ACTIONS.get(key)
         if engine_action and runner:
-            runner(engine_action, project=self.project)
+            # back=True: none of these starts a session, so they return here rather
+            # than ending the launcher.
+            runner(engine_action, project=self.project, back=True)
             return
         self.note = f"{label}: not available here"
         self.paint()
@@ -1383,7 +1387,9 @@ class FirstRunScreen(Responsive):
             return
         runner = getattr(self.app, "start_action", None)
         if runner:
-            runner(action, project=self.project)
+            # Setup finishes and hands you the launcher, as v1 does ("Setup complete -
+            # continuing the launch"), rather than leaving you on a done screen.
+            runner(action, project=self.project, back=True)
 
     def key_escape(self, event) -> None:
         event.stop()

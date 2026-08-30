@@ -730,6 +730,88 @@ def test_every_screen_survives_a_resize() -> None:
     asyncio.run(run())
 
 
+def test_cli_passthrough() -> None:
+    """virt-surv2 must substitute for install_helper.py in a script.
+
+    Its own docstring claimed "Exit code is the engine's own, so this substitutes for
+    install_helper.py in a script" while every flag it did not define - --version,
+    --yes, --branch, --configure DIR, --extensions, --permissions, --archive,
+    --list-engagements - exited 2 with "unrecognized arguments", as did every
+    subcommand except go.
+    """
+    import inspect
+    import subprocess
+
+    section("S  CLI passthrough")
+    main_src = inspect.getsource(
+        __import__("virt_surv2.__main__", fromlist=["main"]).main)
+    check("uses parse_known_args", "parse_known_args" in main_src, True)
+    check("delegates to the engine's own main", "ih.main(argv)" in main_src, True)
+    check("treats a non-go subcommand as passthrough", "passthrough" in main_src, True)
+
+    repo = str(Path(__file__).resolve().parent.parent)
+    out = subprocess.run([sys.executable, "-S", "-m", "virt_surv2", "--version"],
+                         cwd=repo, capture_output=True, text=True, timeout=120)
+    check("--version works", out.returncode, 0)
+    check("--version reports the plugin", "compliance-surveillance-team" in out.stdout, True)
+
+    out = subprocess.run([sys.executable, "-S", "-m", "virt_surv2", "--not-a-flag"],
+                         cwd=repo, capture_output=True, text=True, timeout=120)
+    check("an unknown flag gets the ENGINE's usage, not ours",
+          "install_helper" in (out.stdout + out.stderr), True)
+
+
+def test_prelaunch_and_return_path() -> None:
+    """go must run its pre-flight, and side actions must come BACK to the launcher."""
+    import inspect
+    import tempfile as _tf
+
+    from virt_surv2 import engine as E
+    from virt_surv2 import ui as A
+    from virt_surv2.live import LiveInstallScreen
+    section("R  pre-flight, and the way back")
+
+    import install_helper as ih
+    repo = Path(ih.__file__).resolve().parent
+    launcher_src = (repo / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
+
+    # Every step v2 claims to run must exist in v1 under that name.
+    for name, _label in E.PRELAUNCH_STEPS:
+        check(f"{name} exists in the launcher", f"def {name}(" in launcher_src, True)
+    check("go runs the pre-flight",
+          "run_prelaunch" in inspect.getsource(__import__(
+              "virt_surv2.__main__", fromlist=["main"]).main), True)
+
+    with _tf.TemporaryDirectory() as td:
+        results = E.run_prelaunch(repo, Path(td))
+        check("pre-flight runs every step", len(results), len(E.PRELAUNCH_STEPS))
+        check("pre-flight does not raise", all(ok for _l, ok, _d in results), True)
+    check("a bad repo is survivable", len(E.run_prelaunch(None, Path("/tmp"))) >= 1, True)
+
+    # The watch row exists now, and its action is real.
+    keys = [k for k, _l, _b in A.ACTIONS]
+    check("[t] watch has a row", "t" in keys, True)
+    check("[t] maps to a real action",
+          A.LaunchScreen.ENGINE_ACTIONS.get("t") in E.RUN_FUNCTIONS, True)
+
+    async def run():
+        app = A.VirtSurvApp(start="launch", frozen=True, project="/tmp/p", rows=[])
+        async with app.run_test(size=(100, 34)) as p:
+            await p.pause()
+            scr = LiveInstallScreen({"channel": "dev"}, True, back=True)
+            app.push_screen(scr)
+            await p.pause()
+            scr.engine_finished(0, [], None)
+            await p.pause()
+            await p.press("enter")
+            await p.pause()
+            check("a side action returns to the launcher",
+                  type(app.screen).__name__, "LaunchScreen")
+            check("and does not exit", app._running, True)
+
+    asyncio.run(run())
+
+
 def test_first_run_offer() -> None:
     """An unconfigured folder must be offered first-time setup, as virt-surv go does.
 
@@ -977,6 +1059,8 @@ if __name__ == "__main__":
     test_step_labels_make_sense()
     test_every_launcher_row_is_wired()
     test_every_screen_survives_a_resize()
+    test_cli_passthrough()
+    test_prelaunch_and_return_path()
     test_first_run_offer()
     test_demo_executes_nothing()
     test_menu_parity_with_v1()
