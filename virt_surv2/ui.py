@@ -768,7 +768,9 @@ class LaunchScreen(Responsive):
     # Claude Code with it - the same stdout contract `virt-surv go` uses.
     DECISIONS = {"n": "--new", "": ""}
     # Rows that run engine work in this process instead.
-    ENGINE_ACTIONS = {"a": "archive", "b": "finished", "v": "artifacts", "t": "watch"}
+    # [b] is a SCREEN now, not a listing: it has to return a token so --review and
+    # sign-off are reachable.
+    ENGINE_ACTIONS = {"a": "archive", "v": "artifacts", "t": "watch"}
 
     def _decide(self, decision: str) -> None:
         """Hand a decision to the wrapper and leave, exactly as virt_team_launcher does:
@@ -815,6 +817,11 @@ class LaunchScreen(Responsive):
             return
         if key == "j":
             self.app.push_screen(JiraScreen(self.project))
+            return
+        if key == "b":
+            reader = getattr(self.app, "finished_engagements", None)
+            rows, note = reader(self.project) if reader else ([], "needs the engine")
+            self.app.push_screen(BrowseScreen(self.project, rows, note))
             return
         runner = getattr(self.app, "start_action", None)
         engine_action = self.ENGINE_ACTIONS.get(key)
@@ -1396,6 +1403,154 @@ class FirstRunScreen(Responsive):
         self._choose("skip")
 
 
+class BrowseScreen(Responsive):
+    """[b] - done & archived engagements, with review, sign-off and supersede.
+
+    v2 routed [b] at run_list_engagements, a read-only listing: no token came back, so
+    --review was unreachable and so was human sign-off - the control that exists
+    precisely so an agent cannot sign off its own work.
+    """
+
+    BINDINGS = [("q", "app.quit", "quit")]
+
+    def __init__(self, project, rows=None, note: str = "") -> None:
+        super().__init__()
+        self.project = Path(project)
+        self.engagements = list(rows or [])
+        self.note = note
+        self.cursor = 0
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="shell"):
+            yield Brand(id="brand")
+            with Horizontal(id="panes"):
+                with VerticalScroll(id="panel"):
+                    yield Static(id="browse-rows")
+                with Vertical(id="side"):
+                    yield Static(id="side-body")
+            yield Static(id="detail")
+            yield Static(id="keys")
+
+    def on_mount(self) -> None:
+        n = len(self.engagements)
+        self.query_one("#panel").border_title = f"{n} done or archived" if n else "nothing yet"
+        self.query_one("#side").border_title = "detail"
+        self.paint()
+
+    def reload(self) -> None:
+        reader = getattr(self.app, "finished_engagements", None)
+        if reader:
+            self.engagements, note = reader(self.project)
+            if note:
+                self.note = note
+        self.cursor = min(self.cursor, max(0, len(self.engagements) - 1))
+        self.paint()
+
+    def paint(self) -> None:
+        self.query_one("#brand", Brand).render_frame(
+            0.0, "done & archived" if self.narrow else "done & archived engagements",
+            self.narrow)
+
+        t = Text()
+        if not self.engagements:
+            t.append(f"\n  {self.note or 'nothing done or archived here yet'}\n", style=HINT)
+        for i, v in enumerate(self.engagements):
+            sel = i == self.cursor
+            t.append("  ▸ " if sel else "    ", style=ACCENT if sel else HINT)
+            title = v.get("title") or "?"
+            # Short enough that the state tags stay on the same line - a row that wraps
+            # puts "archived / unsigned" under the wrong engagement.
+            width = 24 if self.narrow else 34
+            shown = title if len(title) <= width else title[: width - 1] + "…"
+            t.append(shown.ljust(width), style=f"bold {TEXT}" if sel else TEXT)
+            t.append(("archived" if v.get("archived") else "done").ljust(9), style=HINT)
+            # Signed vs unsigned is the whole point of the screen, so it is on the row.
+            if v.get("signed"):
+                t.append("   ✓ signed off", style=OK)
+            else:
+                t.append("   unsigned", style=GOLD)
+            t.append("\n")
+        self.query_one("#browse-rows", Static).update(t)
+
+        body = Text("\n")
+        if self.engagements:
+            v = self.engagements[self.cursor]
+            for line in _wrap(v.get("title") or "?", 26):
+                body.append(f"  {line}\n", style=f"bold {ACCENT}")
+            body.append("\n")
+            for label, value in v.get("lines") or []:
+                body.append(f"  {label:<10}", style=HINT)
+                body.append(f"{value}\n", style=TEXT)
+            body.append("\n  sign-off  ", style=HINT)
+            body.append(v.get("signed") or "not signed off", style=OK if v.get("signed") else GOLD)
+            body.append("\n")
+        self.query_one("#side-body", Static).update(body)
+
+        d = Text("  ")
+        d.append("│ ", style=TRACK)
+        d.append(self.note or "opening one is read-only - it never reopens a closed pack",
+                 style=GOLD if self.note else HINT)
+        self.query_one("#detail", Static).update(d)
+
+        k = Text("  ")
+        for name, desc in (("↑↓", "move"), ("enter", "open read-only"),
+                           ("s", "sign off"), ("n", "supersede"), ("esc", "back")):
+            k.append(name, style=KEY)
+            k.append(f" {desc}   ", style=HINT)
+        self.query_one("#keys", Static).update(k)
+
+    def on_key(self, event) -> None:
+        if not self.engagements:
+            if event.key == "escape":
+                self.key_escape(event)
+            return
+        v = self.engagements[self.cursor]
+        k = event.key
+        if k == "down":
+            self.cursor = (self.cursor + 1) % len(self.engagements)
+        elif k == "up":
+            self.cursor = (self.cursor - 1) % len(self.engagements)
+        elif k == "enter":
+            event.stop()
+            self._decide(getattr(self.app, "review_decision")(self.project, v["token"])
+                         if hasattr(self.app, "review_decision") else "")
+            return
+        elif k == "n":
+            event.stop()
+            self._decide(getattr(self.app, "supersede_decision")(self.project, v["token"])
+                         if hasattr(self.app, "supersede_decision") else "")
+            return
+        elif k == "s":
+            event.stop()
+            signer = getattr(self.app, "sign_off", None)
+            if signer and v.get("token"):
+                try:
+                    self.note = signer(self.project, v["token"]) or "signed off"
+                except Exception as exc:    # noqa: BLE001
+                    self.note = f"could not sign off: {exc}"
+            self.reload()
+            return
+        else:
+            return
+        event.stop()
+        self.paint()
+
+    def _decide(self, decision: str) -> None:
+        if not decision:
+            self.note = "no token for this engagement"
+            self.paint()
+            return
+        self.app.decision = decision
+        self.app.exit()
+
+    def key_escape(self, event) -> None:
+        event.stop()
+        if len(self.app.screen_stack) > 2:
+            self.app.pop_screen()
+        else:
+            self.app.exit()
+
+
 class JiraScreen(Responsive):
     """[j] - start an engagement from a ticket.
 
@@ -1626,6 +1781,7 @@ class VirtSurvApp(App):
     settings_rows = None
     settings_apply = None
     settings_restore = None
+    finished_engagements = None
 
 
     def _fatal_error(self) -> None:

@@ -456,6 +456,71 @@ def run_prelaunch(repo: Optional[Path], project: Path, report=None) -> list:
     return out
 
 
+def finished_engagements(repo: Optional[Path], project: Path):
+    """DONE and ARCHIVED packs - the ones the resume menu never shows.
+
+    Returns (views, note). Each view carries the row_view display fields plus `signed`
+    (who signed it off, or "") and `token`. Sign-off is read fresh rather than cached
+    because pressing [s] must change what the screen says.
+    """
+    if repo is None:
+        return [], "no clone found"
+    try:
+        launcher = _launcher(repo)
+        import engagement_state
+        root = launcher._vsit_paths().engagements_dir(Path(project))
+        rows = engagement_state.finished_engagements(root)
+    except Exception as exc:            # noqa: BLE001
+        return [], f"could not read finished engagements: {exc}"
+    if not rows:
+        return [], "nothing done or archived in this folder yet"
+    out = []
+    for r in rows:
+        try:
+            view = launcher.row_view(r)
+        except Exception:               # noqa: BLE001
+            view = {"title": r.get("slug") or "?", "lines": []}
+        token = ""
+        try:
+            token = launcher._row_resume_token(r) or ""
+        except Exception:               # noqa: BLE001
+            pass
+        view["token"] = token
+        view["archived"] = bool(r.get("archived"))
+        view["signed"] = _sign_off_state(launcher, Path(project), token)
+        out.append(view)
+    return out, ""
+
+
+def _sign_off_state(launcher, project: Path, token: str) -> str:
+    if not token:
+        return ""
+    try:
+        return launcher._sign_off_state(Path(project), token) or ""
+    except Exception:                   # noqa: BLE001
+        return ""
+
+
+def sign_off(repo: Optional[Path], project: Path, token: str) -> str:
+    """Record a HUMAN sign-off. The control exists so an agent cannot sign its own
+    work, which is why it is a deliberate keypress and not a side effect of closing."""
+    launcher = _launcher(repo)
+    return launcher._record_sign_off(Path(project), token) or ""
+
+
+def review_decision(repo: Optional[Path], project: Path, token: str) -> str:
+    return f"{engage_command(repo, project)} --review {token}"
+
+
+def supersede_decision(repo: Optional[Path], project: Path, token: str) -> str:
+    """New work that REPLACES a finished pack. The link lives on the new engagement,
+    so the closed record stays exactly as closed."""
+    try:
+        return _launcher(repo)._supersede_command(Path(project), token)
+    except Exception:                   # noqa: BLE001
+        return f"{engage_command(repo, project)} --new --supersedes {token}"
+
+
 def settings_rows(repo: Optional[Path], project: Path):
     """The project's REAL settings, grouped, from the launcher's own editor.
 

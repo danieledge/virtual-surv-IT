@@ -653,7 +653,7 @@ def test_every_launcher_row_is_wired() -> None:
     from virt_surv2 import ui as A
     section("O  every launcher row is wired")
 
-    opens_a_screen = {"c", "o", "j"}
+    opens_a_screen = {"c", "o", "j", "b"}   # b browses done & archived
     emits_a_decision = {"n", ""}
     for key, label, _blurb in A.ACTIONS:
         wired = (key in opens_a_screen
@@ -726,6 +726,70 @@ def test_every_screen_survives_a_resize() -> None:
                     __import__("textual").geometry.Size(60, 30)))
                 await p.pause()
                 check(f"{name} survives a resize", app._running, True)
+
+    asyncio.run(run())
+
+
+def test_browse_review_and_signoff() -> None:
+    """[b] must return a token so --review and human sign-off are reachable.
+
+    It routed at run_list_engagements - a read-only listing. No token came back, so
+    --review was unreachable and so was sign-off, the control that exists precisely so
+    an agent cannot sign off its own work.
+    """
+    from virt_surv2 import engine as E
+    from virt_surv2 import ui as A
+    section("T  browse, review and sign-off")
+
+    import install_helper as ih
+    repo = Path(ih.__file__).resolve().parent
+
+    check("[b] is a screen, not an engine listing",
+          "b" in A.LaunchScreen.ENGINE_ACTIONS, False)
+    check("BrowseScreen exists", A.BrowseScreen is not None, True)
+
+    rows, note = E.finished_engagements(repo, repo)
+    check("reads finished packs", isinstance(rows, list), True)
+    if rows:
+        check("carries a token", bool(rows[0].get("token")), True)
+        check("knows archived state", "archived" in rows[0], True)
+        check("reads sign-off state", "signed" in rows[0], True)
+
+    check("review decision shape",
+          E.review_decision(repo, repo, "abc").endswith("--review abc"), True)
+    check("supersede never reopens the closed pack",
+          "--supersedes abc" in E.supersede_decision(repo, repo, "abc"), True)
+
+    async def run():
+        rows = [{"title": "wash-trade-pack", "archived": True, "signed": "",
+                 "token": "wash-trade-pack", "lines": [("status", "done")]}]
+
+        class Stub(A.VirtSurvApp):
+            def review_decision(self, project, token):
+                return f"/engage --review {token}"
+
+            def supersede_decision(self, project, token):
+                return f"/engage --new --supersedes {token}"
+
+        app = Stub(start="launch", frozen=True, project="/tmp/p", rows=[])
+        async with app.run_test(size=(100, 30)) as p:
+            await p.pause()
+            app.push_screen(A.BrowseScreen("/tmp/p", rows, ""))
+            await p.pause()
+            await p.press("enter")
+            await p.pause()
+            check("enter emits a --review decision",
+                  app.decision, "/engage --review wash-trade-pack")
+
+        app = Stub(start="launch", frozen=True, project="/tmp/p", rows=[])
+        async with app.run_test(size=(100, 30)) as p:
+            await p.pause()
+            app.push_screen(A.BrowseScreen("/tmp/p", rows, ""))
+            await p.pause()
+            await p.press("n")
+            await p.pause()
+            check("n supersedes rather than reopening",
+                  app.decision, "/engage --new --supersedes wash-trade-pack")
 
     asyncio.run(run())
 
@@ -1059,6 +1123,7 @@ if __name__ == "__main__":
     test_step_labels_make_sense()
     test_every_launcher_row_is_wired()
     test_every_screen_survives_a_resize()
+    test_browse_review_and_signoff()
     test_cli_passthrough()
     test_prelaunch_and_return_path()
     test_first_run_offer()

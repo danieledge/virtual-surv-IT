@@ -462,6 +462,22 @@ class InstallerTuiApp(App):
         from . import engine as E
         return E.jira_decision(self.repo, project, ref)
 
+    def finished_engagements(self, project):
+        from . import engine as E
+        return E.finished_engagements(self.repo, project)
+
+    def sign_off(self, project, token: str) -> str:
+        from . import engine as E
+        return E.sign_off(self.repo, project, token)
+
+    def review_decision(self, project, token: str) -> str:
+        from . import engine as E
+        return E.review_decision(self.repo, project, token)
+
+    def supersede_decision(self, project, token: str) -> str:
+        from . import engine as E
+        return E.supersede_decision(self.repo, project, token)
+
     def settings_rows(self, project):
         from . import engine as E
         return E.settings_rows(self.repo, project)
