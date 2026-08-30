@@ -769,7 +769,8 @@ class LaunchScreen(Responsive):
     # Rows that run engine work in this process instead.
     # [b] is a SCREEN now, not a listing: it has to return a token so --review and
     # sign-off are reachable.
-    ENGINE_ACTIONS = {"a": "archive", "v": "artifacts", "t": "watch"}
+    # [a] is a SCREEN now: v1 picks one or all, v2 archived everything closed.
+    ENGINE_ACTIONS = {"v": "artifacts", "t": "watch"}
 
     def _decide(self, decision: str) -> None:
         """Hand a decision to the wrapper and leave, exactly as virt_team_launcher does:
@@ -816,6 +817,9 @@ class LaunchScreen(Responsive):
             return
         if key == "j":
             self.app.push_screen(JiraScreen(self.project))
+            return
+        if key == "a":
+            self.app.push_screen(ArchiveScreen(self.project, self.engagements))
             return
         if key == "b":
             reader = getattr(self.app, "finished_engagements", None)
@@ -1411,6 +1415,136 @@ class FirstRunScreen(Responsive):
         self._choose("skip")
 
 
+class ArchiveScreen(Responsive):
+    """[a] - pick ONE, or all, with the consequence stated before you press the key.
+
+    v2 ran run_archive_engagements, which archives every closed pack with no selection:
+    a different operation under the same key. And the ARCHIVED-OPEN consequence was
+    nowhere on screen - v1 puts it there deliberately, "because it is the thing a person
+    needs before pressing the key, not after".
+    """
+
+    BINDINGS = [("q", "app.quit", "quit")]
+
+    def __init__(self, project, rows=None) -> None:
+        super().__init__()
+        self.project = Path(project)
+        self.engagements = list(rows or [])
+        self.picked: set = set()
+        self.cursor = 0
+        self.note = ""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="shell"):
+            yield Brand(id="brand")
+            with Horizontal(id="panes"):
+                with VerticalScroll(id="panel"):
+                    yield Static(id="archive-rows")
+                with Vertical(id="side"):
+                    yield Static(id="side-body")
+            yield Static(id="detail")
+            yield Static(id="keys")
+
+    def on_mount(self) -> None:
+        self.query_one("#panel").border_title = f"{len(self.engagements)} open"
+        self.query_one("#side").border_title = "consequence"
+        self.paint()
+
+    def paint(self) -> None:
+        self.query_one("#brand", Brand).render_frame(
+            0.0, "archive" if self.narrow else "archive engagements", self.narrow)
+
+        t = Text()
+        if not self.engagements:
+            t.append("\n  nothing open to archive in this folder\n", style=HINT)
+        for i, v in enumerate(self.engagements):
+            sel = i == self.cursor
+            t.append("  ▸ " if sel else "    ", style=ACCENT if sel else HINT)
+            t.append("[", style=TRACK)
+            t.append("✓" if i in self.picked else " ", style=OK)
+            t.append("]  ", style=TRACK)
+            title = v.get("title") or "?"
+            t.append(title[:38], style=f"bold {TEXT}" if sel else TEXT)
+            t.append("   " + (v.get("status") or ""), style=HINT)
+            t.append("\n")
+        self.query_one("#archive-rows", Static).update(t)
+
+        body = Text("\n")
+        body.append("  Archiving in place\n\n", style=f"bold {ACCENT}")
+        for line in _wrap("Nothing is deleted. The pack moves out of the resume list "
+                          "and stays exactly as it is.", 26):
+            body.append(f"  {line}\n", style=TEXT)
+        body.append("\n")
+        for line in _wrap("An OPEN pack archives with --force and then shows as "
+                          "ARCHIVED-OPEN in checks.", 26):
+            body.append(f"  {line}\n", style=GOLD)
+        self.query_one("#side-body", Static).update(body)
+
+        d = Text("  ")
+        d.append("│ ", style=TRACK)
+        d.append(self.note or f"{len(self.picked)} selected", style=GOLD if self.note else HINT)
+        self.query_one("#detail", Static).update(d)
+
+        k = Text("  ")
+        for name, desc in (("↑↓", "move"), ("space", "pick"), ("a", "all"),
+                           ("enter", "archive"), ("esc", "back")):
+            k.append(name, style=KEY)
+            k.append(f" {desc}   ", style=HINT)
+        self.query_one("#keys", Static).update(k)
+
+    def on_key(self, event) -> None:
+        k = event.key
+        if k == "escape":
+            self.key_escape(event)
+            return
+        if not self.engagements:
+            return
+        if k == "down":
+            self.cursor = (self.cursor + 1) % len(self.engagements)
+        elif k == "up":
+            self.cursor = (self.cursor - 1) % len(self.engagements)
+        elif k == "space":
+            if self.cursor in self.picked:
+                self.picked.discard(self.cursor)
+            else:
+                self.picked.add(self.cursor)
+        elif k == "a":
+            self.picked = set(range(len(self.engagements)))
+        elif k == "enter":
+            event.stop()
+            self._archive()
+            return
+        else:
+            return
+        event.stop()
+        self.paint()
+
+    def _archive(self) -> None:
+        chosen = [self.engagements[i] for i in sorted(self.picked)]
+        if not chosen:
+            self.note = "nothing picked - space to pick, a for all"
+            self.paint()
+            return
+        doer = getattr(self.app, "archive_engagements", None)
+        if not doer:
+            self.note = "archiving needs the engine"
+            self.paint()
+            return
+        try:
+            self.note = doer(self.project, chosen)
+        except Exception as exc:        # noqa: BLE001
+            self.note = f"could not archive: {exc}"
+        self.picked.clear()
+        self.paint()
+
+    def key_escape(self, event) -> None:
+        event.stop()
+        if len(self.app.screen_stack) > 2:
+            self.app.pop_screen()
+        else:
+            self.app.exit()
+
+
 class BrowseScreen(Responsive):
     """[b] - done & archived engagements, with review, sign-off and supersede.
 
@@ -1582,8 +1716,33 @@ class JiraScreen(Responsive):
             yield Static(id="keys")
 
     def on_mount(self) -> None:
-        self.query_one("#panel").border_title = "from a Jira ticket"
+        # Jira write-back is unusable in the "on (key UNSET)" state, and v2 had no way
+        # out of it: it could start work FROM a ticket but never name the project key.
+        needs = getattr(self.app, "jira_needs_key", None)
+        self.needs_key = bool(needs(self.project)) if needs else False
+        self.query_one("#panel").border_title = (
+            "Jira project key" if self.needs_key else "from a Jira ticket")
         h = Text()
+        if self.needs_key:
+            h.append("\n  Jira write-back is on, but no project key is set\n\n",
+                     style=f"bold {GOLD}")
+            h.append("  Until it is, the team cannot raise or update an issue.\n",
+                     style=TEXT)
+            h.append("  Enter the key (e.g. SURV) to finish turning it on.\n", style=TEXT)
+            self.query_one("#open-help", Static).update(h)
+            inp = self.query_one("#edit", Input)
+            inp.placeholder = "project key, e.g. SURV"
+            self.call_after_refresh(inp.focus)
+            d = Text("  ")
+            d.append("│ ", style=TRACK)
+            d.append("esc leaves it unset", style=HINT)
+            self.query_one("#detail", Static).update(d)
+            k = Text("  ")
+            for name, desc in (("enter", "save the key"), ("esc", "back")):
+                k.append(name, style=KEY)
+                k.append(f" {desc}   ", style=HINT)
+            self.query_one("#keys", Static).update(k)
+            return
         h.append("\n  Which ticket?\n\n", style=f"bold {ACCENT}")
         h.append("  The engagement opens with the ticket's summary and acceptance\n",
                  style=TEXT)
@@ -1605,6 +1764,14 @@ class JiraScreen(Responsive):
         ref = event.value.strip()
         if not ref:
             self.app.pop_screen()
+            return
+        if getattr(self, "needs_key", False):
+            setter = getattr(self.app, "set_jira_key", None)
+            if setter:
+                setter(self.project, ref)
+            self.needs_key = False
+            self.on_mount()             # re-render as the ticket prompt
+            self.query_one("#edit", Input).value = ""
             return
         builder = getattr(self.app, "jira_decision", None)
         self.app.decision = (builder(self.project, ref) if builder
@@ -1799,6 +1966,8 @@ class VirtSurvApp(App):
     settings_restore = None
     finished_engagements = None
     recent_projects = None
+    archive_engagements = None
+    jira_needs_key = None
 
 
     def _fatal_error(self) -> None:

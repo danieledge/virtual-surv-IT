@@ -456,6 +456,29 @@ def run_prelaunch(repo: Optional[Path], project: Path, report=None) -> list:
     return out
 
 
+def archive_engagements(repo: Optional[Path], project: Path, views: list) -> str:
+    """Archive the packs you PICKED, through the launcher's own _archive_perform.
+
+    v2 called run_archive_engagements, which archives every closed pack with no
+    selection at all - a different operation under the same key. Archiving in place
+    deletes nothing; an OPEN pack archives with --force and then shows as ARCHIVED-OPEN
+    in checks, which is why v1 states that before you press the key rather than after.
+    """
+    if not views:
+        return "nothing selected"
+    launcher = _launcher(repo)
+    import engagement_state
+
+    rows = [v.get("row") for v in views if v.get("row")]
+    if not rows:
+        return "could not identify those engagements"
+    perform = getattr(launcher, "_archive_perform", None)
+    if perform is None:
+        return "this clone has no _archive_perform"
+    perform(engagement_state, rows)
+    return f"archived {len(rows)}"
+
+
 def guard_running_inside_target(ih, repo: Optional[Path]) -> str:
     """v1's Windows guard, run before the engine touches the clone.
 

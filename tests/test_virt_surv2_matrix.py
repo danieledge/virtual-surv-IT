@@ -653,7 +653,7 @@ def test_every_launcher_row_is_wired() -> None:
     from virt_surv2 import ui as A
     section("O  every launcher row is wired")
 
-    opens_a_screen = {"c", "o", "j", "b"}   # b browses done & archived
+    opens_a_screen = {"c", "o", "j", "b", "a"}   # b browses, a archives
     emits_a_decision = {"n", ""}
     for key, label, _blurb in A.ACTIONS:
         wired = (key in opens_a_screen
@@ -728,6 +728,57 @@ def test_every_screen_survives_a_resize() -> None:
                 check(f"{name} survives a resize", app._running, True)
 
     asyncio.run(run())
+
+
+def test_archive_picks_and_jira_key() -> None:
+    """[a] must let you pick, and Jira must be escapable from 'on (key UNSET)'."""
+    import inspect
+
+    from virt_surv2 import engine as E
+    from virt_surv2 import ui as A
+    section("W  archive selection, and the Jira key")
+
+    check("[a] is a screen, not a bulk engine call",
+          "a" in A.LaunchScreen.ENGINE_ACTIONS, False)
+    check("ArchiveScreen exists", A.ArchiveScreen is not None, True)
+    src = inspect.getsource(A.ArchiveScreen)
+    check("it states the ARCHIVED-OPEN consequence", "ARCHIVED-OPEN" in src, True)
+    check("it says nothing is deleted", "Nothing is deleted" in src, True)
+    check("archiving goes through the launcher's own perform",
+          "_archive_perform" in inspect.getsource(E.archive_engagements), True)
+
+    async def run():
+        rows = [{"title": "a", "status": "open", "row": {"slug": "a"}},
+                {"title": "b", "status": "open", "row": {"slug": "b"}}]
+        captured = {}
+
+        class Stub(A.VirtSurvApp):
+            def archive_engagements(self, project, views):
+                captured["views"] = views
+                return f"archived {len(views)}"
+
+        app = Stub(start="launch", frozen=True, project="/tmp/p", rows=[])
+        async with app.run_test(size=(100, 30)) as p:
+            await p.pause()
+            app.push_screen(A.ArchiveScreen("/tmp/p", rows))
+            await p.pause()
+            await p.press("enter")
+            check("nothing picked archives nothing", "views" in captured, False)
+            await p.press("space")
+            await p.press("enter")
+            await p.pause()
+            check("only the picked one is archived", len(captured.get("views", [])), 1)
+            await p.press("a")
+            await p.press("enter")
+            await p.pause()
+            check("[a] picks them all", len(captured.get("views", [])), 2)
+
+    asyncio.run(run())
+
+    check("jira_needs_key is available", callable(E.jira_needs_key), True)
+    check("set_jira_key is available", callable(E.set_jira_key), True)
+    check("the Jira screen asks for a key when unset",
+          "needs_key" in inspect.getsource(A.JiraScreen), True)
 
 
 def test_remaining_v1_guards() -> None:
@@ -1199,6 +1250,7 @@ if __name__ == "__main__":
     test_step_labels_make_sense()
     test_every_launcher_row_is_wired()
     test_every_screen_survives_a_resize()
+    test_archive_picks_and_jira_key()
     test_remaining_v1_guards()
     test_headless_and_new_window()
     test_browse_review_and_signoff()

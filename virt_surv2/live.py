@@ -462,6 +462,18 @@ class InstallerTuiApp(App):
         from . import engine as E
         return E.jira_decision(self.repo, project, ref)
 
+    def jira_needs_key(self, project) -> bool:
+        from . import engine as E
+        return E.jira_needs_key(self.repo, project)
+
+    def set_jira_key(self, project, key: str) -> str:
+        from . import engine as E
+        return E.set_jira_key(self.repo, project, key)
+
+    def archive_engagements(self, project, views):
+        from . import engine as E
+        return E.archive_engagements(self.repo, project, views)
+
     def recent_projects(self):
         from . import engine as E
         return E.recent_projects(self.repo)
