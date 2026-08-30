@@ -1019,7 +1019,7 @@ def _config_editor(project_dir: Path) -> None:
     the machine tier speak again). All interaction on stderr/stdin; stdout stays the
     decision channel. Every failure path just returns - cosmetic tier."""
     try:
-        from launcher_app import settings_screen
+        settings_screen = _screen("settings_screen")
 
         # None = the screen could not run at all; False = it ran and nothing changed.
         # Only the former falls through - treating Esc as "unavailable" once dumped the
@@ -1462,7 +1462,7 @@ def _pick_engagement_slug(project_dir: Path, shown: list) -> str:
     own picker so the choice looks like everything else; falls back to the most recent
     rather than asking a question the plain tier cannot render well."""
     try:
-        from launcher_app import slug_picker_screen
+        slug_picker_screen = _screen("slug_picker_screen")
 
         picked = slug_picker_screen(project_dir, _this_module(), shown)
         if picked:
@@ -1506,7 +1506,9 @@ def _browse_decision(project_dir: Path):
     plain fallback below is a single typed path, because a numbered directory walker in
     input() is worse than just pasting the path you already know."""
     try:
-        from launcher_app import BROWSE_CANCELLED, browse_screen
+        from launcher_app import BROWSE_CANCELLED
+
+        browse_screen = _screen("browse_screen")
 
         chosen = browse_screen(project_dir, _this_module())
         if chosen is None:
@@ -1537,6 +1539,42 @@ def _browse_prompt(project_dir: Path):
         print(ink.dim(f"    not a folder: {candidate}"), file=err)
         return None
     return candidate
+
+
+def _screen(name: str):
+    """The best available implementation of a launcher_app screen.
+
+    Returns a callable that tries the Textual tier first and falls back to
+    launcher_app's on its None sentinel - which every one of those screens already
+    uses to mean "this tier cannot run here". So each call site keeps its own
+    fallback logic untouched, and there is exactly one place that knows a third tier
+    exists.
+
+    VIRT_SURV_NO_TEXTUAL=1 skips just the Textual tier; VIRT_SURV_NO_APP=1 skips the
+    full-screen tiers entirely, as it always has.
+    """
+    import launcher_app
+
+    base = getattr(launcher_app, name)
+    if os.environ.get("VIRT_SURV_NO_APP") or os.environ.get("VIRT_SURV_NO_TEXTUAL"):
+        return base
+    try:
+        import launcher_textual
+
+        tier = getattr(launcher_textual, name, None)
+    except Exception:
+        tier = None
+    if tier is None:
+        return base
+
+    def wrapped(*args, **kwargs):
+        try:
+            out = tier(*args, **kwargs)
+        except Exception:
+            out = None  # a broken tier must cost nothing but itself
+        return base(*args, **kwargs) if out is None else out
+
+    return wrapped
 
 
 def _jira_offered(project_dir: Path) -> bool:
@@ -2088,7 +2126,9 @@ def _new_decision(project_dir: Path, engagement_state=None, menu=None, shown=Non
         print(ink.dim("    -> starting new"), file=sys.stderr)
         return _new_command(project_dir)
     try:
-        from launcher_app import REQUEST_SKIPPED, request_screen
+        from launcher_app import REQUEST_SKIPPED
+
+        request_screen = _screen("request_screen")
 
         answer = request_screen(project_dir, _this_module())
     except Exception:
@@ -2227,7 +2267,9 @@ def _decision_from_pick(
             # tear the app down and drop to a bare input()). Same None/cancel contract the
             # settings screen learned the hard way: None means the screen could not run
             # and the plain prompt takes over; a cancel is NOT unavailability.
-            from launcher_app import JIRA_CANCELLED, jira_screen
+            from launcher_app import JIRA_CANCELLED
+
+            jira_screen = _screen("jira_screen")
 
             ref = jira_screen(project_dir, _this_module())
             if ref == JIRA_CANCELLED:
@@ -2306,7 +2348,7 @@ def _decision_from_pick(
         return "__again__"
     if pick[0] == "archive":
         try:
-            from launcher_app import archive_screen
+            archive_screen = _screen("archive_screen")
 
             if archive_screen(project_dir, _this_module(), engagement_state, menu) is None:
                 _archive_menu(project_dir, engagement_state, menu)
@@ -2322,7 +2364,7 @@ def _decision_from_pick(
         # settings above - conflating them dumped users into the wrong tier once.
         token = None
         try:
-            from launcher_app import finished_screen
+            finished_screen = _screen("finished_screen")
 
             token = finished_screen(project_dir, _this_module(), engagement_state)
         except Exception:
@@ -3970,9 +4012,9 @@ def _offer_first_time_setup(project_dir: Path):
             SETUP_DEFAULTS,
             SETUP_GUIDED,
             SETUP_SKIP,
-            setup_screen,
         )
 
+        setup_screen = _screen("setup_screen")
         choice = setup_screen(project_dir, _this_module())
         if choice == SETUP_CANCEL:
             # The human left. Returning _ABORT rather than False is the whole fix: False

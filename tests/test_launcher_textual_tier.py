@@ -115,9 +115,57 @@ def test_guards_match_v1():
           ("new" in empty and "launch" in empty), True)
 
 
+def test_every_screen_has_a_tier():
+    """Each launcher_app screen this tier claims must answer the same contract."""
+    import inspect
+
+    import launcher_app
+    import launcher_textual
+
+    covered = ["run_app", "settings_screen", "finished_screen", "archive_screen",
+               "request_screen", "jira_screen", "browse_screen", "setup_screen",
+               "slug_picker_screen"]
+    for name in covered:
+        tier = getattr(launcher_textual, name, None)
+        base = getattr(launcher_app, name, None)
+        check(f"{name} exists in both", (tier is not None and base is not None), True)
+        if tier and base:
+            # Same call shape, or the dispatcher cannot swap one for the other.
+            t_args = list(inspect.signature(tier).parameters)
+            b_args = list(inspect.signature(base).parameters)
+            check(f"{name} takes v1's arguments", t_args, b_args)
+
+
+def test_dispatcher_falls_back_on_none():
+    """_screen returns a callable that tries Textual and falls back on its None."""
+    import virt_team_launcher as L
+
+    src = inspect_source(L._screen)
+    check("it wraps rather than replaces", "base(*args, **kwargs)" in src, True)
+    check("None means fall through", "if out is None" in src or "out is None" in src, True)
+    check("a broken tier costs only itself", "except Exception" in src, True)
+    check("VIRT_SURV_NO_TEXTUAL skips just this tier",
+          "VIRT_SURV_NO_TEXTUAL" in src, True)
+
+    # With the tier disabled, the dispatcher must hand back launcher_app's own function.
+    import launcher_app
+    os.environ["VIRT_SURV_NO_TEXTUAL"] = "1"
+    try:
+        check("disabled returns v1's function directly",
+              L._screen("settings_screen") is launcher_app.settings_screen, True)
+    finally:
+        del os.environ["VIRT_SURV_NO_TEXTUAL"]
+
+
+def inspect_source(fn):
+    import inspect
+    return inspect.getsource(fn)
+
+
 if __name__ == "__main__":
     for fn in (test_tier_answers_the_same_contract, test_tier_is_wired_above_the_others,
-               test_picks_match_v1_exactly, test_guards_match_v1):
+               test_picks_match_v1_exactly, test_guards_match_v1,
+               test_every_screen_has_a_tier, test_dispatcher_falls_back_on_none):
         print(f"\n{fn.__name__}")
         fn()
     print()

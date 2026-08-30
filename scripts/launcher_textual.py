@@ -103,6 +103,146 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
     return APP_FALLBACK if pick is None else pick
 
 
+def _tiers():
+    """The screen classes, or None when this tier cannot run at all."""
+    if _ui() is None:
+        return None
+    try:
+        from virt_surv2 import tiers
+        return tiers
+    except Exception:                   # noqa: BLE001
+        return None
+
+
+def _run(app):
+    """Run one tier app and return its result, or None if it could not run.
+
+    None is launcher_app's "this tier cannot draw" sentinel on every screen, so a
+    failure here always lands on the tier below rather than on a broken screen.
+    """
+    try:
+        app.run()
+    except Exception:                   # noqa: BLE001
+        return None
+    return getattr(app, "result", None)
+
+
+def settings_screen(project_dir: Path, mod, output=None):
+    """True/False when the screen RAN, None when this tier cannot."""
+    t = _tiers()
+    if t is None:
+        return None
+    return _run(t.SettingsTier(project_dir, mod))
+
+
+def finished_screen(project_dir: Path, mod, engagement_state, output=None):
+    """The chosen resume token, "" on Esc, None when this tier cannot run."""
+    t = _tiers()
+    if t is None:
+        return None
+    try:
+        root = mod._vsit_paths().engagements_dir(Path(project_dir))
+        rows = engagement_state.finished_engagements(root)
+        views = []
+        for r in rows:
+            v = mod.row_view(r)
+            v["row"] = r
+            v["archived"] = bool(r.get("archived"))
+            views.append(v)
+    except Exception:                   # noqa: BLE001
+        return None
+    return _run(t.FinishedTier(project_dir, mod, views))
+
+
+def archive_screen(project_dir: Path, mod, engagement_state, menu: dict, output=None):
+    """None when this tier cannot run; otherwise it has done the archiving."""
+    t = _tiers()
+    if t is None:
+        return None
+    rows = (menu or {}).get("open") or []
+    return _run(t.ArchiveTier(project_dir, mod, engagement_state, rows))
+
+
+def request_screen(project_dir: Path, mod, output=None):
+    """(request, auto), the caller's REQUEST_SKIPPED, or None."""
+    t = _tiers()
+    if t is None:
+        return None
+    try:
+        from launcher_app import REQUEST_SKIPPED
+    except Exception:                   # noqa: BLE001
+        return None
+    return _run(t.RequestTier(project_dir, REQUEST_SKIPPED))
+
+
+def jira_screen(project_dir: Path, mod, output=None):
+    """The ticket ref, the caller's JIRA_CANCELLED, or None."""
+    t = _tiers()
+    if t is None:
+        return None
+    try:
+        from launcher_app import JIRA_CANCELLED
+    except Exception:                   # noqa: BLE001
+        return None
+    return _run(t.JiraTier(project_dir, mod, JIRA_CANCELLED))
+
+
+def browse_screen(start_dir: Path, mod, output=None):
+    """A Path, the caller's BROWSE_CANCELLED, or None."""
+    t = _tiers()
+    if t is None:
+        return None
+    try:
+        from launcher_app import BROWSE_CANCELLED
+    except Exception:                   # noqa: BLE001
+        return None
+    return _run(t.BrowseTier(start_dir, mod, BROWSE_CANCELLED))
+
+
+def setup_screen(project_dir: Path, mod, output=None):
+    """SETUP_DEFAULTS / SETUP_GUIDED / SETUP_SKIP / SETUP_CANCEL, or None.
+
+    Skip and cancel are different answers and must stay so: skip launches without
+    configuring, cancel launches nothing at all.
+    """
+    t = _tiers()
+    if t is None:
+        return None
+    try:
+        from launcher_app import (SETUP_CANCEL, SETUP_DEFAULTS, SETUP_GUIDED,
+                                  SETUP_SKIP)
+    except Exception:                   # noqa: BLE001
+        return None
+    options = [
+        (SETUP_DEFAULTS, "Set it up with the recommended defaults",
+         "Applies every recommended project default with no questions: enable the team "
+         "here, permissions, preferences and the orchestrator model. The usual answer."),
+        (SETUP_GUIDED, "Walk me through it",
+         "The same setup, asking about each part, with the recommended answer "
+         "pre-filled."),
+        (SETUP_SKIP, "Not now",
+         "Launches without configuring this folder. The team will not run here until "
+         "it is set up."),
+    ]
+    return _run(t.SetupTier(project_dir, options, cancel_value=SETUP_CANCEL))
+
+
+def slug_picker_screen(project_dir: Path, mod, shown: list, output=None):
+    """The chosen slug, or "" on cancel/unavailable."""
+    t = _tiers()
+    if t is None:
+        return None
+    options = []
+    for row in shown:
+        try:
+            slug = mod._row_resume_token(row) or "?"
+        except Exception:               # noqa: BLE001
+            slug = "?"
+        options.append((slug, slug, row.get("status") or ""))
+    result = _run(t.SlugPickTier(project_dir, options, cancel_value=""))
+    return result or ""
+
+
 def _actions(project_dir: Path, mod, shown: list, jira_on: bool) -> list:
     """(pick, label, hotkey) rows, in launcher_app.run_app's order and conditions.
 
