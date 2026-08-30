@@ -144,6 +144,21 @@ def test_menu_renders_at_both_widths():
 
     asyncio.run(run())
 
+    # The class must be applied from on_mount, not only from on_resize. A resize event
+    # is not guaranteed for the INITIAL size and over mosh/tmux can arrive late or not
+    # at all; without this the app laid out for a wide terminal inside a narrow one,
+    # content wrapped at the left margin, and the wrapped remnants read as a second,
+    # mangled copy of the screen ("IO is mangled", 2026-08-30).
+    import inspect
+
+    from launcher_tiers import MenuApp, TierApp
+    check("width is applied at mount",
+          "_apply_width" in inspect.getsource(MenuApp.on_mount), True)
+    check("width is applied on resize",
+          "_apply_width" in inspect.getsource(TierApp.on_resize), True)
+    check("_apply_width reads the CURRENT size, not just the event",
+          "self.size" in inspect.getsource(TierApp._apply_width), True)
+
 
 def test_cancel_is_not_a_fallback():
     """Esc must mean "launch nothing", not "this tier cannot run".

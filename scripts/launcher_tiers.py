@@ -81,14 +81,22 @@ class Brand(Static):
     """The mark: a robot head whose mouth is a progress bar and whose eyes light on
     success. One identity object, static here and animated where there is progress."""
 
-    def render_frame(self, pct: float, subtitle: str, narrow: bool = False) -> None:
+    #: Columns the mark itself occupies on the rule's line, before the rule starts.
+    MARK_COLS = 16
+
+    def render_frame(self, pct: float, subtitle: str, narrow: bool = False,
+                     width: int = 0) -> None:
         eye = OK if pct >= 1.0 else ACCENT
-        # A fixed rule per width class, not a measured one. content_size is 0 on the
-        # first paint and self.size is the screen, so both overflowed the shell's
-        # padding and wrapped the rule onto its own line. It is decoration - the
-        # subtitle beside it carries the information - so a value that always fits
-        # beats one that is occasionally exact.
-        rule = 34 if narrow else 52
+        # Fitted to the terminal, then capped. A fixed rule per width class is wrong at
+        # the bottom of a class - 34 columns plus the mark overflowed a 50-column
+        # terminal and wrapped the rule onto its own line - and a MEASURED one is wrong
+        # on the first paint, where content_size is 0 and self.size is the screen. The
+        # caller knows the real width, so take it and clamp.
+        pad = 1 if narrow else 3
+        cap = 34 if narrow else 52
+        rule = cap
+        if width:
+            rule = max(4, min(cap, width - 2 * pad - self.MARK_COLS))
         t = Text()
         t.append("       ○\n", style=DIM)
         t.append("   ╭───┴───╮   ", style=DIM)
@@ -152,17 +160,28 @@ class TierApp(App):
             yield Static(id="detail")
             yield Static(id="keys")
 
-    def on_resize(self, event) -> None:
-        # The class goes on the SCREEN, not the app: the stylesheet selects
-        # `Screen.-narrow #side`, so setting it on the app node matched nothing and the
-        # detail pane stayed put at phone width - squeezing the list until rows fell off
-        # the bottom, which is exactly what the breakpoint exists to prevent.
-        narrow = event.size.width < NARROW
+    def _apply_width(self, width: int | None = None) -> None:
+        """Set the width class from the CURRENT size.
+
+        Driven from on_mount as well as on_resize: a resize event is not guaranteed for
+        the INITIAL size, and over mosh/tmux it can arrive late or not at all. Relying
+        on the event alone left the app laid out for a wide terminal inside a narrow
+        one, so content sized for two panes wrapped at the left margin and the wrapped
+        remnants read as a second, mangled copy of the screen.
+        """
+        if width is None:
+            width = getattr(self.size, "width", 0) or 0
+        narrow = 0 < width < NARROW
         self._narrow = narrow
+        # The class goes on the SCREEN: the stylesheet selects `Screen.-narrow #side`,
+        # so setting it on the app node matched nothing.
         try:
             self.screen.set_class(narrow, "-narrow")
         except Exception:               # noqa: BLE001 — cosmetic only
             pass
+
+    def on_resize(self, event) -> None:
+        self._apply_width(event.size.width)
         painter = getattr(self, "paint", None)
         if callable(painter):
             painter()
@@ -179,7 +198,8 @@ class TierApp(App):
             return str(self.project)
 
     def head(self, subtitle: str) -> None:
-        self.query_one("#brand", Brand).render_frame(0.0, subtitle, self.narrow)
+        self.query_one("#brand", Brand).render_frame(
+            0.0, subtitle, self.narrow, getattr(self.size, "width", 0) or 0)
 
     def foot(self, pairs, note: str = "", warn: bool = False) -> None:
         d = Text("  ")
@@ -220,6 +240,7 @@ class MenuApp(TierApp):
 
     def on_mount(self) -> None:
         self.ran = True
+        self._apply_width()             # before the first paint, not after a resize
         n = len(self.views)
         self.query_one("#panel").border_title = f"{n} open" if n else "nothing open"
         self.query_one("#side").border_title = "detail"
