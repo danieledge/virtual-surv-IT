@@ -735,7 +735,6 @@ def test_only_one_menu_option_calls_itself_an_update():
 
     Asserted on the LABELS because that is where the ambiguity lived - both flows were
     working exactly as designed."""
-    import install_helper as ih
 
     source = (REPO_ROOT / "install_helper.py").read_text(encoding="utf-8")
     start = source.index('("1", "Install or reconfigure')
@@ -784,3 +783,51 @@ def test_an_update_run_knows_it_is_an_update():
     assert "Plugin update" in resolved, (
         f"the label follows the mode it is actually running in; got {resolved}"
     )
+
+
+def test_every_installer_screen_has_a_textual_tier():
+    """The update flow lived entirely on the older renderer: picking update from a Textual
+    menu dropped into a prompt_toolkit decision screen and then a prompt_toolkit progress
+    screen (photographed 2026-08-30)."""
+    import launcher_textual
+
+    for name in ("chooser_screen", "grid_screen", "progress_screen", "update_decision_screen"):
+        assert callable(getattr(launcher_textual, name, None)), f"{name} is not ported"
+
+
+def test_no_menu_rolls_its_own_numbered_prompt_without_a_tier():
+    """_choose_submenu was tiered, so the three menus using it got the new interface.
+    Two others printed their own numbered list and called input(), so they never did -
+    which is what a user meets as "it fell back again" (owner report, 2026-08-30).
+
+    Asserted on the two that were found rather than by pattern: a heuristic for "is this a
+    menu" produced nothing useful when it was tried, and a checker that reports clean
+    without having looked is worse than no checker."""
+    source = (REPO_ROOT / "install_helper.py").read_text(encoding="utf-8")
+    flat = " ".join(source.split())
+    for function in ("run_extensions_editor", "run_alias_manage"):
+        start = source.index(f"def {function}")
+        end = source.find("\ndef ", start + 1)
+        body = source[start : end if end != -1 else len(source)]
+        assert "_tiered_installer_screen(" in body, (
+            f"{function} still asks its question without offering a screen"
+        )
+    assert (
+        '_tiered_installer_screen( "chooser_screen"' in flat
+        or '_tiered_installer_screen("chooser_screen"' in flat
+    )
+
+
+def test_a_blank_answer_is_not_a_cancel_at_a_defaulted_prompt():
+    """The two look identical as strings and mean opposite things: pressing Enter at a
+    "[1]" prompt ASKS FOR option 1, while "" from a screen means the human left.
+
+    Conflating them made blank-Enter back out of the alias manager instead of registering
+    the alias - caught by an existing test, which is the only reason it is not shipped."""
+    source = (REPO_ROOT / "install_helper.py").read_text(encoding="utf-8")
+    start = source.index("def run_alias_manage")
+    end = source.find("\ndef ", start + 1)
+    body = source[start:end]
+    # The cancel check must sit on the SCREEN branch, never after the input() fallback.
+    assert "elif choice ==" in body, "the cancel test must be an elif on the screen branch"
+    assert body.index("elif choice ==") < body.index('if choice in ("", "1")')

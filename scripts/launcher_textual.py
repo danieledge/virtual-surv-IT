@@ -616,3 +616,134 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
     if not getattr(app, "ran", False):
         return None
     return MONITOR_CLOSED
+
+
+def update_decision_screen(ih, repo=None, output=None):
+    """What the update would bring, and the one question worth asking - in Textual.
+
+    Returns "update", "cancel", or None when this tier cannot draw. The facts come from
+    installer_app's own gatherer, so the two renderings cannot disagree about what version
+    you are on or whether your clone is dirty.
+    """
+    widgets = _widgets()
+    if widgets is None:
+        return None
+    try:
+        import installer_app
+        from rich.text import Text as _Text
+    except Exception:  # noqa: BLE001
+        return None
+    try:
+        local, remote, headlines, dirty = installer_app._update_facts(ih, repo)
+    except Exception:  # noqa: BLE001
+        return None
+
+    def facts():
+        t = _Text()
+        if remote and local and remote != local:
+            t.append(f"  {local}  ->  {remote}\n", style="bold")
+        elif remote and local:
+            t.append(f"  already on {local} - nothing to pull\n")
+        else:
+            t.append("  checking what is available...\n")
+        if dirty:
+            # Stated BEFORE the keypress, not discovered mid-run.
+            t.append("\n  note: your clone has uncommitted changes\n")
+            t.append("        they are stashed and restored around the pull\n")
+        return t
+
+    def detail(width):
+        t = _Text("\n")
+        t.append("  What is coming\n\n", style="bold")
+        for line in headlines or ["No release notes available."]:
+            t.append(f"  - {line}\n")
+        t.append("\n")
+        t.append(
+            "  Pulls the new code and refreshes the copy Claude Code loads. Your "
+            "settings, preferences and model choice are not touched and are not "
+            "re-asked.\n"
+        )
+        return t
+
+    try:
+        app = widgets.DecisionApp(
+            Path.cwd(),
+            [("update", "update now"), ("cancel", "not now")],
+            facts,
+            detail,
+            "Update the team",
+            cancel="cancel",
+        )
+        with _true_terminal_size():
+            app.run()
+    except Exception:  # noqa: BLE001
+        return None
+    if not getattr(app, "ran", False):
+        return None
+    return getattr(app, "picked", "cancel")
+
+
+def progress_screen(titles, run_fn, ih, *, title, repo=None, output=None):
+    """Run `run_fn(observer)` while showing its steps live, in Textual.
+
+    Returns the exit code, or None when this tier cannot draw. The observer and its
+    bounded output buffer come from installer_app, so both renderings watch the same
+    thing in the same way.
+    """
+    widgets = _widgets()
+    if widgets is None:
+        return None
+    try:
+        import installer_app
+    except Exception:  # noqa: BLE001
+        return None
+    import threading
+
+    state = installer_app._RunState(titles)
+
+    def work():
+        try:
+            state.code = run_fn(state)
+        except BaseException:  # noqa: BLE001 - the screen must close whatever happens
+            state.code = 1
+        finally:
+            state.done = True
+
+    worker = threading.Thread(target=work, daemon=True)
+    worker.start()
+    try:
+        app = widgets.ProgressApp(repo or Path.cwd(), state, title)
+        with _true_terminal_size():
+            app.run()
+    except Exception:  # noqa: BLE001
+        return None
+    worker.join(timeout=1)
+    if not getattr(app, "ran", False):
+        return None
+    return state.code
+
+
+def grid_screen(rows_fn, apply_fn, help_fn, ih, *, title, repo=None, output=None):
+    """A settings grid, in Textual.
+
+    True/False when it RAN (changed something or not), None when it could not - and the
+    caller must keep those apart, because "ran and changed nothing" is a decision while
+    "could not run" is a reason to try the next tier.
+    """
+    widgets = _widgets()
+    if widgets is None:
+        return None
+    try:
+        if not (rows_fn() or []):
+            return None  # no settings to draw is not a settings screen
+    except Exception:  # noqa: BLE001
+        return None
+    try:
+        app = widgets.GridApp(repo or Path.cwd(), rows_fn, apply_fn, help_fn, title)
+        with _true_terminal_size():
+            app.run()
+    except Exception:  # noqa: BLE001
+        return None
+    if not getattr(app, "ran", False):
+        return None
+    return bool(getattr(app, "changed", False))

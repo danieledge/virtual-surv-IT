@@ -1686,3 +1686,230 @@ class MonitorApp(TierApp):
         if key == "r":
             event.stop()
             self.paint()
+
+
+class DecisionApp(TierApp):
+    """A short question with a fixed set of answers and the facts beside it.
+
+    The update screen is the case it was written for: what you are on, what is coming,
+    whether your clone is dirty - all visible at once, then one answer. `picked` is the
+    chosen key, or the caller's cancel value.
+    """
+
+    def __init__(self, project, options: list, facts, detail, title: str, cancel="cancel") -> None:
+        super().__init__(project)
+        self.options = list(options)  # [(key, label)]
+        self._facts = facts  # () -> Text, drawn above the options
+        self._detail = detail  # (width) -> Text for the side pane
+        self.title_text = title
+        self._cancel = cancel
+        self.picked = cancel
+        self.ran = False
+
+    def on_mount(self) -> None:
+        self.ran = True
+        self._apply_width()
+        self.chrome_ready(self.title_text)
+        self.paint()
+
+    def paint(self) -> None:
+        self.head(self.title_text if self.narrow else f"{self.folder()}  ·  {self.title_text}")
+        t = Text()
+        t.append(self._facts())
+        t.append("\n")
+        for i, (_key, label) in enumerate(self.options):
+            sel = self.cursor == i
+            t.append("  ▸ " if sel else "    ", style=ACCENT if sel else HINT)
+            t.append(f"{label}\n", style=f"bold {TEXT}" if sel else TEXT)
+        self.query_one("#rows", Static).update(t)
+
+        width = 26 if not self.narrow else max(20, self.panel_width() - 4)
+        self.query_one("#side-body", Static).update(self._detail(width))
+        self.foot((("↑↓", "move"), ("enter", "choose"), ("esc/q", "cancel")))
+
+    def on_key(self, event) -> None:
+        key = event.key
+        if key in ("escape", "q", "ctrl+c"):
+            event.stop()
+            self.picked = self._cancel
+            self.exit()
+            return
+        if not self.options:
+            return
+        if key == "down":
+            self.cursor = (self.cursor + 1) % len(self.options)
+        elif key == "up":
+            self.cursor = (self.cursor - 1) % len(self.options)
+        elif key == "enter":
+            event.stop()
+            self.picked = self.options[self.cursor][0]
+            self.exit()
+            return
+        else:
+            return
+        self.paint()
+
+
+class ProgressApp(TierApp):
+    """Work happening, watched.
+
+    Rows move pending -> running -> their result while a WORKER THREAD does the work: a
+    blocking subprocess on the main thread would freeze the frame it is meant to be
+    animating. The shared state is only ever assigned wholesale, never edited in place, so
+    a torn read shows for at most one frame.
+
+    Closing is only possible once the work has finished - closing mid-run would leave the
+    installer writing into a screen that no longer exists, and the user with no idea
+    whether their plugin was half-updated.
+    """
+
+    def __init__(self, project, state, title: str, refresh: float = 0.15) -> None:
+        super().__init__(project)
+        self.state = state
+        self.title_text = title
+        self._refresh = refresh
+        self.ran = False
+
+    def on_mount(self) -> None:
+        self.ran = True
+        self._apply_width()
+        self.chrome_ready(self.title_text)
+        self.paint()
+        self.set_interval(self._refresh, self.paint)
+
+    def paint(self) -> None:
+        self.head(self.title_text if self.narrow else f"{self.folder()}  ·  {self.title_text}")
+        marks = {
+            "pending": ("·", DIM),
+            "running": ("▸", ACCENT),
+            "ok": ("✓", OK),
+            "skip": ("~", GOLD),
+            "fail": ("✗", GOLD),
+        }
+        t = Text()
+        for row_title, status, detail in self.state.rows:
+            mark, style = marks.get(status, marks["pending"])
+            t.append(f"  {mark} ", style=style)
+            t.append(row_title, style=f"bold {TEXT}" if status == "running" else TEXT)
+            if detail and status != "running":
+                t.append(f"  ({detail[:36]})", style=DIM)
+            t.append("\n")
+        self.query_one("#rows", Static).update(t)
+
+        width = 26 if not self.narrow else max(20, self.panel_width() - 4)
+        body = Text("\n")
+        body.append("  Output\n\n", style=f"bold {ACCENT}")
+        for line in self.state.lines[-12:]:
+            for wrapped in wrap(line, width):
+                body.append(f"  {wrapped}\n", style=DIM)
+        self.query_one("#side-body", Static).update(body)
+
+        if self.state.done:
+            ok = self.state.code == 0
+            self.foot(
+                (("enter", "close"),),
+                "done" if ok else f"finished with errors (exit {self.state.code})",
+                warn=not ok,
+            )
+        else:
+            self.foot((("^c", "stop"),), "working...")
+
+    def on_key(self, event) -> None:
+        if not self.state.done:
+            return  # nothing leaves while the installer is mid-write
+        if event.key in ("enter", "escape", "q", "ctrl+c"):
+            event.stop()
+            self.exit()
+
+
+class GridApp(TierApp):
+    """A settings grid: every value visible at once, Enter changes the highlighted row.
+
+    Rows arrive as (group, label, value, on, key) and are dispatched BY KEY, never by
+    position - this repo has shipped positional dispatch twice and both times every test
+    passed while the wrong setting changed.
+    """
+
+    def __init__(self, project, rows_fn, apply_fn, help_fn, title: str) -> None:
+        super().__init__(project)
+        self._rows_fn = rows_fn
+        self._apply = apply_fn
+        self._help = help_fn
+        self.title_text = title
+        self.rows = list(rows_fn() or [])
+        self.changed = False
+        self.notes: list = []
+        self.ran = False
+
+    def on_mount(self) -> None:
+        self.ran = True
+        self._apply_width()
+        self.chrome_ready(self.title_text)
+        self.paint()
+
+    def paint(self) -> None:
+        self.head(self.title_text if self.narrow else f"{self.folder()}  ·  {self.title_text}")
+        width = min(max((len(r[1]) for r in self.rows), default=0), 28)
+        t = Text()
+        for i, (group, label, value, on, _key) in enumerate(self.rows):
+            if group:
+                t.append(("\n" if i else "") + f"  {group}\n", style=f"bold {GOLD}")
+            sel = self.cursor == i
+            t.append("  ▸ " if sel else "    ", style=ACCENT if sel else HINT)
+            t.append(f"{label.ljust(width + 1)} ", style=f"bold {TEXT}" if sel else TEXT)
+            t.append(f"{'✓' if on else '·'} {value}\n", style=OK if on else DIM)
+        self.query_one("#rows", Static).update(t)
+
+        w = 26 if not self.narrow else max(20, self.panel_width() - 4)
+        body = Text("\n")
+        if self.rows:
+            _group, label, value, on, key = self.rows[self.cursor]
+            body.append(f"  {label}\n\n", style=f"bold {ACCENT}")
+            for line in wrap(self._help(key) or "No description yet.", w):
+                body.append(f"  {line}\n", style=DIM)
+            body.append("\n")
+            for line in wrap(f"currently: {value}", w):
+                body.append(f"  {line}\n", style=OK if on else DIM)
+        if self.notes:
+            body.append("\n  Just changed\n", style=f"bold {GOLD}")
+            for note in self.notes[-4:]:
+                for line in wrap(note, w):
+                    body.append(f"  {line}\n", style=OK)
+        self.query_one("#side-body", Static).update(body)
+        self.foot((("↑↓", "move"), ("enter", "change"), ("esc/q", "done")))
+
+    def on_key(self, event) -> None:
+        key = event.key
+        if key in ("escape", "q", "ctrl+c"):
+            event.stop()
+            self.exit()
+            return
+        if not self.rows:
+            return
+        if key == "down":
+            self.cursor = (self.cursor + 1) % len(self.rows)
+        elif key == "up":
+            self.cursor = (self.cursor - 1) % len(self.rows)
+        elif key in ("enter", "space"):
+            event.stop()
+            before = list(self.rows)
+            note = ""
+            try:
+                note = self._apply(self.rows[self.cursor][4]) or ""
+            except Exception:  # noqa: BLE001 - a failed write is not a crash
+                note = ""
+            self.rows = list(self._rows_fn() or self.rows)
+            if list(self.rows) != before:
+                self.changed = True
+                for (_g, label, value, _o, _k), (_bg, _bl, was, _bo, _bk) in zip(self.rows, before):
+                    if value != was:
+                        # ONE line per setting: toggling twice used to append two, which
+                        # reads as the panel duplicating rather than as two edits.
+                        prefix = f"{label}: "
+                        self.notes = [n for n in self.notes if not n.startswith(prefix)]
+                        self.notes.append(f"{label}: {was} -> {value}")
+            if note:
+                self.notes.append(note.strip())
+        else:
+            return
+        self.paint()

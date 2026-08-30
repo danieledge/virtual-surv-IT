@@ -1676,7 +1676,7 @@ def run_update_in_app(args, style: Style) -> "Optional[int]":
     except Exception:
         return None
 
-    decision = installer_app.update_decision_screen(_this_module(), repo=_repo_hint())
+    decision = _tiered_installer_screen("update_decision_screen", _this_module(), repo=_repo_hint())
     if decision is None:
         return None  # screen unavailable - the caller streams instead
     if decision == "cancel":
@@ -1689,9 +1689,36 @@ def run_update_in_app(args, style: Style) -> "Optional[int]":
         inst.observer = observer
         return inst.run()
 
-    return installer_app.progress_screen(
-        titles, _run, _this_module(), title="Updating the team", repo=_repo_hint()
+    return _tiered_installer_screen(
+        "progress_screen",
+        titles,
+        _run,
+        _this_module(),
+        title="Updating the team",
+        repo=_repo_hint(),
     )
+
+
+def _tiered_installer_screen(name: str, *args, **kwargs):
+    """Call `name` on the best tier that can draw it: Textual, then prompt_toolkit.
+
+    Same rule as the launcher's _tiered_screen and for the same reason: None means a tier
+    could not draw, so the next is tried; anything else is that screen's real answer.
+    """
+    for module_name in ("launcher_textual", "installer_app"):
+        module = _import_from_scripts(module_name)
+        if module is None:
+            continue
+        screen = getattr(module, name, None)
+        if screen is None:
+            continue
+        try:
+            answer = screen(*args, **kwargs)
+        except Exception:
+            continue  # a tier that raises is a tier that cannot draw
+        if answer is not None:
+            return answer
+    return None
 
 
 def _import_from_scripts(name: str):
@@ -3662,7 +3689,8 @@ class Installer:
             installer_app = _import_from_scripts("installer_app")
             if installer_app is None:
                 return None
-            return installer_app.grid_screen(
+            return _tiered_installer_screen(
+                "grid_screen",
                 _machine_rows,
                 _machine_apply,
                 _machine_help,
@@ -6473,11 +6501,29 @@ def run_alias_manage(
     s = style
     print("")
     print(s.bold("Manage the 'virt-surv' alias"))
-    print(f"  {s.cyan('1)')} Register or update the alias (recommended after plugin updates)")
-    print(f"  {s.cyan('2)')} Change the command 'virt-surv go' uses to launch Claude Code")
-    try:
-        choice = input(f"{s.cyan('  Which one?')} {s.bold('[1]')}: ").strip()
-    except EOFError:
+    options = (
+        ("1", "Register or update the alias (recommended after plugin updates)"),
+        ("2", "Change the command 'virt-surv go' uses to launch Claude Code"),
+    )
+    choice = _tiered_installer_screen(
+        "chooser_screen",
+        options,
+        _this_module(),
+        title="Manage the 'virt-surv' alias",
+        actions={key: key for key, _label in options},
+    )
+    if choice is None:
+        for key, label in options:
+            print(f"  {s.cyan(key + ')')} {label}")
+        try:
+            choice = input(f"{s.cyan('  Which one?')} {s.bold('[1]')}: ").strip()
+        except EOFError:
+            return 0
+        # BLANK IS THE DEFAULT HERE, not a cancel. The two look identical as strings and
+        # mean opposite things: pressing Enter at a "[1]" prompt asks for option 1, while
+        # "" from the screen means the human left. Only the screen's "" is a cancel, which
+        # is why this is decided inside the branch that knows where the answer came from.
+    elif choice == "":
         return 0
     if choice in ("", "1"):
         return run_setup_alias(style, mark_map, assume_yes, demo, repo_hint)
@@ -8355,14 +8401,30 @@ def run_extensions_editor(style: Style, mark_map: dict) -> int:
                     print(style.yellow(f"  {warn} {problem}"))
         else:
             print(style.dim("  not installed"))
-        print("")
-        print("    1  Review the resolved contract (org + this directory's project file)")
-        print("    2  Edit the org contract in $EDITOR")
-        print("    3  Install one from a file")
-        print("    4  Check which registry tools are on PATH")
-        print("    5  Sync now from the configured source")
-        print("    b  Back")
-        choice = ask("  Choose:", "b", assume_yes=False, style=style).strip().lower()
+        # The same chooser the Advanced menu uses, so this stops being the one screen in
+        # the flow that drops back to a numbered prompt (2026-08-30). The numbered list
+        # below is the fallback, unchanged, for a console that cannot host a screen.
+        options = (
+            ("1", "Review the resolved contract (org + this directory's project file)"),
+            ("2", "Edit the org contract in $EDITOR"),
+            ("3", "Install one from a file"),
+            ("4", "Check which registry tools are on PATH"),
+            ("5", "Sync now from the configured source"),
+            ("b", "Back"),
+        )
+        choice = _tiered_installer_screen(
+            "chooser_screen",
+            options,
+            _this_module(),
+            title="Org extensions",
+            actions={key: key for key, _label in options},
+        )
+        if choice is None:
+            print("")
+            for key, label in options:
+                print(f"    {key}  {label}")
+            choice = ask("  Choose:", "b", assume_yes=False, style=style).strip().lower()
+        choice = (choice or "b").strip().lower()
 
         if choice == "1":
             _show_resolved_extensions(style)
