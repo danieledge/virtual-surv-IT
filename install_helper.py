@@ -4996,12 +4996,71 @@ def _parse_review_tool_overrides(raw: str) -> tuple:
     return overrides, rejected
 
 
+_REVIEW_TOOL_STATES = ("auto", "on", "off")
+
+
+def _review_tool_grid(current: dict):
+    """The seven analyser overrides on a grid. The resulting dict, or None if no screen.
+
+    None and an unchanged dict are different answers and the caller must not conflate
+    them: None means fall back to the prompt, while "ran and changed nothing" is a
+    decision. The launcher merged those two once and cancelling dumped the user into the
+    tier they had just declined.
+    """
+    state = dict(current)
+
+    def rows_fn():
+        return [
+            (
+                "Analysers" if index == 0 else "",
+                tool,
+                state.get(tool, "auto"),
+                state.get(tool, "auto") != "auto",
+                tool,
+            )
+            for index, tool in enumerate(_REVIEW_TOOLS)
+        ]
+
+    def apply_fn(key):
+        # Dispatch by KEY, never by row position - this repo has shipped that bug twice.
+        nxt = _REVIEW_TOOL_STATES[
+            (_REVIEW_TOOL_STATES.index(state.get(key, "auto")) + 1) % len(_REVIEW_TOOL_STATES)
+        ]
+        if nxt == "auto":
+            state.pop(key, None)
+        else:
+            state[key] = nxt
+        return f"{key}={nxt}"
+
+    def help_fn(key):
+        # The machine screen's own words, so what auto/on/off mean cannot drift between
+        # the two places this is set.
+        return _machine_help(f"review_tools.{key}")
+
+    changed = _tiered_installer_screen(
+        "grid_screen",
+        rows_fn,
+        apply_fn,
+        help_fn,
+        _this_module(),
+        title="Review-tool overrides",
+        repo=_repo_hint(),
+    )
+    return None if changed is None else state
+
+
 def _ask_review_tool_overrides(style: Style, assume_yes: bool, current: dict) -> dict:
     """One compact prompt for the seven-tool on/off/auto overrides instead of seven
     separate confirm()s - most sessions change zero or one tool, not all seven. Returns
     the full resulting {tool: state} dict (existing overrides plus this prompt's changes,
     with any tool explicitly reset to "auto" removed) - callers write the return value
     straight back via write_team_preferences(review_tools=...)."""
+    if not assume_yes:
+        # GRID first, the prompt wherever it cannot run. Same states and the same help
+        # text underneath either way.
+        picked = _review_tool_grid(current)
+        if picked is not None:
+            return picked
     shown = ", ".join(f"{t}={current.get(t, 'auto')}" for t in _REVIEW_TOOLS)
     raw = ask(
         f"  Review-tool overrides (currently: {shown}) - e.g. 'mypy=off,black=on', "
@@ -5261,22 +5320,60 @@ def ask_and_set_model(
     now covers the global case directly, so duplicating it here just to have a "no, per
     project" answer available adds a needless extra question). run_configure keeps the
     default True - it has no separate machine-defaults entry point of its own."""
-    global_default = offer_global_scope and confirm(
-        "  Also make this the default for new/unconfigured projects, not just this one?",
-        default=False,
-        assume_yes=assume_yes,
-        style=style,
-    )
-    picked = (
-        ask(
-            "  opus / sonnet / sonnet-4-6 / default (reset to sonnet)?",
-            "default",
-            assume_yes,
-            style=style,
+    if not offer_global_scope or assume_yes:
+        # Unchanged under --yes: confirm() returned its default here, which was False.
+        # An unattended run has never opted into the wider scope and must not start now.
+        global_default = False
+    else:
+        global_default = _agreed(
+            style,
+            title="Which projects?",
+            facts=[
+                ("head", "  Also make this the default for new projects?\n"),
+                ("dim", f"  you are setting {project.name}\n"),
+            ],
+            detail=[
+                ("head", "What the wider scope changes"),
+                (
+                    "dim",
+                    "Every new or unconfigured project starts with this model, written to "
+                    "your user-level settings. A project that sets its own model still "
+                    "wins, and no existing configured project is touched.",
+                ),
+            ],
+            yes="this project and future ones",
+            no=f"just {project.name}",
+            assume_yes=False,
+            prompt="  Also make this the default for new/unconfigured projects, not just this one?",
+            default=False,
         )
-        .strip()
-        .lower()
-    )
+
+    if assume_yes:
+        picked = "default"  # unchanged: ask() with assume_yes returned its default
+    else:
+        # A CHOOSER, not a free-text answer.
+        answer = _ask().choose(
+            f"Morgan's model for {project.name}",
+            [
+                (
+                    "default",
+                    "sonnet (the documented default)",
+                    "resets to sonnet - testing to date has not shown better orchestration "
+                    "from opus",
+                ),
+                ("opus", "opus", "the extra margin for critical or high-stakes engagements"),
+                (
+                    "sonnet",
+                    "sonnet, pinned explicitly",
+                    "the current generation, written as an exact model ID rather than the "
+                    "'sonnet' alias, which resolves differently per API provider",
+                ),
+                ("sonnet-4-6", "sonnet-4-6", "pins the PREVIOUS generation explicitly"),
+            ],
+        )
+        if answer.cancelled:
+            return False, "nothing chosen - the model is unchanged"
+        picked = str(answer.value)
     if picked in ("default", "reset", ""):
         model: Optional[str] = None
     elif picked in ORCHESTRATOR_MODELS:
@@ -6524,7 +6621,41 @@ def run_setup_alias(
         # temporary" - live-caught (fable UX review, 2026-08-05): the confirm defaulted
         # to Yes regardless, so pressing Enter wrote exactly the alias the warning had
         # just advised against.
-        if not confirm("  Add it?", default=bool(resolved), assume_yes=assume_yes, style=style):
+        if not _agreed(
+            style,
+            title="Register the 'virt-surv' alias",
+            facts=[
+                ("head", f"  Add the alias to {label}?\n"),
+                ("dim", f"  {rc_path}\n"),
+            ],
+            detail=[
+                ("head", "What gets added"),
+                ("plain", line),
+                *(
+                    [
+                        (
+                            "warn",
+                            "This shell startup file may be temporary on this machine, so "
+                            "the alias could vanish. Declining is the default here.",
+                        )
+                    ]
+                    if not resolved
+                    else []
+                ),
+                (
+                    "dim",
+                    "Only this one line, at the end of the file. Nothing else in it is "
+                    "read or changed.",
+                ),
+            ],
+            yes="add the alias",
+            no=f"leave {label} alone",
+            assume_yes=assume_yes,
+            prompt="  Add it?",
+            # Unchanged, and the part most worth keeping: it declines by default when the
+            # warning above has just said this target may be temporary (2026-08-05).
+            default=bool(resolved),
+        ):
             print(f"{style.dim('-')} {label}: skipped")
             continue
         try:
@@ -6934,16 +7065,52 @@ def detect_or_configure_claude_launch_command(
                 "alias/function, type it below.)"
             )
         )
-    cmd = (
-        ask(
-            "  What command launches Claude Code on this machine? (your own alias/function "
-            "is fine, e.g. 'cc')",
-            default,
-            assume_yes,
-            style=style,
-        ).strip()
-        or default
-    )
+    cmd = ""
+    if not assume_yes:
+        # WHAT IS ACTUALLY HERE, offered by name. _claude_candidates walks the same
+        # discovery tiers the launcher uses, so this is the machine's own answer rather
+        # than a guess the human has to spell.
+        options = []
+        seen = set()
+        for found, how in _claude_candidates():
+            if found in seen:
+                continue
+            seen.add(found)
+            options.append((found, found, f"found on this machine ({how})"))
+            if len(options) >= 3:
+                break
+        options.append(
+            (
+                "",
+                "something else",
+                "your own alias or function that wraps claude, e.g. 'cc' - type it next",
+            )
+        )
+        answer = _ask().choose("What launches Claude Code here?", options)
+        if answer.cancelled:
+            # A CANCEL AND "NOBODY WAS THERE" ARRIVE THE SAME WAY and mean different
+            # things. With a terminal, the human looked and left: remember nothing, ask
+            # again next time. Without one - piped, scripted, no tty - there was nobody to
+            # leave, and the old behaviour applies: fall through to the typed question,
+            # which takes its own default and persists it exactly as it always did.
+            try:
+                left_deliberately = sys.stdin.isatty()
+            except Exception:
+                left_deliberately = False
+            if left_deliberately:
+                return default
+        cmd = str(answer.value or "")
+    if not cmd:
+        cmd = (
+            ask(
+                "  What command launches Claude Code on this machine? (your own "
+                "alias/function is fine, e.g. 'cc')",
+                default,
+                assume_yes,
+                style=style,
+            ).strip()
+            or default
+        )
     cfg[_CLAUDE_LAUNCH_CMD_KEY] = cmd
     if save_config(config_path(), cfg):
         print(f"{ok} remembered '{cmd}' as the Claude Code launch command for this machine")
@@ -10527,8 +10694,23 @@ def _main(argv=None) -> int:
                 if action == "configure":
                     # Free-function flow with no need for Installer's clone-management
                     # state - handled directly here rather than added as an Installer subset.
-                    raw = ask("  Which project directory?", ".", False, style=style)
-                    run_configure(Path(raw), style, marks(), args.yes, args.demo)
+                    target = _pick_project(style, "Which project?", "  Which project directory?")
+                    if target is None:
+                        continue  # they left - not "configure the current directory"
+                    # THE SAME HANDOVER `virt-surv configure` DOES (2026-08-19), which this
+                    # door skipped: an already-configured project gets the launcher's
+                    # settings editor, and only a project with no team configuration yet
+                    # gets the guided first-time pass. Same words and same intent on both
+                    # doors, so they should not be two different experiences.
+                    handed = None
+                    if (
+                        _plugin_enabled_for_configure(target)
+                        and not args.demo
+                        and sys.stdin.isatty()
+                    ):
+                        handed = _run_launcher_settings(target, style)
+                    if handed is None:
+                        run_configure(target, style, marks(), args.yes, args.demo)
                     did_anything = did_anything or not args.demo
                 elif action == "aliasmanage":
                     run_alias_manage(style, marks(), args.yes, args.demo, args.repo)

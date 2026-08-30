@@ -1249,6 +1249,24 @@ def _menu_session(monkeypatch, tmp_path, answers):
     feed = iter(answers)
     monkeypatch.setattr(_sys, "stdin", _TtyStdin())
     monkeypatch.setattr("builtins.input", lambda prompt="": next(feed, "q"))
+
+    # The project question is a chooser now. Answer it with its "type it instead" option,
+    # so the scripted path in `answers` is still what supplies the directory and every
+    # existing list keeps meaning what it always meant. The test still goes THROUGH the
+    # real picker; only the row selection is supplied here.
+    #
+    # Self-contained on purpose: this fixture points ih.__file__ at "nowhere", so
+    # scripts/questions.py is deliberately NOT importable from inside it - leaning on the
+    # framework here crashed for exactly that reason. _PlainQuestions is install_helper's
+    # own stand-in and is always present.
+    class _TypeItInstead(ih._PlainQuestions):
+        def choose(self, title, options, **kwargs):
+            for value, _label, _help in options:
+                if value == "":
+                    return self._Answer("", False)
+            return super().choose(title, options, **kwargs)
+
+    monkeypatch.setattr(ih, "_ask", _TypeItInstead)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
@@ -4810,30 +4828,57 @@ def test_run_env_check_aggregates_and_reports_issues(capsys, monkeypatch):
 def test_ask_and_set_model_project_scope(tmp_path, monkeypatch):
     import install_helper as ih
 
-    monkeypatch.setattr("builtins.input", lambda prompt="": "")  # scope=project, model=default
+    questions = ih._import_from_scripts("questions")
+    # Only the MODEL answer is scripted here. The scope question goes through _agreed,
+    # which with no screen available falls back to confirm() - and with stdin not a real
+    # tty that takes its own default, which is False. Same answer the old blank gave.
+    monkeypatch.setattr(ih, "_ask", lambda: questions.scripted(["default"]))
     ok, message = ih.ask_and_set_model(tmp_path, ih.Style(False), assume_yes=False)
     assert ok
     settings = json.loads((tmp_path / ".claude" / "settings.json").read_text())
     assert settings["model"] == ih.ORCHESTRATOR_MODEL_IDS[ih.ORCHESTRATOR_MODEL_DEFAULT]
 
 
-def test_ask_and_set_model_rejects_bad_input(tmp_path, monkeypatch):
+def test_ask_and_set_model_cannot_be_given_a_model_that_is_not_offered(tmp_path, monkeypatch):
+    """This used to pin the REJECTION of a typo. The question was free text - "opus /
+    sonnet / sonnet-4-6 / default (reset to sonnet)?" - so a misspelling was possible, and
+    the interesting behaviour was catching it. Worse, a near-miss fell through to
+    "default", which is a RESET.
+
+    It is a chooser now, so the typo has nowhere to happen. The rejection path is kept
+    below for the value arriving from anywhere else, but the test that matters is this
+    one: the screen cannot return an answer it did not offer."""
     import install_helper as ih
 
-    monkeypatch.setattr(sys, "stdin", _TtyStdin())  # confirm()/ask() short-circuit to
-    # their own default when stdin isn't a real tty - needed for scripted input() to
-    # actually be consumed rather than silently ignored.
-    answers = iter(["", "not-a-model"])
-    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    questions = ih._import_from_scripts("questions")
+    asker = questions.scripted(["not-a-model"])
+    monkeypatch.setattr(ih, "_ask", lambda: asker)
+    try:
+        ih.ask_and_set_model(tmp_path, ih.Style(False), assume_yes=False)
+    except AssertionError as exc:
+        assert "not on offer" in str(exc)
+        return
+    raise AssertionError("a value that was never offered must not be answerable")
+
+
+def test_ask_and_set_model_leaving_the_chooser_changes_nothing(tmp_path, monkeypatch):
+    """Esc must not fall through to "default", which is a reset - the old free-text
+    prompt did exactly that for a blank answer."""
+    import install_helper as ih
+
+    questions = ih._import_from_scripts("questions")
+    monkeypatch.setattr(ih, "_ask", lambda: questions.scripted([None]))
     ok, message = ih.ask_and_set_model(tmp_path, ih.Style(False), assume_yes=False)
     assert not ok
-    assert "expected opus/sonnet/sonnet-4-6/default" in message
+    assert "unchanged" in message
+    assert not (tmp_path / ".claude" / "settings.json").exists(), "nothing may be written"
 
 
 def test_ask_and_set_model_demo_mode_writes_nothing(tmp_path, monkeypatch):
     import install_helper as ih
 
-    monkeypatch.setattr("builtins.input", lambda prompt="": "")
+    questions = ih._import_from_scripts("questions")
+    monkeypatch.setattr(ih, "_ask", lambda: questions.scripted(["default"]))
     ok, message = ih.ask_and_set_model(tmp_path, ih.Style(False), assume_yes=False, demo=True)
     assert ok
     assert "would set" in message
@@ -4846,10 +4891,11 @@ def test_ask_and_set_model_offer_global_scope_false_skips_that_question(tmp_path
     model-choice answer, never a global-scope answer) and must always write per-project."""
     import install_helper as ih
 
-    monkeypatch.setattr(sys, "stdin", _TtyStdin())
-    answers = iter(["opus"])  # if the scope question were ALSO asked, this would be
-    # consumed by it instead and the model picker would hit StopIteration.
-    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    questions = ih._import_from_scripts("questions")
+    # ONE answer scripted. If the scope question were also asked it would consume this
+    # one, and the model chooser would then fail as unscripted - which is the assertion.
+    asker = questions.scripted(["opus"])
+    monkeypatch.setattr(ih, "_ask", lambda: asker)
     ok, message = ih.ask_and_set_model(
         tmp_path, ih.Style(False), assume_yes=False, offer_global_scope=False
     )
@@ -9026,3 +9072,57 @@ def test_leaving_the_project_picker_does_nothing_at_all():
         assert "step_skip" in body.split("if project is None:")[1][:200], (
             "a cancel is a skip, not a failure and not a silent default"
         )
+
+
+def test_every_menu_option_is_reachable_and_the_tiers_agree():
+    """The wiring audit, run as a test so it cannot rot.
+
+    Three bugs this month were invisible from outside and all three were findable by
+    asking the code: a screen that could not be imported looked merely unavailable, a menu
+    that printed its own numbered list looked like a tier falling back, and a helper
+    shadowed by an older function of the same name looked like a fix that did not work.
+
+    What this gate holds is the part that can only get worse by accident - an option the
+    menu advertises but nobody dispatches, and two tiers that disagree about a screen's
+    arguments. It deliberately does NOT assert how many questions are on screens: that
+    number is a judgement call and moves on purpose."""
+    import sys as _sys
+
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import audit_screens
+
+    rows = audit_screens.audit()
+    assert rows, "the audit found no menu options at all - it has stopped working"
+
+    unreachable = [f"{r['menu']}/{r['key']} ({r['action']})" for r in rows if not r["reached"]]
+    assert not unreachable, f"advertised but not dispatched: {unreachable}"
+
+    tiers = audit_screens.tier_report()
+    textual = tiers.get("launcher_textual") or {}
+    installer = tiers.get("installer_app") or {}
+    assert textual and installer, "both tiers must be importable from the test suite"
+    for name in set(textual) & set(installer):
+        assert textual[name] == installer[name], (
+            f"{name}: the tiers take different arguments, and the dispatcher calls both "
+            f"the same way - textual={textual[name]} installer={installer[name]}"
+        )
+
+
+def test_no_menu_option_asks_only_at_a_prompt():
+    """Every door is a screen. The audit reports one row per option; an option whose only
+    way of asking is a typed prompt is the thing the owner reported twice ("dropped out of
+    the new interface to the terminal-only question prompt").
+
+    Questions DEEPER in are not covered here on purpose - the full install keeps its typed
+    sequence deliberately, and this must not become a reason to change it."""
+    import sys as _sys
+
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import audit_screens
+
+    typed_only = [
+        f"{r['menu']}/{r['key']} ({r['action']}): {r['route']}"
+        for r in audit_screens.audit()
+        if r["asks"] == "typed"
+    ]
+    assert not typed_only, f"these ask only at a prompt: {typed_only}"
