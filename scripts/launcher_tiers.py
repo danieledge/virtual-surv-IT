@@ -12,6 +12,7 @@ signatures; this file knows nothing about tiers or sentinels.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from rich.text import Text
@@ -108,8 +109,7 @@ class Brand(Static):
     #: Columns the mark itself occupies on the rule's line, before the rule starts.
     MARK_COLS = 16
 
-    def render_frame(self, pct: float, subtitle: str, narrow: bool = False,
-                     width: int = 0) -> None:
+    def render_frame(self, pct: float, subtitle: str, narrow: bool = False, width: int = 0) -> None:
         eye = OK if pct >= 1.0 else ACCENT
         # Fitted to the terminal, then capped. A fixed rule per width class is wrong at
         # the bottom of a class - 34 columns plus the mark overflowed a 50-column
@@ -175,8 +175,10 @@ class TierApp(App):
         try:
             self._exit_renderables.append(
                 "".join(_tb.format_exception(type(exc), exc, exc.__traceback__))
-                if exc is not None else "virt-surv stopped unexpectedly.")
-        except Exception:               # noqa: BLE001 — reporting must never re-raise
+                if exc is not None
+                else "virt-surv stopped unexpectedly."
+            )
+        except Exception:  # noqa: BLE001 — reporting must never re-raise
             self._exit_renderables.append("virt-surv stopped unexpectedly.")
         self.exit()
 
@@ -208,7 +210,7 @@ class TierApp(App):
         # so setting it on the app node matched nothing.
         try:
             self.screen.set_class(narrow, "-narrow")
-        except Exception:               # noqa: BLE001 — cosmetic only
+        except Exception:  # noqa: BLE001 — cosmetic only
             pass
 
     def on_resize(self, event) -> None:
@@ -231,9 +233,9 @@ class TierApp(App):
         w = getattr(self.size, "width", 0) or 0
         if not w:
             return 40
-        if self.narrow:                 # shell pad 1, border 1, pad 1, each side
+        if self.narrow:  # shell pad 1, border 1, pad 1, each side
             return max(20, w - 6)
-        return max(20, w - 46)          # ... plus the 32-wide side pane and its margin
+        return max(20, w - 46)  # ... plus the 32-wide side pane and its margin
 
     def chrome_ready(self, panel_title: str, side_title: str = "detail") -> None:
         """Name the panes and take the keyboard away from them.
@@ -250,7 +252,7 @@ class TierApp(App):
             panel.can_focus = False
             self.query_one("#side").border_title = side_title
             self.set_focus(None)
-        except Exception:               # noqa: BLE001 — cosmetic
+        except Exception:  # noqa: BLE001 — cosmetic
             pass
 
     def scroll_row(self, line: int) -> None:
@@ -271,7 +273,7 @@ class TierApp(App):
                 panel.scroll_to(y=line, animate=False)
             elif line >= top + height:
                 panel.scroll_to(y=line - height + 1, animate=False)
-        except Exception:               # noqa: BLE001 — scrolling is cosmetic
+        except Exception:  # noqa: BLE001 — scrolling is cosmetic
             pass
 
     def folder(self) -> str:
@@ -283,7 +285,8 @@ class TierApp(App):
 
     def head(self, subtitle: str) -> None:
         self.query_one("#brand", Brand).render_frame(
-            0.0, subtitle, self.narrow, getattr(self.size, "width", 0) or 0)
+            0.0, subtitle, self.narrow, getattr(self.size, "width", 0) or 0
+        )
 
     def foot(self, pairs, note: str = "", warn: bool = False) -> None:
         d = Text("  ")
@@ -319,20 +322,20 @@ class MenuApp(TierApp):
         self.ran = False
         # One flat list over both regions, so up/down crosses the boundary naturally -
         # the same shape launcher_app uses.
-        self.items = ([("eng", i) for i in range(len(self.views))]
-                      + [("act", i) for i in range(len(self.actions))])
+        self.items = [("eng", i) for i in range(len(self.views))] + [
+            ("act", i) for i in range(len(self.actions))
+        ]
 
     def on_mount(self) -> None:
         self.ran = True
-        self._apply_width()             # before the first paint, not after a resize
+        self._apply_width()  # before the first paint, not after a resize
         n = len(self.views)
         self.chrome_ready(f"{n} open" if n else "nothing open")
         self.paint()
 
     def paint(self) -> None:
         folder = self.folder()
-        self.head(folder if self.narrow
-                  else f"{folder}  ·  engagements in this folder")
+        self.head(folder if self.narrow else f"{folder}  ·  engagements in this folder")
 
         t = Text()
         # Line counter for scroll_row: the pane scrolls, so the highlighted row has to
@@ -344,16 +347,22 @@ class MenuApp(TierApp):
             t.append("  Resume an engagement\n", style=f"bold {HINT}")
             self._y += 1
             for i, v in enumerate(self.views):
-                self._row(t, ("eng", i), v.get("title") or "?",
-                          mark=v.get("mark") or "•",
-                          warn=v.get("mark_style") == "warn",
-                          tag="← most recent" if v.get("recommended") else "")
+                self._row(
+                    t,
+                    ("eng", i),
+                    v.get("title") or "?",
+                    mark=v.get("mark") or "•",
+                    warn=v.get("mark_style") == "warn",
+                    tag="← most recent" if v.get("recommended") else "",
+                )
         else:
             # Which FOLDER, because "no open engagements" alone reads as a statement
             # about the product rather than about where you are standing.
             archived = self.menu.get("archived") or 0
-            t.append(f"  no open engagements here"
-                     f"{f' ({archived} archived)' if archived else ''}\n", style=HINT)
+            t.append(
+                f"  no open engagements here{f' ({archived} archived)' if archived else ''}\n",
+                style=HINT,
+            )
             self._y += 1
 
         t.append("\n  Start something new\n", style=f"bold {HINT}")
@@ -389,11 +398,14 @@ class MenuApp(TierApp):
                 body.append("\n")
         self.query_one("#side-body", Static).update(body)
 
-        self.foot((("↑↓", "move"), ("enter", "choose"), ("esc", "back to terminal")),
-                  f"{len(self.views)} open in {folder}")
+        self.foot(
+            (("↑↓", "move"), ("enter", "choose"), ("esc", "back to terminal")),
+            f"{len(self.views)} open in {folder}",
+        )
 
-    def _row(self, t: Text, item, label: str, mark: str = "", warn: bool = False,
-             tag: str = "", key=None) -> None:
+    def _row(
+        self, t: Text, item, label: str, mark: str = "", warn: bool = False, tag: str = "", key=None
+    ) -> None:
         sel = self.items[self.cursor] == item if self.items else False
         if sel:
             self._cursor_line = self._y
@@ -490,19 +502,18 @@ class RequestApp(TierApp):
 
         lines = wrap_display(self.buf, max(10, width - 4))
         if len(lines) > self.LINES:
-            lines = lines[-self.LINES:]
+            lines = lines[-self.LINES :]
             lines[0] = "..." + lines[0]
         for i, line in enumerate(lines):
             t.append("  > " if i == 0 else "    ", style=ACCENT if i == 0 else HINT)
             t.append(line, style=TEXT)
             if i == len(lines) - 1:
-                t.append("_", style=HINT)      # where the next character lands
+                t.append("_", style=HINT)  # where the next character lands
             t.append("\n")
 
         if self.auto_offered:
             t.append("\n")
-            t.append("  " + ("●" if self.auto else "○") + " ",
-                     style=GOLD if self.auto else DIM)
+            t.append("  " + ("●" if self.auto else "○") + " ", style=GOLD if self.auto else DIM)
             t.append("Ctrl-T  run unattended", style=GOLD if self.auto else DIM)
             # Kept SHORT: this row already spends 26 columns on the label, and the full
             # explanation lives in the pane beside it, which has the room for it.
@@ -517,12 +528,14 @@ class RequestApp(TierApp):
 
         body = Text("\n")
         body.append("  Starting new work\n\n", style=f"bold {ACCENT}")
-        for line in wrap("Whatever you type is handed to Morgan as the request, so the "
-                         "session starts on the work instead of asking what it is.", 26):
+        for line in wrap(
+            "Whatever you type is handed to Morgan as the request, so the "
+            "session starts on the work instead of asking what it is.",
+            26,
+        ):
             body.append(f"  {line}\n", style=DIM)
         body.append("\n")
-        for line in wrap("Leave it empty and nothing changes - you get the plain "
-                         "launch.", 26):
+        for line in wrap("Leave it empty and nothing changes - you get the plain launch.", 26):
             body.append(f"  {line}\n", style=DIM)
         if self.auto_offered and self.auto:
             body.append("\n")
@@ -535,8 +548,7 @@ class RequestApp(TierApp):
         if self.narrow:
             keys = ((" ^d", "send"), ("esc", "back"))
         else:
-            keys = (("^d", "send"), ("enter", "new line"), ("esc", "back"),
-                    ("^u", "clear"))
+            keys = (("^d", "send"), ("enter", "new line"), ("esc", "back"), ("^u", "clear"))
         self.foot(keys, note)
 
     def on_paste(self, event) -> None:
@@ -553,7 +565,7 @@ class RequestApp(TierApp):
         key = event.key
         if key in ("escape", "ctrl+c"):
             event.stop()
-            self.exit()                 # value stays None: the plain launch
+            self.exit()  # value stays None: the plain launch
             return
         if key == "ctrl+d":
             event.stop()
@@ -575,11 +587,11 @@ class RequestApp(TierApp):
         elif key == "enter":
             self.buf += "\n"
         elif key in ("backspace", "ctrl+h"):
-            self.buf = self.buf[:-1]    # deletes a newline like any other character
+            self.buf = self.buf[:-1]  # deletes a newline like any other character
         else:
             ch = getattr(event, "character", None)
             if not ch or not ch.isprintable():
-                return                  # let anything else through to the bindings
+                return  # let anything else through to the bindings
             self.buf += ch
         event.stop()
         self.paint()
@@ -620,8 +632,9 @@ class SettingsApp(TierApp):
     # ── state ────────────────────────────────────────────────────────────────
     def _refresh(self) -> None:
         self.rows = list(self.mod._editor_rows(self.project) or self.rows)
-        self.titles = [t for t, _l, _v, _o in
-                       (self.mod._editor_layout(self.project) or [])] or self.titles
+        self.titles = [
+            t for t, _l, _v, _o in (self.mod._editor_layout(self.project) or [])
+        ] or self.titles
 
     def _note(self, text: str, label: str = "") -> None:
         """Record a "Just changed" line, ONE PER SETTING.
@@ -654,7 +667,7 @@ class SettingsApp(TierApp):
                 keys = self.mod._editor_keys(self.project)
                 if 0 <= action < len(keys):
                     note = self.mod._editor_apply_key(self.project, keys[action])
-        except Exception:               # noqa: BLE001 — a failed write must not kill the screen
+        except Exception:  # noqa: BLE001 — a failed write must not kill the screen
             note = ""
         self._refresh()
         if list(self.rows) != before:
@@ -668,14 +681,14 @@ class SettingsApp(TierApp):
     def _start_editing(self) -> None:
         try:
             self.editing = self.mod.jira_project_key(self.project) or ""
-        except Exception:               # noqa: BLE001
+        except Exception:  # noqa: BLE001
             self.editing = ""
 
     def _is_jira_row(self) -> bool:
         try:
             keys = self.mod._editor_keys(self.project)
             return self.cursor < len(keys) and keys[self.cursor] == self.mod._JIRA_KEY
-        except Exception:               # noqa: BLE001
+        except Exception:  # noqa: BLE001
             return False
 
     # ── drawing ──────────────────────────────────────────────────────────────
@@ -700,8 +713,7 @@ class SettingsApp(TierApp):
                 at = y
             y += 1
             t.append("  ▸ " if sel else "    ", style=ACCENT if sel else HINT)
-            t.append(f"{label.ljust(width + 1)} ",
-                     style=f"bold {TEXT}" if sel else TEXT)
+            t.append(f"{label.ljust(width + 1)} ", style=f"bold {TEXT}" if sel else TEXT)
             if sel and self.editing is not None:
                 t.append(f"{self.editing}█\n", style=ACCENT)
                 continue
@@ -722,8 +734,13 @@ class SettingsApp(TierApp):
             keys = (("↑↓", "move"), ("enter", "toggle"), ("esc", "back"))
             note = name
         else:
-            keys = (("↑↓", "move"), ("enter", "toggle"), ("e", "edit key"),
-                    ("d", "defaults"), ("esc", "back"))
+            keys = (
+                ("↑↓", "move"),
+                ("enter", "toggle"),
+                ("e", "edit key"),
+                ("d", "defaults"),
+                ("esc", "back"),
+            )
             note = name
         self.foot(keys, note)
 
@@ -742,7 +759,7 @@ class SettingsApp(TierApp):
         help_text = None
         try:
             help_text = self.mod.setting_help(label)
-        except Exception:               # noqa: BLE001
+        except Exception:  # noqa: BLE001
             help_text = None
         if help_text:
             for line in wrap(help_text[0], w):
@@ -767,13 +784,13 @@ class SettingsApp(TierApp):
     def on_key(self, event) -> None:
         key = event.key
         if self.editing is not None:
-            event.stop()                # while editing, EVERY key is text or an edit key
+            event.stop()  # while editing, EVERY key is text or an edit key
             if key == "escape":
-                self.editing = None     # cancels the edit, not the screen
+                self.editing = None  # cancels the edit, not the screen
             elif key == "enter":
                 try:
                     note = self.mod.set_jira_project_key(self.project, self.editing)
-                except Exception:       # noqa: BLE001
+                except Exception:  # noqa: BLE001
                     note = ""
                 self.editing = None
                 self._refresh()
@@ -813,7 +830,7 @@ class SettingsApp(TierApp):
             try:
                 if self._is_jira_row() and self.mod._jira_needs_key(self.project):
                     self._start_editing()
-            except Exception:           # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 pass
         elif key == "d":
             self._apply("d")
@@ -823,5 +840,126 @@ class SettingsApp(TierApp):
                 self._start_editing()
         else:
             return
+        event.stop()
+        self.paint()
+
+
+class ChooserApp(TierApp):
+    """One menu as a full-screen picker - the installer's top-level menu and both of
+    its submenus.
+
+    Rows arrive already built as (key, label, blurb, writes) from installer_app's own
+    `_rows`, so the labels, the explanations and - most importantly - what each option
+    touches OUTSIDE the repo are computed in exactly one place. That last column is the
+    reason this screen exists rather than a plain list: someone arrowing quickly past a
+    destructive option should not have to read the pane to notice it.
+
+    `picked` is the chosen key, or "" for Esc/q, which the caller reads as back/quit.
+    """
+
+    def __init__(self, project, rows: list, title: str, marker_kind) -> None:
+        super().__init__(project)
+        self.rows = list(rows)
+        self.title_text = title or ""
+        self._marker_kind = marker_kind
+        self.picked = ""
+        self.ran = False
+        # Its OWN markers, not the on/off pair the other screens use: "·" already means
+        # "off" on every launcher row, and reusing it for "this writes outside the repo"
+        # would give one symbol two meanings in one product.
+        rich = self._can_encode("✎⛔")
+        self.mark_writes = "✎" if rich else "*"
+        self.mark_deletes = "⛔" if rich else "!"
+
+    @staticmethod
+    def _can_encode(text: str) -> bool:
+        try:
+            text.encode(sys.stderr.encoding or "utf-8")
+            return True
+        except Exception:  # noqa: BLE001
+            return False
+
+    def on_mount(self) -> None:
+        self.ran = True
+        self._apply_width()
+        self.chrome_ready(self.title_text or "menu")
+        self.paint()
+
+    def paint(self) -> None:
+        folder = self.folder()
+        self.head(self.title_text if self.narrow else f"{folder}  ·  {self.title_text}")
+
+        width = min(max((len(lbl) for _k, lbl, _b, _w in self.rows), default=0), 34)
+        t = Text()
+        for i, (key, label, _blurb, writes) in enumerate(self.rows):
+            sel = self.cursor == i
+            t.append("  ▸ " if sel else "    ", style=ACCENT if sel else HINT)
+            t.append(f"{key:>2}  ", style=KEY)
+            t.append(label.ljust(width), style=f"bold {TEXT}" if sel else TEXT)
+            kind = self._marker_kind(writes)
+            if kind == "deletes":
+                t.append(f"  {self.mark_deletes}", style=GOLD)
+            elif kind == "writes":
+                t.append(f"  {self.mark_writes}", style=DIM)
+            t.append("\n")
+        self.query_one("#rows", Static).update(t)
+        self.scroll_row(self.cursor)  # one line per row, so index IS the line
+
+        w = 26 if not self.narrow else max(20, self.panel_width() - 4)
+        body = Text("\n")
+        if self.rows:
+            _key, label, blurb, writes = self.rows[self.cursor]
+            body.append(f"  {label}\n\n", style=f"bold {ACCENT}")
+            if blurb:
+                for line in wrap(blurb, w):
+                    body.append(f"  {line}\n", style=DIM)
+                body.append("\n")
+            note = writes or "Nothing outside this project."
+            style = GOLD if self._marker_kind(writes) == "deletes" else DIM
+            for line in wrap(note, w):
+                body.append(f"  {line}\n", style=style)
+        self.query_one("#side-body", Static).update(body)
+
+        kinds = {self._marker_kind(w_) for _k, _l, _b, w_ in self.rows}
+        legend = ""
+        if "writes" in kinds:
+            legend = f"{self.mark_writes} writes outside this project"
+        if "deletes" in kinds:
+            legend += f"{' · ' if legend else ''}{self.mark_deletes} deletes"
+        keys = (
+            (("↑↓", "move"), ("enter", "choose"), ("esc", "back"))
+            if self.narrow
+            else (("↑↓", "move"), ("enter", "choose"), ("esc", "back"))
+        )
+        self.foot(keys, legend)
+
+    def on_key(self, event) -> None:
+        key = event.key
+        if key in ("escape", "q", "ctrl+c"):
+            event.stop()
+            self.picked = ""  # a decision - back/quit - not an unavailability
+            self.exit()
+            return
+        if not self.rows:
+            return
+        if key == "down":
+            self.cursor = (self.cursor + 1) % len(self.rows)
+        elif key == "up":
+            self.cursor = (self.cursor - 1) % len(self.rows)
+        elif key == "enter":
+            event.stop()
+            self.picked = self.rows[self.cursor][0]
+            self.exit()
+            return
+        else:
+            # Typing a key JUMPS to it and does not choose it, which is what the
+            # prompt_toolkit picker does: muscle memory from the numbered menu still
+            # lands you on the right row, and a mistyped key costs a keystroke rather
+            # than starting a thirteen-step install.
+            ch = getattr(event, "character", None) or ""
+            hit = [i for i, r in enumerate(self.rows) if r[0] == ch]
+            if not hit:
+                return
+            self.cursor = hit[0]
         event.stop()
         self.paint()

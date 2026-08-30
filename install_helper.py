@@ -1625,22 +1625,29 @@ def _submenu_screen(style: Style, title: str, options: tuple, actions: dict):
     the same box that most needs the installer to work."""
     if os.environ.get("VIRT_SURV_NO_APP"):
         return None  # documented escape hatch, and what the numbered-tier tests use
-    try:
-        installer_app = _import_from_scripts("installer_app")
-        if installer_app is None:
-            return None
-        return installer_app.chooser_screen(
-            options,
-            _this_module(),
-            title=title,
-            # The caller's OWN table, never guessed: the same key means different things
-            # in different menus, and guessing showed the wrong consequence for the most
-            # prominent option on the most-seen screen (2026-08-28).
-            actions=actions,
-            repo=_repo_hint(),
-        )
-    except Exception:
-        return None
+    # Textual first, prompt_toolkit underneath, numbered menu below that. None from a
+    # tier means "it could not draw", so each falls through to the next; "" is a real
+    # answer (Esc/back) and stops here.
+    for _tier in ("launcher_textual", "installer_app"):
+        try:
+            module = _import_from_scripts(_tier)
+            if module is None:
+                continue
+            picked = module.chooser_screen(
+                options,
+                _this_module(),
+                title=title,
+                # The caller's OWN table, never guessed: the same key means different
+                # things in different menus, and guessing showed the wrong consequence
+                # for the most prominent option on the most-seen screen (2026-08-28).
+                actions=actions,
+                repo=_repo_hint(),
+            )
+            if picked is not None:
+                return picked
+        except Exception:
+            continue
+    return None
 
 
 def run_update_in_app(args, style: Style) -> "Optional[int]":

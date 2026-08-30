@@ -32,7 +32,7 @@ try:
     # The sentinels are launcher_app's, imported rather than restated so the two can
     # never disagree about what "fall through" or "skipped" means.
     from launcher_app import APP_FALLBACK, REQUEST_SKIPPED
-except Exception:                       # pragma: no cover - bare clone
+except Exception:  # pragma: no cover - bare clone
     APP_FALLBACK = "__app_fallback__"
     REQUEST_SKIPPED = "__request_skipped__"
 
@@ -64,15 +64,16 @@ def _widgets():
         try:
             if not stream.isatty():
                 return None
-        except Exception:               # noqa: BLE001 — a stream that cannot answer is a no
+        except Exception:  # noqa: BLE001 — a stream that cannot answer is a no
             return None
     for p in (str(REPO / "vendor"), str(REPO / "scripts")):
         if p not in sys.path:
             sys.path.insert(0, p)
     try:
         import launcher_tiers
+
         return launcher_tiers
-    except Exception:                   # noqa: BLE001
+    except Exception:  # noqa: BLE001
         return None
 
 
@@ -104,7 +105,7 @@ def _true_terminal_size():
                 stream.fileno()
                 tty = stream
                 break
-        except Exception:               # noqa: BLE001 — a stream that cannot answer is a no
+        except Exception:  # noqa: BLE001 — a stream that cannot answer is a no
             continue
     saved_stdout = sys.__stdout__
     saved_env = {k: os.environ[k] for k in ("COLUMNS", "LINES") if k in os.environ}
@@ -119,8 +120,7 @@ def _true_terminal_size():
         os.environ.update(saved_env)
 
 
-def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = False,
-            output=None):
+def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = False, output=None):
     """The engagement menu, rendered in Textual.
 
     Same signature and same return as launcher_app.run_app: a pick tuple
@@ -133,20 +133,21 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
         return APP_FALLBACK
 
     try:
-        views = [mod.row_view(r, default_slug=menu.get("default") or "",
-                              of_many=len(shown) > 1) for r in shown]
-    except Exception:                   # noqa: BLE001
+        views = [
+            mod.row_view(r, default_slug=menu.get("default") or "", of_many=len(shown) > 1)
+            for r in shown
+        ]
+    except Exception:  # noqa: BLE001
         return APP_FALLBACK
 
     try:
-        app = widgets.MenuApp(project_dir, views, _actions(project_dir, mod, shown,
-                                                           jira_on), menu)
+        app = widgets.MenuApp(project_dir, views, _actions(project_dir, mod, shown, jira_on), menu)
         with _true_terminal_size():
             app.run()
-    except Exception:                   # noqa: BLE001 — any failure degrades
+    except Exception:  # noqa: BLE001 — any failure degrades
         return APP_FALLBACK
     if not getattr(app, "ran", False):
-        return APP_FALLBACK             # never drew: let the next tier try
+        return APP_FALLBACK  # never drew: let the next tier try
     # It drew. Its answer stands, INCLUDING None - which launcher_app uses for "the
     # human backed out" and _decision_from_pick turns into launch-nothing. Returning
     # the fallback sentinel there instead sent Esc to the next tier, which drew the
@@ -163,7 +164,7 @@ def _actions(project_dir: Path, mod, shown: list, jira_on: bool) -> list:
     """
     try:
         g = mod.glyphs(mod)
-    except Exception:                   # noqa: BLE001
+    except Exception:  # noqa: BLE001
         g = {}
 
     def label(key, text):
@@ -181,11 +182,15 @@ def _actions(project_dir: Path, mod, shown: list, jira_on: bool) -> list:
     try:
         if mod._running_slug(project_dir):
             out.append((("watch",), label("launch", "watch the engagement running"), "t"))
-    except Exception:                   # noqa: BLE001 — a missing option must not cost the menu
+    except Exception:  # noqa: BLE001 — a missing option must not cost the menu
         pass
-    out.append((("launch",),
-                label("launch", "decide inside the session" if shown else "just launch"),
-                None))
+    out.append(
+        (
+            ("launch",),
+            label("launch", "decide inside the session" if shown else "just launch"),
+            None,
+        )
+    )
     return out
 
 
@@ -209,18 +214,18 @@ def request_screen(project_dir: Path, mod, output=None):
     # nothing about the project's preferences.
     try:
         offered = bool(mod._auto_offered(project_dir))
-    except Exception:                   # noqa: BLE001
+    except Exception:  # noqa: BLE001
         offered = False
     try:
         armed = bool(mod._auto_armed(project_dir)) if offered else False
-    except Exception:                   # noqa: BLE001
+    except Exception:  # noqa: BLE001
         armed = False
 
     try:
         app = widgets.RequestApp(project_dir, auto_offered=offered, auto=armed)
         with _true_terminal_size():
             app.run()
-    except Exception:                   # noqa: BLE001 — any failure degrades
+    except Exception:  # noqa: BLE001 — any failure degrades
         return None
     if not getattr(app, "ran", False):
         return None
@@ -240,15 +245,55 @@ def settings_screen(project_dir: Path, mod, output=None):
         return None
     try:
         if not (mod._editor_rows(project_dir) or []):
-            return None                 # no settings to draw is not a settings screen
-    except Exception:                   # noqa: BLE001
+            return None  # no settings to draw is not a settings screen
+    except Exception:  # noqa: BLE001
         return None
     try:
         app = widgets.SettingsApp(project_dir, mod)
         with _true_terminal_size():
             app.run()
-    except Exception:                   # noqa: BLE001 — any failure degrades
+    except Exception:  # noqa: BLE001 — any failure degrades
         return None
     if not getattr(app, "ran", False):
         return None
     return bool(getattr(app, "changed", False))
+
+
+def chooser_screen(options, ih, *, title: str, actions=None, repo=None, output=None):
+    """One installer menu as a full-screen picker, rendered in Textual.
+
+    Same contract as installer_app.chooser_screen: the chosen key, "" for back/Esc, or
+    None when the screen could not run at all - the caller then prints its numbered
+    menu exactly as before. The None-vs-"" distinction is not decoration: a cancel is a
+    decision, not an unavailability, and conflating the two once dumped someone into an
+    old numbered editor after they had cancelled.
+
+    The ROWS come from installer_app's own `_rows`, deliberately. It splits each label
+    from its explanation and looks up what the key touches outside the repo - using the
+    caller's own key->action table, because the same key means different things in
+    different menus ("1" is a full install at the top level and environment-setup-only
+    under Advanced). Rebuilding any of that here is how the two tiers would come to
+    disagree about what an option does, on the screen where that matters most.
+    """
+    widgets = _widgets()
+    if widgets is None:
+        return None
+    try:
+        import installer_app
+
+        rows = installer_app._rows(options, ih, actions)
+        marker_kind = installer_app._marker_kind
+    except Exception:  # noqa: BLE001
+        return None
+    if not rows:
+        return None
+
+    try:
+        app = widgets.ChooserApp(Path(repo) if repo else Path.cwd(), rows, title, marker_kind)
+        with _true_terminal_size():
+            app.run()
+    except Exception:  # noqa: BLE001 — any failure degrades
+        return None
+    if not getattr(app, "ran", False):
+        return None
+    return getattr(app, "picked", "")

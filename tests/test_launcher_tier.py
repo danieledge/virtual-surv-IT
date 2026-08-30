@@ -504,6 +504,72 @@ def test_every_screen_leaves_on_esc():
     shutil.rmtree(d, ignore_errors=True)
 
 
+def test_the_installer_chooser_matches_installer_app():
+    """The installer's menus: same contract, and the same consequence column.
+
+    One screen covers the top-level menu and both submenus, because install_helper
+    funnels all three through _submenu_screen. The rows come from installer_app's own
+    _rows so that what each option touches OUTSIDE the repo is computed once - the same
+    key means different things in different menus, and guessing which table it belongs
+    to once showed the wrong consequence for the most prominent option on the
+    most-seen screen.
+    """
+    import inspect
+
+    sys.path.insert(0, str(REPO))
+    import install_helper as IH
+    import installer_app
+    import launcher_textual
+    from launcher_tiers import ChooserApp
+
+    check("same signature as installer_app's",
+          list(inspect.signature(launcher_textual.chooser_screen).parameters),
+          list(inspect.signature(installer_app.chooser_screen).parameters))
+
+    options = (
+        ("1", "Install or reconfigure the team (full run - asks everything)"),
+        ("3", "Diagnostics..."),
+        ("u", "Update only (quick - new code + plugin, keeps every setting)"),
+        ("q", "Quit"),
+    )
+
+    async def pick(keys, opts=options, actions=IH.MENU_ACTIONS):
+        rows = installer_app._rows(opts, IH, actions)
+        app = ChooserApp(REPO, rows, "What can I do for you?",
+                         installer_app._marker_kind)
+        async with app.run_test(size=(80, 26)) as p_:
+            await p_.pause()
+            for k in keys:
+                await p_.press(k)
+            await p_.pause()
+        return app.picked
+
+    async def run():
+        check("enter chooses the highlighted row", await pick(["enter"]), "1")
+        check("down then enter chooses the next", await pick(["down", "enter"]), "3")
+        # Typing a key JUMPS and does not choose: muscle memory from the numbered menu
+        # lands you on the right row, and a mistyped key costs a keystroke rather than
+        # starting a thirteen-step install.
+        check("typing a key jumps to it", await pick(["u", "enter"]), "u")
+        check("...and does not choose it on its own", await pick(["u"]), "")
+        check("esc is back/quit, not a pick", await pick(["escape"]), "")
+        check("q is back/quit too", await pick(["q"]), "")
+        # Every row of the longest submenu must be reachable.
+        adv = tuple((k, f"option {k}") for k in IH._ADVANCED_ACTIONS)
+        check("the last row of a 16-row submenu is reachable",
+              await pick(["up", "enter"], adv, IH._ADVANCED_ACTIONS), "b")
+
+    asyncio.run(run())
+
+    # And it must be tried BEFORE the prompt_toolkit picker, which is before the
+    # numbered menu.
+    src = (REPO / "install_helper.py").read_text(encoding="utf-8")
+    check("both tiers are tried in order",
+          'for _tier in ("launcher_textual", "installer_app")' in src, True)
+    check('"" is a real answer and stops the fall-through',
+          "if picked is not None:" in src, True)
+
+
 def test_a_broken_tier_costs_nothing():
     """Any failure degrades to the tier below, never breaks the launch."""
     import launcher_app
@@ -528,6 +594,7 @@ if __name__ == "__main__":
                test_the_settings_screen_matches_launcher_app,
                test_the_list_follows_the_cursor,
                test_every_screen_leaves_on_esc,
+               test_the_installer_chooser_matches_installer_app,
                test_a_broken_tier_costs_nothing):
         print(f"\n{fn.__name__}")
         fn()
