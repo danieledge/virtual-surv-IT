@@ -1018,16 +1018,16 @@ def _config_editor(project_dir: Path) -> None:
     REMOVING the project-level keys (resolve_preferences' key-presence precedence lets
     the machine tier speak again). All interaction on stderr/stdin; stdout stays the
     decision channel. Every failure path just returns - cosmetic tier."""
-    try:
-        from launcher_app import settings_screen
-
-        # None = the screen could not run at all; False = it ran and nothing changed.
-        # Only the former falls through - treating Esc as "unavailable" once dumped the
-        # user into the numbered editor after cancelling (live report, 2026-08-20).
-        if settings_screen(project_dir, _this_module()) is not None:
-            return
-    except Exception:
-        pass  # any app failure degrades to the numbered tier below
+    # None = the screen could not run at all; False = it ran and nothing changed.
+    # Only the former falls through - treating Esc as "unavailable" once dumped the
+    # user into the numbered editor after cancelling (live report, 2026-08-20).
+    for _tier in ("launcher_textual", "launcher_app"):
+        try:
+            _screen = __import__(_tier, fromlist=["settings_screen"]).settings_screen
+            if _screen(project_dir, _this_module()) is not None:
+                return
+        except Exception:
+            continue  # any app failure degrades to the next tier down
     err = sys.stderr
     ink = _Ink()
     while True:

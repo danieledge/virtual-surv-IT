@@ -225,3 +225,30 @@ def request_screen(project_dir: Path, mod, output=None):
     if not getattr(app, "ran", False):
         return None
     return getattr(app, "value", None) or REQUEST_SKIPPED
+
+
+def settings_screen(project_dir: Path, mod, output=None):
+    """The [c] screen, rendered in Textual.
+
+    Same contract as launcher_app.settings_screen: True/False when the screen RAN
+    (changed something or not), and None ONLY when it could not run at all. The caller
+    falls through on None alone - conflating the two once meant that cancelling this
+    screen dropped the user into the numbered editor.
+    """
+    widgets = _widgets()
+    if widgets is None:
+        return None
+    try:
+        if not (mod._editor_rows(project_dir) or []):
+            return None                 # no settings to draw is not a settings screen
+    except Exception:                   # noqa: BLE001
+        return None
+    try:
+        app = widgets.SettingsApp(project_dir, mod)
+        with _true_terminal_size():
+            app.run()
+    except Exception:                   # noqa: BLE001 — any failure degrades
+        return None
+    if not getattr(app, "ran", False):
+        return None
+    return bool(getattr(app, "changed", False))

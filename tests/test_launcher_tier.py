@@ -309,12 +309,14 @@ def test_the_composer_matches_launcher_app():
 
     asyncio.run(run())
 
-    from launcher_tiers import MenuApp, TierApp
-    check("the base binds esc only",
-          [b_[0] if isinstance(b_, tuple) else b_.key for b_ in TierApp.BINDINGS],
-          ["escape"])
-    check("the menu adds q for itself",
-          [b_[0] if isinstance(b_, tuple) else b_.key for b_ in MenuApp.BINDINGS], ["q"])
+    # Textual MERGES BINDINGS up the MRO, and a binding fires even when a handler has
+    # already consumed the key - so a base-class binding is one no screen can remove or
+    # override. Two bugs came from that: quit-on-q ended the composer instead of typing
+    # a q, and quit-on-Esc closed the settings screen when Esc meant "cancel the edit".
+    # Every screen handles its own exits, so there must be no bindings anywhere.
+    from launcher_tiers import MenuApp, RequestApp, SettingsApp, TierApp
+    for cls in (TierApp, MenuApp, RequestApp, SettingsApp):
+        check(f"{cls.__name__} declares no bindings", list(cls.BINDINGS), [])
 
     # And it must be reached BEFORE the prompt_toolkit composer.
     src = (REPO / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
@@ -322,6 +324,146 @@ def test_the_composer_matches_launcher_app():
     i_ptk = src.find("from launcher_app import request_screen")
     check("the Textual composer is wired in", i_textual > 0, True)
     check("it runs before the prompt_toolkit one", i_textual < i_ptk, True)
+
+
+def _scratch_project():
+    import tempfile
+    d = Path(tempfile.mkdtemp(prefix="vs-tier-"))
+    (d / ".git").mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def test_the_settings_screen_matches_launcher_app():
+    """The [c] screen: same contract, and the row you are looking at is the row that
+    changes.
+
+    That last one is not obvious and has bitten before: the screen is GROUPED, so the
+    highlighted row's index is not the dispatch index, and when it was assumed to be,
+    position 3 showed one setting while the toggle changed another. No test noticed,
+    because none asserted it - so this one does.
+    """
+    import inspect
+    import json
+    import shutil
+
+    import launcher_app
+    import launcher_textual
+    import virt_team_launcher as L
+    from launcher_tiers import SettingsApp
+
+    check("same signature as launcher_app's",
+          list(inspect.signature(launcher_textual.settings_screen).parameters),
+          list(inspect.signature(launcher_app.settings_screen).parameters))
+    check("no tty cannot draw", launcher_textual.settings_screen(REPO, L), None)
+
+    async def drive(keys, moves=0):
+        d = _scratch_project()
+        app = SettingsApp(d, L)
+        async with app.run_test(size=(90, 30)) as p_:
+            await p_.pause()
+            for _ in range(moves):
+                await p_.press("down")
+            looking_at = app.rows[app.cursor][0]
+            for k in keys:
+                await p_.press(k)
+            await p_.pause()
+        f = d / ".claude" / "team-preferences.json"
+        wrote = json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
+        note = app.notes[-1] if app.notes else ""
+        shutil.rmtree(d, ignore_errors=True)
+        return app.changed, app.ran, wrote, looking_at, note
+
+    async def run():
+        changed, ran, wrote, _at, _n = await drive(["escape"])
+        check("esc ran and changed nothing", (ran, changed, wrote), (True, False, {}))
+        changed, _r, wrote, _at, _n = await drive(["enter", "escape"])
+        check("toggling row 0 writes it", (changed, wrote),
+              (True, {"extra_formats": ["docx"]}))
+        changed, _r, wrote, at, note = await drive(["enter", "escape"], moves=2)
+        check("toggling row 2 writes THAT row", (changed, wrote),
+              (True, {"evidence_room": True}))
+        check("and the note names the row the cursor was on",
+              note.startswith(at + ":"), True)
+        _c, ran, _w, _at, _n = await drive(["q"])
+        check("q leaves the screen", ran, True)
+
+    asyncio.run(run())
+
+    # The Jira key is asked for HERE, in place. Enabling Jira with no key used to name
+    # the gap and leave the fix in a JSON file.
+    async def jira():
+        d = _scratch_project()
+        app = SettingsApp(d, L)
+        keys = L._editor_keys(d)
+        at = keys.index(L._JIRA_KEY)
+        async with app.run_test(size=(90, 30)) as p_:
+            await p_.pause()
+            for _ in range(at):
+                await p_.press("down")
+            await p_.press("enter")
+            await p_.pause()
+            check("enabling jira asks for the key", app.editing is not None, True)
+            for ch in "surv1":
+                await p_.press(ch)
+            check("the key is upper-cased as typed", app.editing, "SURV1")
+            await p_.press("backspace")
+            await p_.press("enter")
+            await p_.pause()
+            check("the key is saved", L.jira_project_key(d), "SURV")
+            await p_.press("e")
+            await p_.pause()
+            check("e re-opens the key without toggling jira off",
+                  app.editing is not None, True)
+            await p_.press("escape")
+            await p_.pause()
+            # Esc means "cancel the edit", NOT "close the screen". A base-class Esc
+            # binding used to do both, because a binding fires even when a handler has
+            # consumed the key.
+            check("esc cancels the edit", app.editing, None)
+            check("and leaves the screen open", app.is_running, True)
+        shutil.rmtree(d, ignore_errors=True)
+
+    asyncio.run(jira())
+
+
+def test_the_list_follows_the_cursor():
+    """Every row must be reachable and VISIBLE.
+
+    The list pane scrolls and nothing was moving it, so past the bottom of the pane the
+    screen looked frozen - the selection was still moving, just where it could not be
+    seen. Worse, the pane is focusable and Textual gives keys to the focused widget
+    first, so each Down scrolled the pane a line BEFORE the app moved the cursor.
+    """
+    import shutil
+
+    import virt_team_launcher as L
+    from launcher_tiers import SettingsApp
+
+    async def run():
+        d = _scratch_project()
+        app = SettingsApp(d, L)
+        offscreen = []
+        async with app.run_test(size=(104, 26)) as p_:
+            await p_.pause()
+            for n in range(len(app.rows)):
+                if n:
+                    await p_.press("down")
+                    await p_.pause()
+                panel = app.query_one("#panel")
+                top, height = panel.scroll_offset.y, panel.content_size.height
+                y = at = 0
+                for i in range(len(app.rows)):
+                    if i < len(app.titles) and app.titles[i]:
+                        y += 2 if i else 1
+                    if i == app.cursor:
+                        at = y
+                    y += 1
+                if not top <= at < top + height:
+                    offscreen.append(app.rows[app.cursor][0])
+        shutil.rmtree(d, ignore_errors=True)
+        check("no row is selected off-screen", offscreen, [])
+
+    asyncio.run(run())
 
 
 def test_a_broken_tier_costs_nothing():
@@ -345,6 +487,8 @@ if __name__ == "__main__":
                test_menu_renders_at_both_widths, test_cancel_is_not_a_fallback,
                test_it_measures_the_real_terminal,
                test_the_composer_matches_launcher_app,
+               test_the_settings_screen_matches_launcher_app,
+               test_the_list_follows_the_cursor,
                test_a_broken_tier_costs_nothing):
         print(f"\n{fn.__name__}")
         fn()
