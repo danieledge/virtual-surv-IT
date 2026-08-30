@@ -378,6 +378,29 @@ def test_finish_screen_renders() -> None:
     asyncio.run(run())
 
 
+def test_decision_is_not_dumped_to_a_terminal() -> None:
+    """A decision with no wrapper to act on it must explain itself, not print raw.
+
+    Live report: "selecting new engagement just sent /engage --new to the terminal".
+    The output was correct and nothing was reading it - the shell shortcut was a
+    version behind and had no go branch.
+    """
+    import inspect
+
+    from virt_surv2 import __main__ as M
+
+    src = inspect.getsource(M.main)
+    check("guards on isatty before printing a decision",
+          "sys.stdout.isatty()" in src, True)
+    check("explains rather than emitting", "nothing is set up to launch it" in src, True)
+    check("says how to fix it", "Manage the shell shortcuts" in src, True)
+    check("still prints the decision when something IS capturing it",
+          "print(decision)" in src, True)
+
+    # And v2 must be able to repair its own shortcut, or only running v1 could.
+    check("go heals a stale alias block", "heal_stale_aliases" in src, True)
+
+
 def test_css_paths() -> None:
     """Every App class must point at a stylesheet that exists.
 
@@ -454,6 +477,9 @@ if __name__ == "__main__":
 
     print("\nfinish screen")
     test_finish_screen_renders()
+
+    print("\ndecision output")
+    test_decision_is_not_dumped_to_a_terminal()
 
     print("\ncss paths")
     test_css_paths()

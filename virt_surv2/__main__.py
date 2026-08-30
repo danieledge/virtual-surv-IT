@@ -146,6 +146,15 @@ def main(argv=None) -> int:
         print("  run it from inside the clone, or pass --repo PATH", file=sys.stderr)
         return 2
 
+    if launching:
+        # Self-heal the shortcut, exactly as `virt-surv go` does on its own entry point:
+        # both functions live in one stamped block, so a stale block means a stale
+        # virt-surv2 too - and until this, only running v1 could fix v2's shortcut.
+        try:
+            ih.heal_stale_aliases()
+        except Exception:               # noqa: BLE001 — never let a heal cost a launch
+            pass
+
     from .live import InstallerTuiApp
 
     if launching or a.settings:
@@ -178,6 +187,25 @@ def main(argv=None) -> int:
         if decision is None:
             return E.ABORT_EXIT_CODE
         if decision:
+            if sys.stdout.isatty():
+                # Nothing is capturing stdout, so no wrapper is going to act on this.
+                # Printing the bare decision here is what "selecting new engagement just
+                # sent /engage --new to the terminal" looked like: correct output, no
+                # reader. Say what happened instead of emitting it into the void.
+                print("", file=sys.stderr)
+                print("  This chose:", file=sys.stderr)
+                print(f"    {decision}", file=sys.stderr)
+                print("", file=sys.stderr)
+                print("  ...but nothing is set up to launch it. The 'virt-surv2' shell",
+                      file=sys.stderr)
+                print("  shortcut is what starts Claude Code with that. Yours is out of",
+                      file=sys.stderr)
+                print("  date or missing.", file=sys.stderr)
+                print("", file=sys.stderr)
+                print("  Fix it:  virt-surv2 --advanced  ->  Manage the shell shortcuts",
+                      file=sys.stderr)
+                print("  then open a new terminal.", file=sys.stderr)
+                return 0
             print(decision)
         return 0
 
