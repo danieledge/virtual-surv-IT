@@ -1763,6 +1763,42 @@ def _tiered_installer_screen(name: str, *args, **kwargs):
     return None
 
 
+# The real clone, for the many callers that have no `args` to hand. Set once by _main.
+_REPO_HINT: Optional[str] = None
+
+
+def _real_clone() -> Optional[str]:
+    """Where the real clone is, or None - WITHOUT trusting __file__.
+
+    _relocate_if_running_inside_target_repo copies this file to a bare temp directory and
+    re-execs from there for the rest of the session, so that `git checkout` can overwrite
+    the original safely. It already passes the real clone through as `--repo` precisely so
+    later code does not have to trust __file__ - but only callers holding `args` were
+    reading it, and _import_from_scripts holds nothing.
+
+    The consequence was silent and total: in a relocated session _resolve_repo_root(None)
+    fell through to __file__'s parent (a temp dir with one .py file in it) and returned
+    None, so EVERY scripts/ module was unreachable and every tiered screen degraded to a
+    numbered prompt. Not just the new ones - launcher_textual and installer_app too, and
+    for as long as the tiers have existed. It hid because installer.json's `repo_path`
+    covers it, and that key is written by any completed Installer run, so a machine that
+    has ever finished one never sees it (measured on a dev clone whose runs always abort
+    on the dirty tree, 2026-08-30).
+
+    argv is read as the fallback rather than the primary source because a caller running
+    before _main has parsed anything still needs an answer, and the flag is right there.
+    """
+    if _REPO_HINT:
+        return _REPO_HINT
+    argv = sys.argv[1:]
+    for index, token in enumerate(argv):
+        if token == "--repo" and index + 1 < len(argv):
+            return argv[index + 1]
+        if token.startswith("--repo="):
+            return token.split("=", 1)[1]
+    return None
+
+
 def _import_from_scripts(name: str):
     """Import a module out of the real clone's scripts/ directory, or None.
 
@@ -1786,7 +1822,9 @@ def _import_from_scripts(name: str):
 
     roots = []
     try:
-        resolved = _resolve_repo_root(None)
+        # The hint first, then installer.json's repo_path, then __file__ - see
+        # _real_clone() for why passing None here was silently fatal in a relocated run.
+        resolved = _resolve_repo_root(_real_clone())
         if resolved:
             roots.append(resolved / "scripts")
     except Exception:
@@ -1810,8 +1848,16 @@ def _this_module():
 
 
 def _repo_hint():
-    """The configured clone, for the frame title's version. None is fine."""
+    """The clone, for the frame title's version. None is fine.
+
+    Asks _real_clone() first. It used to read installer.json alone, which meant that in a
+    relocated session on a machine with no `repo_path` written yet, these screens lost
+    their version line for exactly the reason _import_from_scripts lost the whole tier -
+    one blind spot, two symptoms, so it is fixed in one place (2026-08-30)."""
     try:
+        hint = _real_clone()
+        if hint:
+            return Path(hint)
         configured = load_config(config_path()).get("repo_path")
         return Path(configured) if isinstance(configured, str) and configured else None
     except Exception:
@@ -9856,8 +9902,12 @@ def main(argv=None) -> int:
 
 
 def _main(argv=None) -> int:
-    global run_cmd
+    global run_cmd, _REPO_HINT
     args = parse_args(argv)
+    # Remembered for every later caller that has no args of its own - chiefly
+    # _import_from_scripts, which decides whether any tiered screen can be drawn at all.
+    if args.repo:
+        _REPO_HINT = str(args.repo)
     style = Style(supports_color())
     # --model only means anything paired with one of these two - live-caught (fable UX
     # review, 2026-08-05): `--model opus` alone was silently DISCARDED and fell through

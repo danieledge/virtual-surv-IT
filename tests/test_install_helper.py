@@ -8665,3 +8665,72 @@ def test_one_menu_item_cannot_take_the_installer_with_it():
     assert "traceback.print_exc()" in recovery, "the error must be shown in full, never eaten"
     assert "That action failed" in recovery, "the user must be told which action broke"
     assert "menu_rc = max(menu_rc, 1)" in recovery, "the exit code must carry the failure"
+
+
+def test_the_real_clone_is_found_without_trusting_file(monkeypatch):
+    """_relocate_if_running_inside_target_repo re-execs from a bare temp directory for the
+    rest of the session, and passes the real clone through as --repo precisely so later
+    code need not trust __file__. Only callers holding `args` were reading it.
+
+    The consequence was silent and total: _resolve_repo_root(None) fell through to
+    __file__'s parent - a temp dir with one .py file in it - returned None, and EVERY
+    scripts/ module became unreachable, so every tiered screen degraded to a numbered
+    prompt. Not only the new ones: launcher_textual and installer_app too, for as long as
+    the tiers have existed. It hid because installer.json's repo_path covers it, and that
+    key is written by any completed Installer run."""
+    import install_helper as ih
+
+    repo_root = Path(__file__).resolve().parents[1]
+    monkeypatch.setattr(ih, "_REPO_HINT", None)
+
+    monkeypatch.setattr(sys, "argv", ["install_helper.py"])
+    assert ih._real_clone() is None, "no flag and no stored hint means no answer, not a guess"
+
+    monkeypatch.setattr(sys, "argv", ["install_helper.py", "--repo", str(repo_root)])
+    assert ih._real_clone() == str(repo_root), "the relocation's own flag must be read"
+
+    monkeypatch.setattr(sys, "argv", ["install_helper.py", f"--repo={repo_root}"])
+    assert ih._real_clone() == str(repo_root), "and in the joined spelling"
+
+    # A hint stored by _main outranks argv, which is the normal path once args are parsed.
+    monkeypatch.setattr(sys, "argv", ["install_helper.py"])
+    monkeypatch.setattr(ih, "_REPO_HINT", str(repo_root))
+    assert ih._real_clone() == str(repo_root)
+
+
+def test_the_importer_asks_for_the_clone_rather_than_assuming_none():
+    """The one-line cause. Passing None here was the whole bug, so the call is asserted
+    rather than the behaviour - a test that merely imported something would pass on any
+    machine whose installer.json happens to carry repo_path, which is most of them."""
+    import inspect
+
+    import install_helper as ih
+
+    source = inspect.getsource(ih._import_from_scripts)
+    assert "_resolve_repo_root(_real_clone())" in source
+    assert "_resolve_repo_root(None)" not in source, "None was the bug"
+
+    # The frame-title helper had the identical blind spot and is fixed from the same place.
+    assert "_real_clone()" in inspect.getsource(ih._repo_hint)
+
+
+def test_install_helper_defines_each_name_once():
+    """A new _repo_hint() was added while an older one already existed 80 lines below it.
+    Python kept the second silently, so the new code was dead on arrival and every check
+    against it returned the old answer - which looks exactly like the fix not working
+    (2026-08-30).
+
+    Cheap to test, and it catches a whole class: this file is nine thousand lines, and
+    nothing else would have noticed."""
+    import ast
+    from collections import Counter
+
+    repo_root = Path(__file__).resolve().parents[1]
+    tree = ast.parse((repo_root / "install_helper.py").read_text(encoding="utf-8"))
+    names = Counter(
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+    )
+    duplicates = {name: count for name, count in names.items() if count > 1}
+    assert not duplicates, f"defined more than once, so only the last one runs: {duplicates}"
