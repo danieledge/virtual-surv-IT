@@ -844,7 +844,6 @@ def _wrap(text: str, width: int) -> list[str]:
 # this is where the install's deferred project questions land. Groups, labels and help
 # text are GENERATED from scripts/virt_team_launcher.py by tools/gen_settings.py — the
 # screen cannot drift from the thing it configures.
-from .settings_data import SETTING_GROUPS  # noqa: E402
 
 SET_LABEL_W = 32
 
@@ -863,140 +862,171 @@ class SettingRow(Static):
         if len(label) > width - 1:
             label = label[: width - 2] + "…"
         t.append(label.ljust(width), style=f"bold {TEXT}" if selected else TEXT)
-        if r["kind"] == "toggle":
-            on = bool(r["value"])
-            t.append("[", style=TRACK)
-            t.append("✓" if on else " ", style=OK if on else TRACK)
-            t.append("] ", style=TRACK)
-            t.append("on" if on else "off", style=OK if on else HINT)
-        else:
-            for opt in r["options"]:
-                sel = opt == r["value"]
-                t.append(opt + "  ", style=f"bold {ACCENT}" if sel else HINT)
+        # The value as the launcher formats it, provenance and all: "on  (machine
+        # default)" and "on" are different states - one is inherited, one was set here -
+        # and a bare on/off cannot tell them apart.
+        head, _, qualifier = str(r["value"]).partition("  ")
+        t.append(head, style=OK if r["on"] else HINT)
+        if qualifier and not narrow:
+            t.append("  " + qualifier, style=HINT)
         self.update(t)
         self.set_class(selected, "-selected")
 
 
 class SettingsScreen(Responsive):
+    """The project's real settings, read and written through the launcher's editor.
+
+    The first version of this screen rendered a generated constant and wrote nothing,
+    while printing "currently: on" and "N changed" - it asserted a project's
+    configuration as fact and claimed edits it did not keep.
+    """
+
     BINDINGS = [("q", "app.quit", "quit")]
 
-    def __init__(self, project: str = "~/www/my-project") -> None:
+    def __init__(self, project: str = ".") -> None:
         super().__init__()
-        self.project = project
-        self.groups = [(title, [dict(r) for r in rows]) for title, rows in SETTING_GROUPS]
-        self.rows = [r for _title, rows in self.groups for r in rows]
-        self.defaults = {r["label"]: r["value"] for r in self.rows}
+        self.project = Path(project).expanduser()
+        self.groups: list = []
+        self.rows: list = []
+        self.note = ""
         self.cursor = 0
-        self.changed: list[str] = []
 
     def compose(self) -> ComposeResult:
         with Vertical(id="shell"):
             yield Brand(id="brand")
             with Horizontal(id="panes"):
                 with VerticalScroll(id="panel"):
-                    for gi, (title, rows) in enumerate(self.groups):
-                        yield Static(title, classes="group -first" if gi == 0 else "group")
-                        for r in rows:
-                            yield SettingRow(r, id=f"set-{r['key'].replace('.', '-')}",
-                                             classes="task")
+                    yield Static(id="setting-rows")
                 with Vertical(id="side"):
                     yield Static(id="side-body")
             yield Static(id="detail")
             yield Static(id="keys")
 
     def on_mount(self) -> None:
-        self.query_one("#panel").border_title = f"{len(self.rows)} settings"
         self.query_one("#side").border_title = "what it does"
+        self.reload()
+
+    def reload(self) -> None:
+        """Re-read from disk. Every write goes through the launcher, so the only way to
+        show what a project is now configured to do is to ask again."""
+        reader = getattr(self.app, "settings_rows", None)
+        if reader:
+            self.groups, err = reader(self.project)
+        else:
+            self.groups, err = [], "settings need the engine"
+        if err:
+            self.note = err
+        self.rows = [r for _t, rows in self.groups for r in rows]
+        self.cursor = min(self.cursor, max(0, len(self.rows) - 1))
+        try:
+            self.query_one("#panel").border_title = (
+                f"{len(self.rows)} settings" if self.rows else "no settings")
+        except Exception:               # noqa: BLE001
+            pass
         self.paint()
 
-    def _row_widget(self, r: dict) -> SettingRow:
-        return self.query_one(f"#set-{r['key'].replace('.', '-')}", SettingRow)
-
     def paint(self) -> None:
+        folder = str(self.project)
+        try:
+            folder = "~/" + str(self.project.resolve().relative_to(Path.home()))
+        except (ValueError, OSError):
+            pass
         self.query_one("#brand", Brand).render_frame(
-            0.0, self.project if self.narrow else f"{self.project}  ·  project settings",
-            self.narrow)
-        for i, r in enumerate(self.rows):
-            self._row_widget(r).render_frame(i == self.cursor, self.narrow)
+            0.0, folder if self.narrow else f"{folder}  ·  project settings", self.narrow)
 
-        cur = self.rows[self.cursor]
-        # The highlighted setting explains ITSELF — the pane that described the screen's
-        # keys answered a question everyone had already worked out, while "what does this
-        # one DO?" went unanswered.
+        t = Text()
+        idx = 0
+        for title, rows in self.groups:
+            t.append(f"  {title}\n", style=f"bold {HINT}")
+            for r in rows:
+                sel = idx == self.cursor
+                t.append("  ▸ " if sel else "    ", style=ACCENT if sel else HINT)
+                label = r["label"]
+                if len(label) > SET_LABEL_W - 1:
+                    label = label[: SET_LABEL_W - 2] + "…"
+                t.append(label.ljust(SET_LABEL_W),
+                         style=f"bold {TEXT}" if sel else TEXT)
+                head, _, qual = str(r["value"]).partition("  ")
+                t.append(head, style=OK if r["on"] else HINT)
+                if qual and not self.narrow:
+                    t.append("  " + qual, style=HINT)
+                t.append("\n")
+                idx += 1
+            t.append("\n")
+        self.query_one("#setting-rows", Static).update(t)
+
         body = Text("\n")
-        body.append(f"  {cur['label']}\n\n", style=f"bold {ACCENT}")
-        for line in _wrap(cur["what"], 26):
-            body.append(f"  {line}\n", style=TEXT)
-        if cur["off"]:
+        if self.rows:
+            cur = self.rows[self.cursor]
+            for line in _wrap(cur["label"], 26):
+                body.append(f"  {line}\n", style=f"bold {ACCENT}")
             body.append("\n")
-            for line in _wrap(cur["off"], 26):
-                body.append(f"  {line}\n", style=HINT)
-        if cur.get("needs"):
-            body.append("\n")
-            for line in _wrap(cur["needs"], 26):
-                body.append(f"  {line}\n", style=GOLD)
-        body.append("\n  currently: ", style=HINT)
-        val = cur["value"]
-        shown = ("on" if val else "off") if cur["kind"] == "toggle" else str(val)
-        body.append(shown, style=OK if (val is True or cur["kind"] == "choice") else HINT)
-        if self.defaults[cur["label"]] != val:
-            body.append("   (changed)", style=GOLD)
+            for line in _wrap(cur["what"], 26):
+                body.append(f"  {line}\n", style=TEXT)
+            if cur["off"]:
+                body.append("\n")
+                for line in _wrap(cur["off"], 26):
+                    body.append(f"  {line}\n", style=HINT)
+            body.append("\n  currently\n", style=HINT)
+            for line in _wrap(str(cur["value"]), 26):
+                body.append(f"  {line}\n", style=OK if cur["on"] else HINT)
         self.query_one("#side-body", Static).update(body)
 
         d = Text("  ")
         d.append("│ ", style=TRACK)
-        if self.narrow:
-            d.append(cur["what"][:70], style=HINT)
-        elif self.changed:
-            d.append(f"{len(self.changed)} changed — applies to {self.project} only", style=GOLD)
-        else:
-            d.append(f"applies to {self.project} only, not to your other projects", style=HINT)
+        d.append(self.note or f"changes are written to {folder} as you make them",
+                 style=GOLD if self.note else HINT)
         self.query_one("#detail", Static).update(d)
 
-        keys = [("↑↓", "move")]
-        keys.append(("←→", "change") if cur["kind"] == "choice" else ("space", "toggle"))
-        keys += [("d", "defaults"), ("esc", "back")]
         k = Text("  ")
-        for name, desc in keys:
+        for name, desc in (("↑↓", "move"), ("space", "change"),
+                           ("d", "restore machine defaults"), ("esc", "back")):
             k.append(name, style=KEY)
             k.append(f" {desc}   ", style=HINT)
         self.query_one("#keys", Static).update(k)
 
-    def _note_change(self, r: dict) -> None:
-        if r["value"] != self.defaults[r["label"]]:
-            if r["label"] not in self.changed:
-                self.changed.append(r["label"])
-        elif r["label"] in self.changed:
-            self.changed.remove(r["label"])
-
     def on_key(self, event) -> None:
-        r = self.rows[self.cursor]
+        if not self.rows:
+            return
         k = event.key
-        if k in ("down", "j"):
+        if k == "down":
             self.cursor = (self.cursor + 1) % len(self.rows)
-            self._row_widget(self.rows[self.cursor]).scroll_visible()
-        elif k in ("up", "k"):
+        elif k == "up":
             self.cursor = (self.cursor - 1) % len(self.rows)
-            self._row_widget(self.rows[self.cursor]).scroll_visible()
-        elif k == "space" and r["kind"] == "toggle":
-            r["value"] = not r["value"]
-            self._note_change(r)
-        elif k in ("left", "right") and r["kind"] == "choice":
-            i = r["options"].index(r["value"])
-            r["value"] = r["options"][(i + (1 if k == "right" else -1)) % len(r["options"])]
-            self._note_change(r)
+        elif k in ("space", "enter", "left", "right"):
+            self._apply(self.rows[self.cursor])
+            return
         elif k == "d":
-            for row in self.rows:
-                row["value"] = self.defaults[row["label"]]
-            self.changed.clear()
+            self._restore()
+            return
         else:
             return
         event.stop()
         self.paint()
 
+    def _apply(self, row: dict) -> None:
+        applier = getattr(self.app, "settings_apply", None)
+        if not applier:
+            self.note = "settings need the engine"
+            self.paint()
+            return
+        try:
+            self.note = applier(self.project, row["key"]) or ""
+        except Exception as exc:        # noqa: BLE001 — a bad write must say so
+            self.note = f"could not change {row['label']}: {exc}"
+        self.reload()
+
+    def _restore(self) -> None:
+        restorer = getattr(self.app, "settings_restore", None)
+        if not restorer:
+            return
+        try:
+            self.note = restorer(self.project) or "restored machine defaults"
+        except Exception as exc:        # noqa: BLE001
+            self.note = f"could not restore defaults: {exc}"
+        self.reload()
+
     def key_escape(self, event) -> None:
-        # Back to the launcher when there is one, otherwise leave. Esc that quits an app
-        # you opened a sub-screen from is the classic way to lose someone's place.
         event.stop()
         if len(self.app.screen_stack) > 2:
             self.app.pop_screen()
@@ -1024,6 +1054,11 @@ ADVANCED: list[tuple[str, str, str]] = [
      "This machine - shown in every project."),
     ("model", "Morgan's model",
      "Per project only."),
+    ("formats", "Analyser overrides (this project)",
+     "Turn any of the seven supported analysers (ruff, mypy, bandit, black, sqlfluff, "
+     "shfmt, gitleaks) on or off for one project, and validate the forced-on ones "
+     "against what is actually installed. Everything else this step used to ask - docx "
+     "output and regulatory citations - now lives in the settings screen."),
     ("demo", "Demo",
      "Watch the whole run - nothing executed or written."),
     ("machinedefaults", "This machine's defaults",
@@ -1076,11 +1111,11 @@ SHELL_WRITERS = {"fixbashrc", "aliasmanage", "gitbashperf"}
 # v1 Advanced items deliberately NOT duplicated here, and where they went instead.
 # The parity test allows these and requires a destination for each, so "missing" and
 # "moved on purpose" stay different things.
-DEDUPED = {
-    "formats": "the settings screen - project settings belong on the project you are "
-               "in, reached with [c] from the launcher. Its docx, citations and "
-               "per-project analyser toggles are all there.",
-}
+# Nothing is deduped away right now. `formats` was, on the belief that the settings
+# screen covered it - it covers docx and citations, but NOT the per-project analyser
+# overrides, which live in a different store. The item is back, renamed to the part
+# that is genuinely only there.
+DEDUPED: dict = {}
 
 
 class AdvancedRow(Static):
@@ -1571,12 +1606,45 @@ class MenuScreen(Responsive):
 
 
 class VirtSurvApp(App):
-    CSS_PATH = "ui.tcss"
+    # Absolute: Textual resolves a relative CSS_PATH against the SUBCLASS's
+    # module file, so any subclass defined elsewhere looked for ui.tcss beside
+    # itself and failed to start.
+    CSS_PATH = str(Path(__file__).resolve().parent / "ui.tcss")
 
     # The launcher's stdout contract, so the screen-only app answers it too rather
     # than raising the moment a launcher row is chosen.
     decision = None
     engage_cmd = "/compliance-surveillance-team:engage"
+    # The screen-only app has no engine, so the settings screen renders empty with a
+    # note rather than pretending to show a project's configuration.
+    settings_rows = None
+    settings_apply = None
+    settings_restore = None
+
+
+    def _fatal_error(self) -> None:
+        """Report a crash without rich.traceback, which needs pygments.
+
+        pygments is deliberately NOT vendored (tests/test_virt_team_launcher.py pins
+        that: rich's Console/Table/Panel/Rule need neither it nor markdown-it). Textual's
+        default handler imports rich.traceback anyway, so on a real user's machine a
+        crash surfaced as ModuleNotFoundError: pygments - the one moment you need the
+        actual cause, replaced by a message about a package you never asked for.
+
+        Plain traceback to stderr instead: no dependency, and the cause survives.
+        """
+        import traceback as _tb
+
+        self.bell()
+        exc = getattr(self, "_exception", None)
+        try:
+            self._exit_renderables.append(
+                "".join(_tb.format_exception(type(exc), exc, exc.__traceback__))
+                if exc is not None else "virt-surv2 stopped unexpectedly."
+            )
+        except Exception:               # noqa: BLE001 — reporting must never re-raise
+            self._exit_renderables.append("virt-surv2 stopped unexpectedly.")
+        self.exit()
 
     def __init__(self, start: str = "decide", frozen: bool = False, done: bool = False,
                  project=None, rows=None, note: str = "") -> None:

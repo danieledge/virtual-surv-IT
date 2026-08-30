@@ -214,36 +214,25 @@ def test_screen_keys() -> None:
 
 
 def test_settings() -> None:
+    """The screen-only app has no engine, so the settings screen must render EMPTY with
+    a note rather than invent a project's configuration - which is what the generated
+    version did."""
     from virt_surv2 import ui as A
 
     async def run():
-        a = A.VirtSurvApp(start="settings", frozen=True)
+        a = A.VirtSurvApp(start="settings", frozen=True, project="/tmp/no-such-project")
         async with a.run_test(size=(104, 34)) as p:
             await p.pause()
             scr = a.screen
-            check("settings rows from the generated data", len(scr.rows), 25)
-            check("settings: groups", len(A.SETTING_GROUPS), 7)
-            check("settings: every row has help text",
-                  all(r["what"] for r in scr.rows), True)
+            check("no rows without an engine", scr.rows, [])
+            check("it says why", bool(scr.note), True)
+            # And it must not crash on any key with nothing to show.
+            for key in ("down", "up", "space", "d", "enter"):
+                await p.press(key)
+            check("empty settings survives every key", a._running, True)
 
-            first = scr.rows[0]
-            before = first["value"]
-            await p.press("space")
-            check("settings: space toggles", first["value"], not before)
-            check("settings: change is tracked", first["label"] in scr.changed, True)
-            await p.press("d")
-            check("settings: d restores defaults", first["value"], before)
-            check("settings: d clears the change list", scr.changed, [])
-
-            # qa depth is the choice row; walk to it and cycle.
-            qa = next(i for i, r in enumerate(scr.rows) if r["label"] == "qa depth")
-            for _ in range(qa):
-                await p.press("down")
-            await p.press("right")
-            check("settings: right cycles a choice", scr.rows[qa]["value"], "quick")
-
-        # Esc from settings opened over the launcher returns, it does not quit.
-        a = A.VirtSurvApp(start="launch", frozen=True)
+        # Reached from the launcher, and Esc returns there rather than quitting.
+        a = A.VirtSurvApp(start="launch", frozen=True, project="/tmp/p", rows=[])
         async with a.run_test(size=(104, 34)) as p:
             await p.pause()
             await p.press("c")
@@ -401,6 +390,48 @@ def test_decision_is_not_dumped_to_a_terminal() -> None:
     check("go heals a stale alias block", "heal_stale_aliases" in src, True)
 
 
+def test_crash_reporting_needs_no_pygments() -> None:
+    """A crash must report its CAUSE using only the vendored tree.
+
+    pygments is deliberately not vendored (pinned by
+    test_virt_team_launcher.test_rich_ui_loads_from_vendor_tree). Textual's default
+    _fatal_error imports rich.traceback anyway, so on a user's machine a crash
+    surfaced as "ModuleNotFoundError: pygments" - the one moment the real cause
+    matters, replaced by a package they never asked for.
+    """
+    import inspect
+
+    from virt_surv2.live import InstallerTuiApp
+    from virt_surv2.ui import VirtSurvApp
+
+    for cls in (VirtSurvApp, InstallerTuiApp):
+        src = inspect.getsource(cls._fatal_error)
+        # The IMPORT, not the word - the docstring explains why it is avoided.
+        check(f"{cls.__name__} does not import rich.traceback",
+              "from rich.traceback import" in src, False)
+        check(f"{cls.__name__} formats the real exception",
+              "format_exception" in src, True)
+
+    check("pygments is still out of the vendor tree",
+          (Path(__file__).resolve().parent.parent / "vendor" / "pygments").exists(), False)
+
+    async def run():
+        class Boom(VirtSurvApp):
+            def on_mount(self):
+                raise RuntimeError("the real cause")
+
+        app = Boom()
+        surfaced = ""
+        try:
+            async with app.run_test(size=(80, 24)):
+                pass
+        except Exception as exc:        # noqa: BLE001
+            surfaced = f"{type(exc).__name__}: {exc}"
+        check("the cause survives", surfaced, "RuntimeError: the real cause")
+
+    asyncio.run(run())
+
+
 def test_css_paths() -> None:
     """Every App class must point at a stylesheet that exists.
 
@@ -480,6 +511,9 @@ if __name__ == "__main__":
 
     print("\ndecision output")
     test_decision_is_not_dumped_to_a_terminal()
+
+    print("\ncrash reporting")
+    test_crash_reporting_needs_no_pygments()
 
     print("\ncss paths")
     test_css_paths()

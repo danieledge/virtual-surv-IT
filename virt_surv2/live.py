@@ -343,7 +343,35 @@ def _wrap(text: str, width: int) -> list[str]:
 class InstallerTuiApp(App):
     """The drop-in. Decide, then run the real engine."""
 
-    CSS_PATH = "ui.tcss"
+    # Absolute: Textual resolves a relative CSS_PATH against the SUBCLASS's
+    # module file, so any subclass defined elsewhere looked for ui.tcss beside
+    # itself and failed to start.
+    CSS_PATH = str(Path(__file__).resolve().parent / "ui.tcss")
+
+
+    def _fatal_error(self) -> None:
+        """Report a crash without rich.traceback, which needs pygments.
+
+        pygments is deliberately NOT vendored (tests/test_virt_team_launcher.py pins
+        that: rich's Console/Table/Panel/Rule need neither it nor markdown-it). Textual's
+        default handler imports rich.traceback anyway, so on a real user's machine a
+        crash surfaced as ModuleNotFoundError: pygments - the one moment you need the
+        actual cause, replaced by a message about a package you never asked for.
+
+        Plain traceback to stderr instead: no dependency, and the cause survives.
+        """
+        import traceback as _tb
+
+        self.bell()
+        exc = getattr(self, "_exception", None)
+        try:
+            self._exit_renderables.append(
+                "".join(_tb.format_exception(type(exc), exc, exc.__traceback__))
+                if exc is not None else "virt-surv2 stopped unexpectedly."
+            )
+        except Exception:               # noqa: BLE001 — reporting must never re-raise
+            self._exit_renderables.append("virt-surv2 stopped unexpectedly.")
+        self.exit()
 
     def __init__(self, ih, repo, demo: bool, start: str = "decide",
                  project=None, rows=None, note: str = "") -> None:
@@ -417,6 +445,18 @@ class InstallerTuiApp(App):
     def jira_decision(self, project, ref: str) -> str:
         from . import engine as E
         return E.jira_decision(self.repo, project, ref)
+
+    def settings_rows(self, project):
+        from . import engine as E
+        return E.settings_rows(self.repo, project)
+
+    def settings_apply(self, project, row_key: str) -> str:
+        from . import engine as E
+        return E.settings_apply(self.repo, project, row_key)
+
+    def settings_restore(self, project) -> str:
+        from . import engine as E
+        return E.settings_restore_defaults(self.repo, project)
 
     def resume_token(self, view: dict) -> str:
         from . import engine as E

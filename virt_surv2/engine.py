@@ -414,6 +414,72 @@ def resume_token(repo: Optional[Path], row: dict) -> str:
         return ""
 
 
+def settings_rows(repo: Optional[Path], project: Path):
+    """The project's REAL settings, grouped, from the launcher's own editor.
+
+    Returns (groups, note) where groups is [(title, [row, ...])] and a row carries
+    key/label/value/on/help. Values come from _editor_layout, so they are what this
+    project is actually configured to do - including the "(machine default)" and
+    "(default)" provenance v1 appends, which is the difference between inherited and
+    explicitly set.
+
+    The previous version rendered a GENERATED constant: fixed labels, guessed defaults,
+    no project involved. It showed values it had never read.
+    """
+    if repo is None:
+        return [], "no clone found, so this project's settings cannot be read"
+    try:
+        launcher = _launcher(repo)
+        layout = launcher._editor_layout(Path(project))
+    except Exception as exc:            # noqa: BLE001
+        return [], f"could not read this project's settings: {exc}"
+    if layout is None:
+        return [], "could not read this project's settings"
+
+    keys = {}
+    for label, key in launcher._TOGGLE_PREFS:
+        keys[label] = key
+    keys[launcher._ENV_ROW_LABEL] = launcher._ENV_KEY
+    keys[launcher._JIRA_ROW_LABEL] = launcher._JIRA_KEY
+    for label, key, _values, _default in launcher._CHOICE_PREFS:
+        keys[label] = key
+
+    groups: list = []
+    for title, label, value, on in layout:
+        if title or not groups:
+            groups.append((title or "Other", []))
+        help_text = ()
+        try:
+            help_text = launcher.setting_help(label) or ()
+        except Exception:               # noqa: BLE001
+            pass
+        groups[-1][1].append({
+            "key": keys.get(label, label),
+            "label": label,
+            "value": value,
+            "on": bool(on),
+            "what": help_text[0] if help_text else "",
+            "off": help_text[1] if len(help_text) > 1 else "",
+        })
+    return groups, ""
+
+
+def settings_apply(repo: Optional[Path], project: Path, row_key: str) -> str:
+    """Apply ONE setting and return the launcher's own note. This is the write."""
+    launcher = _launcher(repo)
+    return launcher._editor_apply_key(Path(project), row_key) or ""
+
+
+def settings_restore_defaults(repo: Optional[Path], project: Path) -> str:
+    """'d' - DELETE the project-level keys so the machine tier applies again.
+
+    Not "set every value back to a snapshot": key presence is what resolve_preferences
+    reads, so deleting and re-writing the same value are different states.
+    """
+    launcher = _launcher(repo)
+    return launcher._editor_apply(Path(project), "d") or ""
+
+
 def project_is_configured(repo: Optional[Path], project: Path) -> Optional[bool]:
     """Is the team enabled for this folder? None when the question cannot be answered.
 

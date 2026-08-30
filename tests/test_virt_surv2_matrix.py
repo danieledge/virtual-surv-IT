@@ -229,25 +229,49 @@ def test_render_reflects_model() -> None:
                 check(f"decide {d.key}: box reflects value",
                       ("✓" in after), bool(d.value))
 
-        a = A.VirtSurvApp(start="settings", frozen=True)
-        async with a.run_test(size=(104, 40)) as p:
-            await p.pause()
-            scr = a.screen
-            for r in scr.rows:
-                w = scr.query_one(f"#set-{r['key'].replace('.', '-')}", A.SettingRow)
-                check(f"settings {r['key']}: row renders the live object", w.row is r, True)
-            r0 = scr.rows[0]
-            w0 = scr.query_one(f"#set-{r0['key'].replace('.', '-')}", A.SettingRow)
-            scr.cursor = 0
-            before = text_of(w0)
-            await p.press("space")
-            check("settings: drawn state changes", text_of(w0) != before, True)
+        # The settings screen renders every row into one block, so "does the view
+        # follow the model" is asserted on the drawn text, with a stub supplying rows
+        # the way the engine-backed app does.
+        class StubSettings(A.VirtSurvApp):
+            store = {"extra_formats": False}
 
-        # Two instances must not share state.
-        s1, s2 = A.SettingsScreen(), A.SettingsScreen()
-        s1.rows[0]["value"] = not s1.rows[0]["value"]
-        check("settings screens are independent",
-              s2.rows[0]["value"], A.SETTING_GROUPS[0][1][0]["value"])
+            def settings_rows(self, project):
+                on = self.store["extra_formats"]
+                return [("What the team produces", [{
+                    "key": "extra_formats", "label": "docx export",
+                    "value": "on" if on else "off  (machine default)",
+                    "on": on, "what": "renders .docx too", "off": "markdown only",
+                }])], ""
+
+            def settings_apply(self, project, key):
+                self.store[key] = not self.store[key]
+                return "docx export on" if self.store[key] else "docx export off"
+
+            def settings_restore(self, project):
+                self.store["extra_formats"] = False
+                return "restored"
+
+        app = StubSettings(start="settings", frozen=True, project="/tmp/p")
+        async with app.run_test(size=(104, 40)) as p:
+            await p.pause()
+            scr = app.screen
+            block = scr.query_one("#setting-rows")
+            check("reads the stub's rows", len(scr.rows), 1)
+            before = text_of(block)
+            check("shows the inherited marker", "machine default" in before, True)
+            await p.press("space")
+            await p.pause()
+            after = text_of(block)
+            check("the WRITE happened", app.store["extra_formats"], True)
+            check("the drawn state changed", after != before, True)
+            check("the inherited marker is gone once set", "machine default" in after, False)
+            await p.press("d")
+            await p.pause()
+            check("d restores", app.store["extra_formats"], False)
+
+        # Settings come from the project, so a screen with no engine holds none.
+        s1 = A.SettingsScreen("/tmp/no-such-project")
+        check("no rows without an engine", s1.rows, [])
 
     asyncio.run(run())
 
@@ -332,55 +356,52 @@ def test_decide_rows() -> None:
 
 # ── D. all 18 settings rows ───────────────────────────────────────────────────
 
-def test_settings_rows() -> None:
-    from virt_surv2 import ui as A
-    section("D  settings — all 18 rows, every option")
+def test_settings_are_read_and_written() -> None:
+    """The settings screen must read the project and WRITE on change.
 
-    async def run():
-        a = A.VirtSurvApp(start="settings", frozen=True)
-        async with a.run_test(size=(104, 40)) as p:
-            await p.pause()
-            scr = a.screen
-            check("25 rows", len(scr.rows), 25)
-            labels = [r["label"] for r in scr.rows]
-            check("no duplicate labels", len(set(labels)), 25)
-            keys = [r["key"] for r in scr.rows]
-            check("no duplicate keys", len(set(keys)), 25)
+    It previously rendered a generated constant and wrote nothing, while printing
+    "currently: on" and "N changed" - asserting a configuration it had never read and
+    claiming edits it did not keep.
+    """
+    import json
 
-            for i, r in enumerate(scr.rows):
-                scr.cursor = i
-                scr.paint()
-                check(f"{r['label']}: has help", bool(r["what"]), True)
-                if r["kind"] == "toggle":
-                    before = r["value"]
-                    await p.press("space")
-                    check(f"{r['label']}: toggles", r["value"], not before)
-                    check(f"{r['label']}: tracked as changed", r["label"] in scr.changed, True)
-                    await p.press("space")
-                    check(f"{r['label']}: untracked when restored",
-                          r["label"] in scr.changed, False)
-                else:
-                    start = r["value"]
-                    for opt in r["options"][1:] + r["options"][:1]:
-                        await p.press("right")
-                        check(f"{r['label']} -> {opt}", r["value"], opt)
-                    check(f"{r['label']}: ring closes", r["value"], start)
+    from virt_surv2 import engine as E
+    section("D  settings are read from, and written to, the project")
 
-            # Change everything, then restore everything.
-            for i, r in enumerate(scr.rows):
-                scr.cursor = i
-                if r["kind"] == "toggle":
-                    await p.press("space")
-                else:
-                    await p.press("right")
-            check("all rows marked changed", len(scr.changed), 25)
-            await p.press("d")
-            check("d restores every default",
-                  [r["value"] for r in scr.rows],
-                  [scr.defaults[r["label"]] for r in scr.rows])
-            check("d clears the change list", scr.changed, [])
+    import install_helper as ih
+    repo = Path(ih.__file__).resolve().parent
 
-    asyncio.run(run())
+    with tempfile.TemporaryDirectory() as td:
+        proj = Path(td)
+        (proj / ".claude").mkdir(parents=True)
+        prefs = proj / ".claude" / "team-preferences.json"
+
+        groups, note = E.settings_rows(repo, proj)
+        check("reads real groups", len(groups) >= 5, True)
+        check("no error", note, "")
+        rows = [r for _t, rs in groups for r in rs]
+        check("reads real rows", len(rows) >= 15, True)
+        check("every row has a key", all(r["key"] for r in rows), True)
+        check("values carry provenance",
+              any("machine default" in str(r["value"]) for r in rows), True)
+
+        first = rows[0]
+        before = first["value"]
+        E.settings_apply(repo, proj, first["key"])
+        check("a change is WRITTEN to disk", prefs.is_file(), True)
+        check("the written key is the row's", first["key"] in json.loads(prefs.read_text()),
+              True)
+
+        groups2, _ = E.settings_rows(repo, proj)
+        after = groups2[0][1][0]["value"]
+        check("the new value is read back", after != before, True)
+        check("explicitly set loses the (machine default) marker",
+              "machine default" in str(after), False)
+
+        # 'd' DELETES the project keys so the machine tier applies again - not "write
+        # the defaults back", because key presence is what resolve_preferences reads.
+        E.settings_restore_defaults(repo, proj)
+        check("restore empties the project keys", json.loads(prefs.read_text()), {})
 
 
 # ── E. every launcher row ─────────────────────────────────────────────────────
@@ -948,7 +969,7 @@ if __name__ == "__main__":
     test_answers_matrix()
     test_render_reflects_model()
     test_decide_rows()
-    test_settings_rows()
+    test_settings_are_read_and_written()
     test_launcher_rows()
     test_key_fuzz()
     test_responsive_matrix()
