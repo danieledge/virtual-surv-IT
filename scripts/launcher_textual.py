@@ -99,8 +99,13 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
         app.run()
     except Exception:                   # noqa: BLE001 — any failure degrades
         return APP_FALLBACK
-    pick = getattr(app, "pick", None)
-    return APP_FALLBACK if pick is None else pick
+    if not getattr(app, "ran", False):
+        return APP_FALLBACK             # never drew: let the next tier try
+    # It drew. Its answer stands, INCLUDING None - which launcher_app uses for "the
+    # human backed out" and _decision_from_pick turns into launch-nothing. Returning
+    # the fallback sentinel there instead sent Esc to the next tier, which drew the
+    # old menu underneath the one just dismissed.
+    return getattr(app, "pick", None)
 
 
 def _actions(project_dir: Path, mod, shown: list, jira_on: bool) -> list:

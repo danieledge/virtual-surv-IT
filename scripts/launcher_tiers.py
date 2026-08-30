@@ -153,14 +153,23 @@ class TierApp(App):
             yield Static(id="keys")
 
     def on_resize(self, event) -> None:
-        self.set_class(event.size.width < NARROW, "-narrow")
+        # The class goes on the SCREEN, not the app: the stylesheet selects
+        # `Screen.-narrow #side`, so setting it on the app node matched nothing and the
+        # detail pane stayed put at phone width - squeezing the list until rows fell off
+        # the bottom, which is exactly what the breakpoint exists to prevent.
+        narrow = event.size.width < NARROW
+        self._narrow = narrow
+        try:
+            self.screen.set_class(narrow, "-narrow")
+        except Exception:               # noqa: BLE001 — cosmetic only
+            pass
         painter = getattr(self, "paint", None)
         if callable(painter):
             painter()
 
     @property
     def narrow(self) -> bool:
-        return self.has_class("-narrow")
+        return bool(getattr(self, "_narrow", False))
 
     def folder(self) -> str:
         """The folder being read, shortened but never guessed at."""
@@ -199,12 +208,18 @@ class MenuApp(TierApp):
         self.actions = list(actions)
         self.menu = menu or {}
         self.pick = None
+        # Did this screen actually DRAW? "The user backed out" and "this tier cannot
+        # run" are different answers - launcher_app returns None for the first and its
+        # own sentinel for the second - and conflating them sent Esc through to the
+        # next tier, which then drew the old menu.
+        self.ran = False
         # One flat list over both regions, so up/down crosses the boundary naturally -
         # the same shape launcher_app uses.
         self.items = ([("eng", i) for i in range(len(self.views))]
                       + [("act", i) for i in range(len(self.actions))])
 
     def on_mount(self) -> None:
+        self.ran = True
         n = len(self.views)
         self.query_one("#panel").border_title = f"{n} open" if n else "nothing open"
         self.query_one("#side").border_title = "detail"

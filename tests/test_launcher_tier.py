@@ -145,6 +145,42 @@ def test_menu_renders_at_both_widths():
     asyncio.run(run())
 
 
+def test_cancel_is_not_a_fallback():
+    """Esc must mean "launch nothing", not "this tier cannot run".
+
+    launcher_app returns None for a user backing out and APP_FALLBACK for a tier that
+    cannot draw; _decision_from_pick turns the first into _ABORT. Returning the
+    sentinel for Esc sent it to the next tier, which drew the OLD menu on top of the
+    one just dismissed - reported as "when I quit it shows the old interface".
+    """
+    import launcher_app
+    from launcher_tiers import MenuApp
+
+    async def run():
+        actions = [(("new",), "a new engagement", "n")]
+        for key in ("escape", "q"):
+            app = MenuApp(Path("/tmp/p"), [], actions, {})
+            async with app.run_test(size=(96, 26)) as p:
+                await p.pause()
+                await p.press(key)
+                await p.pause()
+            check(f"{key} drew before leaving", app.ran, True)
+            check(f"{key} is a cancel, not a pick", app.pick, None)
+
+    asyncio.run(run())
+
+    # And the adapter must pass that None through rather than the sentinel.
+    import inspect
+
+    import launcher_textual
+    src = inspect.getsource(launcher_textual.run_app)
+    check("a screen that never ran falls through", 'if not getattr(app, "ran"' in src, True)
+    check("a cancel is returned as-is",
+          "return getattr(app, \"pick\", None)" in src, True)
+    check("cancel is no longer mapped to the sentinel",
+          "APP_FALLBACK if pick is None" in src, False)
+
+
 def test_a_broken_tier_costs_nothing():
     """Any failure degrades to the tier below, never breaks the launch."""
     import launcher_app
@@ -163,7 +199,8 @@ def test_a_broken_tier_costs_nothing():
 if __name__ == "__main__":
     for fn in (test_answers_launcher_apps_contract, test_wired_above_the_other_tiers,
                test_picks_match_launcher_app_exactly, test_guards_match_launcher_app,
-               test_menu_renders_at_both_widths, test_a_broken_tier_costs_nothing):
+               test_menu_renders_at_both_widths, test_cancel_is_not_a_fallback,
+               test_a_broken_tier_costs_nothing):
         print(f"\n{fn.__name__}")
         fn()
     print()
