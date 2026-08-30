@@ -5839,7 +5839,7 @@ _ALIAS2_MARKER = "virt-surv2"
 # v6 (2026-08-19): the shell fast path matches 'engage' as well as 'go' - `virt-surv
 # engage` now LAUNCHES (it used to be project setup, which read as the opposite of
 # /engage in-session). heal_stale_aliases rewrites v5 definitions at the next launch.
-_ALIAS_VERSION = 9
+_ALIAS_VERSION = 10
 _ALIAS_STAMP = f"# {_ALIAS_MARKER}-alias-v{_ALIAS_VERSION}"
 
 # Any version's stamp - the removal marker for _strip_stamped_definitions.
@@ -5889,8 +5889,10 @@ def _alias_line_for(rc_path: Path, interpreter: str, launcher_path, script_path)
             f"$__v2CmdArgs = @($__v2Cmd | Select-Object -Skip 1); "
             f"$__v2F = [System.IO.Path]::GetTempFileName(); "
             f"$env:VIRT_SURV_CD_FILE = $__v2F; "
+            f"$__v2Here = (Get-Location).Path; "
             f'Push-Location "{Path(script_path).parent}"; '
-            f'try {{ $__v2D = & "{interpreter}" -m virt_surv2 go }} finally {{ Pop-Location }}; '
+            f'try {{ $__v2D = & "{interpreter}" -m virt_surv2 go --project "$__v2Here" }} '
+            f"finally {{ Pop-Location }}; "
             f"$__v2R = $LASTEXITCODE; "
             f"Remove-Item Env:\\VIRT_SURV_CD_FILE -ErrorAction SilentlyContinue; "
             f"$__v2Go = (Get-Content $__v2F -Raw -ErrorAction SilentlyContinue); "
@@ -5922,12 +5924,14 @@ def _alias_line_for(rc_path: Path, interpreter: str, launcher_path, script_path)
         # the two front doors behave identically from the shell's point of view.
         f'\n{_ALIAS2_MARKER}() {{ '
         f'if [ "$1" = "go" ] || [ "$1" = "engage" ]; then shift; '
-        f'local __v2_c __v2_d __v2_f __v2_r; '
+        f'local __v2_c __v2_d __v2_f __v2_r __v2_h; '
         f'__v2_c="$("{interpreter}" "{launcher_path}" --launch-command)"; '
         f'[ -n "$__v2_c" ] || __v2_c=claude; '
         f'__v2_f="$(mktemp 2>/dev/null || echo "${{TMPDIR:-/tmp}}/virt-surv2-cd.$$")"; '
+        f'__v2_h="$PWD"; '
         f'__v2_d="$(cd "{Path(script_path).parent}" && '
-        f'VIRT_SURV_CD_FILE="$__v2_f" "{interpreter}" -m virt_surv2 go)"; '
+        f'VIRT_SURV_CD_FILE="$__v2_f" "{interpreter}" -m virt_surv2 go '
+        f'--project "$__v2_h")"; '
         f"__v2_r=$?; "
         f'if [ -s "$__v2_f" ]; then cd "$(cat "$__v2_f")" || true; fi; '
         f'rm -f "$__v2_f"; '

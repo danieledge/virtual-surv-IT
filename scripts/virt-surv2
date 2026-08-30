@@ -19,6 +19,7 @@ REPO="$(cd "$(dirname "$SELF")/.." && pwd)"
 PY="${VS_PYTHON:-python3}"
 command -v "$PY" >/dev/null 2>&1 || { echo "virt-surv2: no $PY on PATH" >&2; exit 127; }
 
+HERE="$PWD"
 if [ "${1:-}" = "go" ] || [ "${1:-}" = "engage" ]; then
   # The launcher contract, same as the alias and same as `virt-surv go`: stdout is the
   # decision, 97 means launch nothing, VIRT_SURV_CD_FILE is how the child asks this
@@ -27,7 +28,13 @@ if [ "${1:-}" = "go" ] || [ "${1:-}" = "engage" ]; then
   LAUNCH="$("$PY" "$REPO/scripts/virt_team_launcher.py" --launch-command 2>/dev/null || true)"
   [ -n "$LAUNCH" ] || LAUNCH=claude
   CDF="$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/virt-surv2-cd.$$")"
-  DECISION="$(cd "$REPO" && VIRT_SURV_CD_FILE="$CDF" "$PY" -m virt_surv2 go)"
+  # --project "$PWD" because the cd below is load-bearing (python -m needs the repo on
+  # the path) but the PROJECT is where the user is standing. Without it every launch
+  # read the clone, and engage_command returned the bare /engage - the wrong spelling
+  # for every plugin install.
+  # `|| true` because set -e would abort this function on the abort path (rc 97),
+  # skipping the cd handshake, the temp-file cleanup and the clean exit below.
+  DECISION="$(cd "$REPO" && VIRT_SURV_CD_FILE="$CDF" "$PY" -m virt_surv2 go --project "$HERE")" || true
   RC=$?
   if [ -s "$CDF" ]; then cd "$(cat "$CDF")" || true; fi
   rm -f "$CDF"

@@ -752,6 +752,41 @@ def test_first_run_offer() -> None:
     asyncio.run(run())
 
 
+def test_demo_executes_nothing() -> None:
+    """--demo must swap the engine's run_cmd, not merely set a flag.
+
+    Several steps have NO self.demo branch because the swap is assumed - dashboard_step
+    says exactly that in its docstring - so setting args.demo alone left --demo running
+    npm install, git fetch, claude plugin install/uninstall and pip install for real.
+    """
+    import inspect
+
+    import install_helper as ih
+    from virt_surv2 import engine as E
+    section("Q  --demo executes nothing")
+
+    real = ih.run_cmd
+    with E._DemoRunner(ih, True):
+        check("run_cmd is swapped", ih.run_cmd is not real, True)
+        proc = ih.run_cmd(["git", "fetch", "origin", "dev"])
+        check("nothing is executed", proc.returncode, 0)
+    check("run_cmd is restored", ih.run_cmd is real, True)
+    with E._DemoRunner(ih, False):
+        check("a real run is untouched", ih.run_cmd is real, True)
+
+    for where in (E.run_installer, E.run_action):
+        check(f"{where.__name__} installs the demo runner",
+              "_DemoRunner" in inspect.getsource(where), True)
+
+    # Every run_* lambda must take the REAL demo flag: these write settings.json,
+    # ~/.bashrc, ~/.bash_profile and the engagement archive.
+    for name, fn in E.RUN_FUNCTIONS.items():
+        check(f"{name} accepts demo", "demo" in fn.__code__.co_varnames, True)
+    src = inspect.getsource(E.run_action)
+    check("run_action passes demo through", "str(project) if project else None, dry" in src,
+          True)
+
+
 def test_menu_parity_with_v1() -> None:
     """Every option virt-surv offers must exist in virt-surv2.
 
@@ -922,6 +957,7 @@ if __name__ == "__main__":
     test_every_launcher_row_is_wired()
     test_every_screen_survives_a_resize()
     test_first_run_offer()
+    test_demo_executes_nothing()
     test_menu_parity_with_v1()
     test_analysers()
     test_discovery()

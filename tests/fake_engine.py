@@ -20,6 +20,20 @@ class Style:
         return s
 
 
+def run_cmd(argv, cwd=None, timeout=300):
+    raise AssertionError("real run_cmd reached during a dry run")
+
+
+def make_demo_runner(style):
+    """The dry-run stand-in, same contract as install_helper's."""
+    import subprocess
+
+    def runner(argv, cwd=None, timeout=300):
+        return subprocess.CompletedProcess([str(a) for a in argv], 0, stdout="", stderr="")
+
+    return runner
+
+
 def marks():
     return {"ok": "*", "fail": "x", "skip": "-"}
 

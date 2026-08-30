@@ -244,6 +244,41 @@ class UiObserver:
         self._post(self.screen.engine_result, name, status, detail)
 
 
+class _DemoRunner:
+    """Install the engine's own dry-run stand-in for the length of a run.
+
+    --demo promises "executes nothing, writes nothing", and v1 delivers that by
+    swapping the MODULE-GLOBAL run_cmd for make_demo_runner. Setting args.demo alone
+    does not: several steps have no self.demo branch precisely because the swap is
+    assumed - dashboard_step says so in its own docstring - so v2's --demo was running
+    npm install, git fetch, claude plugin install/uninstall and pip install for real.
+    """
+
+    def __init__(self, ih, demo: bool) -> None:
+        self.ih, self.demo, self.saved = ih, demo, None
+
+    def __enter__(self):
+        # Best-effort: a clone without make_demo_runner is older than this feature, and
+        # failing the whole run over a dry-run helper would be a worse outcome than
+        # running it wet - which is why the caller also still sets args.demo.
+        if not self.demo:
+            return self
+        maker = getattr(self.ih, "make_demo_runner", None)
+        if maker is None:
+            return self
+        try:
+            self.saved = self.ih.run_cmd
+            self.ih.run_cmd = maker(self.ih.Style(False))
+        except Exception:               # noqa: BLE001
+            self.saved = None
+        return self
+
+    def __exit__(self, *exc):
+        if self.saved is not None:
+            self.ih.run_cmd = self.saved
+        return False
+
+
 class _Capture:
     """Line-buffered stand-in for stdout/stderr while the engine runs.
 
@@ -417,7 +452,12 @@ def load_engagements(repo: Optional[Path], project: Path):
     except Exception as exc:            # noqa: BLE001
         return [], f"could not load the engagement reader: {exc}"
     try:
-        menu = engagement_state.resume_menu(Path(project), max_shown=_FULL_MENU)
+        # The ENGAGEMENTS dir, not the project root: resume_menu does a one-level scan
+        # of whatever it is given, so passing the root found nothing, always. The
+        # launcher resolves it through vsit_paths for the same reason - the VSIT
+        # migration moved where packs live.
+        root = launcher._vsit_paths().engagements_dir(Path(project))
+        menu = engagement_state.resume_menu(root, max_shown=_FULL_MENU)
     except Exception as exc:            # noqa: BLE001 — an unreadable project is normal
         return [], f"could not read engagements in this folder: {exc}"
     rows = menu.get("open") or []
@@ -514,33 +554,34 @@ RUN_FUNCTIONS = {
     # `configure` is a free function in main(), not an Installer subset - it needs no
     # clone-management state. It asks for the directory itself, which our patched ask()
     # escalates to the modal, so the user still names the project.
-    "configure":    lambda ih, st, mk, repo, project=None: ih.run_configure(
+    "configure":    lambda ih, st, mk, repo, project=None, demo=False: ih.run_configure(
         Path(project or ih.ask("  Which project directory?", ".", False, style=st) or "."),
-        st, mk, False, False),
+        st, mk, False, demo),
     # `onboard` is configure with every default applied and zero prompts - the same
     # thing v1's first-time-setup screen runs for its "use the defaults" answer.
-    "onboard":      lambda ih, st, mk, repo, project=None: ih.run_configure(
-        Path(project or "."), st, mk, True, False),
-    "howto":        lambda ih, st, mk, repo, project=None: ih.run_howto(st),
-    "aliasmanage":  lambda ih, st, mk, repo, project=None: ih.run_alias_manage(
-        st, mk, False, False, repo),
-    "gitbashperf":  lambda ih, st, mk, repo, project=None: ih.run_gitbash_perf(
-        st, mk, False, False),
-    "extensions":   lambda ih, st, mk, repo, project=None: ih.run_extensions_editor(st, mk),
-    "reprobe":      lambda ih, st, mk, repo, project=None: ih.run_tool_reprobe(st, mk),
-    "archive":      lambda ih, st, mk, repo, project=None: ih.run_archive_engagements(
-        Path(project or "."), st, mk, False),
-    "finished":     lambda ih, st, mk, repo, project=None: ih.run_list_engagements(
+    "onboard":      lambda ih, st, mk, repo, project=None, demo=False: ih.run_configure(
+        Path(project or "."), st, mk, True, demo),
+    "howto":        lambda ih, st, mk, repo, project=None, demo=False: ih.run_howto(st),
+    "aliasmanage":  lambda ih, st, mk, repo, project=None, demo=False: ih.run_alias_manage(
+        st, mk, False, demo, repo),
+    "gitbashperf":  lambda ih, st, mk, repo, project=None, demo=False: ih.run_gitbash_perf(
+        st, mk, False, demo),
+    "extensions":   lambda ih, st, mk, repo, project=None, demo=False: ih.run_extensions_editor(
+        st, mk),
+    "reprobe":      lambda ih, st, mk, repo, project=None, demo=False: ih.run_tool_reprobe(st, mk),
+    "archive":      lambda ih, st, mk, repo, project=None, demo=False: ih.run_archive_engagements(
+        Path(project or "."), st, mk, demo),
+    "finished":     lambda ih, st, mk, repo, project=None, demo=False: ih.run_list_engagements(
         Path(project or "."), st, mk),
     # watch and artifacts have plain, text-only fallbacks in the launcher precisely
     # because their full-screen versions cannot always run. Those are what this calls:
     # their output lands in the capture and renders as run output, rather than a second
     # prompt_toolkit app fighting this one for the terminal.
-    "watch":        lambda ih, st, mk, repo, project=None: _launcher_call(
+    "watch":        lambda ih, st, mk, repo, project=None, demo=False: _launcher_call(
         repo, "_watch_running_engagement", Path(project or ".")),
-    "artifacts":    lambda ih, st, mk, repo, project=None: _launcher_artifacts(
+    "artifacts":    lambda ih, st, mk, repo, project=None, demo=False: _launcher_artifacts(
         repo, Path(project or ".")),
-    "relocate":     lambda ih, st, mk, repo, project=None: ih.run_relocate_to_vsit(st, mk),
+    "relocate":     lambda ih, st, mk, repo, project=None, demo=False: ih.run_relocate_to_vsit(st, mk),
 }
 
 
@@ -614,16 +655,21 @@ def run_action(ih, app, screen, action: str, choices: dict, repo: Optional[Path]
         cap = _Capture(observer.line)
         sys.stdout = sys.stderr = cap
         try:
-            fn = RUN_FUNCTIONS.get(action)
-            if fn is not None:
-                observer.step(1, 1, action)
-                code = fn(ih, ih.Style(False), ih.marks(), args.repo,
-                          str(project) if project else None) or 0
-            else:
-                subset = "full" if action == "demo" else action
-                inst = ih.Installer(args, ih.Style(False), ih.marks(), subset=subset)
-                inst.observer = observer
-                code = inst.run()
+            dry = demo or action == "demo"
+            with _DemoRunner(ih, dry):
+                fn = RUN_FUNCTIONS.get(action)
+                if fn is not None:
+                    observer.step(1, 1, action)
+                    # The real demo flag, not a hardcoded False: these five write to
+                    # settings.json, ~/.bashrc, ~/.bash_profile and the archive.
+                    code = fn(ih, ih.Style(False), ih.marks(), args.repo,
+                              str(project) if project else None, dry) or 0
+                else:
+                    subset = "full" if action == "demo" else action
+                    inst = ih.Installer(args, ih.Style(False), ih.marks(), subset=subset)
+                    inst.observer = observer
+                    _disarm_self_reexec(inst, observer, screen)
+                    code = inst.run()
         finally:
             cap.flush()
             sys.stdout, sys.stderr = orig_out, orig_err
@@ -706,16 +752,17 @@ def run_installer(ih, app, screen, choices: dict, repo: Optional[Path],
         cap = _Capture(observer.line)
         sys.stdout = sys.stderr = cap
         try:
-            code = installer.run()
+            with _DemoRunner(ih, demo):
+                code = installer.run()
         finally:
             cap.flush()
             sys.stdout, sys.stderr = orig_out, orig_err
             ih.ask, ih.confirm = orig_ask, orig_confirm
 
-        # An extra step the engine has no equivalent for. Reported through the same
+            # An extra step the engine has no equivalent for. Reported through the same
         # observer so it renders as step N+1 rather than as a surprise after the run.
-        if code == 0 and choices.get("analysers"):
-            code = _install_analysers(ih, observer, repo, demo, installer)
+            if code == 0 and choices.get("analysers"):
+                code = _install_analysers(ih, observer, repo, demo, installer)
 
     except BaseException as exc:        # noqa: BLE001 — includes KeyboardInterrupt
         sys.stdout, sys.stderr = orig_out, orig_err

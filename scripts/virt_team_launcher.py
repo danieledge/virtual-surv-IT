@@ -124,7 +124,7 @@ def _configured_launch_command() -> str:
 
 
 # Pinned to install_helper._ALIAS_VERSION by a sync test - bump both together.
-_EXPECTED_ALIAS_VERSION = 9  # v9: virt-surv2 gains the same go handshake
+_EXPECTED_ALIAS_VERSION = 10  # v10: virt-surv2 go is told the caller's cwd
 # Exit code that means "the human backed out - do NOT launch" (2026-08-20 user report:
 # "when exiting the tui it launches claude code, it shouldn't"). Esc used to be folded
 # into the same empty decision as 'just launch', so backing out of the menu still
