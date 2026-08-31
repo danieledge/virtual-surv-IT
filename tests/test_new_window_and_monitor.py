@@ -587,14 +587,26 @@ def test_every_tier_offers_the_watch_option():
     launcher = (REPO_ROOT / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
     app = (REPO_ROOT / "scripts" / "launcher_app.py").read_text(encoding="utf-8")
 
-    # picker tier + plain tier (label, and the key that maps to it)
-    assert '(("watch",), "watch the engagement already running", "t")' in launcher
+    # THREE TIERS, NOT FOUR (2026-08-31). The second prompt_toolkit picker was deleted:
+    # it could only run when the prompt_toolkit full-screen menu had already failed while
+    # prompt_toolkit was still usable, and it had begun to drift from the tiers either
+    # side of it. Its watch row went with it, so this no longer looks for it.
+    #
+    # The plain tier's label and key still have to be here, and the Textual tier is
+    # checked below through launcher_textual's shared action list.
     assert "[t]')} watch the running engagement" in launcher
     assert 'choice.lower() == "t"' in launcher
+    # The DEFINITION, not the name: a comment stands where it was, explaining why, and a
+    # check that trips over its own tombstone teaches the next person to delete the note.
+    assert "def _pt_menu_round" not in launcher, "the deleted middle picker must not come back"
     # And no trace of the removed workflow screen anywhere in the menus.
     assert '(("workflow",)' not in launcher and '(("workflow",)' not in app
 
-    # full-screen tier: the action AND the keypress that reaches it
+    # full-screen tiers: the action AND the keypress that reaches it. The Textual tier
+    # builds its rows in launcher_textual._actions, which is a THIRD place this label
+    # lives - the whole reason this test checks files rather than one file.
+    textual = (REPO_ROOT / "scripts" / "launcher_textual.py").read_text(encoding="utf-8")
+    assert '("watch",)' in textual, "the Textual tier must offer watch"
     assert '(("watch",)' in app, "the app tier must offer watch"
     keys = app.split("for key, ret in (", 1)[1].split("):", 1)[0]
     assert '("t", ("watch",))' in keys, "t must be bound in the app tier"

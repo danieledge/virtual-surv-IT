@@ -134,7 +134,15 @@ class Brand(Static):
         t.append(" ├─   ", style=DIM)
         t.append("─" * rule + "\n", style=TRACK)
         t.append("   │ ", style=DIM)
-        t.append_text(bar(pct, 5, track=MOUTH))
+        # A MOUTH, not a meter, unless something is actually running. head() calls this
+        # with pct=0.0 on every non-progress screen, so sixteen screens showed a five-cell
+        # empty track that reads as "something is at zero" (independent TUI review,
+        # 2026-08-31). The animated mouth is a good idea exactly where there is progress
+        # to animate.
+        if pct > 0.0:
+            t.append_text(bar(pct, 5, track=MOUTH))
+        else:
+            t.append("\u2500" * 5, style=MOUTH)
         t.append(" │   ", style=DIM)
         t.append(subtitle + "\n", style=DIM)
         t.append("   ╰───────╯", style=DIM)
@@ -311,8 +319,13 @@ class MenuApp(TierApp):
     review. So this screen never learns what any of them mean.
     """
 
-    def __init__(self, project, views: list, actions: list, menu: dict) -> None:
+    def __init__(self, project, views: list, actions: list, menu: dict, mod=None) -> None:
         super().__init__(project)
+        # The HOST module, carried only so the legend can probe which glyphs this console
+        # can draw. Optional, because every existing caller predates it and a menu without
+        # a legend is still a menu.
+        self.mod = mod
+        self.showing_help = False
         self.views = list(views)
         self.actions = list(actions)
         self.menu = menu or {}
@@ -337,7 +350,16 @@ class MenuApp(TierApp):
 
     def paint(self) -> None:
         folder = self.folder()
-        self.head(folder if self.narrow else f"{folder}  ·  engagements in this folder")
+        # A notice from the action just taken - "nothing to archive here" - shown IN the
+        # frame. Printed to stderr it was repainted over by this very draw, so the
+        # keypress looked like it had done nothing (independent TUI review, 2026-08-31).
+        notice = self.menu.get("notice") or ""
+        head = folder if self.narrow else f"{folder}  ·  engagements in this folder"
+        if notice:
+            # At phone width the notice WINS. It is the transient, surprising thing;
+            # the folder name is on screen for the rest of the session either way.
+            head = notice if self.narrow else f"{head}   ·   {notice}"
+        self.head(head)
 
         t = Text()
         # Line counter for scroll_row: the pane scrolls, so the highlighted row has to
@@ -383,9 +405,13 @@ class MenuApp(TierApp):
 
         kind, idx = self.items[self.cursor] if self.items else ("act", 0)
         body = Text("\n")
-        if kind == "eng" and self.views:
+        if getattr(self, "showing_help", False):
+            body = self._legend()
+        elif kind == "eng" and self.views:
             v = self.views[idx]
-            body.append(f"  {v.get('title') or '?'}\n\n", style=f"bold {ACCENT}")
+            for line in wrap(str(v.get("title") or "?"), 26):
+                body.append(f"  {line}\n", style=f"bold {ACCENT}")
+            body.append("\n")
             for label, value in v.get("lines") or []:
                 body.append(f"  {label:<10}", style=HINT)
                 warn = v.get("status") == "blocked" and label in ("status", "next")
@@ -401,9 +427,40 @@ class MenuApp(TierApp):
         self.query_one("#side-body", Static).update(body)
 
         self.foot(
-            (("↑↓", "move"), ("enter", "choose"), ("esc/q", "back to terminal")),
+            (
+                ("↑↓", "move"),
+                ("enter", "choose"),
+                ("?", "close" if getattr(self, "showing_help", False) else "what marks mean"),
+                ("esc/q", "back to terminal"),
+            ),
             f"{len(self.views)} open in {folder}",
         )
+
+    def _legend(self) -> Text:
+        """What the row marks mean, and every key this screen answers to.
+
+        The CONTENT comes from launcher_app._help_model, which the prompt_toolkit help
+        screen also reads - two tiers explaining the same glyph in different words is how
+        they came to disagree about everything else."""
+        out = Text("\n")
+        try:
+            from launcher_app import _help_model
+
+            marks, keys = _help_model(self.mod)
+        except Exception:  # noqa: BLE001
+            out.append("  legend unavailable\n", style=DIM)
+            return out
+        out.append("  What the marks mean\n\n", style=f"bold {ACCENT}")
+        for mark, name, meaning in marks:
+            out.append(f"  {mark} ", style=GOLD)
+            out.append(f"{name}\n", style=TEXT)
+            for line in wrap(meaning, 24):
+                out.append(f"     {line}\n", style=DIM)
+        out.append("\n  Keys\n\n", style=f"bold {ACCENT}")
+        for key, what in keys:
+            out.append(f"  {key:<6}", style=KEY)
+            out.append(f"{what}\n", style=DIM)
+        return out
 
     def _row(
         self, t: Text, item, label: str, mark: str = "", warn: bool = False, tag: str = "", key=None
@@ -427,7 +484,21 @@ class MenuApp(TierApp):
         # Esc. Both leave `pick` as None, which the caller reads as "launch nothing".
         if event.key in ("escape", "q", "ctrl+c"):
             event.stop()
+            if getattr(self, "showing_help", False):
+                # Esc closes the legend before it closes the menu, which is what a person
+                # opening it expects and costs them nothing if they meant to leave.
+                self.showing_help = False
+                self.paint()
+                return
             self.exit()
+            return
+        if event.key == "question_mark":
+            # A PANE TOGGLE, not a second screen: a screen cannot open another screen from
+            # inside itself (see this file's monitor note), and the marks being explained
+            # are three columns to the left of where the explanation lands.
+            event.stop()
+            self.showing_help = not getattr(self, "showing_help", False)
+            self.paint()
             return
         if not self.items:
             return
@@ -604,6 +675,18 @@ class RequestApp(TierApp):
         self.paint()
 
 
+def _is_binary(value) -> bool:
+    """Whether a settings value is genuinely on/off, rather than one of several states.
+
+    Named rather than inlined because the answer decides which MARK a row gets, and a row
+    marked "off" that is actually set to "auto" is a lie the user acts on. Only the head of
+    the value matters - the qualifier after a double space ("  (machine default)") is
+    commentary, not state.
+    """
+    head = str(value or "").split("  ")[0].strip().lower()
+    return head in ("on", "off", "", "-", "yes", "no")
+
+
 class SettingsApp(TierApp):
     """The [c] screen: a live on/off column, toggled in place.
 
@@ -720,11 +803,23 @@ class SettingsApp(TierApp):
                 at = y
             y += 1
             t.append("  ▸ " if sel else "    ", style=ACCENT if sel else HINT)
-            t.append(f"{label.ljust(width + 1)} ", style=f"bold {TEXT}" if sel else TEXT)
+            # TRUNCATED TO THE CAP so the value column is straight. Three of fifteen
+            # labels are longer than 24, and letting those three run on made their dots
+            # float mid-line while the other twelve aligned - which reads as a broken
+            # column rather than a capped one. The full label is in the pane.
+            shown = label if len(label) <= width else label[: max(1, width - 1)] + "…"
+            t.append(f"{shown.ljust(width + 1)} ", style=f"bold {TEXT}" if sel else TEXT)
             if sel and self.editing is not None:
                 t.append(f"{self.editing}█\n", style=ACCENT)
                 continue
-            t.append("● " if on else "○ ", style=OK if on else DIM)
+            # A DOT MEANS ON OR OFF AND NOTHING ELSE. Some rows carry a tri-state value
+            # ("auto", "close-only"), and showing the OFF glyph beside one said the
+            # setting was off when it was not - the same confusion this file's cp1252
+            # note records for an earlier glyph choice.
+            if _is_binary(value):
+                t.append("● " if on else "○ ", style=OK if on else DIM)
+            else:
+                t.append("· ", style=HINT)
             # Only the HEAD of the value. The qualifier after a double space
             # ("  (machine default)") is longer than the column has room for and was
             # clipped mid-word; the pane beside it shows the value in full.
@@ -906,7 +1001,11 @@ class ChooserApp(TierApp):
             sel = self.cursor == i
             t.append("  ▸ " if sel else "    ", style=ACCENT if sel else HINT)
             t.append(f"{key:>2}  ", style=KEY)
-            t.append(label.ljust(width), style=f"bold {TEXT}" if sel else TEXT)
+            # TRUNCATED, not wrapped: a row is one line, and a label that wrapped pushed
+            # its continuation flush against the border and broke the marker column at
+            # phone width. The full text is in the pane, which is what the pane is for.
+            shown = label if len(label) <= width else label[: max(1, width - 1)] + "…"
+            t.append(shown.ljust(width), style=f"bold {TEXT}" if sel else TEXT)
             kind = self._marker_kind(writes)
             if kind == "deletes":
                 t.append(f"  {self.mark_deletes}", style=GOLD)
@@ -920,7 +1019,9 @@ class ChooserApp(TierApp):
         body = Text("\n")
         if self.rows:
             _key, label, blurb, writes = self.rows[self.cursor]
-            body.append(f"  {label}\n\n", style=f"bold {ACCENT}")
+            for line in wrap(label, w):
+                body.append(f"  {line}\n", style=f"bold {ACCENT}")
+            body.append("\n")
             if blurb:
                 for line in wrap(blurb, w):
                     body.append(f"  {line}\n", style=DIM)
@@ -1009,14 +1110,25 @@ class SetupApp(TierApp):
         t = Text()
         t.append("  First-time setup\n\n", style=f"bold {GOLD}")
         t.append("  No team configuration in this folder yet.\n\n", style=DIM)
+        # Wrapped to the panel, with the continuation under the text rather than at
+        # column 1. This is the first screen a new project ever shows, and it wrapped
+        # "...then opens them to / change" even on a wide terminal.
+        blurb_width = max(20, self.panel_width() - 10)
+        lines_per_row = []
         for i, (_value, label, blurb) in enumerate(self.rows):
             sel = self.cursor == i
             t.append("  ▸ " if sel else "    ", style=ACCENT if sel else HINT)
             t.append(f"{label}\n", style=f"bold {TEXT}" if sel else TEXT)
-            t.append(f"        {blurb}\n\n", style=DIM)
+            wrapped = wrap(blurb, blurb_width) if blurb else []
+            for line in wrapped:
+                t.append(f"        {line}\n", style=DIM)
+            t.append("\n")
+            lines_per_row.append(1 + len(wrapped) + 1)
         self.query_one("#rows", Static).update(t)
-        # Three rows of three lines each, so the cursor's line is not its index.
-        self.scroll_row(self.cursor * 3 + 2)
+        # Rows are no longer a fixed three lines each, so the cursor's line is counted
+        # rather than multiplied - a fixed stride would scroll to the wrong row the
+        # moment one blurb wrapped differently from another.
+        self.scroll_row(sum(lines_per_row[: self.cursor]) + lines_per_row[self.cursor] - 1)
 
         w = 26 if not self.narrow else max(20, self.panel_width() - 4)
         body = Text("\n")
@@ -1228,7 +1340,9 @@ class FinishedApp(ListApp):
         t = Text("\n")
         if not row:
             return t
-        t.append(f"  {row.get('title', '')}\n\n", style=f"bold {ACCENT}")
+        for line in wrap(str(row.get("title", "")), 26):
+            t.append(f"  {line}\n", style=f"bold {ACCENT}")
+        t.append("\n")
         for key in ("slug", "detail"):
             value = row.get(key)
             if value:
@@ -1349,7 +1463,10 @@ class BrowseApp(TierApp):
         # Probed, not assumed - the same question ChooserApp asks before its own markers,
         # because a corporate console decoding cp1252 cannot render a tick.
         self.mark_project = "✓" if ChooserApp._can_encode("✓") else "*"
-        self.rows = self._rows_for(self.here)
+        self.filter = ""  # "" means not filtering at all, which is not the same as ""
+        self.filtering = False
+        self.all_rows = self._rows_for(self.here)
+        self.rows = list(self.all_rows)
         self.picked = None
         self.ran = False
 
@@ -1361,8 +1478,28 @@ class BrowseApp(TierApp):
 
     def _reload(self, new_dir) -> None:
         self.here = new_dir
-        self.rows = self._rows_for(new_dir)
+        self.all_rows = self._rows_for(new_dir)
+        # A filter belongs to the directory you typed it in. Carrying it into the next one
+        # hides rows for a reason that is no longer on screen.
+        self.filter = ""
+        self.filtering = False
+        self._apply_filter()
         self.cursor = 0
+
+    def _apply_filter(self) -> None:
+        """Narrow to matching rows, keeping the ones that are not really entries.
+
+        "use this folder" and "up" are always offered: they are how you leave, and a filter
+        that can strip your way out of a screen is a trap.
+        """
+        needle = self.filter.lower()
+        if not needle:
+            self.rows = list(self.all_rows)
+        else:
+            self.rows = [
+                row for row in self.all_rows if row[1] in ("use", "up") or needle in row[0].lower()
+            ]
+        self.cursor = min(self.cursor, max(0, len(self.rows) - 1))
 
     def paint(self) -> None:
         self.head(str(self.here) if self.narrow else f"{self.here}")
@@ -1405,12 +1542,62 @@ class BrowseApp(TierApp):
         ):
             side.append(f"  {line}\n", style=DIM)
         self.query_one("#side-body", Static).update(side)
-        self.foot((("↑↓", "move"), ("enter", "open"), ("bksp", "up"), ("esc/q", "cancel")))
+        if self.filtering or self.filter:
+            self.foot(
+                (("type", "filter"), ("bksp", "edit"), ("enter", "open"), ("esc", "clear")),
+                f"filter: {self.filter}_" if self.filtering else f"filter: {self.filter}",
+            )
+        else:
+            self.foot(
+                (
+                    ("↑↓", "move"),
+                    ("/", "filter"),
+                    ("enter", "open"),
+                    ("bksp", "up"),
+                    ("esc/q", "cancel"),
+                )
+            )
 
     def on_key(self, event) -> None:
         key = event.key
+        if self.filtering:
+            # INSIDE THE FILTER the keys mean something else, and only three of them.
+            event.stop()
+            if key == "escape":
+                self.filter = ""
+                self.filtering = False
+                self._apply_filter()
+            elif key == "backspace":
+                self.filter = self.filter[:-1]
+                self._apply_filter()
+            elif key in ("enter", "down", "up"):
+                # Leave the filter in place and go back to moving through what it matched.
+                # Enter does NOT open from inside the filter: the row actions live in the
+                # handler below and duplicating them here is how two code paths come to
+                # disagree about what Enter does on the same row.
+                self.filtering = False
+            elif len(getattr(event, "character", "") or "") == 1 and event.character.isprintable():
+                self.filter += event.character
+                self._apply_filter()
+            self.paint()
+            return
+        # Textual names this key "slash", not "/". The literal never matched and the
+        # filter simply never opened - verified by printing the key name rather than
+        # assuming it (2026-08-31).
+        if key in ("slash", "/"):
+            event.stop()
+            self.filtering = True
+            self.paint()
+            return
         if key in ("escape", "q", "ctrl+c"):
             event.stop()
+            if self.filter:
+                # Clear the filter before leaving the screen: it is the thing most likely
+                # to be what the person wanted rid of.
+                self.filter = ""
+                self._apply_filter()
+                self.paint()
+                return
             self.picked = None
             self.exit()
             return

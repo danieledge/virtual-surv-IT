@@ -153,7 +153,9 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
         return APP_FALLBACK
 
     try:
-        app = widgets.MenuApp(project_dir, views, _actions(project_dir, mod, shown, jira_on), menu)
+        app = widgets.MenuApp(
+            project_dir, views, _actions(project_dir, mod, shown, jira_on), menu, mod
+        )
         with _true_terminal_size():
             app.run()
     except Exception:  # noqa: BLE001 — any failure degrades
@@ -678,7 +680,9 @@ def update_decision_screen(ih, repo=None, output=None):
         elif remote and local:
             t.append(f"  already on {local} - nothing to pull\n")
         else:
-            t.append("  checking what is available...\n")
+            # The facts were gathered before this screen opened, so "checking..." names a
+            # check that has already finished and failed.
+            t.append("  could not reach the update channel\n", style="yellow")
         if dirty:
             # Stated BEFORE the keypress, not discovered mid-run.
             t.append("\n  note: your clone has uncommitted changes\n")

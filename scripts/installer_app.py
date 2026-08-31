@@ -367,12 +367,23 @@ def chooser_screen(
             legend = f"   {mark_writes} writes outside this project"
         if "deletes" in kinds:
             legend += f"{' · ' if legend else '   '}{mark_deletes} deletes"
-        return [
-            (
-                "class:hint",
-                chrome.ui_text(host, f"  ↑↓ move · Enter choose · Esc back{legend}"),
-            )
-        ]
+        keys = "  ↑↓ move · Enter choose · Esc back"
+        # THE KEYS ARE NOT NEGOTIABLE; the legend is. Together they overran a 66-column
+        # terminal and the tail was cut mid-word ("✎ writes outside this projec"), which
+        # looks like a rendering fault rather than a narrow screen. A shortened legend
+        # still names the marks; a clipped one names nothing (independent TUI review,
+        # 2026-08-31).
+        # Shortened only when it genuinely does not fit. A two-column safety margin made
+        # this degrade at 80 columns, where the full legend fits exactly - and a legend
+        # that shortens on a terminal with room for it is its own small defect.
+        width = chrome.term_columns()
+        if legend and len(keys) + len(legend) > width:
+            legend = f"   {mark_writes} writes outside"
+            if "deletes" in kinds:
+                legend += f" · {mark_deletes} deletes"
+        if legend and len(keys) + len(legend) > width:
+            legend = ""
+        return [("class:hint", chrome.ui_text(host, f"{keys}{legend}"))]
 
     kb = KeyBindings()
 
@@ -864,7 +875,10 @@ def update_decision_screen(ih, repo=None, output=None):
         elif remote and local and remote == local:
             out.append(("class:on", f"  already on {local} - nothing to pull\n\n"))
         else:
-            out.append(("class:dim", "  checking what is available...\n\n"))
+            # NOT "checking...": _update_facts has already run and come back with
+            # nothing, so a progressive-present line describes a check that finished and
+            # failed. Say the true thing (independent TUI review, 2026-08-31).
+            out.append(("class:warn", "  could not reach the update channel\n\n"))
         if dirty:
             # Stated BEFORE the keypress, not discovered mid-run. The streaming flow
             # asked about this after it had already started working.

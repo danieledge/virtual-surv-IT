@@ -1373,23 +1373,15 @@ def artifacts_screen(project_dir: Path, mod, slug: str, output=None):
     return True
 
 
-def help_screen(project_dir: Path, mod, output=None):
-    """The legend (2026-08-20). The settings screen explains itself, but the menu's own
-    status glyphs did not - a row marked ⛔ told you something was wrong without saying
-    what. Returns True when it ran."""
-    try:
-        p = mod._ptk_ui()
-        if not p:
-            return None
-        from prompt_toolkit.key_binding import KeyBindings
-    except Exception:
-        return None
+def _help_model(mod):
+    """(marks, keys) for the legend - the CONTENT, with no idea how it will be drawn.
 
+    Extracted so the Textual tier can show the same legend rather than a second one written
+    beside it. Two tiers explaining the same glyph in different words is how they came to
+    disagree about everything else.
+    """
     g = glyphs(mod)
-    # Every string here is sized to its pane. The first draft wrapped in BOTH columns
-    # ("Enter choose the highlighted r/ow"), which is a poor look for the screen whose
-    # entire job is explaining things.
-    rows = [
+    marks = [
         (g["in_progress"], "in progress", "being worked on"),
         (g["blocked"], "blocked", "parked, outside our control"),
         (g["closing"], "closing", "DoD gate and sign-off"),
@@ -1405,9 +1397,31 @@ def help_screen(project_dir: Path, mod, output=None):
         ("b", "browse done & archived"),
         ("v", "view artifacts"),
         ("m", "show all open"),
-        ("?", "this screen"),
+        ("?", "this legend"),
         ("Esc", "quit, no launch"),
     ]
+    return marks, keys
+
+
+def help_screen(project_dir: Path, mod, output=None):
+    """The legend (2026-08-20). The settings screen explains itself, but the menu's own
+    status glyphs did not - a row marked ⛔ told you something was wrong without saying
+    what. Returns True when it ran."""
+    try:
+        p = mod._ptk_ui()
+        if not p:
+            return None
+        from prompt_toolkit.key_binding import KeyBindings
+    except Exception:
+        return None
+
+    # Every string is sized to its pane. The first draft wrapped in BOTH columns ("Enter
+    # choose the highlighted r/ow"), which is a poor look for the screen whose entire job
+    # is explaining things.
+    #
+    # Read from _help_model rather than restated, so the Textual menu's ? legend and this
+    # screen cannot come to describe the same glyph differently.
+    rows, keys = _help_model(mod)
 
     def _body():
         out = [("class:group", "  What the marks mean\n\n")]

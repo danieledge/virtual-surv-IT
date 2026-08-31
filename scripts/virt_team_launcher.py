@@ -1133,7 +1133,11 @@ def _finished_menu(project_dir: Path, es) -> str:
     except Exception:
         rows = []
     if not rows:
-        print(ink.dim("    no done or archived engagements yet"), file=err)
+        # Shown on the next menu draw rather than printed under the app that is about to
+        # repaint over it. The empty STRING stays: this function returns a resume token,
+        # and the caller already turns a falsy one into "__again__". Returning the menu's
+        # sentinel from here would be a second function deciding the menu's business.
+        _notice("Nothing done or archived in this folder yet.")
         return ""
     p = _ptk_ui()
     if p:
@@ -2171,70 +2175,18 @@ def _auto_offered(project_dir: Path) -> bool:
         return False
 
 
-def _pt_menu_round(
-    p, project_dir: Path, engagement_state, menu: dict, shown: list, show_all: bool = False
-) -> str:
-    """prompt_toolkit tier of the go menu: arrow/mouse picker over the same entries as
-    the numbered flow, same return contract (decision, "" for in-session/plain, or
-    "__again__" after a side action)."""
-    # Same local cap as the numbered tier, and the same escape hatch - the picker is a
-    # fixed-height widget, so an uncapped list would simply run off it.
-    full = shown
-    shown = shown if show_all else shown[:_PLAIN_TIER_ROWS]
-    hidden = len(full) - len(shown)
-    entries = []
-    default_slug = menu.get("default") or ""
-    for i, row in enumerate(shown):
-        # 2026-08-19: this tier used to render its own `resume <slug> <status> opened
-        # <date> <title>` row while the numbered tier had already moved to title-first
-        # with a detail tail - two renderers, and THIS is the one most users actually
-        # see (live screenshot). Same content in both now; one line, because a picker
-        # entry is a single selectable row.
-        view = row_view(row, default_slug=default_slug, of_many=len(shown) > 1)
-        frags = [
-            ("class:warn" if view["mark_style"] == "warn" else "class:dim", f"{view['mark']} "),
-            ("", view["title"]),
-        ]
-        if view["detail"]:
-            frags.append(("class:dim", f"  ·  {view['detail']}"))
-        if view["recommended"]:
-            frags.append(("class:on", "  <- most recent"))
-        entries.append((("resume", i), frags, None))
-    subtitle = ""
-    if not shown:
-        archived = menu.get("archived") or 0
-        subtitle = f"none open ({archived} archived)" if archived else "none open"
-    if hidden:
-        entries.append(((_SHOW_ALL,), f"show all {len(full)} open engagements", "m"))
-    entries.append((("new",), "start a new engagement", "n"))
-    if _jira_offered(project_dir):
-        entries.append((("jira",), "a new engagement from a Jira ticket", "j"))
-    entries.append((("settings",), "change a project setting", "c"))
-    entries.append((("open",), "open a different project folder", "o"))
-    if shown:
-        entries.append((("archive",), "archive engagement(s)", "a"))
-    entries.append((("finished",), "browse done & archived engagements", "b"))
-    if _running_slug(project_dir):
-        entries.append((("watch",), "watch the engagement already running", "t"))
-    launch_label = "decide inside the session instead" if shown else "just launch"
-    entries.append((("launch",), launch_label, None))
-    default_index = 0
-    for i, row in enumerate(shown):
-        if (_row_resume_token(row) or "") == default_slug:
-            default_index = i
-            break
-    pick = _pt_pick(
-        p,
-        # Morgan ASKS rather than captioning a list (2026-08-20): the picker's title is
-        # the question, so both tiers pose the same thing.
-        "How would you like to start?",
-        entries,
-        default_index=default_index,
-        subtitle=subtitle,
-    )
-    if pick is _PT_FAILED:
-        return "__pt_fallback__"
-    return _decision_from_pick(pick, project_dir, engagement_state, menu, shown)
+# _pt_menu_round WAS HERE, and is gone (independent TUI review, 2026-08-31).
+#
+# It was a SECOND prompt_toolkit picker, beneath the prompt_toolkit full-screen menu, and
+# it could only run when that one had already failed mid-draw while prompt_toolkit itself
+# was still usable - a state that essentially does not happen, and one that a second
+# prompt_toolkit widget would not survive either. It had already drifted: "start a new
+# engagement" against the others' "a new engagement", and a right pane reading "Nothing
+# selected" while the cursor sat on an action the other tiers described.
+#
+# This file's own _config_editor deleted its middle tier for exactly this argument, and
+# recorded it: "a middle tier that is a worse copy of the two either side of it earns
+# nothing and is where the drift collects". Three tiers, not four.
 
 
 def _tiered_screen(name: str, *args, **kwargs):
@@ -2421,6 +2373,25 @@ def _decision_from_pick(
     return ""
 
 
+# A message for the human that must survive into the NEXT menu draw. A plain print between
+# two full-screen apps is invisible: the app that follows repaints over it, so "nothing was
+# archived" looked like the keypress had done nothing at all. One-shot - read and cleared by
+# the draw that shows it - because a notice that persists is a notice nobody reads.
+_PENDING_NOTICE = ""
+
+
+def _notice(text: str) -> None:
+    """Say something to the user on the next menu draw, rather than into the void."""
+    global _PENDING_NOTICE
+    _PENDING_NOTICE = text or ""
+
+
+def _take_notice() -> str:
+    global _PENDING_NOTICE
+    text, _PENDING_NOTICE = _PENDING_NOTICE, ""
+    return text
+
+
 def _menu_round(
     project_dir: Path, engagement_state, menu: dict, shown: list, show_all: bool = False
 ) -> str:
@@ -2430,12 +2401,21 @@ def _menu_round(
     again."""
     err = sys.stderr
     ink = _Ink()
+    # Anything the last round wanted to say, carried into THIS draw so a full-screen app
+    # shows it instead of repainting over a print nobody saw.
+    notice = _take_notice()
+    if notice:
+        menu = dict(menu or {})
+        menu["notice"] = notice
     # Tier order (2026-08-20): full-screen app -> picker -> numbered. Each falls through
     # on its own sentinel, so a console that cannot run the app still gets a working menu.
     # Default since 2026-08-20 (user decision: "no need to poc, lets just build out the
     # better tui"). VIRT_SURV_NO_APP=1 opts OUT, back to the picker/numbered tiers - kept
     # as an escape hatch for a console where the app misbehaves in a way the internal
     # fallback does not catch.
+    if notice and os.environ.get("VIRT_SURV_NO_APP"):
+        # No app on this tier to host it, and nothing repaints over a print here.
+        print(ink.dim(f"    {notice}"), file=err)
     if not os.environ.get("VIRT_SURV_NO_APP"):
         # Tier 0: Textual. Answers the same APP_FALLBACK sentinel as the tier below, so
         # a console that cannot run it lands on exactly today's behaviour.
@@ -2464,13 +2444,6 @@ def _menu_round(
                 )
         except Exception:
             pass  # any app failure degrades to the tiers below, never breaks the launch
-    p = _ptk_ui()
-    if p:
-        decision = _pt_menu_round(p, project_dir, engagement_state, menu, shown, show_all)
-        if decision != "__pt_fallback__":
-            return decision
-        # The pt widget could not run in this console (live Windows report
-        # 2026-08-17: a silent plain launch) - the numbered tier below takes over.
     # 2026-08-20 UX pass: Morgan ASKS, and the answers are grouped. Previously one
     # "Open engagements" rule sat above everything, so [n] start new / [c] settings /
     # [Enter] read as though they were open engagements; and with no blank line anywhere
