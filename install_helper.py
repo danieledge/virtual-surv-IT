@@ -5657,13 +5657,39 @@ def run_configure(
     print(
         style.bold(f"Configuring {project}" + (" (DEMO - nothing will be written)" if demo else ""))
     )
-    if not assume_yes and confirm(
-        "  Use the recommended settings (enable + permission allow-list + this "
+    # THE ONE QUESTION MOST PEOPLE ANSWER, on a screen. Saying yes here skips the twelve
+    # that follow, so this is the whole of first contact for anyone taking the default -
+    # and it was a paragraph-long [Y/n] on a bare prompt, immediately after they had
+    # chosen on a full-screen picker (independent TUI review, 2026-08-31).
+    #
+    # The twelve-question walkthrough underneath is NOT converted, and that is deliberate:
+    # it is what someone gets when they explicitly decline the recommended path and ask to
+    # be walked through each choice. A person who asked for that asked for questions.
+    if not assume_yes and _agreed(
+        style,
+        title="Configure this project",
+        facts=[
+            ("head", "  Use the recommended settings?\n"),
+            ("dim", f"  for {target.name}\n"),
+        ],
+        detail=[
+            ("head", "What that sets"),
+            ("plain", "- enables the team for this project"),
+            ("plain", "- adds the permission allow-list (fewer prompts)"),
+            ("plain", "- applies this machine's defaults"),
+            (
+                "dim",
+                "Everything here can be changed afterwards from the settings screen. "
+                "Declining walks you through each choice one at a time instead.",
+            ),
+        ],
+        yes="use the recommended settings",
+        no="walk me through each choice",
+        assume_yes=False,
+        prompt="  Use the recommended settings (enable + permission allow-list + this "
         "machine's defaults) - the fastest way to get running? 'No' walks through each "
         "choice instead.",
         default=True,
-        assume_yes=False,
-        style=style,
     ):
         assume_yes = True
     rc = 0
