@@ -183,7 +183,12 @@ _TEAM_SCRIPT_NAMES = (
     # diagnostic. It imports and prints; it executes nothing under review. Without the
     # entry a plugin-mode user is asked for execution consent to run a tool whose whole
     # job is answering a support question about the plugin itself.
-    r"|launch_terminal|tier_probe)\.py"
+    # 2026-08-31: audit_screens, the read-only "is every menu option wired?" report. It
+    # parses install_helper with ast and imports the two tier modules to compare their
+    # signatures; it executes nothing under review and writes nothing. Same reasoning as
+    # tier_probe - without the entry, a plugin-mode user is asked for execution consent to
+    # run a tool whose whole job is answering a question about the plugin itself.
+    r"|launch_terminal|tier_probe|audit_screens)\.py"
 )
 
 # 0.32 (ADR-009): the COMPANY tool allowlist - literal command PREFIXES the human curates in
