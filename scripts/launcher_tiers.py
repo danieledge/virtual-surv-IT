@@ -124,7 +124,9 @@ class Brand(Static):
         t = Text()
         t.append("       ○\n", style=DIM)
         t.append("   ╭───┴───╮   ", style=DIM)
-        t.append("VIRT-SURV\n", style=f"bold {ACCENT}")
+        # The product is VIRT-SURV-IT; "virt-surv" is only the command you type
+        # (owner, 2026-08-31). The mark is the name, not the alias.
+        t.append("VIRT-SURV-IT\n", style=f"bold {ACCENT}")
         t.append("  ─┤ ", style=DIM)
         t.append("●", style=f"bold {eye}")
         t.append("   ", style=DIM)

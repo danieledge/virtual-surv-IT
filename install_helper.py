@@ -1826,12 +1826,18 @@ def _tiered_installer_screen(name: str, *args, **kwargs):
         screen = getattr(module, name, None)
         if screen is None:
             continue
+        before = getattr(module, "APPS_RUN", None)
         try:
             answer = screen(*args, **kwargs)
         except Exception:
             continue  # a tier that raises is a tier that cannot draw
         if answer is not None:
             return answer
+        # It drew and still said None: there is nothing below a screen that ran, and
+        # opening the older renderer over it is what the owner reported on 2026-08-31.
+        after = getattr(module, "APPS_RUN", None)
+        if before is not None and after is not None and after != before:
+            return None
     return None
 
 

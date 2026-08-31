@@ -580,7 +580,14 @@ def test_setup_screen_escape_CANCELS_rather_than_skipping(ptk, tmp_path):
     text = buf.getvalue()
     assert "First-time setup" in text
     assert "no questions asked" in text
-    assert "leaves this screen" in text, "the guided pass must admit that it leaves"
+    # NEITHER OPTION LEAVES THIS INTERFACE ANY MORE (owner, 2026-08-31). The guided pass
+    # used to say "asks questions; leaves this screen", and it meant it: choosing it
+    # started a separate interactive program that asked a dozen questions in a fixed order,
+    # to someone whose first impression of the product this is. Both options now apply the
+    # recommended defaults; the second then opens the settings editor on the result.
+    assert "choose settings for this project" in text
+    assert "recommended defaults" in text
+    assert "leaves this screen" not in text, "nothing here leaves the interface now"
 
 
 def test_the_menu_offers_the_explorer(ptk):

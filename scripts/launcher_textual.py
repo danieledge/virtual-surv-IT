@@ -77,9 +77,18 @@ def _widgets():
         return None
 
 
+# How many Textual screens have actually started. Not a statistic: a dispatcher reads it to
+# tell "this tier could not draw" apart from "this tier drew, and still returned None",
+# which are the same value and opposite situations. See _tiered_screen.
+APPS_RUN = 0
+
+
 @contextlib.contextmanager
 def _true_terminal_size():
     """Let Textual measure the REAL terminal for as long as it is drawing.
+
+    Also the single choke point every screen passes through on its way to app.run(), which
+    is why APPS_RUN is counted here rather than in seventeen adapters that would drift.
 
     Textual sizes itself with shutil.get_terminal_size(), which reads COLUMNS/LINES
     from the environment first and otherwise measures `sys.__stdout__`. Neither is
@@ -98,6 +107,8 @@ def _true_terminal_size():
     deliberately dynamic rather than a one-off COLUMNS export: Textual re-measures on
     SIGWINCH, and a pinned value would break resizing to fix sizing.
     """
+    global APPS_RUN
+    APPS_RUN += 1
     tty = None
     for stream in (sys.stderr, sys.stdin):
         try:
@@ -323,7 +334,11 @@ def setup_screen(project_dir: Path, mod, output=None):
         return None
     rows = [
         (SETUP_DEFAULTS, "set up with recommended defaults", "no questions asked"),
-        (SETUP_GUIDED, "guided setup", "asks questions; leaves this screen"),
+        (
+            SETUP_GUIDED,
+            "choose settings for this project",
+            "starts from the recommended defaults, then opens them to change",
+        ),
         (SETUP_SKIP, "skip for now", "launch without setting up"),
     ]
     try:

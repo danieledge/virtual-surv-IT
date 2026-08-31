@@ -836,3 +836,66 @@ def test_the_monitor_re_reads_rather_than_caching():
     assert "set_interval" in mount, "the monitor must refresh on a clock"
     paint = inspect.getsource(launcher_tiers.MonitorApp.paint)
     assert "self._read()" in paint, "and re-read on every paint, never cache"
+
+
+def test_once_a_screen_has_drawn_no_older_tier_may_open():
+    """Owner, 2026-08-31: "i pressed esc on this screen and it went back to the old
+    interface ... make sure the old interface is never shown if successfully in new".
+
+    THE CAUSE IS THE THIRD ANSWER, one layer above where scripts/questions.py fixed it. A
+    tier returns None for "I could not draw this", and the dispatcher tries the tier below.
+    That is right when the tier genuinely could not draw, and very wrong when the tier DID
+    draw and the human answered: the reply to "I am finished with this screen" becomes the
+    older renderer opening on top of it.
+
+    The return value cannot tell those apart, so the dispatcher stops trying to. Every
+    Textual screen runs its app inside _true_terminal_size(), so counting entries there
+    counts screens that actually ran."""
+    import inspect
+
+    import launcher_textual
+    import virt_team_launcher
+
+    # The counter has to sit at the ONE place all seventeen screens pass through, or it
+    # is seventeen places that will drift.
+    # Counted on CODE LINES, not on occurrences in the file: the first version counted a
+    # comment that mentions app.run() and reported eighteen calls against seventeen
+    # contexts - a checker that finds a discrepancy in prose is a checker nobody will
+    # believe the next time it finds a real one.
+    lines = [ln.strip() for ln in inspect.getsource(launcher_textual).split("\n")]
+    check("counter exists", hasattr(launcher_textual, "APPS_RUN"), True)
+    check(
+        "every app.run is inside the counted context",
+        lines.count("app.run()"),
+        lines.count("with _true_terminal_size():"),
+    )
+    check(
+        "the context counts",
+        "APPS_RUN += 1" in inspect.getsource(launcher_textual._true_terminal_size),
+        True,
+    )
+
+    # And it must actually move.
+    before = launcher_textual.APPS_RUN
+    with launcher_textual._true_terminal_size():
+        pass
+    check("running a screen increments it", launcher_textual.APPS_RUN, before + 1)
+
+    # Both of the launcher's dispatchers must consult it.
+    for name in ("_tiered_screen", "_config_editor"):
+        body = inspect.getsource(getattr(virt_team_launcher, name))
+        assert "APPS_RUN" in body, f"{name} still falls through after a screen has drawn"
+
+
+def test_the_installer_dispatcher_stops_falling_through_too():
+    """Same rule, same reason, the other front door. Two dispatchers with one rule between
+    them is how the tiers drifted apart the first time."""
+    import inspect
+    import sys as _sys
+
+    _sys.path.insert(0, str(REPO))
+    import install_helper as ih
+
+    body = inspect.getsource(ih._tiered_installer_screen)
+    assert "APPS_RUN" in body
+    assert "before" in body and "after" in body, "it must compare, not just mention"

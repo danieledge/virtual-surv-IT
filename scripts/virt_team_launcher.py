@@ -1023,8 +1023,13 @@ def _config_editor(project_dir: Path) -> None:
     # user into the numbered editor after cancelling (live report, 2026-08-20).
     for _tier in ("launcher_textual", "launcher_app"):
         try:
-            _screen = __import__(_tier, fromlist=["settings_screen"]).settings_screen
-            if _screen(project_dir, _this_module()) is not None:
+            _module = __import__(_tier, fromlist=["settings_screen"])
+            _before = getattr(_module, "APPS_RUN", None)
+            if _module.settings_screen(project_dir, _this_module()) is not None:
+                return
+            # Same rule as _tiered_screen: a tier that DREW has nothing below it.
+            _after = getattr(_module, "APPS_RUN", None)
+            if _before is not None and _after is not None and _after != _before:
                 return
         except Exception:
             continue  # any app failure degrades to the next tier down
@@ -2246,9 +2251,17 @@ def _tiered_screen(name: str, *args, **kwargs):
             screen = getattr(module, name, None)
             if screen is None:
                 continue
+            before = getattr(module, "APPS_RUN", None)
             answer = screen(*args, **kwargs)
             if answer is not None:
                 return answer
+            # IT DREW, AND STILL SAID NONE. Falling through here is what put the older
+            # renderer on top of a screen the human had just finished with (owner report,
+            # 2026-08-31). None means "could not draw"; a screen that ran cannot mean that,
+            # so there is nothing below it to try.
+            after = getattr(module, "APPS_RUN", None)
+            if before is not None and after is not None and after != before:
+                return None
         except Exception:
             continue  # a tier that raises is a tier that cannot draw
     return None
@@ -4040,9 +4053,19 @@ def _offer_first_time_setup(project_dir: Path):
             return _ABORT
         if choice == SETUP_SKIP:
             return False
-        if choice == SETUP_DEFAULTS:
-            verb = "onboard"  # non-interactive: applies the defaults and reports them
-        elif choice != SETUP_GUIDED:
+        # BOTH START FROM THE RECOMMENDED DEFAULTS (owner request, 2026-08-31). The old
+        # guided pass left this interface for a separate program that asked a dozen
+        # questions in a fixed order - to someone whose first impression of the product
+        # this is. It reached the same destination the defaults already knew, by a longer
+        # road, and only one of the two roads stayed inside the interface.
+        #
+        # So `onboard` applies the defaults either way. The difference is what happens
+        # next: "choose settings" then opens the settings editor ON the configured
+        # project, where every value is visible at once with an explanation pane, and
+        # nothing is asked in a fixed order.
+        if choice in (SETUP_DEFAULTS, SETUP_GUIDED):
+            verb = "onboard"
+        else:
             choice = None
     except Exception:
         choice = None
@@ -4059,15 +4082,83 @@ def _offer_first_time_setup(project_dir: Path):
             return False
     import subprocess
 
-    try:
-        proc = subprocess.run(
-            [sys.executable, str(helper), verb, str(project_dir)],
-            stdout=sys.stderr,
-            stderr=sys.stderr,
-        )
-    except OSError:
+    argv = [sys.executable, str(helper), verb, str(project_dir)]
+    code = _setup_in_app(argv, project_dir)
+    if code is None:
+        # No screen anywhere - the streaming run this has always done.
+        try:
+            code = subprocess.run(argv, stdout=sys.stderr, stderr=sys.stderr).returncode
+        except OSError:
+            return False
+    if code != 0 or not _plugin_enabled(project_dir):
         return False
-    return proc.returncode == 0 and _plugin_enabled(project_dir)
+
+    # THEN SHOW THEM WHAT THEY GOT. Only for "choose settings" - the defaults option was
+    # picked precisely to avoid being asked anything, and opening an editor over it would
+    # answer a question nobody asked.
+    #
+    # The editor runs AFTER the setup rather than instead of it, because it edits the
+    # project's preference file and there is no file until the project is configured.
+    # Nothing overwrites the result afterwards.
+    if choice == SETUP_GUIDED:
+        # The SAME editor the go menu's [c] opens, reporting the same delta afterwards -
+        # not a second one written for this screen. Two editors for one set of settings is
+        # how the launcher's tiers drifted apart the first time.
+        try:
+            _run_settings_editor(project_dir)
+        except Exception:  # noqa: BLE001
+            # The project is already configured by this point, so a terminal that cannot
+            # host the editor loses the chance to ADJUST the defaults, not the setup. There
+            # is no failure here worth abandoning a completed setup for.
+            pass
+    return True
+
+
+def _setup_in_app(argv, project_dir: Path):
+    """Run the setup subprocess behind a live progress screen. Its exit code, or None.
+
+    None means no tier could draw one and the caller should stream instead - the same
+    three-way contract every screen here uses, and the reason a cancel and an
+    unavailability cannot be confused.
+
+    ONLY SAFE BECAUSE `onboard` ASKS NOTHING. It sets assume_yes unconditionally, which is
+    the entire point of the subcommand over plain `configure`. A subprocess that prompted
+    would prompt into a screen that cannot show it, and hang - the same trap the
+    installer's in-app allow-list exists to keep shut.
+    """
+    import subprocess
+
+    def work(observer):
+        observer.step(1, 1, "Setting up this project")
+        try:
+            proc = subprocess.Popen(  # fixed argv, shell=False  # nosec B603
+                argv,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                errors="replace",
+                # Nothing to type, and a pipe rather than the terminal means a subprocess
+                # that somehow DID ask gets EOF and gives up, instead of waiting forever
+                # behind a screen that cannot show the question.
+                stdin=subprocess.DEVNULL,
+            )
+        except OSError:
+            return 1
+        for line in proc.stdout or ():
+            observer.line(line)
+        proc.wait()
+        observer.result("Setting up this project", "ok" if proc.returncode == 0 else "fail", "")
+        return proc.returncode
+
+    # The screen owns the worker thread and the observer; this only describes the work.
+    return _tiered_screen(
+        "progress_screen",
+        ["Setting up this project"],
+        work,
+        _this_module(),
+        title="First-time setup",
+        repo=project_dir,
+    )
 
 
 def _running_slug(project_dir: Path) -> str:

@@ -1207,7 +1207,11 @@ def setup_screen(project_dir: Path, mod, output=None):
     g = glyphs(mod)
     options = [
         (SETUP_DEFAULTS, f"{g['new']}set up with recommended defaults", "no questions asked"),
-        (SETUP_GUIDED, f"{g['settings']}guided setup", "asks questions; leaves this screen"),
+        (
+            SETUP_GUIDED,
+            f"{g['settings']}choose settings for this project",
+            "starts from the recommended defaults, then opens them to change",
+        ),
         (SETUP_SKIP, f"{g['launch']}skip for now", "launch without setting up"),
     ]
     idx = [0]

@@ -110,12 +110,11 @@ INDENT = "  "
 # space + its text, and the longest text is the footer, not the tagline. Getting this wrong
 # by one column let the full tier render at 64 columns while needing 65 - which is the exact
 # class of bug the width tiers exist to prevent.
-FULL_WIDTH = (
-    len(INDENT)
-    + max(max(len(r) for r in _ROBOT_UNICODE), max(len(r) for r in _ROBOT_ASCII))
-    + 2
-    + max(len(TAGLINE), len(FOOTER))
-)
+# No mascot column any more, so the widest row is just the indent and the longest text -
+# which is the footer, not the tagline. Computed rather than estimated: getting this wrong
+# by one column let the full tier render at a width it did not fit, which is the exact
+# class of bug the width tiers exist to prevent.
+FULL_WIDTH = len(INDENT) + max(len(TAGLINE), len(FOOTER))
 # Below this the mascot is dropped and only the two text lines remain.
 COMPACT_WIDTH = len(INDENT) + 3 + len(TAGLINE)
 _MINIMAL_TAG = "compliance surveillance IT"
@@ -158,15 +157,23 @@ def _footer_segments() -> list:
 
 
 def _full_banner() -> list:
-    """Three rows: the mascot on the left, the three text lines beside it."""
-    art = _robot()
-    beside = [_wordmark_segments(), _tagline_segments(), _footer_segments()]
-    rows = []
-    for index in range(_ART_ROWS):
-        row = [("plain", INDENT), (_ROBOT_INK[index], art[index]), ("plain", "  ")]
-        row += beside[index]
-        rows.append(row)
-    return rows
+    """Three rows: the wordmark, what it stands for, and what the team is.
+
+    NO MASCOT HERE (owner, 2026-08-31). There were two of them: the Textual mark draws its
+    own robot inside the frame, and this printed a different one - different construction,
+    different eyes, a cp1252 fallback face the other has no equivalent of - directly above
+    it. Two mascots for one product is worse than either alone, because whichever a person
+    meets second reads as a rendering fault in the first. The one in the frame stays; it is
+    the one on screen while the thing is being used.
+
+    _ROBOT_UNICODE, _ROBOT_ASCII and _robot() are kept below rather than deleted. They
+    carry the reason an ASCII box never closes in a terminal, which is exactly the
+    reasoning someone needs before drawing one here again."""
+    return [
+        [("plain", INDENT)] + _wordmark_segments(),
+        [("plain", INDENT)] + _tagline_segments(),
+        [("plain", INDENT)] + _footer_segments(),
+    ]
 
 
 def _compact_banner(with_tagline: bool) -> list:

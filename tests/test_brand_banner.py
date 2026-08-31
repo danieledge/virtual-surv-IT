@@ -69,17 +69,27 @@ def test_no_box_drawing_characters(width, monkeypatch):
     assert not any(0x2500 <= ord(ch) <= 0x257F for ch in text)
 
 
-@pytest.mark.parametrize("width", [65, 80, 120])
-def test_box_drawing_IS_used_where_it_renders(width, monkeypatch):
-    """The other half of the rule. Falling back everywhere would mean the corp box's
-    limitation degrading every other console for no reason."""
+@pytest.mark.parametrize("width", [40, 44, 45, 60, 64, 65, 80, 120, 200])
+def test_the_banner_is_plain_text_on_every_console(width, monkeypatch):
+    """It used to draw a mascot in box-drawing glyphs where they would render, and fall
+    back to an ASCII face where they would not. There is no mascot here now (owner,
+    2026-08-31: "theres another mascot shown on the fall back screens lets not have that
+    displayed anywhere") - the Textual frame draws the only one, and two mascots for one
+    product meant whichever you saw second read as a fault in the first.
+
+    So the console's encoding no longer changes what this prints, which is a simplification
+    worth asserting rather than merely allowing: it is now impossible for the banner to
+    look different on the corporate box than it does here."""
 
     class _Utf8:
         encoding = "utf-8"
 
     monkeypatch.setattr(brand_banner.sys, "stderr", _Utf8, raising=False)
-    text = "".join(brand_banner.render(width))
-    assert any(0x2500 <= ord(ch) <= 0x257F for ch in text), "the drawn mascot should appear"
+    rich = brand_banner.render(width)
+    monkeypatch.setattr(brand_banner.sys, "stderr", _Cp1252, raising=False)
+    plain = brand_banner.render(width)
+    assert rich == plain, "the banner must not depend on what the console can encode"
+    assert all(line.isascii() for line in rich), rich
 
 
 @pytest.mark.parametrize("width", [40, 50, 65, 72, 80, 100])
@@ -137,20 +147,27 @@ def test_the_brand_palette_reaches_the_right_words():
 
 
 def test_full_tier_carries_every_element_of_the_supplied_brand():
-    """Four rows, mascot beside the text.
+    """Three rows: the wordmark, what it stands for, and what the team is.
 
     Was nine rows in a dashed box with five-row letterforms, until a photo of a real
     PowerShell console showed the letters do not read at terminal aspect ratio: a five-row
-    V's diagonals never visually connect. The box went with them - it was noise around
-    content that reads perfectly well without it, and cost four of the nine lines."""
+    V's diagonals never visually connect. The box went with them - noise around content
+    that reads perfectly well without it, at four of the nine lines.
+
+    The mascot went last (2026-08-31), and for a different reason: there were two of them.
+    The Textual frame draws its own, and this drew a second, differently-built one directly
+    above it."""
     lines = brand_banner.render(80)
     text = "\n".join(lines)
-    assert len(lines) == 3  # one row per text line, mascot beside
+    assert len(lines) == 3
     assert brand_banner.TAGLINE in text
     assert brand_banner.FOOTER in text
-    assert "o o" in text or "o_o" in text  # the mascot's eyes, either form
     assert "V S I T" in text  # spaced caps, legible at any width in any font
     assert "+-" not in text, "the dashed box is gone; it read as debris on a real console"
+    # THE SECOND MASCOT MUST NOT COME BACK. Named eyes rather than a glyph range, because
+    # the ASCII fallback face was the form the corporate console actually showed.
+    for face in ("o o", "o_o", "[o", "\u25cf \u25cf"):
+        assert face not in text, f"a second mascot is back in the banner: {face!r}"
 
 
 def test_narrow_terminals_get_the_compact_mark_not_a_wrapped_box():
