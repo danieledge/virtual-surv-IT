@@ -211,10 +211,16 @@ def ask_plain(question: Question) -> Answer:
     except Exception:
         return Answer.left()
 
+    # THE SAME KEYS THE SCREENS OFFER. This used to number 1..N while chooser_rows
+    # assigned letters from the tenth option on, so one question showed [a] on a screen
+    # and [10] at a prompt - the same option, two names, decided by which tier drew. No
+    # caller has ten options today, which is exactly when to fix it (independent TUI
+    # review, 2026-08-31).
+    keys = list(_KEYS[: len(question.options)])
     print("", file=err)
     print(f"  {question.title}", file=err)
-    for number, (_value, label, help_text) in enumerate(question.options, 1):
-        print(f"    [{number}] {label}", file=err)
+    for key, (_value, label, help_text) in zip(keys, question.options):
+        print(f"    [{key}] {label}", file=err)
         if help_text:
             print(f"        {help_text}", file=err)
     print(f"    [b] {question.cancel_hint}", file=err)
@@ -228,14 +234,10 @@ def ask_plain(question: Question) -> Answer:
             return Answer.left()
         if raw in ("", "b", "q"):
             return Answer.left()
-        try:
-            index = int(raw) - 1
-        except ValueError:
-            print(f"    1-{len(question.options)} or b, please.", file=err)
-            continue
-        if 0 <= index < len(question.options):
-            return Answer.chosen(question.options[index][0])
-        print(f"    1-{len(question.options)} or b, please.", file=err)
+        if raw in keys:
+            return Answer.chosen(question.options[keys.index(raw)][0])
+        offered = f"{keys[0]}-{keys[-1]}" if len(keys) > 1 else keys[0]
+        print(f"    {offered} or b, please.", file=err)
 
 
 def chooser_rows(question: Question):

@@ -3670,29 +3670,41 @@ def _offer_update_if_behind() -> None:
         if not sys.stdin.isatty():
             print(ink.dim("      Run: virt-surv  ->  [u] update"), file=err)
             return
-        print(ink.bold("      Update now? [y/N]: "), end="", file=err)
+        # THE SCREEN THE INSTALLER ALREADY HAS FOR THIS EXACT QUESTION - version delta,
+        # release notes, dirty-tree warning - rather than a [y/N] in front of the TUI. It
+        # returns "update", "cancel", or None when no tier can draw it, and only the last
+        # of those falls through to the typed prompt below.
+        wants = None
         try:
-            answer = input().strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            print("", file=err)
-            return
-        if answer not in ("y", "yes"):
+            wants = _tiered_screen("update_decision_screen", _this_module(), repo=clone)
+        except Exception:  # noqa: BLE001
+            wants = None
+        if wants is None:
+            print(ink.bold("      Update now? [y/N]: "), end="", file=err)
+            try:
+                answer = input().strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print("", file=err)
+                return
+            wants = "update" if answer in ("y", "yes") else "cancel"
+        if wants != "update":
             print(ink.dim("      skipped - 'virt-surv' then [u] whenever you want it."), file=err)
             return
         installer = clone / "install_helper.py"
         if not installer.is_file():
             print(ink.warn("      install_helper.py not found in this clone."), file=err)
             return
-        print(ink.dim("      updating..."), file=err)
-        proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
-            # The positional mode, not an invented flag: install_helper's own
-            # parser takes {install,update}, and "update" is the six-step subset
-            # that pulls and refreshes the installed copy without re-asking every
-            # question the human already answered.
-            [sys.executable, str(installer), "update", "--yes"],
-            timeout=900,
-        )
-        if proc.returncode == 0:
+        # The positional mode, not an invented flag: install_helper's own parser takes
+        # {install,update}, and "update" is the six-step subset that pulls and refreshes
+        # the installed copy without re-asking every question the human already answered.
+        # --yes is honest here: the one question worth asking was asked on the screen above.
+        argv = [sys.executable, str(installer), "update", "--yes"]
+        code = _run_in_app(argv, clone, "Updating the team", "Pulling the new version")
+        if code is None:
+            # No screen anywhere - the streaming run this has always done.
+            print(ink.dim("      updating..."), file=err)
+            code = subprocess.run(argv, timeout=900).returncode  # nosec B603
+        if code == 0:
             print(
                 f"    {ink.good('+')} updated. The session about to start uses the new version.",
                 file=err,
@@ -4072,7 +4084,7 @@ def _offer_first_time_setup(project_dir: Path):
     import subprocess
 
     argv = [sys.executable, str(helper), verb, str(project_dir)]
-    code = _setup_in_app(argv, project_dir)
+    code = _run_in_app(argv, project_dir, "First-time setup", "Setting up this project")
     if code is None:
         # No screen anywhere - the streaming run this has always done.
         try:
@@ -4103,8 +4115,8 @@ def _offer_first_time_setup(project_dir: Path):
     return True
 
 
-def _setup_in_app(argv, project_dir: Path):
-    """Run the setup subprocess behind a live progress screen. Its exit code, or None.
+def _run_in_app(argv, project_dir: Path, title: str = "First-time setup", step: str = "Working"):
+    """Run a subprocess behind a live progress screen. Its exit code, or None.
 
     None means no tier could draw one and the caller should stream instead - the same
     three-way contract every screen here uses, and the reason a cancel and an
@@ -4118,7 +4130,7 @@ def _setup_in_app(argv, project_dir: Path):
     import subprocess
 
     def work(observer):
-        observer.step(1, 1, "Setting up this project")
+        observer.step(1, 1, step)
         try:
             proc = subprocess.Popen(  # fixed argv, shell=False  # nosec B603
                 argv,
@@ -4136,17 +4148,12 @@ def _setup_in_app(argv, project_dir: Path):
         for line in proc.stdout or ():
             observer.line(line)
         proc.wait()
-        observer.result("Setting up this project", "ok" if proc.returncode == 0 else "fail", "")
+        observer.result(step, "ok" if proc.returncode == 0 else "fail", "")
         return proc.returncode
 
     # The screen owns the worker thread and the observer; this only describes the work.
     return _tiered_screen(
-        "progress_screen",
-        ["Setting up this project"],
-        work,
-        _this_module(),
-        title="First-time setup",
-        repo=project_dir,
+        "progress_screen", [step], work, _this_module(), title=title, repo=project_dir
     )
 
 

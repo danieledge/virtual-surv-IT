@@ -342,7 +342,13 @@ def screen(
         key_bindings=key_bindings,
         style=_style(mod),
         full_screen=True,
-        mouse_support=True,
+        # OFF, because nothing here answers a click. No row has a mouse handler, so the
+        # only effect of enabling it was that terminals which forward mouse events showed
+        # a cursor that highlighted nothing and selected nothing - which reads as broken,
+        # and also takes text selection away from the terminal, so you cannot copy a path
+        # off the screen. Turning it on again means wiring click-to-select first
+        # (independent TUI review, 2026-08-31).
+        mouse_support=False,
         output=output or create_output(stdout=sys.stderr),
         # Only the live monitor passes this; every other screen redraws on a keypress, and
         # a timer on those would burn CPU redrawing something that cannot have changed.
