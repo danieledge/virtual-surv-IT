@@ -319,7 +319,10 @@ def test_the_composer_matches_launcher_app():
             ("look at spoofing in june", False),
         )
         check("an empty send is a plain launch", await send(["ctrl+d"]), None)
-        check("esc is a plain launch", await send(list("hi") + ["escape"]), None)
+        # Esc goes BACK, and must not be confusable with the empty-send plain launch
+        # above it: one is "I did not mean to open this", the other is "launch, I will
+        # decide in session" (independent TUI review, 2026-08-31).
+        check("esc goes back", await send(list("hi") + ["escape"]), "__request_back__")
         check(
             "ctrl-u clears",
             await send(list("hi") + ["ctrl+u"] + list("bye") + ["ctrl+d"]),

@@ -2103,9 +2103,10 @@ def _new_decision(project_dir: Path, engagement_state=None, menu=None, shown=Non
         print(ink.dim("    -> starting new"), file=sys.stderr)
         return _new_command(project_dir)
     try:
-        from launcher_app import REQUEST_SKIPPED
+        from launcher_app import REQUEST_BACK, REQUEST_SKIPPED
     except Exception:
         REQUEST_SKIPPED = "__request_skipped__"
+        REQUEST_BACK = "__request_back__"
     answer = None
     try:
         # Textual first, prompt_toolkit underneath. None from either means "that tier
@@ -2122,6 +2123,8 @@ def _new_decision(project_dir: Path, engagement_state=None, menu=None, shown=Non
             answer = request_screen(project_dir, _this_module())
         except Exception:
             answer = None
+    if answer == REQUEST_BACK:
+        return "__again__"  # they left the composer: redraw the menu, launch nothing
     if answer is None or answer == REQUEST_SKIPPED:
         print(ink.dim("    -> starting new"), file=sys.stderr)
         return _new_command(project_dir)
@@ -2809,6 +2812,19 @@ def _ptk_ui():
     VIRT_SURV_FORCE_PTK=1 skips the tty gate so the pt tier can be driven headlessly
     (tests use prompt_toolkit's own pipe-input/dummy-output session)."""
     global _PTK_CACHE
+    # THE OPT-OUT, HONOURED HERE BECAUSE THIS IS WHERE THE TIER IS DECIDED. It was
+    # documented as "skips every full-screen tier" and checked in three other places - the
+    # installer, questions.ask, and launcher_textual - but not in this one, so a user who
+    # set it because the apps misbehave on their console still met the prompt_toolkit menu
+    # AND the full-screen first-time-setup app. An escape hatch that leaves you in the
+    # thing you were escaping is worse than none, because you conclude the variable does
+    # not work (independent TUI review, 2026-08-31).
+    #
+    # FORCE_PTK is not an exception. It exists so tests can drive this tier headlessly; a
+    # caller that sets both is contradicting itself, and refusing to draw is the safe way
+    # to resolve that.
+    if os.environ.get("VIRT_SURV_NO_APP"):
+        return None
     if not os.environ.get("VIRT_SURV_FORCE_PTK"):
         try:
             if not (sys.stdin.isatty() and sys.stderr.isatty()):

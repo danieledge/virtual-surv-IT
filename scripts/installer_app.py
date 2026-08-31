@@ -670,7 +670,9 @@ def progress_screen(titles, run_fn, ih, *, title, repo=None, output=None):
             ok = state.code == 0
             word = "done" if ok else f"finished with errors (exit {state.code})"
             return [("class:hint", chrome.ui_text(host, f"  {word} · Enter close"))]
-        return [("class:hint", chrome.ui_text(host, "  working... · Ctrl-C stop"))]
+        # No "Ctrl-C stop" here either: the key handler ignores everything until the
+        # run finishes, for the same reason its Textual twin does.
+        return [("class:hint", chrome.ui_text(host, "  working... (this cannot be interrupted)"))]
 
     kb = KeyBindings()
 

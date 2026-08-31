@@ -1644,9 +1644,21 @@ class _PlainQuestions:
             raw = input("    Choice: ").strip().lower()
         except (EOFError, KeyboardInterrupt):
             return self._Answer(None, True)
-        if raw.isdigit() and 1 <= int(raw) <= len(options):
-            return self._Answer(options[int(raw) - 1][0], False)
-        return self._Answer(None, True)
+        # A TYPO IS NOT A CANCEL, which is what this used to return. questions.ask_plain
+        # re-prompts, and this stand-in runs precisely where there is no other tier to
+        # catch the mistake - a single downloaded file with no scripts/ beside it. The
+        # fallback being stricter than the thing it stands in for is the worst way round
+        # (independent TUI review, 2026-08-31).
+        while True:
+            if raw in ("", "b", "q"):
+                return self._Answer(None, True)
+            if raw.isdigit() and 1 <= int(raw) <= len(options):
+                return self._Answer(options[int(raw) - 1][0], False)
+            print(f"    1-{len(options)} or b, please.")
+            try:
+                raw = input("    Choice: ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                return self._Answer(None, True)
 
     def confirm(self, title, yes, no, **_kw):
         # Present for PARITY, not for completeness' sake: a stand-in that offers less than
@@ -2090,7 +2102,11 @@ def choose_action(style: Style) -> str:
                     ("2", "Status line (this machine - shown in every project)"),
                     ("3", "Project preferences (docx, citations, review tools)"),
                     ("4", "Morgan's model (per project only)"),
-                    ("5", "Demo - watch the whole run, nothing executed or written"),
+                    # Parenthesised, not dashed: _rows splits label from explanation on
+                    # the first " (", so a dash kept all 55 characters in the label column
+                    # and pushed the row past the divider at phone width (independent TUI
+                    # review, 2026-08-31).
+                    ("5", "Demo (watch the whole run, nothing executed or written)"),
                     (
                         "6",
                         "This machine's defaults (view/edit - no project needed)",

@@ -31,10 +31,11 @@ from pathlib import Path
 try:
     # The sentinels are launcher_app's, imported rather than restated so the two can
     # never disagree about what "fall through" or "skipped" means.
-    from launcher_app import APP_FALLBACK, REQUEST_SKIPPED
+    from launcher_app import APP_FALLBACK, REQUEST_BACK, REQUEST_SKIPPED
 except Exception:  # pragma: no cover - bare clone
     APP_FALLBACK = "__app_fallback__"
     REQUEST_SKIPPED = "__request_skipped__"
+    REQUEST_BACK = "__request_back__"
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -174,7 +175,18 @@ def _actions(project_dir: Path, mod, shown: list, jira_on: bool) -> list:
     is worse than not offering it.
     """
     try:
-        g = mod.glyphs(mod)
+        # tui_chrome.glyphs, not mod.glyphs. `mod` is the HOST module
+        # (virt_team_launcher), which has no glyphs attribute - so this raised on every
+        # call, the except swallowed it, and g was permanently {}. Every label() below was
+        # a no-op: the prompt_toolkit menu showed icons and this one silently did not, for
+        # as long as the tier has existed (independent TUI review, 2026-08-31).
+        #
+        # The bare menu was arguably the nicer of the two, but it was an accident wearing
+        # the clothes of a decision, and the dead label() machinery would have misled the
+        # next person to edit this.
+        from tui_chrome import glyphs as _glyphs
+
+        g = _glyphs(mod)
     except Exception:  # noqa: BLE001
         g = {}
 
@@ -240,7 +252,11 @@ def request_screen(project_dir: Path, mod, output=None):
         return None
     if not getattr(app, "ran", False):
         return None
-    return getattr(app, "value", None) or REQUEST_SKIPPED
+    value = getattr(app, "value", None)
+    # REQUEST_BACK must survive this line. It used to read `or REQUEST_SKIPPED`, which
+    # turned every non-answer into the plain launch - including the one that means "I am
+    # leaving".
+    return value if value is not None else REQUEST_SKIPPED
 
 
 def settings_screen(project_dir: Path, mod, output=None):

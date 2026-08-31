@@ -1800,6 +1800,10 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
 
 
 REQUEST_SKIPPED = "__request_skipped__"
+# Deliberately NOT the same value. SKIPPED is "launch, and I will say what I want inside
+# the session" - an answer. BACK is "I did not mean to open this" - a decision to leave,
+# which must cost nothing. Folding the two together is what made Esc start a session.
+REQUEST_BACK = "__request_back__"
 
 
 def request_screen(project_dir: Path, mod, output=None):
@@ -1833,7 +1837,13 @@ def request_screen(project_dir: Path, mod, output=None):
 
     def _body():
         out = [("class:group", f"  {g['new']}What would you like the team to do?\n\n")]
-        out.append(("class:dim", "  Type it. Esc to decide in session instead.\n\n"))
+        out.append(
+            (
+                "class:dim",
+                "  Type it, then Ctrl-D. Ctrl-D with nothing typed launches and you "
+                "decide in session. Esc goes back.\n\n",
+            )
+        )
         cursor = "_" if mod._can_encode("_") else " "
         # Wrap for DISPLAY across the pane, and show the LAST few lines - a composer that
         # scrolls off the top is normal; one that hides what you are currently typing is
@@ -1953,7 +1963,7 @@ def request_screen(project_dir: Path, mod, output=None):
     @kb.add("escape", eager=True)
     @kb.add("c-c")
     def _esc(event):
-        result["v"] = REQUEST_SKIPPED
+        result["v"] = REQUEST_BACK
         event.app.exit()
 
     try:

@@ -77,13 +77,30 @@ Screen.-narrow #shell {
     padding: 0 1;
 }
 
-Screen.-narrow #side {
-    display: none;
+/* STACKED, NOT DROPPED. Hiding the pane made the richest tier the least informative one
+   at the width the product is most used at - and on the installer chooser the hidden text
+   is what each option touches outside the repo, which is that screen's stated reason to
+   exist. The original objection stands and is respected: two panes SIDE BY SIDE at this
+   width clipped every label. This is one column, which is what the prompt_toolkit tier
+   below has always done (tui_chrome._stacked_rows). */
+Screen.-narrow #panes {
+    layout: vertical;
 }
 
 Screen.-narrow #panes > #panel {
     width: 100%;
     padding: 0 1;
+    /* Share the column with the pane below rather than taking the whole height. */
+    height: 1fr;
+}
+
+Screen.-narrow #side {
+    width: 100%;
+    margin-left: 0;
+    margin-top: 1;
+    /* Enough to be worth reading, capped so the list it describes stays on screen. */
+    height: auto;
+    max-height: 40%;
 }
 
 Screen.-narrow #brand {

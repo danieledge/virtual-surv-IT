@@ -500,7 +500,11 @@ class RequestApp(TierApp):
         width = self.panel_width()
         t = Text()
         t.append("  What would you like the team to do?\n\n", style=f"bold {HINT}")
-        t.append("  Type it. Esc to decide in session instead.\n\n", style=DIM)
+        t.append(
+            "  Type it, then Ctrl-D. Ctrl-D with nothing typed launches and you decide\n"
+            "  in session. Esc goes back.\n\n",
+            style=DIM,
+        )
 
         lines = wrap_display(self.buf, max(10, width - 4))
         if len(lines) > self.LINES:
@@ -567,7 +571,8 @@ class RequestApp(TierApp):
         key = event.key
         if key in ("escape", "ctrl+c"):
             event.stop()
-            self.exit()  # value stays None: the plain launch
+            self.value = "__request_back__"  # back to the menu, NOT a launch
+            self.exit()
             return
         if key == "ctrl+d":
             event.stop()
@@ -736,10 +741,14 @@ class SettingsApp(TierApp):
             keys = (("↑↓", "move"), ("enter", "toggle"), ("esc/q", "back"))
             note = name
         else:
+            # "e" IS SHOWN ONLY WHERE IT WORKS. The handler is gated to the Jira row, so
+            # on fourteen of fifteen rows this advertised a key that silently did nothing -
+            # which this file's own RequestApp comment calls the worst answer a keypress
+            # can give (independent TUI review, 2026-08-31).
             keys = (
                 ("↑↓", "move"),
                 ("enter", "toggle"),
-                ("e", "edit key"),
+                *((("e", "edit key"),) if self._is_jira_row() else ()),
                 ("d", "defaults"),
                 ("esc", "back"),
             )
@@ -1337,6 +1346,9 @@ class BrowseApp(TierApp):
         self.here = start
         self._rows_for = rows_for  # (directory) -> [(label, kind, payload)]
         self.recents = list(recents)
+        # Probed, not assumed - the same question ChooserApp asks before its own markers,
+        # because a corporate console decoding cp1252 cannot render a tick.
+        self.mark_project = "✓" if ChooserApp._can_encode("✓") else "*"
         self.rows = self._rows_for(self.here)
         self.picked = None
         self.ran = False
@@ -1355,20 +1367,40 @@ class BrowseApp(TierApp):
     def paint(self) -> None:
         self.head(str(self.here) if self.narrow else f"{self.here}")
         t = Text()
-        for i, (label, kind, _payload) in enumerate(self.rows):
+        for i, (label, kind, payload) in enumerate(self.rows):
             sel = self.cursor == i
             t.append("  ▸ " if sel else "    ", style=ACCENT if sel else HINT)
             style = f"bold {TEXT}" if sel else (GOLD if kind in ("use", "recent") else TEXT)
-            t.append(f"{label}\n", style=style)
+            t.append(f"{label}", style=style)
+            # WHICH OF THESE IS A PROJECT is the question this screen exists to answer, and
+            # the flag was already in the payload. Said in words as well as colour: a mono
+            # terminal, or a colour-blind reader, gets nothing from GOLD alone.
+            if kind == "dir" and isinstance(payload, tuple) and len(payload) == 2 and payload[1]:
+                t.append(f"  {self.mark_project} team project", style=OK)
+            elif kind == "recent":
+                t.append("  recent", style=DIM)
+            t.append("\n")
         self.query_one("#rows", Static).update(t)
         self.scroll_row(self.cursor)
 
         width = 26 if not self.narrow else max(20, self.panel_width() - 4)
         side = Text("\n")
         side.append("  Where to work\n\n", style=f"bold {ACCENT}")
+        marked = sum(
+            1
+            for _label, kind, payload in self.rows
+            if kind == "dir" and isinstance(payload, tuple) and len(payload) == 2 and payload[1]
+        )
         for line in wrap(
             "Enter opens a folder. The first row uses the folder you are in. "
             "Recent projects jump straight there.",
+            width,
+        ):
+            side.append(f"  {line}\n", style=DIM)
+        side.append("\n")
+        for line in wrap(
+            f"{self.mark_project} marks a folder the team is already set up in"
+            + (f" - {marked} here." if marked else "; none here."),
             width,
         ):
             side.append(f"  {line}\n", style=DIM)
@@ -1814,7 +1846,11 @@ class ProgressApp(TierApp):
                 warn=not ok,
             )
         else:
-            self.foot((("^c", "stop"),), "working...")
+            # NOT "^c stop": on_key returns early until the work is done, so every
+            # key including Ctrl-C is swallowed. nothing leaves while the installer is mid-write - a half-written install is worse than a slow one,
+            # which is the right call; advertising a cancel that does not exist is
+            # not (independent TUI review, 2026-08-31).
+            self.foot((), "working... (this cannot be interrupted)")
 
     def on_key(self, event) -> None:
         if not self.state.done:

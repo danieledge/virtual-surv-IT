@@ -822,7 +822,7 @@ def test_escape_is_never_shadowed_by_a_second_send_key(ptk, tmp_path):
     can resolve. Pinned so nobody re-adds it and quietly turns Esc into a send."""
     app = _load("launcher_app")
     res, _ = _compose(ptk, "tune the thresholds\x1b\r", tmp_path)
-    assert res == app.REQUEST_SKIPPED
+    assert res == app.REQUEST_BACK
 
 
 def test_a_long_brief_survives_whole(ptk, tmp_path):
@@ -839,10 +839,19 @@ def test_a_long_brief_survives_whole(ptk, tmp_path):
     assert len(res[0]) > 150, "a multi-sentence brief must not be truncated"
 
 
-def test_escape_still_skips_to_a_plain_launch(ptk, tmp_path):
+def test_escape_goes_back_rather_than_launching(ptk, tmp_path):
+    """It used to be a plain launch, and that was the bug: Esc means back on every other
+    screen in the product, including the sibling Jira composer, so a reflexive Esc here
+    cost a whole Claude session plus a new engagement - and someone who opened [n] by
+    mistake, meaning to resume something, had no route back at all (independent TUI
+    review, 2026-08-31).
+
+    The plain launch did not disappear. Ctrl-D on an empty composer still means "I will
+    say what I want inside the session", which is an answer someone gives on purpose."""
     app = _load("launcher_app")
     res, _ = _compose(ptk, "half a thought\x1b", tmp_path)
-    assert res == app.REQUEST_SKIPPED
+    assert res == app.REQUEST_BACK
+    assert app.REQUEST_BACK != app.REQUEST_SKIPPED, "back and skip must stay distinct"
 
 
 def test_sending_an_empty_composer_is_a_skip(ptk, tmp_path):
