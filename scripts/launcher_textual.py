@@ -202,8 +202,8 @@ def _actions(project_dir: Path, mod, shown: list, jira_on: bool) -> list:
     out.append((("open",), label("open", "open a different project folder"), "o"))
     if shown:
         out.append((("artifacts",), label("archive", "view an engagement's artifacts"), "v"))
-        out.append((("archive",), label("archive", "archive engagement(s)"), "a"))
-    out.append((("finished",), label("browse", "browse done & archived"), "b"))
+        out.append((("archive",), label("archive", "archive finished engagements"), "a"))
+    out.append((("finished",), label("browse", "browse done and archived"), "b"))
     try:
         if mod._running_slug(project_dir):
             out.append((("watch",), label("launch", "watch the engagement running"), "t"))

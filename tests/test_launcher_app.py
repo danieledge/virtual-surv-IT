@@ -711,7 +711,7 @@ def _drive_finished(ptk, keys: str, rows):
 def test_menu_key_b_returns_the_finished_pick(ptk):
     pick, text = _drive(ptk, "b", [_row()])
     assert pick == ("finished",)
-    assert "browse done & archived" in text
+    assert "browse done and archived" in text  # "&" became "and" in the wording pass
 
 
 def test_finished_screen_lists_closed_and_archived_with_provenance(ptk):

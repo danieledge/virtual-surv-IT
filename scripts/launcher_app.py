@@ -93,8 +93,8 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
     if shown:
         actions.append((("artifacts",), f"{g['archive']}view an engagement's artifacts", "v"))
     if shown:
-        actions.append((("archive",), f"{g['archive']}archive engagement(s)", "a"))
-    actions.append((("finished",), f"{g['browse']}browse done & archived", "b"))
+        actions.append((("archive",), f"{g['archive']}archive finished engagements", "a"))
+    actions.append((("finished",), f"{g['browse']}browse done and archived", "b"))
     # Watching in-flight work and the workflow trace belong in THIS tier too. They were added
     # to the picker and plain tiers first and missed here (caught 2026-08-25 by rendering the
     # menu under a real pty, which is the only place the omission was visible) - the app tier
@@ -1394,7 +1394,7 @@ def _help_model(mod):
         ("c", "project settings"),
         ("o", "another project"),
         ("a", "archive"),
-        ("b", "browse done & archived"),
+        ("b", "browse done and archived"),
         ("v", "view artifacts"),
         ("m", "show all open"),
         ("?", "this legend"),

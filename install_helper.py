@@ -2012,11 +2012,11 @@ def choose_action(style: Style) -> str:
             # the quick update deliberately never asks. The word now appears once, on the
             # option that actually means it.
             ("1", "Install or reconfigure the team (full run - asks everything)"),
-            ("2", "Configure a project (per project - enable/permissions/preferences/model)"),
+            ("2", "Set up a project (turn the team on for one folder, and choose its settings)"),
             ("3", "Diagnostics..."),
-            ("4", "Advanced / one-off settings..."),
-            ("5", "Help: using the plugin (Morgan explains)"),
-            ("u", "Update only (quick - new code + plugin, keeps every setting)"),
+            ("4", "Advanced and one-off settings..."),
+            ("5", "How to use the team, day to day (Morgan explains)"),
+            ("u", "Update to the latest version (quick, and keeps every setting)"),
             ("q", "Quit"),
         )
         # THE TOP-LEVEL MENU GOES THROUGH THE PICKER TOO (2026-08-28). The submenus were
@@ -2075,19 +2075,19 @@ def choose_action(style: Style) -> str:
                 style,
                 "Diagnostics",
                 (
-                    ("1", "Check for updates (read-only)"),
-                    ("2", "Quick: analyser output cleanliness only"),
-                    ("3", "Comprehensive: the full environment + synthetic-engagement report"),
-                    ("4", "Self-test only: just the synthetic engagement"),
+                    ("1", "Check for a newer version (changes nothing)"),
+                    ("2", "Quick check (are the analysers behaving)"),
+                    ("3", "Full check (this machine, and a test engagement end to end)"),
+                    ("4", "Test engagement only (no environment checks)"),
                     ("", "-- internal / prototype diagnostics --"),
                     (
                         "5",
-                        "Hook latency: feeds the ADR-014 daemon decision (slower - repeated + concurrent)",
+                        "Hook timing (slow: runs each hook repeatedly and in parallel)",
                     ),
-                    ("6", "ADR-014 spike smoke test (PROTOTYPE - starts a real daemon process)"),
+                    ("6", "Guard daemon prototype test (starts a real background process)"),
                     (
                         "7",
-                        "Guard daemon start diagnostic (starts the REAL daemon - why isn't it starting)",
+                        "Why won't the guard daemon start (starts the real one)",
                     ),
                     ("b", "Back"),
                 ),
@@ -2098,49 +2098,49 @@ def choose_action(style: Style) -> str:
                 style,
                 "Advanced / one-off settings",
                 (
-                    ("1", "Environment setup only (this machine - no code pull)"),
-                    ("2", "Status line (this machine - shown in every project)"),
-                    ("3", "Project preferences (docx, citations, review tools)"),
-                    ("4", "Morgan's model (per project only)"),
+                    ("1", "Set up this machine only (does not download new code)"),
+                    ("2", "Status line (shows the team's state in every project)"),
+                    ("3", "Preferences for one project (documents, citations, analysers)"),
+                    ("4", "Which model Morgan runs on (one project at a time)"),
                     # Parenthesised, not dashed: _rows splits label from explanation on
                     # the first " (", so a dash kept all 55 characters in the label column
                     # and pushed the row past the divider at phone width (independent TUI
                     # review, 2026-08-31).
-                    ("5", "Demo (watch the whole run, nothing executed or written)"),
+                    ("5", "Demo (watch a full run without changing anything)"),
                     (
                         "6",
-                        "This machine's defaults (view/edit - no project needed)",
+                        "This machine's defaults (what a new project starts with)",
                     ),
-                    ("7", "Rebuild the local team dashboard"),
+                    ("7", "Rebuild the team dashboard"),
                     ("8", "Fix a slow ~/.bashrc (checks first, applies only if needed)"),
                     ("9", "Clean stale plugin cache (removes old installs, keeps the active one)"),
                     (
                         "10",
-                        "Manage the 'virt-surv' alias (register/update it, or change the 'go' launch command)",
+                        "The 'virt-surv' command (re-register it, or change what 'go' launches)",
                     ),
                     (
                         "11",
-                        "Git Bash performance fix (Claude Code shell-snapshot slowness on Windows)",
+                        "Git Bash speed fix (for slow Bash calls on Windows)",
                     ),
                     (
                         "12",
-                        "Code intelligence (install/refresh tree-sitter - sharper codebase "
-                        "orientation; optional, degrades to pattern matching without it)",
+                        "Code intelligence (exact symbols and line ranges when reading "
+                        "Java, Scala, SQL and more; optional)",
                     ),
                     (
                         "13",
-                        "Org extensions (review/edit the standard workflow this machine "
-                        "applies to every project - analysers, close actions, instructions)",
+                        "Standard workflow for this machine (the analysers, close actions "
+                        "and instructions every project inherits)",
                     ),
                     (
                         "14",
-                        "Re-probe installed tools (run after installing an analyser or "
-                        "tree-sitter, so the team stops reporting it missing)",
+                        "Look for installed tools again (run this after installing one, so "
+                        "the team stops calling it missing)",
                     ),
                     (
                         "15",
-                        "Move team files into VSIT/ (one folder instead of scattered across "
-                        "your docs/ and repo root - shows you the plan before moving anything)",
+                        "Tidy team files into one VSIT folder (shows you the plan before "
+                        "moving anything)",
                     ),
                     ("b", "Back"),
                 ),

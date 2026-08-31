@@ -2502,8 +2502,8 @@ def _menu_round(
     if shown:
         settings_opt += f"   {ink.bold('[v]')} view artifacts"
     if shown:
-        settings_opt += f"   {ink.bold('[a]')} archive engagement(s)"
-    settings_opt += f"   {ink.bold('[b]')} browse done & archived"
+        settings_opt += f"   {ink.bold('[a]')} archive finished engagements"
+    settings_opt += f"   {ink.bold('[b]')} browse done and archived"
     if _running_slug(project_dir):
         settings_opt += f"   {ink.bold('[t]')} watch the running engagement"
     print(settings_opt, file=err)
