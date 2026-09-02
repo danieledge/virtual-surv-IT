@@ -3234,6 +3234,21 @@ class Installer:
             if reason:
                 self.register_directly(reason)
                 return
+            # An OLD CLI is the likeliest cause of this one specific refusal, and the
+            # user cannot be expected to know that. Measured 2026-09-02: CLI 2.1.258
+            # accepts the absolute path this passes, so a parser that rejects it is one
+            # that current versions no longer have.
+            if "source format" in (err or "").lower():
+                self.say(
+                    self.style.yellow(
+                        "    This usually means an out-of-date Claude Code. Current "
+                        "versions accept the folder path this passes; older ones only "
+                        "took owner/repo, a URL, or ./path."
+                    )
+                )
+                self.say(
+                    self.style.dim("    Update Claude Code to the latest version and run me again.")
+                )
             self.step_fail("Add marketplace", err or "claude plugin marketplace add failed")
         self.step_ok(
             f"Marketplace {MARKETPLACE} " + self.did("->", "would point at") + f" {self.repo}"

@@ -9126,3 +9126,34 @@ def test_no_menu_option_asks_only_at_a_prompt():
         if r["asks"] == "typed"
     ]
     assert not typed_only, f"these ask only at a prompt: {typed_only}"
+
+
+def test_a_source_format_refusal_names_an_out_of_date_cli():
+    """Reported 2026-09-02: "Invalid marketplace source format. try: owner/repo,
+    https://..., or ./path" - and only for some users, which is the tell.
+
+    The installer passes the clone's ABSOLUTE path. Measured against CLI 2.1.258 in a
+    sandboxed HOME, that is accepted and the add succeeds, so a parser rejecting it is one
+    current versions no longer have. The user cannot be expected to know that, so the step
+    says it.
+
+    IT STILL FAILS, and this test pins that too. Adding the message to
+    _CLI_UNUSABLE_MARKERS would fall back to writing the registration JSON directly, which
+    would paper over a refusal the CLI was entitled to make - the fallback is for a CLI
+    that could not RUN, not for one that ran and told us we called it wrong."""
+    import inspect
+
+    import install_helper as ih
+
+    body = inspect.getsource(ih.Installer.marketplace)
+    assert '"source format" in (err or "").lower()' in body
+    assert "out-of-date Claude Code" in body
+    assert "Update Claude Code" in body
+    # The hint must come BEFORE the fail, because step_fail raises.
+    assert body.index("source format") < body.index('self.step_fail("Add marketplace"')
+
+    # And it must not have become a silent fallback.
+    assert "source format" not in " ".join(ih._CLI_UNUSABLE_MARKERS), (
+        "this refusal means the CLI ran and rejected our argument, which is not the same "
+        "as a CLI that could not run at all"
+    )
