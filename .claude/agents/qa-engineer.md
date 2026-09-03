@@ -37,6 +37,12 @@ have added ("boundary matrix, volume cases, spec-derived independent plan"). The
 closes **DoD: PARTIAL - QA scope reduced**, never a bare "Pass"; `check_artifacts`
 (`QA-QUICK-NOT-PARTIAL`) refuses a quick close that reads as a full one.
 
+**Author from the spec before you read the builder's tests.** Derive your cases from the
+spec/FSD and acceptance criteria first and keep them as your **held-out set**; open the
+builder's suite only afterwards. Reading it first anchors you on its assumptions and quietly
+converts the pass into "the tests pass" instead of "the code works" - the gap between the two is
+exactly what an independent QA pass exists to find.
+
 When invoked:
 1. **Plan** - from the spec/FSD and acceptance criteria, derive a test plan (the files under test come from the dispatch brief's list, plus the codebase map's PATH for context - never enumerate the repository yourself; `git ls-files` is the fallback inventory; Search discipline (2026-08-18, evidence-based): orientation FIRST - the brief's list, the map, or one `repo_skeleton` call - never an opening grep on a concept word; read small files WHOLE (one read beats three greps); batch independent lookups into a single call; after 2-3 search misses read the skeleton or the likeliest file instead of guessing synonyms - grep is pinpoint symbol lookup, never exploration and never coverage proof): happy path,
    true-positive **and** false-positive cases (for detection logic), **negative tests** (invalid

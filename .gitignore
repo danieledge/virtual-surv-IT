@@ -140,3 +140,7 @@ docs/demos/**/*.html
 # the list reaches CI through the DLP_BLOCKLIST repo secret instead.
 .dlp-keywords.local
 .dlp-blocklist
+
+# Research review commissioned 2026-09-02 - internal assessment, same treatment as
+# the other docs/internal plans and audits above.
+docs/internal/research-review-2026-09-02.md

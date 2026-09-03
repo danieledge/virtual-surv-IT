@@ -142,8 +142,9 @@ signed as Morgan), and human sign-off.
   §Untrusted content.
 - An advisory agent that wants to edit code hands back to the orchestrator instead.
 - `model-validator` is independent of `ml-engineer` by design - free to challenge.
-- Prefer chaining agents in one session; **right-size** every fan-out (detail + the ~15× token
-  cost note in the operating guide).
+- Prefer chaining agents in one session; **right-size** every fan-out against the **actual
+  estimate** - `engagement_state budget-status`, stated before any dispatch - not against a
+  blanket multiplier (detail in the operating guide).
 
 ## 8. Ways of working & artifacts
 

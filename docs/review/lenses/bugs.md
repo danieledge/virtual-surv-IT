@@ -17,6 +17,10 @@ Avoid nitpicks (those are 🔵 style/form or filtered).
 - **Error handling gaps** - swallowed exceptions, bare `except`, unhandled rejections.
 - **Infinite loops / non-termination** - missing base case or break.
 - **State mutation** - unexpected side effects, mutating shared/aliased state.
+- **Test gaming (tests that pass without proving anything)** - cases that special-case known
+  inputs, hardcode or memorise expected outputs, assert on implementation detail rather than
+  behaviour, or were weakened/skipped until they passed. A green suite over logic that only
+  recognises its own fixtures is a **missed-alert bug wearing a passing test**.
 - **Detection-logic correctness (this domain)** - would the change cause a **missed alert**
   (false negative) or a **false alert** (false positive)? Wrong threshold comparison
   (`>` vs `>=`), boundary handling, timezone/epoch mistakes, dropped records in a filter. These

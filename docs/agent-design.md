@@ -55,7 +55,10 @@
    own findings-pack JSONL.
 3. **Match the model to the work (see §2).** Cheap tier for mechanical, top tier only where it
    changes outcomes.
-4. **Right-size every engagement.** Multi-agent costs ~15× the tokens; the PM uses the *leanest*
+4. **Right-size every engagement.** Fan-out is priced per spawn from `engagement_state
+   budget-status`, not from a blanket multiplier (the old "~15×" is a multi-agent-vs-chat
+   figure; 3-10x is the current vs-single-agent number, and neither prices a small
+   cold-context spawn correctly). The PM uses the *leanest*
    set that fits (a narrow change → one builder + one reviewer, not the whole team) and states the
    intended agent count out loud at the gate (CLAUDE.md §6).
 5. **Coordinate through artifacts, not chatter (the "blackboard").** Subagents can't talk to each
@@ -182,7 +185,7 @@ and this matrix are the guard against drift.*
 | Subagents **inherit no parent history** - put every input in the brief | ✅ | Stated in CLAUDE.md §6 delegation. |
 | Never vague briefs (they cause duplicated work / gaps) | ✅ | "the #1 failure is weak delegation" (CLAUDE.md §6). |
 | **Scale effort to complexity**; state the number of agents | ✅ | PM states intended agent count + why at the gate (`engage` §5). |
-| Budget **~15× tokens**; reserve multi-agent for high value | ✅ | "~15× the tokens" cited verbatim (CLAUDE.md §6). |
+| Budget fan-out cost; reserve multi-agent for high value | ✅ | Priced **per spawn** from `engagement_state budget-status` before any dispatch (CLAUDE.md §8), rather than by a blanket multiplier - the source guidance's "~15×" is a multi-agent-vs-chat figure and misprices a small cold-context spawn. |
 | **Tier models per role** (cheap routine, strong high-stakes) | ✅ | §2 - 4 opus / 8 sonnet / 1 haiku. |
 | Return **condensed results**; persist big outputs as **artifacts**, not via the orchestrator's context | 🟡 | Blackboard (Delivery Report / RTM) + a **hard ≤~1,500-token / ~30-line return budget** stated in the delegation brief and each agent's return instruction (operating guide §Orchestration; an over-budget return is a stated defect to trim, aligned to Anthropic's 1-2k-token sub-agent return), **backstopped by a hook**: `scripts/subagent_return_budget.py` is a PostToolUse hook on the `Task` matcher (wired in `.claude/settings.json` + `hooks/hooks.json`) that measures the actual return and gives Morgan one nudge when it is clearly over budget (trigger: 2× the stated ceiling, so a borderline return is never flagged). Still 🟡, for two reasons stated plainly: the hook fires **after** the return has landed, so it prompts a trim rather than preventing the context cost; and the token count is a `chars / 4` estimate (a hook has no access to the model's tokenizer). It is advisory by design - fails open, silent outside a live engagement. |
 | **Restrict tools per subagent** (limit blast radius) | ✅ | Least privilege; advisors hold no general Edit (Bash, where granted, is execution-gated §7; Write/Edit, where granted, are scoped to one findings-pack path and mechanically enforced). |
