@@ -2513,8 +2513,12 @@ def _menu_round(
                 return _decision_from_pick(
                     pick, project_dir, engagement_state, menu, shown, rich=True
                 )
-        except Exception as exc:
-            # degrade, never break the launch - but say so (2026-09-09)
+        except (Exception, SystemExit) as exc:
+            # degrade, never break the launch - but say so (2026-09-09). SystemExit is in
+            # here because it is NOT an Exception: a helper that prints and calls
+            # sys.exit() (engagement_state does, on an invalid write) would otherwise
+            # unwind straight past every handler and out through main. KeyboardInterrupt
+            # stays uncaught on purpose - Ctrl-C means leave.
             _report_crash("the engagement menu (textual tier)", exc)
         try:
             from launcher_app import APP_FALLBACK, run_app
@@ -2526,7 +2530,7 @@ def _menu_round(
                 return _decision_from_pick(
                     pick, project_dir, engagement_state, menu, shown, rich=True
                 )
-        except Exception as exc:
+        except (Exception, SystemExit) as exc:
             # degrades to the tiers below, never breaks the launch - but say so
             _report_crash("the engagement menu (app tier)", exc)
     # 2026-08-20 UX pass: Morgan ASKS, and the answers are grouped. Previously one
@@ -4488,7 +4492,22 @@ def _watch_after_launch(project_dir: Path, slug: str) -> None:
     print(ink.dim(f"    the session is running - see {where}"), file=sys.stderr)
 
 
+def _consume_debug_flag(argv: list) -> list:
+    """`--debug` out of argv and into the environment, returning what is left.
+
+    Detailed errors were reachable only by setting VIRT_SURV_DEBUG, which nobody
+    discovers. `virt-surv --debug go` is the same switch typed where a person looks for
+    it. Its own function so it is testable without running main(), which reconfigures
+    stdout and cannot be called from a test without breaking output capture for
+    everything after it."""
+    if "--debug" not in argv[1:]:
+        return argv
+    os.environ["VIRT_SURV_DEBUG"] = "1"
+    return [a for a in argv if a != "--debug"]
+
+
 def main() -> int:
+    sys.argv = _consume_debug_flag(sys.argv)
     # stdout is a PIPE under the shell wrapper, so on Windows it takes the ANSI code page
     # (cp1252 on the corporate box). A typed request carrying one character outside it -
     # a pasted arrow, an emoji, a Jira glyph - raised UnicodeEncodeError on the decision

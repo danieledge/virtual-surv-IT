@@ -1,6 +1,10 @@
 # Plan: turn `virt-surv go` into a real TUI app
 
-**Date:** 2026-08-20 · **Status:** plan, not started · Supersedes the TUI item in
+**Date:** 2026-08-20 · **Status:** BUILT - `scripts/launcher_app.py` shipped from this
+plan, and the "Textual: rejected for now" call below was reversed on 2026-08-30:
+`scripts/launcher_tiers.py` / `launcher_textual.py` are a Textual tier on top of it, with
+`vendor/textual` vendored. Read the rejection as history, not as the current position.
+· Supersedes the TUI item in
 `docs/internal/backlog-2026-08-20.md`, which assumed a new dependency was required.
 
 ## The finding that changes the recommendation

@@ -1,6 +1,8 @@
 # Plan: a clean container to test the plugin properly
 
-**Status:** proposal, 2026-08-25. Nothing built.
+**Status:** written 2026-08-25 as a proposal. **BUILT**: `docker/` holds the Dockerfiles
+and its own README. The directory is git-ignored by design, so a fresh clone will not show
+it - which is also why this line said "nothing built" long after it was.
 **Ask (owner):** "set up a clean container on this host eg a docker where i can fully test the
 plugin - i don't want it to just run here, i want to be able to test it cleanly."
 **Host survey:** run first, read-only. Findings inline below.

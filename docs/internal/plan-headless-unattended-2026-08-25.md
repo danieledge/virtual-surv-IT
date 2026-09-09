@@ -1,6 +1,11 @@
 # Plan: unattended runs move to `-p`, gated
 
-**Status:** proposal, 2026-08-25. Nothing built.
+**Status:** written 2026-08-25 as a proposal. **BUILT the same day**:
+`scripts/headless_run.py` implements the argv construction and stream decoding (its
+docstring records the real `claude -p` output it was built against), and
+`virt_team_launcher` / `launcher_app` drive it. The supervisor the module says belongs "on
+top" is still the launchers rather than a daemon, so unattended runs are started by a human
+and read back when someone opens the UI: nothing watches, retries or sweeps.
 **Ask (owner):** "lets move unattended to -p but gated ie can be unattended headless or
 unattended normal" + "plan it out and research existing solutions we can leverage".
 

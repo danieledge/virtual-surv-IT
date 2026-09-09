@@ -1,6 +1,8 @@
 # Plan: bring `virt-surv` (no arguments) up to the standard of `virt-surv go`
 
-**Status:** proposal, 2026-08-25. Nothing built.
+**Status:** written 2026-08-25 as a proposal. **BUILT**: `scripts/installer_app.py`
+(2026-08-28), the second consumer of `tui_chrome`, and the configure flow has been moving
+onto screens since ("Configure's first question is a screen").
 **Ask (owner):** "explore elegant TUI interfaces to replace the `virt-surv` (no parameters)
 path - diagnostics, installing the plugin, updating, setting machine defaults. The current
 solution feels behind the `virt-surv go` route."

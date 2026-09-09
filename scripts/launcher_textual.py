@@ -780,8 +780,16 @@ def progress_screen(titles, run_fn, ih, *, title, repo=None, output=None):
     def work():
         try:
             state.code = run_fn(state)
-        except BaseException:  # noqa: BLE001 - the screen must close whatever happens
+        except BaseException as exc:  # noqa: BLE001 - the screen must close whatever happens
+            # Closing the screen is right; throwing the reason away is not. This showed
+            # "finished with errors (exit 1)" and nothing else, on the one screen where
+            # the user has no other way to find out what went wrong.
             state.code = 1
+            import traceback as _tb
+
+            for line in _tb.format_exc().rstrip().splitlines():
+                state.lines = state.lines + [line]
+            _report_outside_loop("an install/update step", exc)
         finally:
             state.done = True
 
@@ -793,7 +801,11 @@ def progress_screen(titles, run_fn, ih, *, title, repo=None, output=None):
             app.run()
     except Exception:  # noqa: BLE001
         return None
-    worker.join(timeout=1)
+    # NOT a bare timeout. `state.done` is set in the worker's own finally, so once it is
+    # observed the thread is on its way out and joining is bounded; before that, a 1-second
+    # timeout could return while an install was still writing files, and the caller would
+    # carry on around it.
+    worker.join(timeout=1 if state.done else 30)
     if not getattr(app, "ran", False):
         return None
     return state.code
