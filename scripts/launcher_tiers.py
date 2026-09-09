@@ -21,6 +21,22 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Static
 
 
+def shared_monitor_rows(snap: dict, slug: str) -> list:
+    """The monitor's rows, from the ONE model both tiers use.
+
+    Module-level and callable, deliberately: the previous version of this lived inline in
+    the paint loop, and the only way to test its fallback was to grep the source - which
+    is the same practice that let this screen ship reading `snap["status"]` off a
+    dictionary that never had it, with two tests passing throughout because they inspected
+    text rather than behaviour."""
+    try:
+        import launcher_app as _la
+
+        return _la.monitor_rows(snap, slug)
+    except Exception:  # noqa: BLE001 - a model we cannot load is a degraded row, not a crash
+        return [("status", "unknown")]
+
+
 def _ensure_plain_traceback() -> None:
     """Make `import rich.traceback` succeed without pygments.
 
@@ -93,7 +109,12 @@ EIGHTHS = " ▏▎▍▌▋▊▉█"
 # its text moves to the footer. Phones and split panes land here - launcher_app already
 # learned this ("overflows the frame on a phone, where the same text is the only
 # column and the borders come out of it too").
-NARROW = 76
+# Was 76 here and 80 in tui_chrome, so a terminal 76-79 columns wide was narrow to one
+# renderer and not the other. One number, taken from the shared chrome.
+try:
+    from tui_chrome import NARROW_COLUMNS as NARROW
+except Exception:  # noqa: BLE001 - standalone import from a bare clone
+    NARROW = 80
 
 
 def wrap(text: str, width: int) -> list[str]:
@@ -1871,6 +1892,12 @@ class JiraApp(TierApp):
         if key == "enter":
             event.stop()
             text = self.buf.strip()
+            # Same acceptance rule as the prompt_toolkit screen, which refuses until a
+            # ticket key is detected. This tier submitted ANY non-empty buffer, so the
+            # "no ticket key found yet" line above was decoration and a typo went through
+            # as `--jira hlelo` in the session prompt (2026-09-10 walkthrough).
+            if text and not self._key_of(text):
+                return  # stay on the screen rather than bouncing out with a typo
             self.value = ((text, True) if self.auto else text) if text else None
             self.exit()
             return
@@ -1924,19 +1951,40 @@ class MonitorApp(TierApp):
         self.head(self.slug if self.narrow else f"{self.folder()}  ·  watching {self.slug}")
 
         t = Text()
-        status = str(snap.get("status") or "unknown")
-        t.append("  status  ", style=DIM)
-        t.append(f"{status}\n\n", style=OK if status in ("closed", "done") else GOLD)
-        for label in ("phase", "elapsed", "spend", "artifacts", "outstanding"):
-            value = snap.get(label)
-            if value not in (None, "", []):
-                t.append(f"  {label:<12}", style=DIM)
-                t.append(f"{value}\n", style=TEXT)
-        note = snap.get("note") or snap.get("last_note")
-        if note:
-            t.append("\n")
-            for line in wrap(str(note), max(20, self.panel_width() - 4)):
-                t.append(f"  {line}\n", style=DIM)
+        # ONE model, shared with the prompt_toolkit tier (2026-09-10). This used to read
+        # snap["status"], "phase", "elapsed" and "spend" off the top level; _monitor_read
+        # nests all of that under snap["state"], so every value was missing and the default
+        # monitor - the tier every configured terminal gets - showed "status unknown" and an
+        # artifact count forever, while a user watched an unattended run and concluded it
+        # was broken. Reimplementing the model per tier is what allowed that; importing it
+        # is what stops it happening again.
+        rows = shared_monitor_rows(snap, self.slug)
+        if snap.get("error"):
+            for line in wrap(str(snap["error"]), max(20, self.panel_width() - 4)):
+                t.append(f"  {line}\n", style=GOLD)
+            t.append(
+                "  A cold start can take a few minutes on a locked-down machine.\n\n",
+                style=DIM,
+            )
+        for label, value in rows:
+            style = TEXT
+            if label == "status":
+                style = OK if value in ("closed", "done") else GOLD
+            if label == "run":
+                style = OK if value == "finished" else (GOLD if value != "FAILED" else "bold red")
+            t.append(f"  {label:<12}", style=DIM)
+            t.append(f"{value}\n", style=style)
+        head = snap.get("headless") or {}
+        if head.get("denials"):
+            # A run refused its tools reports "completed" and produces nothing. Silence
+            # here is the difference between "it finished" and "it was stopped".
+            t.append(
+                f"\n  {len(head['denials'])} tool call(s) REFUSED - this run was blocked, "
+                "not merely finished\n",
+                style="bold red",
+            )
+        if head.get("finished"):
+            t.append("\n  run finished - nothing more will change\n", style=DIM)
         self.query_one("#rows", Static).update(t)
 
         width = 26 if not self.narrow else max(20, self.panel_width() - 4)

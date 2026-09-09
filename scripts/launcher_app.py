@@ -2029,6 +2029,67 @@ def _elapsed(since: float) -> str:
     return f"{hours}h {minutes:02d}m"
 
 
+def monitor_rows(snap: dict, slug: str) -> list:
+    # Every one of these is coerced by TYPE, not merely defaulted. The state file is
+    # parsed with json.loads, and a file holding `"text"`, `123` or `[]` parses perfectly
+    # into something with no .get - which reached here as AttributeError and killed the
+    # monitor's repaint loop. A half-written or hand-edited pack is a displayable state,
+    # the same contract _monitor_read already keeps for a missing or unreadable file.
+    state = snap.get("state")
+    state = state if isinstance(state, dict) else {}
+    eng = state.get("engagement")
+    eng = eng if isinstance(eng, dict) else {}
+    outstanding = state.get("outstanding")
+    outstanding = outstanding if isinstance(outstanding, list) else []
+    budget = state.get("budget")
+    budget = budget if isinstance(budget, dict) else {}
+    rows = [
+        ("engagement", eng.get("title") or slug),
+        ("slug", slug),
+        ("status", state.get("status") or "-"),
+        ("phase", state.get("phase") or "-"),
+        ("outstanding", str(len(outstanding)) if isinstance(outstanding, list) else "-"),
+        ("artifacts", str(snap.get("artifacts", 0))),
+    ]
+    if state.get("auto"):
+        # Two short rows, not one long one: the left pane is ~47 columns and a value
+        # that runs past it is clipped mid-word at the border - caught under a pty
+        # twice now (2026-08-25), because a headless harness cannot see it.
+        rows.append(("unattended", state.get("run_mode") or "yes"))
+        rung = state.get("auto_on_budget") or "-"
+        cap = budget.get("engagement_usd") or state.get("engagement_usd")
+        hard = budget.get("hard_cap_usd")
+        if hard:
+            # An enforced cap is a different promise from an advisory one and must read
+            # that way at a glance, not on inspection.
+            rows.append(("ceiling", f"${hard} HARD"))
+        elif cap:
+            rows.append(("ceiling", f"${cap}, then {rung}"))
+    head = snap.get("headless")
+    head = head if isinstance(head, dict) else {}
+    if head:
+        if head.get("finished"):
+            run = "finished" if head.get("ok") else "FAILED"
+        elif head.get("live"):
+            run = "live" if head.get("started") else "starting"
+        else:
+            run = "gone"
+        rows.append(("run", run))
+        # Proof of life, from the first tick. Before a workspace exists these are the
+        # ONLY evidence the run is doing anything, which is precisely when it matters.
+        if head.get("events"):
+            rows.append(
+                ("activity", f"{head['events']} events, {head.get('tool_calls', 0)} tool calls")
+            )
+        if head.get("stages"):
+            rows.append(("stages", str(len(head["stages"]))))
+        if head.get("cost_usd"):
+            rows.append(("spent", f"${head['cost_usd']:.2f}"))
+        if head.get("retries"):
+            rows.append(("retries", str(len(head["retries"]))))
+    return rows
+
+
 def _monitor_read(project_dir: Path, slug: str) -> dict:
     """One snapshot of an engagement, read fresh from disk every tick.
 
@@ -2120,54 +2181,7 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
     _PATIENCE = 300.0
 
     def _rows(snap: dict) -> list:
-        state = snap.get("state") or {}
-        eng = state.get("engagement") or {}
-        outstanding = state.get("outstanding") or []
-        budget = state.get("budget") or {}
-        rows = [
-            ("engagement", eng.get("title") or slug),
-            ("slug", slug),
-            ("status", state.get("status") or "-"),
-            ("phase", state.get("phase") or "-"),
-            ("outstanding", str(len(outstanding)) if isinstance(outstanding, list) else "-"),
-            ("artifacts", str(snap.get("artifacts", 0))),
-        ]
-        if state.get("auto"):
-            # Two short rows, not one long one: the left pane is ~47 columns and a value
-            # that runs past it is clipped mid-word at the border - caught under a pty
-            # twice now (2026-08-25), because a headless harness cannot see it.
-            rows.append(("unattended", state.get("run_mode") or "yes"))
-            rung = state.get("auto_on_budget") or "-"
-            cap = budget.get("engagement_usd") or state.get("engagement_usd")
-            hard = budget.get("hard_cap_usd")
-            if hard:
-                # An enforced cap is a different promise from an advisory one and must read
-                # that way at a glance, not on inspection.
-                rows.append(("ceiling", f"${hard} HARD"))
-            elif cap:
-                rows.append(("ceiling", f"${cap}, then {rung}"))
-        head = snap.get("headless") or {}
-        if head:
-            if head.get("finished"):
-                run = "finished" if head.get("ok") else "FAILED"
-            elif head.get("live"):
-                run = "live" if head.get("started") else "starting"
-            else:
-                run = "gone"
-            rows.append(("run", run))
-            # Proof of life, from the first tick. Before a workspace exists these are the
-            # ONLY evidence the run is doing anything, which is precisely when it matters.
-            if head.get("events"):
-                rows.append(
-                    ("activity", f"{head['events']} events, {head.get('tool_calls', 0)} tool calls")
-                )
-            if head.get("stages"):
-                rows.append(("stages", str(len(head["stages"]))))
-            if head.get("cost_usd"):
-                rows.append(("spent", f"${head['cost_usd']:.2f}"))
-            if head.get("retries"):
-                rows.append(("retries", str(len(head["retries"]))))
-        return rows
+        return monitor_rows(snap, slug)
 
     def _body():
         snap = _monitor_read(project_dir, slug)

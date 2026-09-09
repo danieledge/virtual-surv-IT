@@ -137,7 +137,15 @@ def _report_crash(where: str, exc: BaseException | None = None) -> None:
         detail = _tb.format_exc()
     except Exception:  # noqa: BLE001 - reporting must never re-raise
         pass
-    label = f"{exc.__class__.__name__}: {exc}" if exc is not None else "unknown error"
+    # str(exc) is NOT safe: an exception can carry a __str__ that raises, and reporting
+    # that becomes the crash is the one failure this whole function exists to prevent.
+    label = "unknown error"
+    if exc is not None:
+        label = exc.__class__.__name__
+        try:
+            label = f"{label}: {exc}"
+        except Exception:  # noqa: BLE001
+            label = f"{label} (its message could not be rendered)"
     path = None
     try:
         path = _crash_log_path()
@@ -279,6 +287,29 @@ def _alias_installed_anywhere() -> bool:
         except OSError:
             continue
     return False
+
+
+def _print_plain_help() -> None:
+    """The key legend, for a console that cannot host a help SCREEN.
+
+    Every hotkey the menu accepts, including the ones the rendered legend omits (`t`,
+    `m`, and the digits). A tier that cannot draw a screen can still print a list, and a
+    silent [?] reads as a broken tool."""
+    ink = _Ink()
+    print(ink.dim("\n    Keys"), file=sys.stderr)
+    for key, what in (
+        ("1-9", "resume that engagement"),
+        ("n", "start a new engagement (type your request)"),
+        ("j", "start from a Jira ticket"),
+        ("t", "watch the engagement that is running"),
+        ("m", "show every open engagement, not just the first few"),
+        ("a", "archive finished engagements"),
+        ("c", "settings"),
+        ("?", "this list"),
+        ("q / Esc", "leave without launching anything"),
+    ):
+        print(f"      {key:<9} {what}", file=sys.stderr)
+    print(ink.dim("    Not every key applies on every screen.\n"), file=sys.stderr)
 
 
 def _warn_if_abort_will_be_ignored() -> None:
@@ -965,7 +996,7 @@ def _editor_apply(project_dir: Path, action) -> str:
         if now_on and not str(jira.get("project_key") or ""):
             note = (
                 "enabled with no project key - set integrations.jira.project_key in "
-                ".claude/team-preferences.json (docs/INTEGRATIONS.md)"
+                f"{_team_prefs_path(project_dir)} (docs/INTEGRATIONS.md)"
             )
         try:
             prefs_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2354,12 +2385,21 @@ def _decision_from_pick(
     if pick[0] == _SHOW_ALL:
         return _SHOW_ALL
     if pick[0] == "help":
+        # help_screen needs prompt_toolkit, and the numbered tier is shown PRECISELY when
+        # that cannot draw - so [?] silently redrew the menu and looked broken. Fall back
+        # to the plain legend rather than to nothing.
+        drew = False
         try:
             from launcher_app import help_screen
 
-            help_screen(project_dir, _this_module())
-        except Exception:
-            pass  # cosmetic tier
+            # `is True`, not truthiness: help_screen documents "returns True when it
+            # ran" and returns None when it cannot draw, which is the case this fallback
+            # exists for. `is not False` would have treated that None as success.
+            drew = help_screen(project_dir, _this_module()) is True
+        except Exception:  # noqa: BLE001
+            drew = False
+        if not drew:
+            _print_plain_help()
         return "__again__"
     if pick[0] == "watch":
         # Watching starts NOTHING. Returning "__again__" puts the human back on the menu
@@ -2372,7 +2412,13 @@ def _decision_from_pick(
     if pick[0] == "artifacts":
         slug = _row_resume_token(shown[0]) if shown else ""
         if len(shown) > 1:
-            slug = _pick_engagement_slug(project_dir, shown) or slug
+            # NOT `or slug`: the picker returns "" for cancel, and falling back to the
+            # first row meant Esc on "Which engagement?" opened the most recent
+            # engagement's artifacts instead of going back (2026-09-10 walkthrough).
+            picked = _pick_engagement_slug(project_dir, shown)
+            if not picked:
+                return ""
+            slug = picked
         if slug:
             try:
                 if _tiered_screen("artifacts_screen", project_dir, _this_module(), slug) is None:
@@ -4488,7 +4534,16 @@ def _watch_after_launch(project_dir: Path, slug: str) -> None:
             return
     except Exception:
         pass
-    where = f"artifacts/{slug}/" if slug else "the new window"
+    if slug:
+        # Resolved, not assumed: `artifacts/<slug>/` is the LEGACY location, so on a
+        # migrated project this line named a directory that does not exist, in the one
+        # message whose whole job is telling the user where to look.
+        try:
+            where = f"{_vsit_paths().engagement_dir(slug, project_dir)}/"
+        except Exception:  # noqa: BLE001
+            where = f"{slug}/"
+    else:
+        where = "the new window"
     print(ink.dim(f"    the session is running - see {where}"), file=sys.stderr)
 
 
