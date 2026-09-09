@@ -21,7 +21,9 @@ machine, so there is no machine-default tier):
       "enabled": true,
       "tool_prefix": "mcp__atlassian",
       "project_key": "SURV",
-      "mirror": "close-only"
+      "mirror": "close-only",
+      "done_transition": "",
+      "dry_run": false
     },
     "pr_comments": {
       "enabled": false,
@@ -36,7 +38,9 @@ machine, so there is no machine-default tier):
 | `jira.enabled` | Master switch for the Jira flow. | `false` |
 | `jira.tool_prefix` | The MCP tool-name prefix of **your** Jira server as it appears in this Claude Code environment (check `/mcp`). The team calls whatever issue-create/comment/transition tools it finds under that prefix and degrades gracefully when none are available. | `"mcp__atlassian"` |
 | `jira.project_key` | The Jira project new engagement issues are raised in. | unset (surfaced as `UNSET` so it is never silently missing) |
-| `jira.mirror` | `"close-only"`: outward actions happen only at engagement close. `"live"`: phase transitions are mirrored as they happen, **only after the human approves that explicitly at the go-ahead gate** (see the approval model below). | `"close-only"` |
+| `jira.mirror` | `"close-only"`: outward actions happen only at engagement close. `"live"`: phase transitions are mirrored as they happen, **only after the human approves that explicitly at the go-ahead gate** (see the approval model below). Note this is *when* to post, never *whether* - for that, see `dry_run`. | `"close-only"` |
+| `jira.done_transition` | The **exact** workflow state the close transition targets, e.g. `"Done"`. Unset means the team never transitions a ticket: it comments and attaches, and workflow state stays the human's. Set it and the close transitions to that state and no other. Before 2026-09-09 this doc promised a done-transition, the engage reference said transitions were human-only, nothing enforced either, and the target was guessed from whatever the board offered - a coin toss on any board with several done-ish states. | unset (no transition) |
+| `jira.dry_run` | `true` prints every outward call the team would make, in full, and makes none of them. For a first run against a real ticket, and for checking what a configuration will actually do. | `false` |
 | `pr_comments.enabled` | Experimental (see below). | `false` |
 | `pr_comments.tool_prefix` | MCP prefix of your GitHub/GitLab server. | `"mcp__github"` |
 
@@ -61,9 +65,11 @@ that line is present, so a project without integrations pays zero context for th
   opening banner, and overridable by setting `"mirror": "close-only"` explicitly. Each
   comment is one line and carries no artifact bodies, findings detail or data.
 - **At close:** the issue gets the closing summary (the engagement-summary email text) as
-  a comment, **plus the delivery report and key artifacts attached**, and a transition to
-  your done-state - offered in the same preview-then-approve step as every other close
-  action. Until 2026-08-21 a team-raised issue closed with the summary alone, so the same
+  a comment, **plus the delivery report and key artifacts attached**, and, **only when
+  `done_transition` names a state**, a transition to exactly that state - offered in the
+  same preview-then-approve step as every other close action. With `done_transition` unset,
+  which is the default, nothing is transitioned and the ticket's workflow state is left to
+  you. Until 2026-08-21 a team-raised issue closed with the summary alone, so the same
   work reached a ticket in full or in outline depending only on how the engagement started.
 
 **Every comment opens with a summary from Morgan** (2026-08-21): the people reading a

@@ -405,7 +405,15 @@ def test_the_settings_screen_matches_launcher_app():
             for k in keys:
                 await p_.press(k)
             await p_.pause()
-        f = d / ".claude" / "team-preferences.json"
+        # Read it back from wherever THIS project's layout keeps it, resolved by
+        # vsit_paths rather than assumed here. The editor used to hardcode
+        # .claude/team-preferences.json while the probe resolved the same file through
+        # vsit_paths, so on a new-layout project every toggle was written where nothing
+        # would read it. Pinning the path here would pin that bug back in; what this
+        # test cares about is that the toggle PERSISTS where it will be read.
+        import vsit_paths
+
+        f = vsit_paths.preferences_file(d)
         wrote = json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
         note = app.notes[-1] if app.notes else ""
         shutil.rmtree(d, ignore_errors=True)

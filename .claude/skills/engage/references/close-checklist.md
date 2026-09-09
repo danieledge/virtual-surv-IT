@@ -162,7 +162,8 @@ never replace a close step - these are additions after the standard close comple
 
 **First-class Jira integration (`INTEGRATIONS=jira:on(...)` in the open banner):** the same
 offer-after-summary-email step also carries the built-in Jira close actions - post the
-summary-email text as a comment on the recorded `jira-issue` decision's key, and transition
-it to the done-state (`.claude/skills/engage/references/integrations.md` has the rules; a
-PARTIAL or parked close posts the honest status and never transitions to done). Same
+summary-email text as a comment on the recorded `jira-issue` decision's key, and - **only
+when `done_transition` names a state** (default unset: never transition) - move it to
+exactly that state (`.claude/skills/engage/references/integrations.md` has the rules; a
+PARTIAL or parked close posts the plain status and never transitions). Same
 approval, logging and closed-pack-only discipline as the extension actions above.

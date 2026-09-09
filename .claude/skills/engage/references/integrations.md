@@ -25,12 +25,24 @@
   (other issues, transitions, other projects) stays gated as normal.
 - **The harness prompts on every MCP call on top of that.** Expect it; never work
   around it.
+- **Never transition a ticket unless `done_transition` names the target state** (default
+  unset: comment and attach, leave workflow state to the human). When set, use exactly that
+  state at close, never one guessed from what the board offers. `INTEGRATIONS=` carries
+  `transition=NONE` or the name.
+- **`dry_run` means show, never send:** print each call you would make, make none. `mirror`
+  is the other axis - close-only vs live is *when*, never *whether*.
 - **Degrade gracefully, out loud.** Configured tools missing from `/mcp`, or a call
   failing, never blocks the engagement: note it in one line, record it as an
   outstanding item, and carry on. Tracker availability is never load-bearing.
+- **A failed write is NOT a write.** Carrying on is right, recording it as delivered is
+  not: no artifact may say or imply something reached the ticket unless the call succeeded.
+  It becomes an outstanding item naming what did not arrive and where it is instead.
 - **Record what you created.** The moment an issue exists:
   `engagement_state set-decision jira-issue "<KEY>"` - a resumed or compacted session
   re-reads the key from state and never raises a duplicate.
+- **Check the ticket before posting.** State can be lost between the write and the record
+  (crash, compaction, resume), so memory alone duplicates. Every comment carries a marker
+  `vsit:<slug>:<phase>`: read the comments first, skip any phase already marked.
 - **Every comment opens with a summary from Morgan** (2026-08-21). Ticket readers were
   never in the session; a bare status token tells them nothing. One or two sentences on
   where the work is and what it means for them, then the detail. Signed as Morgan, 🤖 AI

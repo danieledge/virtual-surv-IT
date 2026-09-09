@@ -889,6 +889,17 @@ def resolve_integrations(project_dir: Path) -> dict:
             "tool_prefix": str(jira.get("tool_prefix") or "mcp__atlassian"),
             "project_key": str(jira.get("project_key") or ""),
             "mirror": "live" if jira.get("mirror") == "live" else "close-only",
+            # The EXACT target state for the close transition, or "" for never (the
+            # default). The docs used to say both "status transitions remain human-only"
+            # and "transition to done at close", nothing enforced either, and the model
+            # picked a target from whatever the board happened to offer - a coin toss on
+            # any board with several done-ish states. Owner decision 2026-09-09:
+            # configurable, default off. Unset means the team comments and attaches and
+            # leaves the workflow state to the human.
+            "done_transition": str(jira.get("done_transition") or ""),
+            # Show every write instead of making it. There was no such mode: `mirror`
+            # chooses close-only vs live, which is WHEN to post, never WHETHER.
+            "dry_run": jira.get("dry_run") is True,
         }
     pr = raw.get("pr_comments")
     if isinstance(pr, dict) and pr.get("enabled") is True:
@@ -912,7 +923,10 @@ def integrations_report_line(integrations: dict) -> str:
     if jira.get("enabled"):
         bits.append(
             f"jira:on({jira['mirror']},key={jira['project_key'] or 'UNSET'},"
-            f"tools={jira['tool_prefix']})"
+            f"tools={jira['tool_prefix']},"
+            f"transition={jira['done_transition'] or 'NONE'}"
+            + (",DRY-RUN" if jira.get("dry_run") else "")
+            + ")"
         )
     pr = integrations.get("pr_comments") or {}
     if pr.get("enabled"):

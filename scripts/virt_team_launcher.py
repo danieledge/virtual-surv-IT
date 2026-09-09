@@ -666,9 +666,7 @@ def _editor_rows(project_dir: Path):
     except Exception:
         return None
     try:
-        prefs = json.loads(
-            (project_dir / ".claude" / "team-preferences.json").read_text(encoding="utf-8")
-        )
+        prefs = json.loads(_team_prefs_path(project_dir).read_text(encoding="utf-8"))
     except Exception:
         prefs = {}
     keyed: dict = {}
@@ -764,9 +762,30 @@ def _editor_layout(project_dir: Path):
     return out
 
 
+# A PROJECT key, not a ticket ref: the leading half of what _JIRA_KEY_RE matches, and
+# deliberately derived from it. The setter used to accept anything alphanumeric once
+# underscores were stripped, so `A_B`, `1PROJ` and single-letter `X` all saved happily and
+# then no ticket for that project could ever be recognised, with no error at either end.
+_JIRA_PROJECT_KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9]+$")
+
+
+def _team_prefs_path(project_dir: Path) -> Path:
+    """The preferences file for THIS project's layout.
+
+    These three functions hardcoded `.claude/team-preferences.json` while the probe
+    resolved the same file through vsit_paths. On a new-layout project that meant the
+    settings screen wrote the Jira key to a file the probe never read: set it, saved, no
+    error, no effect. Resolve it the one way, and fall back to the old location only if
+    the resolver is unavailable (a bare clone with scripts/ not yet on sys.path)."""
+    try:
+        return _vsit_paths().preferences_file(project_dir)
+    except Exception:  # noqa: BLE001 - cosmetic tier: never let this kill the launch
+        return project_dir / ".claude" / "team-preferences.json"
+
+
 def jira_project_key(project_dir: Path) -> str:
     """The configured Jira project key, "" when unset."""
-    prefs_path = project_dir / ".claude" / "team-preferences.json"
+    prefs_path = _team_prefs_path(project_dir)
     try:
         prefs = json.loads(prefs_path.read_text(encoding="utf-8"))
         return str(((prefs.get("integrations") or {}).get("jira") or {}).get("project_key") or "")
@@ -777,7 +796,7 @@ def jira_project_key(project_dir: Path) -> str:
 def _jira_needs_key(project_dir: Path) -> bool:
     """Jira write-back is ON but has no project key - the one state the settings screen
     could name ("key UNSET") and offered no way to fix (user question, 2026-08-28)."""
-    prefs_path = project_dir / ".claude" / "team-preferences.json"
+    prefs_path = _team_prefs_path(project_dir)
     try:
         prefs = json.loads(prefs_path.read_text(encoding="utf-8"))
     except Exception:
@@ -791,13 +810,18 @@ def set_jira_project_key(project_dir: Path, key: str) -> str:
     short note for the user ('' when there is nothing to say).
 
     Jira project keys are uppercase alphanumeric, so the input is upper-cased and
-    validated here rather than at each caller - both editor tiers hand raw typing over."""
+    validated here rather than at each caller - both editor tiers hand raw typing over.
+    Validated against _JIRA_PROJECT_KEY_RE, which is the same shape the ticket-ref parser
+    will accept, so a key that saves is a key whose tickets can be recognised."""
     key = (key or "").strip().upper()
     if not key:
         return ""
-    if not key.replace("_", "").isalnum():
-        return f"{key!r} is not a Jira project key - unchanged"
-    prefs_path = project_dir / ".claude" / "team-preferences.json"
+    if not _JIRA_PROJECT_KEY_RE.match(key):
+        return (
+            f"{key!r} is not a Jira project key - unchanged "
+            "(letters and digits, starting with a letter, at least two characters)"
+        )
+    prefs_path = _team_prefs_path(project_dir)
     try:
         prefs = json.loads(prefs_path.read_text(encoding="utf-8"))
     except Exception:
@@ -880,7 +904,7 @@ def _editor_apply(project_dir: Path, action) -> str:
     'd' restores machine defaults (drops the project-level pref keys; env has no
     machine tier, its own row toggles it). Returns a short note for the user ('' when
     there is nothing to say). Shared by both editor tiers."""
-    prefs_path = project_dir / ".claude" / "team-preferences.json"
+    prefs_path = _team_prefs_path(project_dir)
     try:
         prefs = json.loads(prefs_path.read_text(encoding="utf-8"))
     except Exception:

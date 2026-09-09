@@ -1611,6 +1611,12 @@ def _cmd_init(args: argparse.Namespace) -> int:
         # transcript reader had to do and could never do reliably.
         "run_mode": _handoff.get("run_mode") or None,
         "session_id": _handoff.get("session_id") or None,
+        # The ticket this engagement is FOR, from the launcher that already knew it. The
+        # handoff has always carried `ref` and this consumed everything except that, so
+        # the only ticket link was a decision key the model had to remember to write -
+        # which left resume, the delivery report and any later "what was this work for?"
+        # with nothing to read.
+        "jira_source": _handoff.get("ref") or None,
         # What the human actually typed at the launcher, verbatim. Recorded so it survives
         # the one-shot handoff being consumed, and so a reader months later can see the ask
         # the engagement answered rather than only the answer.
