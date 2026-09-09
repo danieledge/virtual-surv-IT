@@ -1280,24 +1280,26 @@ agent, not a boundary against an adversarial one, and string-matching arbitrary 
 defeated (env indirection, `eval`, `base64 | sh`, heredocs). The standing mitigation is to keep real
 data off the machine (the §5 posture). Tracked, not a surprise.
 
-**Fixes for a further pair of escape paths are staged, waiting on a human apply step (not yet
-live).** Hook and guard
-files are model-blocked by design, so a fix the team writes sits staged until the user installs it.
-Both were found by an audit on 2026-08-01 and are **pending**, not done:
+**A further pair of escape paths were closed, and the fixes are live.** Hook and guard files are
+model-blocked by design, so a fix the team writes sits staged until the user installs it. Both were
+found by an audit on 2026-08-01, both were applied, and the live hooks in `.claude/hooks/` are now
+byte-identical to their staged counterparts (verified 2026-09-09, with
+`tests/test_guard_git_config.py` and `tests/test_guard_raw_coverage.py` passing, 112 tests). Kept
+here because the paths themselves are worth knowing about:
 
 - **`.git/config` / `core.hooksPath` was an unguarded consent-equivalent execution path.** Setting
   `core.hooksPath`, or an external diff/merge driver, hands the next plain `git commit` / `git diff`
   arbitrary execution with no consent marker written and no gate consulted. The improved
-  consent-write guard is staged at `scripts/staged_hooks/guard-consent-writes.py` with a regression
-  net (`tests/test_guard_git_config.py`, which **fails until applied**, by design). It goes live
-  only when the user runs `bash scripts/apply-guard-git-config.sh`.
-- **Raw-data guard coverage gaps are being addressed, also staged.** `WebFetch` resolves `file://`
+  consent-write guard covers it, with a regression net in `tests/test_guard_git_config.py`. Applied
+  via `bash scripts/apply-guard-git-config.sh`; the live guard carries the `core.hooksPath` checks.
+- **Raw-data guard coverage gaps are closed.** `WebFetch` resolves `file://`
   URLs against the local filesystem but sat outside the guard's fixed tool set (ADR-002 rec 22 rated
   that gap architectural rather than live: with `WebFetch` present, it was live), and a `Grep` rooted
   at a parent directory or with no path at all descends into `data/raw/` while naming a path that
-  does not resolve under it (recs 7 and 15). The staged guard is
-  `scripts/staged_hooks/guard-raw-data.py` with `tests/test_guard_raw_coverage.py`; it goes live only
-  when the user runs `bash scripts/apply-guard-raw-coverage.sh`.
+  does not resolve under it (recs 7 and 15). Both are covered by the
+  live raw-data guard, with `tests/test_guard_raw_coverage.py` as the regression net. Applied via
+  `bash scripts/apply-guard-raw-coverage.sh`; `WebFetch` is wired in both `hooks/hooks.json` and
+  `.claude/settings.json`.
 
 **First `/engage` of a session can take ~2-3 minutes before the first Morgan message (under
 investigation).** Tester feedback: the **initial** engagement is slow to produce the opening banner;

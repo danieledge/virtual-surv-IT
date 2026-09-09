@@ -10,9 +10,10 @@ licence.
 
 ## Vendored Python libraries (`vendor/`)
 
-The file-conversion front door (`scripts/convert_file.py`) depends on pure-Python libraries
-vendored verbatim under `vendor/`, so a plain `git clone` works in environments without pip
-access (corporate networks). Each package's own licence text ships inside its
+Two subsystems depend on pure-Python libraries vendored verbatim under `vendor/`, so a plain
+`git clone` works in environments without pip access (corporate networks): the file-conversion
+front door (`scripts/convert_file.py`) and the terminal UI (`scripts/launcher_textual.py`,
+`scripts/installer_app.py`). Each package's own licence text ships inside its
 `vendor/<name>-<version>.dist-info/` directory; the summary:
 
 | Package | Version | Licence | Source | Used for |
@@ -22,6 +23,13 @@ access (corporate networks). Each package's own licence text ships inside its
 | xlrd | 2.0.2 | BSD-3-Clause | <https://github.com/python-excel/xlrd> | reading legacy `.xls` |
 | pypdf | 6.14.2 | BSD-3-Clause | <https://github.com/py-pdf/pypdf> | PDF text extraction |
 | defusedxml | 0.7.1 | PSF-2.0 | <https://github.com/tiran/defusedxml> | safe XML parsing (entity-expansion defence) |
+| olefile | 0.47 | BSD-2-Clause | <https://github.com/decalage2/olefile> | reading OLE containers (legacy `.msg`/`.xls` paths) |
+| textual | 8.2.8 | MIT | <https://github.com/Textualize/textual> | the full-screen terminal UI |
+| rich | 15.0.0 | MIT | <https://github.com/Textualize/rich> | terminal rendering (textual dependency) |
+| prompt_toolkit | 3.0.53 | BSD-3-Clause | <https://github.com/prompt-toolkit/python-prompt-toolkit> | line editing in the launcher prompts |
+| platformdirs | 4.11.5 | MIT | <https://github.com/tox-dev/platformdirs> | per-OS config/cache paths |
+| wcwidth | 0.8.2 | MIT | <https://github.com/jquast/wcwidth> | terminal column widths (prompt_toolkit dependency) |
+| typing_extensions | 4.16.0 | PSF-2.0 | <https://github.com/python/typing_extensions> | typing back-compat (textual dependency) |
 
 The vendored code is unmodified. Update procedure and pinned-version rationale:
 `vendor/README.md`.

@@ -163,3 +163,29 @@ PM persists its own synthesis, never verbatim reviewed-code text and never data 
 secrets, PII or MNPI (§5). It is **advisory context, not enforcement** (the guard hooks stay
 the only enforcement layer), kept under ~200 lines, with SHA anchors, as-of dates and 📊/🧠
 tags so staleness stays visible. Hygiene: `python -m scripts.check_artifacts`.
+
+### Carry-over at open (what a repeat engagement owes the last one)
+
+Reading the map is not the same as acting on it. On a project that has run an engagement
+before, the open does two bounded things beyond loading the map, and says each result out loud
+in one line. **Neither is a DoD gate** - they are open-step discipline, so a missing map or an
+unreadable prior pack is a silent skip, never a failure, and a first engagement does neither.
+
+1. **Disposition every §4 watch item.** For each open question / watch item, say whether this
+   engagement **picks it up** (in scope) or **defers** it (with the reason, one clause).
+   Deferring is a legitimate answer; silence is not. An item nobody dispositions sits in §4
+   across engagement after engagement and the section decays into a graveyard that gets loaded
+   at every open and acted on at none. An item picked up is closed out or re-dated in §4 at
+   close, never left standing as though nothing happened.
+
+2. **Re-check the previous engagement's `accepted` and `deferred` findings.** The prior pack
+   persists at `VSIT/engagements/<slug>/data/findings-*.jsonl` (the workspace is git-ignored in
+   the working project but stays on disk). Read the most recent one, filter to those two
+   dispositions, and check them against the code **as it stands now**: still present, fixed
+   since, or worse. This is the only outcome feedback the team can actually obtain - it never
+   sees production - and it is what stops `accepted` becoming permanent silence. Report it as
+   one line ("3 accepted findings from `review-x`: 2 still present, 1 fixed since"). Where one
+   got worse, raise it in **this** engagement rather than filing the same finding again.
+
+Both reads are small: §4 is a short section and the disposition filter normally leaves a
+handful of findings. Neither justifies a fan-out; the PM does them itself at the open.

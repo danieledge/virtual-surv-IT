@@ -23,6 +23,14 @@ Record each artifact with `add-artifact` as it lands, and **write the brief and 
 together in the same turn, before ending the turn; never leave the index trailing** (it is the
 external memory that survives compaction).
 
+**Carry-over, when the project has run an engagement before.** Loading the codebase map is not
+the same as acting on it. Two bounded steps, each reported in one line, both silent skips when
+there is no map or no prior pack (and both skipped entirely on a first engagement): disposition
+every §4 watch item as **picked up** or **deferred with a reason** (silence is what turns §4
+into a graveyard), and re-check the previous pack's `accepted` / `deferred` findings against the
+code as it stands now - still present, fixed, or worse. Full rules:
+`docs/operating-guide.d/artifacts-lifecycle.md` §Carry-over at open.
+
 Lifecycle discipline: a pause on unanswered user input is ⛔ BLOCKED said out loud ("this
 engagement is NOT closed - outstanding: ..."), interim output takes pass-scoped names
 (`review-pass-N`, `interim-*`), and `delivery-report.md` + the summary email are written at ✅

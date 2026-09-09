@@ -22,6 +22,14 @@ planted:
 forbidden:
   - id: FP-1
     keywords: [find_alerts_by_trader, parameterized query is unsafe, trader_id injection]
+    # `find_alerts_by_trader` is a bare identifier, and _matches() builds its haystack from
+    # title + kind + LOCATION (eval_score.py), so without a floor this trap fires on any
+    # finding whose location merely names the function - a style note on the duplicated query
+    # body tripped it in the 2026-09-03 run while the review had explicitly cited that
+    # function's parameterised query as the CORRECT pattern. The trap describes calling a safe
+    # query unsafe, which is a warning-or-worse claim; a nitpick that happens to sit in the
+    # same function is not the failure being tested.
+    min_severity: warning
 
 pass:
   require_all_must_find: true

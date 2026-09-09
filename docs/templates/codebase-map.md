@@ -101,6 +101,11 @@ against the loaded version and mentions headline changes when they differ.)
 Things a future engagement should check first (suspected debt, unverified assumptions,
 upstream changes expected). Each with a date and owner if known.
 
+> Every item here is **dispositioned at the next open** - picked up (in scope) or deferred with
+> a reason - and an item picked up is closed out or re-dated here at that engagement's close.
+> An item that is merely read, engagement after engagement, is what turns this section into a
+> graveyard. Rules: `docs/operating-guide.d/artifacts-lifecycle.md` §Carry-over at open.
+
 ## 5. Deprecated
 
 | Date | Original entry (condensed) | Why deprecated |
