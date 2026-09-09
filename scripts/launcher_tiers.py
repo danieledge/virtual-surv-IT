@@ -190,7 +190,13 @@ class TierApp(App):
             )
         except Exception:  # noqa: BLE001 — reporting must never re-raise
             self._exit_renderables.append("virt-surv stopped unexpectedly.")
-        self.exit()
+        # RECORD it, do not just print it (2026-09-09). An adapter reading `pick`/`value`
+        # off a crashed app cannot otherwise tell a crash from a deliberate Esc, so a
+        # crashed composer launched a session WITHOUT the request the user had typed and
+        # a crashed menu read as "backed out". `crashed` is what makes them distinguishable.
+        self.crashed = exc or RuntimeError("virt-surv stopped unexpectedly")
+        # exit() alone resets Textual's return code to 0 after the framework set it to 1.
+        self.exit(return_code=1)
 
     def compose(self) -> ComposeResult:
         with Vertical(id="shell"):

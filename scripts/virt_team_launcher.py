@@ -106,6 +106,65 @@ def _installer_config_path() -> Path:
     return root / "virt-surv-it" / "installer.json"
 
 
+def _crash_log_path() -> Path:
+    """Where a swallowed crash is written. Beside installer.json, so it is machine-scoped,
+    honours XDG_CONFIG_HOME and needs no new directory convention."""
+    return _installer_config_path().parent / "launcher-crash.log"
+
+
+def _report_crash(where: str, exc: BaseException | None = None) -> None:
+    """Record a swallowed crash and TELL the user, without changing what happens next.
+
+    WHY (2026-09-09 review, from a live report: "tried an option, fell out of the TUI, no
+    way to see what the error was"). Three catch-alls sit between a menu pick and the
+    shell, and each one is RIGHT to degrade rather than break the launch. What was wrong
+    was that all three were silent, so a crash anywhere after the pick surfaced as the
+    wrapper launching plainly with no decision - and on a corporate box that plain launch
+    then fails with an unrelated shell error about the npm shim. The user is left with a
+    symptom that has nothing to do with the fault, and nothing to report.
+
+    So: keep every degrade exactly as it was, and make it speak. Two ASCII lines on stderr
+    (stdout carries the launch decision and must stay clean) plus the full traceback in a
+    log whose path those lines name.
+
+    Never raises. A reporting path that can itself fail is worse than no reporting: it
+    would turn a degraded launch into a dead one."""
+    import datetime as _dt
+    import traceback as _tb
+
+    detail = ""
+    try:
+        detail = _tb.format_exc()
+    except Exception:  # noqa: BLE001 - reporting must never re-raise
+        pass
+    label = f"{exc.__class__.__name__}: {exc}" if exc is not None else "unknown error"
+    path = None
+    try:
+        path = _crash_log_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8", errors="replace") as fh:
+            fh.write(
+                f"\n---- {_dt.datetime.now().isoformat(timespec='seconds')} "
+                f"| {where} | python {sys.version.split()[0]} on {sys.platform}\n"
+                f"argv: {sys.argv!r}\n{detail or label}\n"
+            )
+    except Exception:  # noqa: BLE001 - a log we cannot write is not worth a crash
+        path = None
+    try:
+        ink = _Ink()
+        print(ink.warn(f"    virt-surv hit an internal error in {where} ({label})"), file=sys.stderr)
+        if path is not None:
+            print(ink.dim(f"    full details: {path}"), file=sys.stderr)
+        else:
+            print(ink.dim("    (could not write the crash log)"), file=sys.stderr)
+        if not os.environ.get("VIRT_SURV_DEBUG"):
+            print(ink.dim("    VIRT_SURV_DEBUG=1 re-raises instead of degrading"), file=sys.stderr)
+    except Exception:  # noqa: BLE001
+        pass
+    if os.environ.get("VIRT_SURV_DEBUG") and exc is not None:
+        raise exc
+
+
 def _configured_launch_command() -> str:
     """The command 'virt-surv go' launches Claude Code with, resolved at RUN time from
     the machine config rather than baked into the shell alias (alias v5, 2026-08-17
@@ -2430,8 +2489,9 @@ def _menu_round(
                 return _decision_from_pick(
                     pick, project_dir, engagement_state, menu, shown, rich=True
                 )
-        except Exception:
-            pass  # same contract as the tier below: degrade, never break the launch
+        except Exception as exc:
+            # degrade, never break the launch - but say so (2026-09-09)
+            _report_crash("the engagement menu (textual tier)", exc)
         try:
             from launcher_app import APP_FALLBACK, run_app
 
@@ -2442,8 +2502,9 @@ def _menu_round(
                 return _decision_from_pick(
                     pick, project_dir, engagement_state, menu, shown, rich=True
                 )
-        except Exception:
-            pass  # any app failure degrades to the tiers below, never breaks the launch
+        except Exception as exc:
+            # degrades to the tiers below, never breaks the launch - but say so
+            _report_crash("the engagement menu (app tier)", exc)
     # 2026-08-20 UX pass: Morgan ASKS, and the answers are grouped. Previously one
     # "Open engagements" rule sat above everything, so [n] start new / [c] settings /
     # [Enter] read as though they were open engagements; and with no blank line anywhere
@@ -4404,6 +4465,16 @@ def _watch_after_launch(project_dir: Path, slug: str) -> None:
 
 
 def main() -> int:
+    # stdout is a PIPE under the shell wrapper, so on Windows it takes the ANSI code page
+    # (cp1252 on the corporate box). A typed request carrying one character outside it -
+    # a pasted arrow, an emoji, a Jira glyph - raised UnicodeEncodeError on the decision
+    # print at the end of this function, which the __main__ catch-all then swallowed:
+    # exit 0, empty stdout, plain launch, request silently lost. Replace rather than
+    # raise; a mangled character in the request beats losing the whole request.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:  # noqa: BLE001 - older/odd streams may not support it
+        pass
     if "--launch-command" in sys.argv[1:]:
         # Alias v5 support channel: print ONLY the configured launch command on stdout
         # (the shell function word-splits it), nothing else on either stream.
@@ -4426,14 +4497,16 @@ def main() -> int:
             # with its current value, so printing the summary first said everything twice.
             _print_banner(target)
             _run_settings_editor(target)
-        except Exception:
+        except Exception as exc:
+            _report_crash("virt-surv configure", exc)
             return 1
         return 0
     project_dir = Path.cwd()
     if not _plugin_enabled(project_dir):
         try:
             configured = _offer_first_time_setup(project_dir)
-        except Exception:
+        except Exception as exc:
+            _report_crash("first-time setup", exc)
             configured = False  # cosmetic path - never let it kill the launch
         if configured == _ABORT:
             # Backed out: exit 97 so the wrapper launches nothing, the same contract the
@@ -4544,8 +4617,10 @@ def main() -> int:
     _progress_done()
     try:
         decision = _resume_decision(project_dir)
-    except Exception:
-        decision = ""  # same reasoning - never let one piece's failure kill the other
+    except Exception as exc:
+        # same reasoning - never let one piece's failure kill the other
+        _report_crash("the engagement menu", exc)
+        decision = ""
     if decision == _ABORT:
         # Nothing on stdout, and a distinct exit code so the wrapper skips the launch
         # entirely rather than starting a session the human just backed out of. An
@@ -4621,5 +4696,9 @@ if __name__ == "__main__":
     _heal_stale_alias_once()
     try:
         sys.exit(main())
-    except Exception:
-        sys.exit(0)  # fail open - never block a claude launch over this optimisation
+    except Exception as exc:
+        # Still fail open: the wrapper skips the launch ONLY on 97, so any other code
+        # still launches Claude. But exiting 0 said "this succeeded", which was a lie and
+        # made the crash invisible to any caller checking the status.
+        _report_crash("startup", exc)
+        sys.exit(1)

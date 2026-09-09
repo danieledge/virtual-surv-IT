@@ -158,8 +158,11 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
         )
         with _true_terminal_size():
             app.run()
-    except Exception:  # noqa: BLE001 — any failure degrades
+    except Exception as exc:  # noqa: BLE001 — any failure degrades
+        _report_outside_loop("the engagement menu (textual)", exc)
         return APP_FALLBACK
+    if _crashed(app, "the engagement menu (textual)") is not None:
+        return APP_FALLBACK  # crashed: never let the half-built pick read as a choice
     if not getattr(app, "ran", False):
         return APP_FALLBACK  # never drew: let the next tier try
     # It drew. Its answer stands, INCLUDING None - which launcher_app uses for "the
@@ -167,6 +170,37 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
     # the fallback sentinel there instead sent Esc to the next tier, which drew the
     # old menu underneath the one just dismissed.
     return getattr(app, "pick", None)
+
+
+def _report_outside_loop(where: str, exc: BaseException) -> None:
+    """A failure BEFORE or AROUND Textual's own loop - driver start, terminal sizing, the
+    app constructor. `_fatal_error` never sees these, so nothing recorded them and the
+    next tier simply redrew the older menu underneath the one that had just vanished."""
+    try:
+        import virt_team_launcher as _vtl
+
+        _vtl._report_crash(where, exc)
+    except Exception:  # noqa: BLE001 - reporting must never re-raise
+        pass
+
+
+def _crashed(app, where: str):
+    """The exception a TierApp recorded before dying, reported, or None.
+
+    An app that crashed mid-handler still has whatever `pick`/`value` it happened to hold,
+    and every adapter below used to read that straight back to the caller - so a crash was
+    indistinguishable from a user choice. Call this FIRST and return the adapter's
+    could-not-draw sentinel when it fires, never the user-choice value."""
+    exc = getattr(app, "crashed", None)
+    if exc is None:
+        return None
+    try:
+        import virt_team_launcher as _vtl
+
+        _vtl._report_crash(where, exc)
+    except Exception:  # noqa: BLE001 - reporting must never re-raise
+        pass
+    return exc
 
 
 def _actions(project_dir: Path, mod, shown: list, jira_on: bool) -> list:
@@ -250,7 +284,12 @@ def request_screen(project_dir: Path, mod, output=None):
         app = widgets.RequestApp(project_dir, auto_offered=offered, auto=armed)
         with _true_terminal_size():
             app.run()
-    except Exception:  # noqa: BLE001 — any failure degrades
+    except Exception as exc:  # noqa: BLE001 — any failure degrades
+        _report_outside_loop("the request composer (textual)", exc)
+        return None
+    if _crashed(app, "the request composer (textual)") is not None:
+        # NOT REQUEST_SKIPPED: that is the plain launch, and it would drop the text the
+        # user had already typed while looking entirely deliberate.
         return None
     if not getattr(app, "ran", False):
         return None
