@@ -1280,26 +1280,12 @@ agent, not a boundary against an adversarial one, and string-matching arbitrary 
 defeated (env indirection, `eval`, `base64 | sh`, heredocs). The standing mitigation is to keep real
 data off the machine (the §5 posture). Tracked, not a surprise.
 
-**A further pair of escape paths were closed, and the fixes are live.** Hook and guard files are
-model-blocked by design, so a fix the team writes sits staged until the user installs it. Both were
-found by an audit on 2026-08-01, both were applied, and the live hooks in `.claude/hooks/` are now
-byte-identical to their staged counterparts (verified 2026-09-09, with
-`tests/test_guard_git_config.py` and `tests/test_guard_raw_coverage.py` passing, 112 tests). Kept
-here because the paths themselves are worth knowing about:
-
-- **`.git/config` / `core.hooksPath` was an unguarded consent-equivalent execution path.** Setting
-  `core.hooksPath`, or an external diff/merge driver, hands the next plain `git commit` / `git diff`
-  arbitrary execution with no consent marker written and no gate consulted. The improved
-  consent-write guard covers it, with a regression net in `tests/test_guard_git_config.py`. Applied
-  via `bash scripts/apply-guard-git-config.sh`; the live guard carries the `core.hooksPath` checks.
-- **Raw-data guard coverage gaps are closed.** `WebFetch` resolves `file://`
-  URLs against the local filesystem but sat outside the guard's fixed tool set (ADR-002 rec 22 rated
-  that gap architectural rather than live: with `WebFetch` present, it was live), and a `Grep` rooted
-  at a parent directory or with no path at all descends into `data/raw/` while naming a path that
-  does not resolve under it (recs 7 and 15). Both are covered by the
-  live raw-data guard, with `tests/test_guard_raw_coverage.py` as the regression net. Applied via
-  `bash scripts/apply-guard-raw-coverage.sh`; `WebFetch` is wired in both `hooks/hooks.json` and
-  `.claude/settings.json`.
+**Two further escape paths found by the 2026-08-01 audit are closed** - the git config file as a
+consent-equivalent execution path, and the raw-data guard's `WebFetch` and `Grep` coverage gaps.
+Both fixes are live and verified (2026-09-09: the live hooks are byte-identical to their staged
+counterparts, with `tests/test_guard_git_config.py` and `tests/test_guard_raw_coverage.py` passing).
+The detail moved to [`docs/internal/resolved-issues.md`](docs/internal/resolved-issues.md), because
+this section carries what is still **open**.
 
 **First `/engage` of a session can take ~2-3 minutes before the first Morgan message (under
 investigation).** Tester feedback: the **initial** engagement is slow to produce the opening banner;

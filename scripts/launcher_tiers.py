@@ -20,6 +20,59 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Static
 
+
+def _ensure_plain_traceback() -> None:
+    """Make `import rich.traceback` succeed without pygments.
+
+    _fatal_error below covers a crash inside a HANDLER. This covers the driver, which
+    _fatal_error never sees. Textual's input-thread wrapper catches BaseException and then
+    does `import rich.traceback` to build the panic screen; rich.traceback imports pygments
+    at module level, and pygments is deliberately NOT vendored (tests/test_virt_team_launcher
+    pins that it must not be). So on a user's machine that import raises ModuleNotFoundError
+    INSIDE the except that was handling the original failure: the input thread dies without
+    ever calling panic, and the screen freezes with nothing to read and no key that works.
+
+    It has never been seen here because this repo's dev virtualenv HAS pygments; only a real
+    install is exposed. Pre-seed a plain-text stand-in so the import succeeds and the panic
+    path completes. The parent attribute is set too: putting a module in sys.modules does not
+    give `rich.traceback` to code holding the `rich` package object."""
+    try:
+        import rich.traceback  # noqa: F401
+
+        return
+    except Exception:  # noqa: BLE001 - any import failure, not just the pygments one
+        pass
+
+    import traceback as _tb
+    import types
+
+    class _PlainTraceback:
+        """What rich.traceback.Traceback is used for here: something renderable that
+        carries the current exception."""
+
+        def __init__(self, *_a, **_k) -> None:
+            self._text = _tb.format_exc()
+
+        def __rich_console__(self, _console, _options):
+            yield self._text
+
+        def __str__(self) -> str:
+            return self._text
+
+    shim = types.ModuleType("rich.traceback")
+    shim.Traceback = _PlainTraceback
+    shim.install = lambda *_a, **_k: None  # rich's own opt-in hook, a no-op here
+    sys.modules["rich.traceback"] = shim
+    try:
+        import rich
+
+        rich.traceback = shim
+    except Exception:  # noqa: BLE001
+        pass
+
+
+_ensure_plain_traceback()
+
 # ── palette ───────────────────────────────────────────────────────────────────
 # The warm accent is the launcher's existing one (scripts/tui_chrome.py's PALETTE),
 # so the two tiers do not read as different products. Every colour is a hex the

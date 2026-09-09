@@ -34,3 +34,31 @@ name-drift quirk below, which the anchor also mitigates.
 
 *("below" in the verbatim text refers to the README's display-only quirks fold, where the
 cosmetic name-drift entry still lives.)*
+
+---
+
+## Two escape paths from the 2026-08-01 audit (closed; moved out of the README 2026-09-10)
+
+Hook and guard files are model-blocked by design, so a fix the team writes sits staged until
+the user installs it. Both were found by the audit on 2026-08-01, both were applied, and the
+live hooks in `.claude/hooks/` are byte-identical to their staged counterparts (verified
+2026-09-09, with `tests/test_guard_git_config.py` and `tests/test_guard_raw_coverage.py`
+passing, 112 tests).
+
+They sat in the README as "staged, pending, not done" for some time after they were in fact
+live, with the git-config one saying its regression net "fails until applied". That is the
+wrong direction for an error to run in a security-sensitive product: it understated the
+shipped posture. Kept here because the paths themselves are worth knowing about.
+
+- **The git config file was an unguarded consent-equivalent execution path.** Pointing the
+  hooks path at a directory of your own, or setting an external diff/merge driver, hands the
+  next plain `git commit` or `git diff` arbitrary execution with no consent marker written
+  and no gate consulted. The improved consent-write guard covers it, with a regression net in
+  `tests/test_guard_git_config.py`. Applied via `bash scripts/apply-guard-git-config.sh`.
+- **Raw-data guard coverage gaps.** `WebFetch` resolves `file://` URLs against the local
+  filesystem but sat outside the guard's fixed tool set (ADR-002 rec 22 rated that gap
+  architectural rather than live: with `WebFetch` present, it was live), and a `Grep` rooted
+  at a parent directory or with no path at all descends into the raw-data directory while
+  naming a path that does not resolve under it (recs 7 and 15). Both are covered by the live
+  raw-data guard, with `tests/test_guard_raw_coverage.py` as the regression net. Applied via
+  `bash scripts/apply-guard-raw-coverage.sh`; `WebFetch` is wired into both hook files.

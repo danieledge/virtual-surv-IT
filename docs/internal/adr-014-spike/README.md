@@ -1,7 +1,15 @@
 # ADR-014 design spike - persistent guard daemon prototype
 
-**Not production. Not wired into any live hook path.** `.claude/hooks/run-guard.sh` is
-completely unchanged by anything in this directory. This exists to answer
+**This is the retained PROTOTYPE of a component that has since shipped** (corrected
+2026-09-10). The header below was true when written and is not now: `scripts/guard_daemon.py`
+says in its own docstring that it was "promoted from the design spike", `run-guard.sh` is
+full of daemon handling, and 0.37.0 turned `guard_daemon` on by default. The directory is
+kept, and still tested by `tests/test_adr014_guard_daemon_spike.py`, because the spike's
+measurements are the evidence behind that decision. Read the rest as the record of how the
+question was answered, not as a description of today's hook path.
+
+*As written, 2026-08:* **Not production. Not wired into any live hook path.**
+`.claude/hooks/run-guard.sh` is completely unchanged by anything in this directory. This exists to answer
 [ADR-014](../../adr/ADR-014-persistent-guard-daemon.md)'s open questions with a working
 prototype and real measurements, per its own build plan step 2, before any decision to
 build the real thing (step 3).

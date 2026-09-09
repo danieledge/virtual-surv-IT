@@ -1,4 +1,10 @@
-# Engagement workflow - Mermaid diagrams (v0.29.0 - point-in-time; the lifecycle gained the closing window, workspace hardening and three lifecycle hooks in 0.33.x)
+# Engagement workflow - Mermaid diagrams
+
+> **Historical, as of 0.33.** Drawn at v0.29.0 and patched since for the `VSIT/` paths, so
+> it is neither a frozen snapshot nor current. The lifecycle gained the closing window,
+> workspace hardening and three lifecycle hooks in 0.33.x, and has moved again since.
+> `engagement-flow-spec.md` and the skills themselves are the current authority; use these
+> diagrams for the shape, never for the detail.
 
 Companion to `engagement-flow-spec.md`. Diagram 0 is the simple view (core concepts only -
 simplified by omission, never by distortion); diagrams 1-4 are the complete detail: the

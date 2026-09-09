@@ -8,6 +8,18 @@ in the plugin.
 **The one hard rule up front: extensions are ADDITIVE ONLY** (ADR-009). Nothing here can
 waive a disclaimer, gate, guard or the code chain; close actions are offers you approve.
 
+**Two places to put one.** A PROJECT file (`VSIT/config/extensions.md`, everything below)
+says "this repo is different". An ORG file at `~/.config/virt-surv-it/team-extensions.md`
+says "this is how our organisation works", and applies to every project on the machine, so
+a compliance function with fifteen repositories writes its standard once instead of
+fifteen times. Resolution is **project over org**, merged per section: standing
+instructions and close actions CONCATENATE with the org's first, so both apply; the
+analyser registry and integrations MERGE BY NAME with the project winning a collision,
+which is what lets an org register the corporate scanner centrally while one project pins
+its own. Every entry carries its origin through to `show`, because an extension whose
+source is invisible is one nobody can debug. The additive-only rule binds both tiers
+equally.
+
 ---
 
 ## Step 1 - create the extensions contract
