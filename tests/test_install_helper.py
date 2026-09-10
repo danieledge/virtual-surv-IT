@@ -6482,8 +6482,34 @@ def test_run_clean_plugin_cache_falls_back_to_newest_when_registry_missing(tmp_p
 
     rc = ih.run_clean_plugin_cache(ih.Style(False), ih.marks(), assume_yes=True)
     assert rc == 0
-    assert not old.exists()
+    # The SELECTION is still the newest-looking version, which is what this test is named
+    # for. What changed on 2026-09-10 (owner decision) is that --yes no longer carries the
+    # deletion through on that guess: everywhere else the active install is confirmed
+    # first, and these are removed outright rather than moved, so the mistake does not
+    # undo. With no way to ask in a non-interactive test, nothing is removed.
+    assert old.exists(), "deleted on an unconfirmed guess under --yes"
     assert newer.is_dir()
+
+
+def test_clean_plugin_cache_still_removes_unattended_when_the_active_install_is_known(
+    tmp_path, monkeypatch
+):
+    """The other half of that decision: --yes keeps working where the answer is CONFIRMED.
+    Asking on a guess is the narrow case, not a blanket retreat from unattended cleanup."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path))
+    base = tmp_path / ".claude" / "plugins" / "cache" / "mkt" / "compliance-surveillance-team"
+    old, active = base / "0.22.0", base / "0.33.62"
+    _make_fake_plugin_install(old)
+    _make_fake_plugin_install(active)
+    monkeypatch.setattr(ih, "_active_plugin_install_path", lambda *a, **k: active)
+
+    rc = ih.run_clean_plugin_cache(ih.Style(False), ih.marks(), assume_yes=True)
+
+    assert rc == 0
+    assert not old.exists()
+    assert active.is_dir()
 
 
 def test_run_clean_plugin_cache_declined_removes_nothing(tmp_path, monkeypatch):

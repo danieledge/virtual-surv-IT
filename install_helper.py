@@ -7640,6 +7640,18 @@ def run_clean_plugin_cache(
         )
         newest = max(version_dirs, key=_cache_version_sort_key)
         stale = [d for d in version_dirs if d != newest] + removable_ghosts
+        # --yes means "I accept the safe defaults", not "delete on a guess" (owner
+        # decision, 2026-09-10). Every other path here CONFIRMS the active install before
+        # removing anything; this branch could not, and these are deleted outright rather
+        # than moved, so the mistake does not undo. Drop back to asking even under --yes.
+        if assume_yes:
+            print(
+                style.yellow(
+                    "    asking anyway: --yes covers confirmed answers, and which install "
+                    "is live is a guess here"
+                )
+            )
+            assume_yes = False
     if not stale:
         print(f"{style.dim('-')} nothing stale - only the active install is present")
         return 0
