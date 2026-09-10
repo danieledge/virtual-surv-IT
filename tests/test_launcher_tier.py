@@ -764,13 +764,55 @@ def test_enter_does_not_arm_an_unattended_run():
     thinking it toggles options"). Preserved through the port deliberately."""
     import launcher_tiers
 
-    source = inspect.getsource(launcher_tiers.PreflightApp.on_key)
-    commit = source.index('key == "ctrl+d"')
-    toggle = source.index('key in ("enter", "space")')
-    assert "self.confirmed = True" in source[commit:toggle] or commit < toggle
-    after_toggle = source[toggle:]
-    assert "self.confirmed = True" not in after_toggle, "Enter must never confirm"
-    assert "self.exit()" not in after_toggle.split("self.paint()")[0], "Enter must not leave"
+    # Driven, not grepped (2026-09-10). This read the source and matched on the literal
+    # `key == "ctrl+d"`, so adding F2 as a second commit key broke it while the property
+    # it protects was untouched - and a test that breaks on a rename while passing on a
+    # behaviour change is protecting the wrong thing.
+    class _Event:
+        def __init__(self, key):
+            self.key = key
+            self.stopped = False
+
+        def stop(self):
+            self.stopped = True
+
+    class _Stub:
+        """Enough of PreflightApp for on_key, with no Textual loop."""
+
+        def __init__(self):
+            self.rows = [("web", "toggle", ""), ("cap", "cycle", ""), ("mode", "cycle", "")]
+            self.state = {"web": False, "cap": 0, "mode": 0}
+            self._caps = [1, 2]
+            self._modes = ["a", "b"]
+            self.cursor = 0
+            self.confirmed = None
+            self.exited = False
+
+        def exit(self, *_a, **_k):
+            self.exited = True
+
+        def paint(self):
+            pass
+
+    on_key = launcher_tiers.PreflightApp.on_key
+
+    for key in ("enter", "space", "down", "up"):
+        app = _Stub()
+        on_key(app, _Event(key))
+        assert app.confirmed is None, f"{key} confirmed the run"
+        assert app.exited is False, f"{key} left the screen"
+
+    for commit in ("ctrl+d", "f2"):
+        app = _Stub()
+        on_key(app, _Event(commit))
+        assert app.confirmed is True, commit
+        assert app.exited is True, commit
+
+    for cancel in ("escape", "q", "ctrl+c"):
+        app = _Stub()
+        on_key(app, _Event(cancel))
+        assert app.confirmed is False, cancel
+        assert app.exited is True, cancel
 
 
 def test_a_recent_project_is_a_destination_not_a_folder_to_enter():

@@ -875,7 +875,9 @@ def test_unattended_is_not_offered_when_the_project_turned_it_off(ptk, tmp_path)
 
 def test_the_footer_teaches_the_send_key(ptk, tmp_path):
     _res, text = _compose(ptk, "\x1b", tmp_path)
-    assert "Ctrl-D send" in text and "Enter new line" in text
+    # "Ctrl-D/F2" since 2026-09-10: a user reported Ctrl-D not always working, and a
+    # terminal that swallows \x04 left the composer with no send key at all.
+    assert "^d/F2 send" in text and "Enter new line" in text
 
 
 def test_wrapping_is_display_only(ptk):

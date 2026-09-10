@@ -1546,7 +1546,7 @@ _WALL_HEADROOM = 1.25
 
 # Left as the rich form; every use site passes it through ui_text, which is where a
 # console is actually in scope to ask.
-_PREFLIGHT_KEYS = "Space/Enter toggle · Ctrl-D START unattended · Esc/q cancel"
+_PREFLIGHT_KEYS = "Space/Enter toggle · Ctrl-D or F2 START unattended · Esc/q cancel"
 
 
 _PREFLIGHT_CAPS = (0, 10, 25, 35, 50, 100)
@@ -1785,6 +1785,7 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
             state["on_budget"] = (state["on_budget"] + 1) % len(ON_BUDGET)
 
     @kb.add("c-d")
+    @kb.add("f2")
     def _start(event):
         state["confirmed"] = True
         event.app.exit()
@@ -1854,7 +1855,7 @@ def request_screen(project_dir: Path, mod, output=None):
         out.append(
             (
                 "class:dim",
-                "  Type it, then Ctrl-D. Ctrl-D with nothing typed launches and you "
+                "  Type it, then Ctrl-D (or F2). Either with nothing typed launches and you "
                 "decide in session. Esc goes back.\n\n",
             )
         )
@@ -1908,7 +1909,7 @@ def request_screen(project_dir: Path, mod, output=None):
         return [
             (
                 "class:hint",
-                ui_text(mod, f"  Ctrl-D send · Enter new line · Esc back · Ctrl-U clear{tail}"),
+                ui_text(mod, f"  ^d/F2 send · Enter new line · Esc back · ^u clear{tail}"),
             )
         ]
 
@@ -1965,6 +1966,8 @@ def request_screen(project_dir: Path, mod, output=None):
         buf[0] += "\n"
 
     @kb.add("c-d")
+    @kb.add("f2")  # see launcher_tiers' composer: Ctrl-D is \x04 and not every terminal
+    # delivers it, which left the composer with no way to send at all
     # No Alt-Enter: Esc is bound eager (it has to be, or every arrow key waits on a
     # disambiguation timeout), and an eager Esc fires before the two-key escape+enter
     # sequence can ever resolve. Verified 2026-08-25 - the binding existed and silently

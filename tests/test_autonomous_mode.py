@@ -889,26 +889,48 @@ def test_enter_cannot_start_an_unattended_run():
     on the keyboard must not be the one that arms it."""
     body = _preflight_source().split("_PREFLIGHT_CAPS = ", 1)[1]
     commit = body.split("def _start(event):", 1)[0]
-    tail = commit.rsplit("@kb.add(", 1)[1]
-    assert tail.startswith('"c-d"'), f"the commit key must be Ctrl-D, found {tail[:20]!r}"
+    # The COMMIT KEYS, whatever they are: this asserted the last @kb.add before _start was
+    # literally "c-d", by string position, so adding F2 as a second commit key on
+    # 2026-09-10 failed it while the property below was untouched. What matters is not
+    # which keys commit, it is that Enter is not one of them.
+    # Only the decorator block immediately above _start: walking back from the end and
+    # stopping at the first line that is neither a binding nor a comment. Slicing on a
+    # neighbouring function name caught the toggle's own Enter binding.
+    committing = set()
+    for line in reversed(commit.rstrip().splitlines()):
+        stripped = line.strip()
+        if stripped.startswith("@kb.add("):
+            committing.add(stripped[len("@kb.add(") : -1])
+        elif stripped.startswith("#") or not stripped:
+            continue
+        else:
+            break
+    assert '"c-d"' in committing, "Ctrl-D must still commit"
+    assert '"enter"' not in committing, "Enter must never commit an unattended run"
+    assert '"space"' not in committing, "Space must never commit an unattended run"
     toggle = body.split("def _toggle(event):", 1)[0]
     assert '@kb.add("enter")' in toggle, "Enter must be bound to the harmless toggle"
     # The keys are rendered from ONE constant now: the body used to repeat them, went stale
     # when Enter stopped starting the run, and then clipped when corrected. Assert the
     # constant and that the footer uses it, rather than a literal that can drift again.
     src = _preflight_source()
-    assert "Ctrl-D START unattended" in src.split("_PREFLIGHT_KEYS = ", 1)[1].split("\n", 1)[0]
+    legend = src.split("_PREFLIGHT_KEYS = ", 1)[1].split("\n", 1)[0]
+    assert "START unattended" in legend and "Ctrl-D" in legend
+    assert "toggle" in legend, "the legend must say what the reflexive key actually does"
     assert "_PREFLIGHT_KEYS" in body, "the footer must render the shared constant"
-    assert body.count("Ctrl-D START unattended") == 0, "and must not repeat it as a literal"
+    assert body.count("START unattended") == 0, "and must not repeat it as a literal"
 
 
 def test_the_two_screens_in_the_flow_agree_on_their_send_key():
-    """The composer sends on Ctrl-D; the pre-flight now commits on Ctrl-D. One flow, one key -
-    a different commit key per screen is how a reflex lands on the wrong one."""
+    """The composer sends on Ctrl-D; the pre-flight commits on Ctrl-D. One flow, one key -
+    a different commit key per screen is how a reflex lands on the wrong one. Since
+    2026-09-10 both also accept F2, for terminals that swallow \\x04, and that must stay
+    true of BOTH or the pair drifts apart again."""
     src = _preflight_source()
     for func in ("def request_screen", "def auto_preflight_screen"):
         body = src.split(func, 1)[1].split("\ndef ", 1)[0]
         assert '@kb.add("c-d")' in body, f"{func} does not commit on Ctrl-D"
+        assert '@kb.add("f2")' in body, f"{func} does not accept the F2 fallback"
 
 
 # --- the request handoff must never outlive the engagement it was typed for -----------------

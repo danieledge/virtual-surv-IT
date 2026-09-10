@@ -652,8 +652,8 @@ class RequestApp(TierApp):
         t = Text()
         t.append("  What would you like the team to do?\n\n", style=f"bold {HINT}")
         t.append(
-            "  Type it, then Ctrl-D. Ctrl-D with nothing typed launches and you decide\n"
-            "  in session. Esc goes back.\n\n",
+            "  Type it, then Ctrl-D (or F2, if your terminal swallows Ctrl-D). Either\n"
+            "  with nothing typed launches and you decide in session. Esc goes back.\n\n",
             style=DIM,
         )
 
@@ -703,9 +703,14 @@ class RequestApp(TierApp):
         words = len(self.buf.split())
         note = f"{words} word{'' if words == 1 else 's'}" if words else "nothing typed yet"
         if self.narrow:
-            keys = ((" ^d", "send"), ("esc", "back"))
+            keys = ((" ^d/F2", "send"), ("esc", "back"))
         else:
-            keys = (("^d", "send"), ("enter", "new line"), ("esc", "back"), ("^u", "clear"))
+            keys = (
+                ("^d/F2", "send"),
+                ("enter", "new line"),
+                ("esc", "back"),
+                ("^u", "clear"),
+            )
         self.foot(keys, note)
 
     def on_paste(self, event) -> None:
@@ -725,7 +730,15 @@ class RequestApp(TierApp):
             self.value = "__request_back__"  # back to the menu, NOT a launch
             self.exit()
             return
-        if key == "ctrl+d":
+        if key in ("ctrl+d", "f2"):
+            # F2 as well as Ctrl-D (2026-09-10 user report: "ctrl d doesn't always
+            # work"). Ctrl-D reaches an app as the single byte \x04, and a terminal that
+            # does not deliver it - a Windows console going through a different driver, a
+            # remote session eating it as EOF, a terminal profile that binds it - leaves
+            # the composer with NO way to send, which reads as the tool being broken. F2
+            # is an escape sequence rather than a control byte, so it survives paths that
+            # \x04 does not. Ctrl-D stays the documented key; this is the way out when it
+            # is swallowed.
             event.stop()
             text = " ".join(self.buf.split())
             self.value = (text, self.auto) if text else None
@@ -1775,8 +1788,13 @@ class PreflightApp(TierApp):
             side.append(f"  {line}\n", style=DIM)
         self.query_one("#side-body", Static).update(side)
         self.foot(
-            (("↑↓", "move"), ("space/enter", "change"), ("^d", "START"), ("esc/q", "cancel")),
-            "nothing starts until Ctrl-D",
+            (
+                ("↑↓", "move"),
+                ("space/enter", "change"),
+                ("^d/F2", "START"),
+                ("esc/q", "cancel"),
+            ),
+            "nothing starts until Ctrl-D (or F2)",
         )
 
     def on_key(self, event) -> None:
@@ -1786,8 +1804,8 @@ class PreflightApp(TierApp):
             self.confirmed = False
             self.exit()
             return
-        if key == "ctrl+d":
-            event.stop()
+        if key in ("ctrl+d", "f2"):
+            event.stop()  # F2 too - see the composer's on_key for why
             self.confirmed = True
             self.exit()
             return
