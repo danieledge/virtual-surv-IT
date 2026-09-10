@@ -291,3 +291,98 @@ def test_the_network_bound_scanners_are_still_excluded():
     for banned in ("semgrep", "pip-audit"):
         assert banned not in ih._REVIEW_TOOLS, banned
         assert f'"{banned}|' not in probe, f"{banned} became probeable"
+
+
+# ============================================ the offline database, handled for the user
+
+
+def test_the_database_goes_where_the_scanner_itself_looks(monkeypatch, tmp_path):
+    """Not a location of ours. osv-scanner searches os.UserCacheDir then os.TempDir, and a
+    database anywhere else would need OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY set in the
+    environment of every later scan. Reviews run through Bash in a session whose
+    environment we do not control, so that is a database that silently is not there."""
+    import install_helper as ih
+
+    monkeypatch.setenv("OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY", str(tmp_path / "explicit"))
+    assert ih.osv_db_dir() == tmp_path / "explicit"
+
+    monkeypatch.delenv("OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY", raising=False)
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    assert ih.osv_db_dir() == tmp_path / "cache"
+
+
+def test_presence_is_one_ecosystem_archive(monkeypatch, tmp_path):
+    """The documented layout is {cache}/osv-scanner/{ecosystem}/all.zip."""
+    import install_helper as ih
+
+    monkeypatch.setenv("OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY", str(tmp_path))
+    assert ih.osv_db_present() is False
+
+    target = tmp_path / "osv-scanner" / "PyPI"
+    target.mkdir(parents=True)
+    (target / "all.zip").write_bytes(b"not really a zip")
+    assert ih.osv_db_present() is True
+
+
+def test_presence_never_raises(monkeypatch):
+    """It is asked to decide whether to OFFER a download, so a question we cannot answer
+    must not become an error."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "osv_db_dir", lambda: (_ for _ in ()).throw(OSError("gone")))
+    assert ih.osv_db_present() is False
+
+
+def test_the_download_uses_offline_vulnerabilities_not_offline(monkeypatch, tmp_path, capsys):
+    """--offline would forbid the very network call the download needs. Everything else
+    uses --offline; this one step is the exception and must not be 'corrected'."""
+    import install_helper as ih
+
+    seen = {}
+
+    class _Proc:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: "/usr/bin/osv-scanner")
+    monkeypatch.setenv("OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY", str(tmp_path))
+    monkeypatch.setattr(ih, "run_cmd", lambda argv, **k: seen.update(argv=argv) or _Proc())
+
+    ih.run_osv_db_download(ih.Style(False), ih.marks())
+
+    assert "--download-offline-databases" in seen["argv"]
+    assert "--offline-vulnerabilities" in seen["argv"]
+    assert "--offline" not in seen["argv"], "the download cannot run with --offline"
+
+
+def test_a_blocked_download_explains_the_manual_route(monkeypatch, tmp_path, capsys):
+    """Air-gapped machines are the ones that most need this and least can do it, so the
+    failure names the URL and where the file goes rather than just failing."""
+    import install_helper as ih
+
+    class _Proc:
+        returncode = 1
+        stdout = ""
+        stderr = "dial tcp: i/o timeout"
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: "/usr/bin/osv-scanner")
+    monkeypatch.setenv("OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY", str(tmp_path))
+    monkeypatch.setattr(ih, "run_cmd", lambda argv, **k: _Proc())
+
+    rc = ih.run_osv_db_download(ih.Style(False), ih.marks())
+    out = capsys.readouterr().out
+
+    assert rc == 1
+    assert "osv-vulnerabilities.storage.googleapis.com" in out
+    assert "all.zip" in out
+
+
+def test_no_scanner_installed_is_not_a_failure(monkeypatch, capsys):
+    """Nothing to download for is a state, not an error: the tool is optional."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+
+    assert ih.run_osv_db_download(ih.Style(False), ih.marks()) == 0
+    assert "not installed" in capsys.readouterr().out

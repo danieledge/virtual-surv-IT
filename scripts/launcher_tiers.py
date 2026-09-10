@@ -1451,11 +1451,18 @@ class FinishedApp(ListApp):
     passed in, so this file keeps knowing only how to draw.
     """
 
-    def __init__(self, project, views: list, slugs: list, sign_off, signed) -> None:
+    def __init__(
+        self, project, views: list, slugs: list, sign_off, signed, unarchive=None
+    ) -> None:
         super().__init__(project, views, "Done & archived")
         self.slugs = list(slugs)
         self._sign_off = sign_off
         self._signed = signed
+        # Archiving was reachable from the UI and unarchiving was not, though
+        # engagement_state has had _cmd_unarchive all along - so the interface offered a
+        # one-way door with the way back sitting in a CLI the user never sees
+        # (2026-09-10 walkthrough). Optional so an older caller still constructs.
+        self._unarchive = unarchive
         self.note = ""
         self.picked = ""  # "" is this screen's cancel, not None
 
@@ -1494,6 +1501,7 @@ class FinishedApp(ListApp):
             ("↑↓", "move"),
             ("enter", "open"),
             ("s", "sign off"),
+            ("u", "unarchive"),
             ("r", "redo"),
             ("esc/q", "back"),
         )
@@ -1532,6 +1540,22 @@ class FinishedApp(ListApp):
                 self.note = self._sign_off(slug) or ""
             except Exception:  # noqa: BLE001 - a failed sign-off is not a crash
                 self.note = ""
+            self.paint()
+            return
+        if key == "u" and slug:
+            # In place, like sign-off, and NOT confirmed: unarchiving removes a marker and
+            # is itself undone by pressing `a` again. The confirmations elsewhere are for
+            # the things that do not come back.
+            event.stop()
+            if self._unarchive is None:
+                self.note = "unarchive is not available here"
+            elif not (self.rows[self.cursor] or {}).get("archived"):
+                self.note = "that one is not archived"
+            else:
+                try:
+                    self.note = self._unarchive(slug) or ""
+                except Exception:  # noqa: BLE001 - a failed unarchive is not a crash
+                    self.note = "could not unarchive - see the crash log"
             self.paint()
             return
         if key == "r" and slug:

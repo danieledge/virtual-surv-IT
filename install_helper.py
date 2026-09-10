@@ -1598,6 +1598,7 @@ _ADVANCED_ACTIONS = {
     "13": "extensions",
     "14": "reprobe",
     "15": "relocate",
+    "16": "osvdb",
     "b": "back",
 }
 
@@ -2151,6 +2152,11 @@ def choose_action(style: Style) -> str:
                         "15",
                         "Tidy team files into one VSIT folder (shows you the plan before "
                         "moving anything)",
+                    ),
+                    (
+                        "16",
+                        "Vulnerability database (lets the dependency scanner work with no "
+                        "network; downloads once)",
                     ),
                     ("b", "Back"),
                 ),
@@ -6042,6 +6048,31 @@ def run_configure(
     print(rule_header(6, TOTAL_STEPS, "Refreshing the analyser-availability cache", style))
     rc = max(rc, run_tool_cache_refresh(project, style, mark_map, demo=demo))
 
+    # osv-scanner is registered with the implicit `auto` state, so it is USED when present.
+    # It is only ever invoked with --offline, which needs a database that is downloaded
+    # rather than installed with the binary - so "installed" and "usable" are two different
+    # things here, and the gap is invisible: a review simply reports no dependency findings.
+    # Offer the one network step now, while a person is here, rather than let it be
+    # discovered mid-review by someone who cannot see why the finding class is empty
+    # (2026-09-10 owner request: "lets have the TUI handle the database download").
+    if shutil.which("osv-scanner") and not osv_db_present():
+        print("")
+        print(style.dim("  The dependency scanner is installed but has no offline database."))
+        print(style.dim("  Without it, dependency vulnerabilities are simply never reported."))
+        if demo:
+            print(style.dim("    would offer to download it (demo - nothing written)"))
+        elif confirm(
+            "  Download it now? (one-off, needs the network)",
+            default=True,
+            assume_yes=assume_yes,
+            style=style,
+        ):
+            # Never fatal: a blocked download leaves the scanner exactly as it was, and
+            # run_osv_db_download prints the manual copy path for an air-gapped machine.
+            run_osv_db_download(style, mark_map, demo=demo)
+        else:
+            print(style.dim("    skipped - Advanced menu item 16 does it later"))
+
     # 2026-08-12 user request: "recommended should set the model to sonnet" - under the
     # recommended-defaults path (assume_yes True here) this now explicitly PINS sonnet in
     # the project's .claude/settings.json rather than silently skipping the question and
@@ -9148,6 +9179,96 @@ def run_relocate_to_vsit(style: Style, mark_map: dict) -> int:
     return 0 if moved == len(plan) else 1
 
 
+def osv_db_dir() -> Optional[Path]:
+    """Where osv-scanner keeps its offline database on THIS machine, if it can be found.
+
+    Deliberately the tool's OWN default location rather than one of ours: osv-scanner looks
+    in os.UserCacheDir and then os.TempDir, and putting the database anywhere else would
+    mean every later scan had to carry OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY in its
+    environment. A review runs through Bash in a session we do not control the environment
+    of, so a database that only works with an env var set is a database that silently is
+    not there.
+    """
+    if os.environ.get("OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY"):
+        return Path(os.environ["OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY"])
+    if sys.platform == "win32":
+        base = os.environ.get("LOCALAPPDATA")
+        return Path(base) if base else None
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Caches"
+    base = os.environ.get("XDG_CACHE_HOME")
+    return Path(base) if base else Path.home() / ".cache"
+
+
+def osv_db_present() -> bool:
+    """Is there an offline database to scan against?
+
+    The layout osv-scanner documents is {cache}/osv-scanner/{ecosystem}/all.zip, so one
+    ecosystem archive is enough to say the download has happened. Never raises: this is
+    asked to decide whether to OFFER a download, and a question we cannot answer must not
+    become an error."""
+    try:
+        root = osv_db_dir()
+        if not root:
+            return False
+        return any((root / "osv-scanner").glob("*/all.zip"))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def run_osv_db_download(style: Style, mark_map: dict, demo: bool = False) -> int:
+    """Fetch the offline vulnerability database, so the scanner can run with no network.
+
+    WHY THE TOOL DOES NOT DO THIS ITSELF (2026-09-10 owner request: "lets have the TUI
+    handle the database download for the user"). osv-scanner is registered as an analyser
+    and defaults to `auto`, meaning it is used when present - but --offline against an
+    absent database fails, and the flag is not optional here: without it the scanner
+    reaches the network, which is the failure that removed semgrep and pip-audit from the
+    set. So the one network step is done ONCE, deliberately, from a screen, rather than
+    being discovered mid-review by someone who cannot see why the finding class is empty.
+    """
+    ok, fail = mark_map["ok"], mark_map["fail"]
+    if shutil.which("osv-scanner") is None:
+        print(style.dim("  osv-scanner is not installed - nothing to download for."))
+        print(style.dim("    go install github.com/google/osv-scanner/cmd/osv-scanner@latest"))
+        return 0
+    where = osv_db_dir()
+    if osv_db_present():
+        print(f"{ok} vulnerability database already present ({where})")
+        print(style.dim("    run this again to refresh it"))
+    if demo:
+        print(style.dim(f"    would download the OSV database to {where} (demo - nothing written)"))
+        return 0
+    print(style.dim(f"  Downloading the OSV vulnerability database to {where}"))
+    print(style.dim("  This is the one step that needs the network; scans afterwards do not."))
+    # --offline-vulnerabilities, NOT --offline: the download itself must reach the network,
+    # and --offline would forbid exactly that. The positional path is the scan TARGET, so
+    # point it at a throwaway directory - we want the database, not the findings.
+    with tempfile.TemporaryDirectory() as tmp:
+        proc = run_cmd(
+            [
+                "osv-scanner",
+                "--offline-vulnerabilities",
+                "--download-offline-databases",
+                "--format",
+                "json",
+                tmp,
+            ],
+            timeout=600,
+        )
+    if osv_db_present():
+        print(f"{ok} vulnerability database ready - scans can now run with --offline")
+        return 0
+    print(f"{fail} could not download the database")
+    detail = (proc.stderr or proc.stdout or "").strip().splitlines()
+    if detail:
+        print(style.dim("    " + detail[-1][:160]))
+    print(style.dim("    Offline or behind a proxy? Fetch it on a connected machine:"))
+    print(style.dim("      https://osv-vulnerabilities.storage.googleapis.com/<ECOSYSTEM>/all.zip"))
+    print(style.dim(f"    then place it at {where}/osv-scanner/<ECOSYSTEM>/all.zip"))
+    return 1
+
+
 def run_tool_reprobe(style: Style, mark_map: dict) -> int:
     """Force a fresh analyser/tool probe for a project, and show what it found.
 
@@ -10939,6 +11060,11 @@ def _main(argv=None) -> int:
                         _show_resolved_extensions(style)
                     else:
                         menu_rc = max(menu_rc, run_extensions_editor(style, marks()) or 0)
+                    did_anything = did_anything or not args.demo
+                elif action == "osvdb":
+                    menu_rc = max(
+                        menu_rc, run_osv_db_download(style, marks(), demo=args.demo) or 0
+                    )
                     did_anything = did_anything or not args.demo
                 elif action == "reprobe":
                     if args.demo:

@@ -6156,6 +6156,7 @@ def test_advanced_submenu_full_mapping():
         "13": "extensions",
         "14": "reprobe",
         "15": "relocate",
+        "16": "osvdb",
         "b": "back",
     }
 

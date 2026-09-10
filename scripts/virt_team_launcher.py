@@ -1277,6 +1277,27 @@ def _archive_perform(es, targets: list) -> None:
         print(f"    {slug}: {marker}", file=sys.stderr)
 
 
+def _unarchive_perform(es, slug: str) -> str:
+    """Take one pack back out of the archive. Returns a short note for the screen.
+
+    Mirrors _archive_perform's discipline: es.main prints to ITS stdout, which in-process
+    is OUR stdout, and that channel carries the launch decision alone. Redirect, or a
+    confirmation line becomes a command the shell tries to run.
+    """
+    import contextlib
+
+    if not slug:
+        return ""
+    try:
+        with contextlib.redirect_stdout(sys.stderr):
+            rc = es.main(["unarchive", slug])
+    except SystemExit as exc:
+        rc = int(exc.code or 0)
+    except Exception:  # noqa: BLE001
+        rc = 1
+    return "unarchived" if rc == 0 else f"could not unarchive (rc {rc})"
+
+
 def _finished_menu(project_dir: Path, es) -> str:
     """Browse DONE and ARCHIVED engagements (2026-08-21 user request) - the read side
     of the archive story. Returns the chosen engagement's resume token ('' when the

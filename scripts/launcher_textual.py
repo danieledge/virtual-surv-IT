@@ -467,6 +467,7 @@ def finished_screen(project_dir: Path, mod, engagement_state, output=None):
             slugs,
             lambda slug: mod._record_sign_off(project_dir, slug),
             lambda slug: mod._sign_off_state(project_dir, slug) if slug else "",
+            lambda slug: mod._unarchive_perform(engagement_state, slug),
         )
         with _true_terminal_size():
             app.run()

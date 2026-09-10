@@ -1079,3 +1079,77 @@ def test_moving_off_the_row_cancels_a_pending_sign_off():
 
     launcher_tiers.FinishedApp.on_key(app, _Event("s"))
     assert signed == [], "the pending confirmation carried over to another row"
+
+
+def _finished_stub(archived: bool, unarchive=None):
+    """A FinishedApp with no Textual loop, for driving on_key directly."""
+    import launcher_tiers
+
+    app = launcher_tiers.FinishedApp.__new__(launcher_tiers.FinishedApp)
+    app.slugs = ["alpha"]
+    app.rows = [{"title": "A", "archived": archived}]
+    app.cursor = 0
+    app.note = ""
+    app.picked = ""
+    app._confirming = ""
+    app._unarchive = unarchive
+    app.paint = lambda: None
+    return app
+
+
+class _Key:
+    def __init__(self, key):
+        self.key = key
+
+    def stop(self):
+        pass
+
+
+def test_unarchive_is_reachable_from_the_interface():
+    """Archiving was a one-way door in the UI: engagement_state has had _cmd_unarchive all
+    along and nothing surfaced it (2026-09-10 walkthrough)."""
+    import launcher_tiers
+
+    done = []
+    app = _finished_stub(archived=True, unarchive=lambda slug: done.append(slug) or "unarchived")
+
+    launcher_tiers.FinishedApp.on_key(app, _Key("u"))
+
+    assert done == ["alpha"]
+    assert app.note == "unarchived"
+    assert app.picked == "", "unarchiving acts in place, like sign-off, and does not leave"
+
+
+def test_unarchiving_something_that_is_not_archived_says_so():
+    import launcher_tiers
+
+    done = []
+    app = _finished_stub(archived=False, unarchive=lambda slug: done.append(slug) or "unarchived")
+
+    launcher_tiers.FinishedApp.on_key(app, _Key("u"))
+
+    assert done == [], "unarchived a pack that was not archived"
+    assert "not archived" in app.note
+
+
+def test_a_failing_unarchive_is_reported_not_raised():
+    import launcher_tiers
+
+    def explode(_slug):
+        raise OSError("read-only filesystem")
+
+    app = _finished_stub(archived=True, unarchive=explode)
+    launcher_tiers.FinishedApp.on_key(app, _Key("u"))
+
+    assert "could not unarchive" in app.note
+
+
+def test_an_older_caller_without_the_unarchive_hook_still_works():
+    """The parameter is optional, so a tier or test constructing FinishedApp the old way
+    must not break - it just says the action is unavailable."""
+    import launcher_tiers
+
+    app = _finished_stub(archived=True, unarchive=None)
+    launcher_tiers.FinishedApp.on_key(app, _Key("u"))
+
+    assert "not available" in app.note

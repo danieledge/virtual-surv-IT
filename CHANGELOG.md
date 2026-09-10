@@ -5,7 +5,91 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 
 ## [Unreleased]
 
+### Added
+- **A launcher crash now says what it went wrong.** Live report: "tried an option, it fell
+  out of the TUI, no way to see what the error was." Three stacked catch-alls sat between a
+  menu pick and the shell and none recorded anything, so the wrapper launched Claude plainly
+  and the user saw an unrelated shell error. Every degrade stays; the silence goes.
+  `_report_crash` writes a full traceback to `~/.config/virt-surv-it/launcher-crash.log` and
+  prints two lines naming the error and that path. `virt-surv --debug` (or
+  `VIRT_SURV_DEBUG=1`) re-raises after reporting.
+- **`preflight.py`: what the launcher knows before an action starts.** Nine named checks,
+  each with a predicate, a sentence written for a person, and a severity. Actions declare
+  what they need; `why_unavailable()` gives every tier one answer to "why can I not do
+  this". A check never raises and never blocks on an answer it does not have.
+- **`osv-scanner` joins the analyser set as the eighth supported tool**, covering dependency
+  vulnerabilities - a finding class the team could not see at all. Always run `--offline`:
+  that mode is the only reason it qualifies where `semgrep` and `pip-audit` did not. New
+  Advanced menu item 16 downloads the vulnerability database once, so scans afterwards need
+  no network, and `virt-surv configure` offers it when the scanner is installed without one -
+  "installed" and "usable" are two different things here, and the gap is invisible, since a
+  review with no database simply reports no dependency findings. The database goes where
+  osv-scanner itself looks rather than a location of ours: anywhere else would need an
+  environment variable to survive into a review session we do not control. A blocked
+  download names the URL and destination for an air-gapped machine.
+- **Unarchive, from the interface.** `u` on the done-and-archived screen takes a pack back
+  out. `engagement_state` has had `_cmd_unarchive` all along and nothing surfaced it, so
+  archiving was a one-way door in the UI with the way back sitting in a CLI the user never
+  sees. Not confirmed, unlike sign-off and archive-all: it removes a marker and is itself
+  undone by archiving again, and the confirmations elsewhere are for the things that do not
+  come back.
+- **F2 commits as well as Ctrl-D** on the request composer and the unattended pre-flight, in
+  both renderers. Ctrl-D arrives as the byte `\x04` and not every terminal delivers it,
+  which left the composer with no way to send at all.
+
+### Fixed
+- **An update no longer refuses over changes the user never made.** The tool dirties its own
+  clone: `.claude/settings.json` and `.claude/team-preferences.json` are tracked and every
+  configure run or settings toggle writes one of them, while the dated `settings.json.bak-*`
+  each write leaves behind was not ignored. The tool's own config is now reset to the
+  incoming version before a pull, anything the user genuinely changed is stashed **and
+  restored**, and the backup shapes are ignored.
+- **The default monitor was blind.** `launcher_tiers` read `status`, `phase`, `elapsed` and
+  `spend` off the top level of a snapshot that nests them under `state`, so every configured
+  terminal showed "status unknown" and an artifact count forever. Both tiers now share one
+  `monitor_rows` model, and the monitor says when the pack last changed rather than only how
+  long you have been watching.
+- **Sign-off and archive-all ask before they commit.** Both were one keystroke and neither
+  undoes; the sign-off record is permanent, append-only and attributed to your git identity.
+- **Failed first-time setup no longer reads as "you declined"**, which had it telling users
+  they were probably in the wrong directory about a failure they could not see.
+- **`--demo` no longer writes.** `--extensions FILE` and three Advanced menu items were
+  performing real work during a demo session while the quit line said nothing had changed.
+- **The extensions "review" and "check" options read the right contract.** They ran with no
+  working directory, so from a project folder the import failed and from the clone root they
+  resolved the clone's own contract while the menu promised this directory's.
+- **Every settings toggle now lands where the probe reads it.** Five sites hardcoded
+  `.claude/team-preferences.json` while the probe resolved through `vsit_paths`, so on a
+  new-layout project a saved value was never read back.
+- **`virt-surv go` run directly honours the launcher's contract**: exit 97 means launch
+  nothing, and an interactive menu no longer times out at 120 seconds.
+- **The `@vitest/mocker` path-traversal advisory** (GHSA-82fw-gwwq-j7x9) in `dashboard-ui`.
+
 ### Changed
+- **SR 11-7 was rescinded on 17 April 2026 and the docs now say what replaced it.**
+  **SR 26-2** supersedes it and SR 21-8, and narrows "model" to a *complex quantitative
+  method*, expressly excluding deterministic rule-based processes. A threshold-based
+  scenario is very likely **not a model**, so its artifact is the tuning decision register
+  rather than a model-validation report; statistical and ML detection still are models. The
+  determination is the firm's. Generative and agentic AI are out of scope entirely, and
+  these are principles rather than enforceable standards.
+- **Jira: transitions are configurable and default to off.** The engage reference said
+  transitions were human-only, this doc and the close checklist described a done-transition,
+  nothing enforced either, and the target was guessed from whatever the board offered.
+  `done_transition` names the exact state or the team never transitions. `dry_run` prints
+  every outward call and makes none.
+- **A failed Jira write is not a write**: no artifact may say or imply something reached the
+  ticket unless the call succeeded. And comments carry a `vsit:<slug>:<phase>` marker, checked
+  before posting, so a resume does not double-post.
+- **Carry-over at open.** A repeat engagement dispositions every codebase-map watch item as
+  picked up or deferred, and re-checks the previous pack's accepted and deferred findings
+  against the code as it stands.
+- **Right-sizing is priced per spawn** from `engagement_state budget-status` rather than a
+  flat "~15x", which was a chat-comparison figure that mispriced small cold-context spawns.
+- **`code-reviewer` reads the code before its narrative** - commit messages, PR descriptions
+  and ticket text are claims to check, not context to trust. `qa-engineer` derives its cases
+  from the spec before opening the builder's tests.
+
 - **The VSIT brand banner now opens both front doors** - `virt-surv go` and the
   `virt-surv` installer menu - from one shared implementation, `scripts/brand_banner.py`:
   the mascot, the VSIT wordmark, `Virtual Surveillance IT` and the
