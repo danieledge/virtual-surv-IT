@@ -6835,7 +6835,7 @@ def test_demo_menu_selection_is_one_shot_not_sticky(monkeypatch, tmp_path):
 
 
 def test_review_tools_matches_tool_output_checks():
-    """_REVIEW_TOOLS and _TOOL_OUTPUT_CHECKS must name exactly the same seven tools -
+    """_REVIEW_TOOLS and _TOOL_OUTPUT_CHECKS must name exactly the same EIGHT tools -
     check-review-tools.sh's own REVIEW_TOOLS array is checked separately (bash, not
     importable here) but documents the same invariant."""
     import install_helper as ih

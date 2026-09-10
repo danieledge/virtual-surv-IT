@@ -83,15 +83,22 @@ before the passes - "When invoked" step 2) and uses the shared `docs/review/outp
 | Python | `ruff`, `black --check` | `mypy` | `bandit` |
 | SQL | `sqlfluff lint` | - | - |
 | Bash | `shfmt -d` | - | - |
-| Any | - | - | `gitleaks` |
+| Any | - | - | `gitleaks`, `osv-scanner --offline` (dependency vulns) |
 | *— best-effort below, not individually configurable —* | | | |
 | TypeScript | `eslint` | `tsc --noEmit` | `eslint` |
 | Scala | `scalafmt --test`, `scalafix` (non-semantic rules only) | - | - |
 | Java | `checkstyle`, `pmd` (standalone CLI only - see note) | - | - |
 | PowerShell | - | - | - |
 
-**The seven tools above the divider (ruff, mypy, bandit, black, sqlfluff, shfmt, gitleaks)
-are the officially supported, individually configurable set** (proven single-file,
+**`osv-scanner` is ALWAYS run with `--offline`** (2026-09-10). It reads a database
+downloaded once by `--download-offline-databases`; without that database in place it must
+fail fast rather than reach the network. That offline mode is the only reason it qualifies
+where `semgrep` and `pip-audit` did not, so never invoke it without the flag, and report it
+missing rather than running it online. Dependency vulnerabilities were previously a finding
+class this team could not see at all.
+
+**The eight tools above the divider (ruff, mypy, bandit, black, sqlfluff, shfmt, gitleaks,
+osv-scanner) are the officially supported, individually configurable set** (proven single-file,
 dependency-free, network-free; config tiers and the `CST_NO_EXTERNAL_TOOLS=1` kill switch:
 `scripts/check-review-tools.sh`'s header - the mechanics are the script's, not yours to
 re-derive). **Honour whatever its report says is disabled or required-but-missing: never

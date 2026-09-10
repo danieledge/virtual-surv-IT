@@ -52,7 +52,7 @@ fi
 # (2026-08-04) - the ones proven (install_helper.py's _TOOL_OUTPUT_CHECKS) to run
 # single-file, dependency-free and network-free, the same bar semgrep/pip-audit failed.
 # Keep in sync with install_helper.py's _REVIEW_TOOLS.
-REVIEW_TOOLS=(ruff mypy bandit gitleaks sqlfluff black shfmt)
+REVIEW_TOOLS=(ruff mypy bandit gitleaks sqlfluff black shfmt osv-scanner)
 
 # Effective state for a supported tool: the CST_NO_EXTERNAL_TOOLS kill switch (strongest,
 # set by a human/security team in the launch environment - disables every analyser below,
@@ -72,7 +72,8 @@ review_tool_states() {
   python3 - << 'PYEOF' 2>/dev/null
 import json, os
 
-REVIEW_TOOLS = ("ruff", "mypy", "bandit", "gitleaks", "sqlfluff", "black", "shfmt")
+REVIEW_TOOLS = ("ruff", "mypy", "bandit", "gitleaks", "sqlfluff", "black", "shfmt",
+                "osv-scanner")
 
 
 def load(path):
@@ -112,6 +113,14 @@ REVIEW_TOOL_STATES_CACHE="$(review_tool_states)"
 # hanging rather than failing fast, both in real reviews and in this probe itself. Not
 # listed here at all so they never show as "available" and never get invoked, even if
 # installed. See code-reviewer.md for the full removal rationale.
+#
+# osv-scanner IS listed (2026-09-10), and it is the exception that proves the rule: it is a
+# single Go binary with no pip dependency, and its --offline mode is a documented,
+# supported air-gapped path against a database you download once, so the failure that
+# removed the other two does not apply. It is ALWAYS invoked with --offline: without the
+# database in place it must fail fast rather than reach the network, which is the whole
+# reason it qualifies. Dependency vulnerabilities were a finding class this team could not
+# see at all.
 TOOLS=(
   "ruff|Python lint/style|pip install -r requirements-review.txt"
   "mypy|Python types|pip install -r requirements-review.txt"
@@ -120,6 +129,7 @@ TOOLS=(
   "gitleaks|secret scan|apt/brew install gitleaks"
   "shellcheck|Bash lint|apt install shellcheck"
   "shfmt|Bash format|go install mvdan.cc/sh/v3/cmd/shfmt@latest"
+  "osv-scanner|dependency vulns (OFFLINE only)|go install github.com/google/osv-scanner/cmd/osv-scanner@latest"
   "bashate|Bash style|pip install bashate"
   "eslint|TypeScript/JS lint|npm install -g eslint"
   "tsc|TypeScript types|npm install -g typescript"

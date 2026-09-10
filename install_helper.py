@@ -4934,7 +4934,16 @@ def run_orchestrator_model_default(model: Optional[str], style: Style, mark_map:
 # free and network-free - the same bar semgrep/pip-audit failed. Keep in sync with
 # _TOOL_OUTPUT_CHECKS and scripts/check-review-tools.sh's own REVIEW_TOOLS array (a test
 # enforces all three match).
-_REVIEW_TOOLS = ("ruff", "mypy", "bandit", "gitleaks", "sqlfluff", "black", "shfmt")
+_REVIEW_TOOLS = (
+    "ruff",
+    "mypy",
+    "bandit",
+    "gitleaks",
+    "sqlfluff",
+    "black",
+    "shfmt",
+    "osv-scanner",
+)
 _REVIEW_TOOL_STATES = ("auto", "on", "off")
 
 
@@ -7795,6 +7804,12 @@ _TOOL_OUTPUT_CHECKS = (
         "dir",
         20,
     ),
+    # ALWAYS --offline (2026-09-10). This probe is the one place the tool runs against a
+    # throwaway directory to prove its captured output comes back clean, so it is also the
+    # place a missing offline database would first reach the network. Without the flag this
+    # is the same failure that removed semgrep and pip-audit from the set: an unconditional
+    # network call that hangs behind a corporate proxy rather than failing fast.
+    ("osv-scanner", ["--offline", "--format", "json", "--recursive"], "dir", 20),
 )
 
 

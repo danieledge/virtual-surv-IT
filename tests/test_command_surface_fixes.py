@@ -238,3 +238,56 @@ def test_no_backup_file_is_tracked_in_the_repo():
     offenders = [p for p in tracked if ".bak" in p]
 
     assert offenders == [], f"backup files in version control: {offenders}"
+
+
+# ============================================== osv-scanner: offline or not at all
+
+
+def test_osv_scanner_is_registered_in_every_mirror():
+    """The tool registry is duplicated THREE ways: the shell probe's bash array, its python
+    mirror, install_helper._REVIEW_TOOLS, and _TOOL_OUTPUT_CHECKS. A tool in some and not
+    others is available to configure and never probed, or probed and not configurable - and
+    the third mirror is the one I missed first time, which the suite caught."""
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parent.parent
+    probe = (repo / "scripts" / "check-review-tools.sh").read_text(encoding="utf-8")
+    import install_helper as ih
+
+    assert "osv-scanner" in ih._REVIEW_TOOLS
+    assert "osv-scanner" in {name for name, *_ in ih._TOOL_OUTPUT_CHECKS}
+    assert probe.count("osv-scanner") >= 3  # bash list, python mirror, TOOLS row
+
+
+def test_osv_scanner_is_documented_as_offline_only():
+    """semgrep and pip-audit were removed because they made unconditional network calls and
+    hung behind a corporate proxy rather than failing fast. osv-scanner qualifies ONLY
+    because --offline is a documented air-gapped path against a pre-downloaded database, so
+    the flag is not optional: without it this is the same failure that removed the others.
+    """
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parent.parent
+    reviewer = (repo / ".claude" / "agents" / "code-reviewer.md").read_text(encoding="utf-8")
+
+    assert "osv-scanner --offline" in reviewer
+    assert "never invoke it without the flag" in reviewer
+
+    # And the output probe, which is where a missing database would first reach the network
+    import install_helper as ih
+
+    flags = next(f for name, f, *_ in ih._TOOL_OUTPUT_CHECKS if name == "osv-scanner")
+    assert "--offline" in flags
+
+
+def test_the_network_bound_scanners_are_still_excluded():
+    """Adding one offline-capable scanner must not be read as reopening the door."""
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parent.parent
+    probe = (repo / "scripts" / "check-review-tools.sh").read_text(encoding="utf-8")
+    import install_helper as ih
+
+    for banned in ("semgrep", "pip-audit"):
+        assert banned not in ih._REVIEW_TOOLS, banned
+        assert f'"{banned}|' not in probe, f"{banned} became probeable"
