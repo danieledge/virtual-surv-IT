@@ -324,6 +324,13 @@ def action_blocked(project_dir: Path, pick: str) -> str:
 # failed setup came to be reported as a wrong directory (2026-09-10 walkthrough).
 _SETUP_FAILED = "__setup_failed__"
 
+# What a pending sign-off says, shared so the two renderers cannot word it differently or
+# have it in one and not the other. Both tiers ask before writing, because the record is
+# permanent, append-only (a second signature is refused) and attributed to the user's own
+# git identity: one keystroke on the wrong row was a governance record nobody could take
+# back.
+SIGN_OFF_CONFIRM = "press s again to sign off - this cannot be undone"
+
 
 def _print_plain_help() -> None:
     """The key legend, for a console that cannot host a help SCREEN.

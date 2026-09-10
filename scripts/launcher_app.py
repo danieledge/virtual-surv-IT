@@ -731,21 +731,43 @@ def finished_screen(project_dir: Path, mod, engagement_state, output=None):
         ]
 
     kb = KeyBindings()
+    confirming = [""]  # the slug awaiting a second `s`, or ""
+
+    def _cancel_pending():
+        """Moving off the row means no. A pending confirmation that followed the cursor
+        would arm the NEXT engagement, which is worse than not asking at all."""
+        confirming[0] = ""
+        note[0] = ""
 
     @kb.add("up")
     def _up(event):
         idx[0] = (idx[0] - 1) % len(views)
+        _cancel_pending()
 
     @kb.add("down")
     def _down(event):
         idx[0] = (idx[0] + 1) % len(views)
+        _cancel_pending()
 
     @kb.add("s")
     def _sign(event):
         # Recorded HERE, by the human at the keyboard - never by a session. An agent
         # signing off its own work is the thing the Definition-of-Done gate exists to
         # prevent, so the signature is taken where a person demonstrably is.
+        #
+        # CONFIRMED since 2026-09-10, matching the Textual tier. The record is permanent,
+        # append-only (a second signature is refused) and attributed to the user's own git
+        # identity, so one keystroke on the wrong row wrote a governance record nobody
+        # could take back. Both tiers ask, because a confirmation in only one of them is
+        # how the two renderers drift apart.
         slug = mod._row_resume_token(rows[idx[0]]) or ""
+        if not slug:
+            return
+        if confirming[0] != slug:
+            confirming[0] = slug
+            note[0] = mod.SIGN_OFF_CONFIRM
+            return
+        confirming[0] = ""
         note[0] = mod._record_sign_off(project_dir, slug)
 
     @kb.add("r")

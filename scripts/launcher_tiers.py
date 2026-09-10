@@ -21,6 +21,19 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Static
 
 
+def _sign_off_confirm() -> str:
+    """The shared pending-sign-off message, or a faithful fallback.
+
+    Lazy import for the same reason shared_monitor_rows uses one: this module is imported
+    by the launcher, so it must not import it back at module level."""
+    try:
+        import virt_team_launcher as _vtl
+
+        return _vtl.SIGN_OFF_CONFIRM
+    except Exception:  # noqa: BLE001 - a message we cannot load is not a crash
+        return "press s again to sign off - this cannot be undone"
+
+
 def shared_monitor_rows(snap: dict, slug: str) -> list:
     """The monitor's rows, from the ONE model both tiers use.
 
@@ -1327,6 +1340,10 @@ class ListApp(TierApp):
 
     def on_key(self, event) -> None:
         key = event.key
+        if key != "enter" and getattr(self, "_confirm_all", False):
+            # A pending confirmation must not survive a cursor move: it would arm whatever
+            # row the user lands on next, which is worse than not asking at all.
+            self._confirm_all = False
         if key in ("escape", "q", "ctrl+c"):
             event.stop()
             self.picked = None  # leaving is an answer, and it is "nothing chosen"
@@ -1341,6 +1358,9 @@ class ListApp(TierApp):
         elif key == "enter":
             event.stop()
             self.choose(self.cursor)
+            if getattr(self, "_confirm_all", False) and self.picked is None:
+                self.paint()  # asked, not committed: stay and let them press it again
+                return
             self.exit()
             return
         else:
@@ -1359,6 +1379,21 @@ class ArchiveApp(ListApp):
     def __init__(self, project, views: list, open_count: int) -> None:
         super().__init__(project, list(views) + [None], "Archive engagements")
         self.open_count = open_count
+        self._confirm_all = False
+
+    def choose(self, index: int) -> None:
+        """Enter on `index`, except that ALL asks first.
+
+        Archiving one engagement from a list you are looking at is a considered act.
+        "Archive ALL open engagements" on the same key, in the same place, with no pause,
+        is not - and there is no unarchive anywhere in this UI, though
+        engagement_state._cmd_unarchive exists. The pane explains the consequence; it did
+        not ask about it (2026-09-10 walkthrough).
+        """
+        if index == len(self.rows) - 1 and not self._confirm_all:
+            self._confirm_all = True
+            return  # picked stays unset: the caller sees no choice and the screen stays up
+        self.picked = index
 
     def lines_per_row(self) -> int:
         return 2
@@ -1367,10 +1402,17 @@ class ArchiveApp(ListApp):
         t = Text()
         t.append("  ▸ " if selected else "    ", style=ACCENT if selected else HINT)
         if row is None:
-            t.append(
-                f"archive ALL open engagements ({self.open_count})\n",
-                style=f"bold {GOLD}" if selected else GOLD,
-            )
+            if getattr(self, "_confirm_all", False):
+                t.append(
+                    f"press enter again to archive ALL {self.open_count} - "
+                    "there is no undo here\n",
+                    style="bold red",
+                )
+            else:
+                t.append(
+                    f"archive ALL open engagements ({self.open_count})\n",
+                    style=f"bold {GOLD}" if selected else GOLD,
+                )
             t.append("\n")
             return t
         t.append(f"{row['mark']} ", style=GOLD if row["mark_style"] == "warn" else DIM)
@@ -1459,14 +1501,33 @@ class FinishedApp(ListApp):
     def choose(self, index: int) -> None:
         self.picked = self.slugs[index] if index < len(self.slugs) else ""
 
+    _confirming = ""  # the slug awaiting a second `s`, or ""
+
     def on_key(self, event) -> None:
         key = event.key
         slug = self.slugs[self.cursor] if self.cursor < len(self.slugs) else ""
+        if key != "s" and self._confirming:
+            # Moving, choosing or leaving all mean "no". A pending confirmation that
+            # survives a cursor move would arm the NEXT row, which is worse than no
+            # confirmation at all.
+            self._confirming = ""
+            self.note = ""
         if key == "s" and slug:
             # Recorded HERE, by the human at the keyboard - never by a session. An agent
             # signing off its own work is what the Definition-of-Done gate exists to
             # prevent, so the signature is taken where a person demonstrably is.
+            #
+            # CONFIRMED, since 2026-09-10. It was one keystroke, and the record it writes
+            # is permanent, append-only (a second signature is refused) and attributed to
+            # the user's own git identity. A slip of the finger on the wrong row was a
+            # governance record nobody could take back. Press s again to mean it.
             event.stop()
+            if self._confirming != slug:
+                self._confirming = slug
+                self.note = _sign_off_confirm()
+                self.paint()
+                return
+            self._confirming = ""
             try:
                 self.note = self._sign_off(slug) or ""
             except Exception:  # noqa: BLE001 - a failed sign-off is not a crash

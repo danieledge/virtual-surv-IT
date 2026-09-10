@@ -952,3 +952,130 @@ def test_the_installer_dispatcher_stops_falling_through_too():
     body = inspect.getsource(ih._tiered_installer_screen)
     assert "APPS_RUN" in body
     assert "before" in body and "after" in body, "it must compare, not just mention"
+
+
+def test_archive_all_asks_before_it_archives_everything():
+    """One engagement from a list you are looking at is a considered act. "Archive ALL
+    open engagements" on the same key, in the same place, with no pause, is not - and
+    there is no unarchive anywhere in this UI, though engagement_state._cmd_unarchive
+    exists (2026-09-10 walkthrough)."""
+    import launcher_tiers
+
+    views = [{"mark": "", "mark_style": "", "title": "A", "slug": "a", "detail": ""}]
+    app = launcher_tiers.ArchiveApp.__new__(launcher_tiers.ArchiveApp)
+    app.rows = list(views) + [None]
+    app.open_count = 3
+    app._confirm_all = False
+    app.picked = None
+
+    all_row = len(app.rows) - 1
+
+    app.choose(all_row)
+    assert app.picked is None, "archived everything on the first press"
+    assert app._confirm_all is True
+
+    app.choose(all_row)
+    assert app.picked == all_row, "the second press must go through"
+
+
+def test_archiving_one_engagement_still_takes_one_press():
+    """The confirmation is for the row whose consequence differs in kind, not for the
+    ordinary case."""
+    import launcher_tiers
+
+    app = launcher_tiers.ArchiveApp.__new__(launcher_tiers.ArchiveApp)
+    app.rows = [{"slug": "a"}, {"slug": "b"}, None]
+    app.open_count = 2
+    app._confirm_all = False
+    app.picked = None
+
+    app.choose(0)
+    assert app.picked == 0
+
+
+def test_a_pending_confirmation_does_not_survive_a_cursor_move():
+    """Otherwise it arms whatever row you land on next, which is worse than not asking."""
+    import launcher_tiers
+
+    class _Event:
+        def __init__(self, key):
+            self.key = key
+
+        def stop(self):
+            pass
+
+    app = launcher_tiers.ArchiveApp.__new__(launcher_tiers.ArchiveApp)
+    app.rows = [{"slug": "a"}, None]
+    app.open_count = 1
+    app._confirm_all = True
+    app.picked = None
+    app.cursor = 1
+    app.paint = lambda: None
+
+    launcher_tiers.ListApp.on_key(app, _Event("down"))
+
+    assert app._confirm_all is False
+
+
+def test_sign_off_takes_two_presses():
+    """The record is permanent, append-only (a second signature is refused) and attributed
+    to the user's own git identity, so a slip of the finger on the wrong row was a
+    governance record nobody could take back."""
+    import launcher_tiers
+
+    class _Event:
+        def __init__(self, key):
+            self.key = key
+
+        def stop(self):
+            pass
+
+    signed = []
+
+    app = launcher_tiers.FinishedApp.__new__(launcher_tiers.FinishedApp)
+    app.slugs = ["alpha", "beta"]
+    app.cursor = 0
+    app.rows = [1, 2]
+    app.note = ""
+    app.picked = None
+    app._confirming = ""
+    app.paint = lambda: None
+    app._sign_off = lambda slug: signed.append(slug) or "signed"
+
+    launcher_tiers.FinishedApp.on_key(app, _Event("s"))
+    assert signed == [], "signed off on the first press"
+    assert "cannot be undone" in app.note
+
+    launcher_tiers.FinishedApp.on_key(app, _Event("s"))
+    assert signed == ["alpha"]
+
+
+def test_moving_off_the_row_cancels_a_pending_sign_off():
+    """A confirmation that survives a cursor move would sign off the NEXT engagement."""
+    import launcher_tiers
+
+    class _Event:
+        def __init__(self, key):
+            self.key = key
+
+        def stop(self):
+            pass
+
+    signed = []
+    app = launcher_tiers.FinishedApp.__new__(launcher_tiers.FinishedApp)
+    app.slugs = ["alpha", "beta"]
+    app.cursor = 0
+    app.rows = [1, 2]
+    app.note = ""
+    app.picked = None
+    app._confirming = "alpha"
+    app.paint = lambda: None
+    app._sign_off = lambda slug: signed.append(slug) or "signed"
+
+    # FinishedApp.on_key, not the base class: Textual dispatches to the subclass, which
+    # is where the clear lives, and it delegates onward for keys it does not handle.
+    launcher_tiers.FinishedApp.on_key(app, _Event("down"))
+    assert app._confirming == ""
+
+    launcher_tiers.FinishedApp.on_key(app, _Event("s"))
+    assert signed == [], "the pending confirmation carried over to another row"

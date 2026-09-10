@@ -1106,3 +1106,21 @@ def test_the_enforced_wall_sits_above_the_pacing_ceiling():
     headroom = float(src.split("_WALL_HEADROOM = ", 1)[1].split("\n", 1)[0])
     assert headroom > 1.0, "no headroom is the bug"
     assert headroom <= 1.5, "a wall far above the ceiling stops being a wall"
+
+
+def test_both_tiers_confirm_a_sign_off():
+    """The sign-off record is permanent, append-only and attributed to the user's own git
+    identity, so it asks before it writes. In BOTH renderers: a confirmation in only one of
+    them is exactly how the two tiers drift apart, which this codebase has paid for more
+    than once.
+
+    Asserted through the SHARED constant rather than by matching strings in two source
+    files: a wording change should not fail this, and a tier quietly dropping the
+    confirmation should.
+    """
+    import launcher_tiers
+    import virt_team_launcher as vtl
+
+    assert "cannot be undone" in vtl.SIGN_OFF_CONFIRM
+    # The Textual tier resolves the same constant, so the two cannot word it differently.
+    assert launcher_tiers._sign_off_confirm() == vtl.SIGN_OFF_CONFIRM

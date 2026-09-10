@@ -191,3 +191,45 @@ function name should not trip it.
 the same exposure. Deliberately not fixed in the matcher: changing the haystack would move every
 existing baseline, and the release gate has no interval (item 1) to tell a real move from noise.
 Sequence these: item 1 first, then revisit the matcher.
+
+---
+
+## 11. Finding fingerprints, so a disposition survives the next review
+
+**Added 2026-09-10.** Idea taken from CPGuard (https://github.com/KimJeju/cpguard,
+Apache-2.0), whose rescans inherit the previous verdict by fingerprint: same rule, same
+file, same normalised sink code, therefore same audit state and same note. The scanner
+itself is too young to depend on (8 stars, essentially one author, self-reported OWASP
+Benchmark accuracy of 0.717 on Python) but the verdict mechanic is right and is ours to
+take.
+
+**The problem.** A review finds something, the user accepts it with a reason, and three
+months later the next review reports the identical thing as new. The old decision exists
+in the previous findings pack and nothing connects the two, so it is re-decided or
+re-argued. The carry-over rule added on 2026-09-10
+(`docs/operating-guide.d/artifacts-lifecycle.md` §Carry-over at open) has the PM re-read
+the prior pack and match findings by eye, which is the manual version of this.
+
+**What to build.** A `fingerprint` field on `docs/review/findings-schema.json`: a short
+stable hash of **rule + file + normalised code at the location**. Deliberately NOT the line
+number, which moves whenever anything above it is edited. Normalising whitespace and
+formatting means a finding that merely moved is recognised as the same one, while a finding
+whose code genuinely changed gets a new fingerprint and correctly comes back for a fresh
+look.
+
+Then at review time, before findings reach the user: match fingerprints against the
+previous pack, carry `disposition` and its note forward on a match, and mark anything
+unmatched as new. The user is only asked about what they have not already ruled on.
+
+**Why it fits here.** It makes the carry-over rule mechanical rather than manual, it pairs
+with the `challenge` record (item 3) and the `reviewed_by` field, and it is a schema
+addition plus a comparison step rather than new machinery. Canonical hashing is already
+solved: `rfc8785` plus stdlib `hashlib`, per item 9's provenance note.
+
+**Watch for.** A fingerprint that is too loose silently inherits a decision for a finding
+that has actually changed, which is the failure mode that matters: prefer a fingerprint
+that changes too often over one that changes too rarely. Renaming a file should be visible
+as new rather than silently inherited, at least until there is evidence that is annoying.
+
+**Sequence.** 0.39, alongside the challenge record. Not before item 1: without an interval
+on the eval gate there is no way to tell whether the inheritance rule is helping or hiding.
