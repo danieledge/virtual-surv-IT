@@ -157,3 +157,39 @@ def test_an_unknown_action_requires_nothing_and_blocks_nothing(tmp_path):
     report = preflight.preflight(tmp_path)
     assert report.blocks("no-such-action") is False
     assert report.why_unavailable("no-such-action") == ""
+
+
+# ================================================ what the launcher asks the table
+
+
+def test_action_blocked_gives_the_menu_one_answer(monkeypatch, tmp_path):
+    """Both renderers build their own action lists, and launcher_app carries a comment
+    about how that drifted apart the first time. The availability question at least is
+    settled once, so a tier that forgets to ask degrades to today's behaviour rather than
+    disagreeing with its sibling."""
+    import virt_team_launcher as vtl
+
+    monkeypatch.setattr(preflight.os, "access", lambda *_a, **_k: False)
+
+    assert "not writable" in vtl.action_blocked(tmp_path, "settings")
+    assert vtl.action_blocked(tmp_path, "new") == ""  # unmapped picks are never blocked
+
+
+def test_watch_is_deliberately_not_gated(tmp_path):
+    """_running_slug documents why it does not second-guess liveness: the marker is what
+    the team keys on, and a rival notion of "running" would be a second thing to disagree
+    with the first. The staleness answer belongs in the monitor, not here."""
+    import virt_team_launcher as vtl
+
+    assert vtl.action_blocked(tmp_path, "watch") == ""
+
+
+def test_action_blocked_never_raises(monkeypatch, tmp_path):
+    """An unavailable answer must never cost the menu."""
+    import virt_team_launcher as vtl
+
+    def explode(*_a, **_k):
+        raise RuntimeError("preflight is broken")
+
+    monkeypatch.setattr(preflight, "preflight", explode)
+    assert vtl.action_blocked(tmp_path, "settings") == ""

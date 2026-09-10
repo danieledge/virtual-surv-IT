@@ -289,6 +289,42 @@ def _alias_installed_anywhere() -> bool:
     return False
 
 
+def action_blocked(project_dir: Path, pick: str) -> str:
+    """Why this menu action cannot work here, or "" when it can.
+
+    ONE answer for every tier. The two renderers build their own action lists - there is a
+    comment in launcher_app saying exactly how that drifted apart the first time - so the
+    availability question at least is settled in one place, and a tier that forgets to ask
+    simply shows the row as it always did rather than disagreeing with its sibling.
+
+    Backed by scripts/preflight.py: each menu pick maps to a declared action there, whose
+    checks carry a sentence written for a person. A row whose checks fail is still SHOWN,
+    dimmed, with that sentence as the reason - a missing option nobody can explain is the
+    defect this replaces."""
+    # No `watch` entry on purpose. _running_slug documents why it does NOT check whether a
+    # session is still attached: "the marker is what the team itself keys on, and inventing
+    # a second notion of running here would be a second thing to disagree with the first".
+    # A walkthrough flagged that [t] keeps offering a killed session; the answer that
+    # respects that decision is to make the MONITOR say nothing has changed, not to add a
+    # rival liveness rule here.
+    action = {"settings": "configure", "open": "configure"}.get(pick)
+    if not action:
+        return ""
+    try:
+        import preflight
+
+        report = preflight.preflight(project_dir)
+        return report.why_unavailable(action) if report.blocks(action) else ""
+    except Exception:  # noqa: BLE001 - an unavailable answer must never cost the menu
+        return ""
+
+
+# Setup ran and did not succeed. A THIRD answer, like _ABORT: False means "not configured,
+# go ahead and launch" and is indistinguishable from the user declining, which is how a
+# failed setup came to be reported as a wrong directory (2026-09-10 walkthrough).
+_SETUP_FAILED = "__setup_failed__"
+
+
 def _print_plain_help() -> None:
     """The key legend, for a console that cannot host a help SCREEN.
 
@@ -4227,7 +4263,22 @@ def _offer_first_time_setup(project_dir: Path):
         except OSError:
             return False
     if code != 0 or not _plugin_enabled(project_dir):
-        return False
+        # FAILED, which is not the same as declined - and the caller reads plain False as
+        # "the user said no", then tells them they are probably in the wrong directory.
+        # The setup output has already scrolled away inside a progress screen that closed,
+        # so without this the user is told the wrong thing about a failure they cannot see.
+        print("", file=err)
+        print(ink.warn("  First-time setup did not complete."), file=err)
+        if code not in (0, None):
+            print(ink.dim(f"  the setup step exited {code}"), file=err)
+        print(
+            ink.dim(
+                "  Launching plainly. To see what went wrong, run it in the open:\n"
+                f"    python {helper} configure {project_dir}"
+            ),
+            file=err,
+        )
+        return _SETUP_FAILED
 
     # THEN SHOW THEM WHAT THEY GOT. Only for "choose settings" - the defaults option was
     # picked precisely to avoid being asked anything, and opening an editor over it would
@@ -4563,6 +4614,19 @@ def _consume_debug_flag(argv: list) -> list:
 
 def main() -> int:
     sys.argv = _consume_debug_flag(sys.argv)
+    # Preflight the things that are true before any action is chosen. The wrapper check
+    # used to run ONLY on the Esc path, so someone whose shell holds a pre-v7 function
+    # learned about it only if they happened to back out - while the same stale wrapper
+    # also double-launches on the new-window path, silently.
+    try:
+        import preflight as _pf
+
+        _report = _pf.preflight(Path.cwd())
+        if not _report.ok("wrapper_current"):
+            print(_Ink().warn("    " + _report.result("wrapper_current").check.sentence),
+                  file=sys.stderr)
+    except Exception:  # noqa: BLE001 - advisory: never let it cost a launch
+        pass
     # stdout is a PIPE under the shell wrapper, so on Windows it takes the ANSI code page
     # (cp1252 on the corporate box). A typed request carrying one character outside it -
     # a pasted arrow, an emoji, a Jira glyph - raised UnicodeEncodeError on the decision
@@ -4600,6 +4664,9 @@ def main() -> int:
             return 1
         return 0
     project_dir = Path.cwd()
+    # Bound before the branch: the setup offer only runs for an UNCONFIGURED project, so on
+    # every other path this name did not exist and the check below raised UnboundLocalError.
+    configured = None
     if not _plugin_enabled(project_dir):
         try:
             configured = _offer_first_time_setup(project_dir)
@@ -4612,9 +4679,16 @@ def main() -> int:
             # makes the shell function skip the launch rather than run a blank command.
             print(_Ink().dim("    -> back to the terminal"), file=sys.stderr)
             return _ABORT_EXIT_CODE
-        if configured:
+        if configured is True:
+            # `is True`, not truthiness: _SETUP_FAILED is a non-empty string, so a plain
+            # truth test announced "Setup complete" for a setup that had just failed.
             print("Setup complete - continuing the launch.", file=sys.stderr)
-    if not _plugin_enabled(project_dir):
+    if configured == _SETUP_FAILED:
+        # It has already explained itself, in full, immediately above. Adding "wrong
+        # directory?" on top of a reported failure is worse than saying nothing: it sends
+        # the user to look in the one place the problem is not.
+        pass
+    elif not _plugin_enabled(project_dir):
         # Live report (2026-08-15): a session that ran this from the wrong directory (or
         # hit a shell cwd-reset - a documented issue on some corp Windows hosts, see
         # probe-contract.md) got a silent plain launch with no explanation, indistinguishable

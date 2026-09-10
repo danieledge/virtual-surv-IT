@@ -2078,6 +2078,11 @@ def monitor_rows(snap: dict, slug: str) -> list:
         else:
             run = "gone"
         rows.append(("run", run))
+    age = snap.get("state_age")
+    if isinstance(age, (int, float)) and age > 600 and not head.get("finished"):
+        # Ten minutes of no change, and no headless run to explain it. Said plainly rather
+        # than left for the user to infer from a clock that only measures their own patience.
+        rows.append(("last change", f"{_elapsed(_clock() - age)} ago - nothing since"))
         # Proof of life, from the first tick. Before a workspace exists these are the
         # ONLY evidence the run is doing anything, which is precisely when it matters.
         if head.get("events"):
@@ -2117,6 +2122,13 @@ def _monitor_read(project_dir: Path, slug: str) -> dict:
     # don't know if it's doing anything or broken"). The stream file exists from the moment
     # the run starts; the pack does not appear until the session gets that far.
     snap["headless"] = _headless_status(project_dir, slug)
+    # WHEN the pack last changed. Without it a monitor on a killed session counts up
+    # forever and looks identical to one watching live work: the clock in the corner is
+    # how long YOU have been watching, which is not the same question.
+    try:
+        snap["state_age"] = _clock() - state_path.stat().st_mtime
+    except OSError:
+        snap["state_age"] = None
     try:
         snap["state"] = _json.loads(state_path.read_text(encoding="utf-8"))
     except FileNotFoundError:
