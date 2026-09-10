@@ -3908,6 +3908,19 @@ class Installer:
         if status in ("OK", "SKIP"):
             self.step_ok("Bash startup", detail)
             return
+        if status == "ERROR" and detail.startswith("failed to launch"):
+            # _check_shell_startup_time returns ERROR for TWO different things: bash could
+            # not be launched at all, and bash took 10s or more. Only the second justifies
+            # editing ~/.bashrc. On the first we have no measurement, the edit fixes
+            # nothing, and we would be writing to a file the user never asked us to touch
+            # on evidence we do not have.
+            self.step_fail(
+                "Bash startup",
+                f"{detail} - not editing ~/.bashrc: the probe could not run bash, "
+                "so there is no measured startup cost to fix",
+                fatal=False,
+            )
+            return
         print(f"  {self.style.yellow('!')} Bash startup: {detail}")
         # 2026-08-14 user request: describe what's about to happen BEFORE it happens -
         # this path has no interactive "Add it?" pause to convey that at write-time (see
@@ -8714,8 +8727,15 @@ def sync_org_extensions(force: bool = False, quiet: bool = True) -> tuple:
     FAIL-OPEN, ALWAYS. Status is one of: "off" (no source configured), "fresh" (inside the
     TTL, nothing done), "updated", "unchanged", or "failed". A failure NEVER removes or
     invalidates the contract already on disk - stale-but-present beats absent, and absent
-    beats a launch that hangs waiting for a share. This runs on the `go` path, so the one
-    outcome that must be impossible is blocking.
+    beats a launch that hangs waiting for a share.
+
+    **NOT wired to the launch path** (corrected 2026-09-10). This docstring said "this runs
+    on the `go` path", and it does not: the only callers are the org-extensions menu's
+    "Sync now" and the install flow, both with force=True. So the TTL and the "fresh"
+    status below are unreachable, `quiet` is never read, and a central edit reaches a
+    machine only when somebody picks Sync now. The fail-open design is still what a launch
+    path would need, which is why it is kept rather than simplified - but do not read this
+    as describing current behaviour.
 
     The fetched file is DATA, not instructions. It is parsed by a deliberately dumb parser -
     shutil.which only, plain-argv commands, shell metacharacters refused - and nothing
@@ -8767,6 +8787,14 @@ def sync_org_extensions(force: bool = False, quiet: bool = True) -> tuple:
             os.utime(target, None)  # touch, so the TTL restarts without a rewrite
             return ("unchanged", str(target))
         target.parent.mkdir(parents=True, exist_ok=True)
+        # Back up first, same as the file-install path already does. A sync replaces a
+        # contract someone may have hand-edited, from a source they do not control, and
+        # this was the one write of the three with nothing to fall back to.
+        if target.is_file():
+            try:
+                shutil.copy2(target, target.with_suffix(target.suffix + ".bak"))
+            except OSError:
+                pass  # a backup we cannot take must not stop the sync
         target.write_bytes(fetched)
     except OSError as exc:
         return ("failed", str(exc))
@@ -9175,11 +9203,30 @@ def _run_team_script(argv: list, style: Style) -> None:
 
     Consent-free team tooling by design (CLAUDE.md section 7): these are the plugin's own
     scripts, not code under review."""
+    # Run from the CLONE (so `-m scripts.extensions` imports at all) while telling the
+    # module which PROJECT to resolve the project tier against. Neither was set before:
+    # from a project folder via the alias the import failed and the user got
+    # "(no output - no extensions resolved)" plus a traceback tail, and from the clone
+    # root it resolved the CLONE's own contract while the menu row promised "org plus
+    # this directory's project file". Silently the wrong answer, both ways.
+    clone = _resolve_repo_root(None)
+    here = Path.cwd()
+    previous = os.environ.get("CLAUDE_PROJECT_DIR")
     try:
-        proc = run_cmd([sys.executable, "-m", "scripts." + argv[0], *argv[1:]], timeout=120)
+        os.environ["CLAUDE_PROJECT_DIR"] = str(here)
+        proc = run_cmd(
+            [sys.executable, "-m", "scripts." + argv[0], *argv[1:]],
+            cwd=clone if clone else None,
+            timeout=120,
+        )
     except Exception as exc:
         print(style.yellow(f"  could not run: {exc}"))
         return
+    finally:
+        if previous is None:
+            os.environ.pop("CLAUDE_PROJECT_DIR", None)
+        else:
+            os.environ["CLAUDE_PROJECT_DIR"] = previous
     body = (proc.stdout or "").strip()
     print(body if body else style.dim("  (no output - no extensions resolved)"))
     if proc.stderr.strip():
@@ -9906,9 +9953,12 @@ def parse_args(argv=None) -> argparse.Namespace:
         epilog=(
             "Also (handled before any of the above, not shown in usage above since "
             "argparse doesn't model them as a real subparser): "
-            "install_helper.py configure|archive|list-engagements [DIR] [--demo] [--yes] "
-            "- folder-scoped, same forms the 'virt-surv' alias (--setup-alias) runs when "
-            "you type e.g. 'virt-surv configure' from inside a project folder."
+            "install_helper.py go|engage|configure|onboard|archive|list-engagements|"
+            "evidence|setup-alias [DIR] [--demo] [--yes] - folder-scoped, same forms the "
+            "'virt-surv' alias (--setup-alias) runs when you type e.g. 'virt-surv "
+            "configure' from inside a project folder. (Listed in full since 2026-09-10: "
+            "five of the eight were dispatched but undocumented, so the only way to learn "
+            "they existed was to read the dispatcher.)"
         ),
     )
     parser.add_argument(
@@ -10377,10 +10427,18 @@ def _run_go(target: Path, style: Style, mark_map: dict, hat: str, demo: bool = F
                     stdout=subprocess.PIPE,
                     encoding="utf-8",
                     errors="replace",
-                    timeout=120,
+                    # NO timeout: this is an INTERACTIVE menu. At 120s, someone who paused
+                    # to think got TimeoutExpired, an empty decision, and Claude launched
+                    # with no prompt - the launcher was working perfectly and the caller
+                    # gave up on it.
                 )
                 decision = (proc.stdout or "").strip()
-            except (OSError, subprocess.TimeoutExpired):
+                if proc.returncode == 97:
+                    # The launcher's "launch nothing" contract, which the shell wrapper
+                    # honours and this path ignored - so Esc still opened a session.
+                    print(style.dim("    -> back to the terminal"))
+                    return 0
+            except OSError:
                 decision = ""
     launch_cmd = detect_or_configure_claude_launch_command(style, mark_map)
     # The launcher's stdout IS the full pre-seeded prompt now, passed through verbatim
@@ -10678,7 +10736,19 @@ def _main(argv=None) -> int:
         if args.code_intel:
             rc = max(rc, Installer(args, style, marks(), subset="codeintel").run() or 0)
         if args.extensions:
-            rc = max(rc, run_install_extensions(args.extensions, style, marks()))
+            # Gated like its neighbours above. Added 2026-08-27, after the 2026-08-13 pass
+            # that gated the other six, so it inherited the exact bug that pass fixed:
+            # `--demo --extensions FILE` overwrote the machine's org contract for real,
+            # while --demo promises nothing is written.
+            if args.demo:
+                print(
+                    style.dim(
+                        f"    would install the org extensions contract from "
+                        f"{args.extensions} (demo - nothing written)"
+                    )
+                )
+            else:
+                rc = max(rc, run_install_extensions(args.extensions, style, marks()))
         if args.configure:
             rc = max(rc, run_configure(Path(args.configure), style, marks(), args.yes, args.demo))
         if args.archive:
@@ -10781,13 +10851,29 @@ def _main(argv=None) -> int:
                 elif action == "howto":
                     run_howto(style)  # read-only narrative - never counts as "did anything"
                 elif action == "extensions":
-                    menu_rc = max(menu_rc, run_extensions_editor(style, marks()) or 0)
+                    # These three WRITE (edit/install/sync a contract, rewrite the tool
+                    # cache, shutil.move whole directories) and were reached from a --demo
+                    # session ungated, so the run did real work and the quit line still
+                    # said nothing had changed.
+                    if args.demo:
+                        print(style.dim("    org extensions: read-only in demo"))
+                        _show_resolved_extensions(style)
+                    else:
+                        menu_rc = max(menu_rc, run_extensions_editor(style, marks()) or 0)
                     did_anything = did_anything or not args.demo
                 elif action == "reprobe":
-                    menu_rc = max(menu_rc, run_tool_reprobe(style, marks()) or 0)
+                    if args.demo:
+                        print(style.dim("    would re-probe the analysers and rewrite the "
+                                        "tool cache (demo - nothing written)"))
+                    else:
+                        menu_rc = max(menu_rc, run_tool_reprobe(style, marks()) or 0)
                     did_anything = did_anything or not args.demo
                 elif action == "relocate":
-                    menu_rc = max(menu_rc, run_relocate_to_vsit(style, marks()) or 0)
+                    if args.demo:
+                        print(style.dim("    would relocate this project's files to VSIT/ "
+                                        "(demo - nothing moved)"))
+                    else:
+                        menu_rc = max(menu_rc, run_relocate_to_vsit(style, marks()) or 0)
                     did_anything = did_anything or not args.demo
                 elif action == "gitbashperf":
                     run_gitbash_perf(style, marks(), args.yes, args.demo)
