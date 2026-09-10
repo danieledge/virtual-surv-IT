@@ -100,6 +100,13 @@ RECOMMENDED_ALLOW = (
     "Bash(mypy *)",
     "Bash(bandit *)",
     "Bash(shellcheck *)",
+    # Added 2026-09-11 with osv-scanner joining the supported analyser set. THIS is the
+    # list users actually receive - the installer writes it into a project's settings and
+    # _headless_allow_rules hands it to unattended runs - so without an entry here the
+    # registry advertises the tool and every review hits a permission prompt for the team's
+    # own tooling. Always invoked --offline; that flag is why it qualified where semgrep
+    # and pip-audit did not.
+    "Bash(osv-scanner *)",
     "Bash(python -m scripts.*)",
     "Bash(python3 -m scripts.*)",
     "Bash(py -m scripts.*)",

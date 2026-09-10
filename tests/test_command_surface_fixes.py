@@ -386,3 +386,19 @@ def test_no_scanner_installed_is_not_a_failure(monkeypatch, capsys):
 
     assert ih.run_osv_db_download(ih.Style(False), ih.marks()) == 0
     assert "not installed" in capsys.readouterr().out
+
+
+def test_users_actually_receive_the_scanner_permission():
+    """RECOMMENDED_ALLOW is the list users GET: the installer writes it into a project's
+    settings, and _headless_allow_rules hands it to unattended runs. Registering a tool in
+    the analyser set without an entry here means the registry advertises it and every
+    review hits a permission prompt for the team's own tooling - which is precisely the
+    failure the allow-list exists to prevent."""
+    import install_helper as ih
+
+    allow = " ".join(ih.RECOMMENDED_ALLOW)
+    assert "osv-scanner" in allow
+
+    # Every supported analyser that is a plain binary should be reachable the same way.
+    for tool in ("ruff", "mypy", "bandit", "osv-scanner"):
+        assert tool in allow, f"{tool} is in the analyser set but not in the allow-list"

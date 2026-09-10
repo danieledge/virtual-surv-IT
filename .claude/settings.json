@@ -42,6 +42,7 @@
       "Bash(spotbugs:*)",
       "Bash(scalafmt:*)",
       "Bash(scalafix:*)",
+      "Bash(osv-scanner:*)",
       "Bash(python -m scripts.render_html:*)",
       "Bash(python3 -m scripts.render_html:*)"
     ]
