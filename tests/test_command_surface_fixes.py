@@ -186,3 +186,55 @@ def test_the_epilog_names_every_positional_subcommand():
 
     for subcommand in ("go", "engage", "configure", "onboard", "archive", "evidence"):
         assert subcommand in epilog, subcommand
+
+
+# ================================================ a clone the tool dirtied must still update
+
+
+def test_the_tools_own_config_is_reset_rather_than_blocking_an_update():
+    """User report, 2026-09-10: "the stash question ... they haven't intentionally written
+    anything to the plugin directory".
+
+    They had not. `.claude/settings.json` and `.claude/team-preferences.json` are TRACKED
+    and the tool writes them itself - configure, a model change, any settings toggle - so
+    the clone went dirty on its own and the next update refused over edits that were never
+    the user's. These files are the shipped defaults, so an update takes the incoming
+    version.
+    """
+    import install_helper as ih
+
+    assert ".claude/settings.json" in ih._SELF_OWNED_CONFIG
+    assert ".claude/team-preferences.json" in ih._SELF_OWNED_CONFIG
+    # Narrow on purpose: everything else in the tree belongs to the user and is stashed
+    # and restored, never discarded.
+    assert len(ih._SELF_OWNED_CONFIG) == 2
+
+
+def test_settings_backups_are_ignored_so_they_cannot_dirty_a_clone():
+    """Each settings write drops a dated settings.json.bak-<date> beside its target. None
+    of those shapes were ignored, so every configure run also left untracked files."""
+    import subprocess
+
+    for candidate in (
+        ".claude/settings.json.bak",
+        ".claude/settings.json.bak-2026-09-10",
+        ".claude/settings.json.bak-2026-09-10.2",
+    ):
+        done = subprocess.run(
+            ["git", "check-ignore", "-q", candidate],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+        )
+        assert done.returncode == 0, f"{candidate} is not ignored"
+
+
+def test_no_backup_file_is_tracked_in_the_repo():
+    """A .bak is a backup by definition and never belongs in the history."""
+    import subprocess
+
+    tracked = subprocess.run(
+        ["git", "ls-files"], cwd=str(REPO_ROOT), capture_output=True, text=True
+    ).stdout.splitlines()
+    offenders = [p for p in tracked if ".bak" in p]
+
+    assert offenders == [], f"backup files in version control: {offenders}"

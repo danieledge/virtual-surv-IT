@@ -1243,6 +1243,16 @@ def windows_shim_cmdline(shim_path: str, rest) -> str:
     return f'cmd.exe /s /c "{inner}"'
 
 
+# Config the PLUGIN writes into its own clone. On update these are reset to the incoming
+# version rather than preserved: they are the shipped defaults, the tool authors them, and
+# a user configuring the clone should not thereby be blocked from updating it. Anything
+# else in the tree is the user's and is stashed and restored, never discarded.
+_SELF_OWNED_CONFIG = (
+    ".claude/settings.json",
+    ".claude/team-preferences.json",
+)
+
+
 def run_cmd(argv, cwd: Optional[Path] = None, timeout: int = 300):
     """Fixed-argv runner, output captured. Tests monkeypatch this symbol; --demo swaps
     it for make_demo_runner's dry-run stand-in for the duration of the run.
@@ -2469,18 +2479,45 @@ class Installer:
                 self.step_skip("Sync", "declined - staying on your current code")
                 return
 
+        # The tool's OWN config in its own clone is disposable: take the incoming version
+        # (owner decision, 2026-09-10 - "we might change default settings so let's just
+        # overwrite with latest version, keep it simple"). These files are TRACKED and the
+        # tool writes them itself - every configure run, model change or settings toggle
+        # touches one - so users hit "you have uncommitted changes" having written nothing,
+        # and an update refused over edits that were never theirs. Discarding them first
+        # also means there is nothing here for a later stash pop to conflict on, which is
+        # exactly where these files would have collided. Anything the user genuinely
+        # changed is still stashed and restored below.
+        reset = [p for p in _SELF_OWNED_CONFIG if (Path(repo) / p).exists()]
+        if reset:
+            proc = run_cmd(["git", "-C", repo, "checkout", "--", *reset])
+            if proc.returncode == 0:
+                self.say(self.style.dim(f"  Took the new defaults for {', '.join(reset)}."))
+
         if is_dirty(repo):
             self.say(self.style.yellow("  The clone has uncommitted local changes."))
-            if self.args.yes or not sys.stdin.isatty():
-                self.step_fail(
-                    "Working tree",
-                    "dirty - refusing to reset; commit or stash your changes, then re-run",
+            # STASH, don't refuse (2026-09-10 user report). Users hit this having written
+            # nothing: the tool dirties its own clone. `.claude/settings.json` and
+            # `.claude/team-preferences.json` are TRACKED and every configure run, model
+            # change or settings toggle writes one of them, and the dated
+            # `settings.json.bak-<date>` each write leaves behind was not ignored either.
+            # So "commit or stash your changes, then re-run" asked the user to deal with
+            # edits that were never theirs, and the update screen had already promised
+            # they would be "stashed and restored around the pull" - a promise this branch
+            # then broke. Under --yes (which is how the menu's own update runs) it did not
+            # even ask; it just failed. Stashing is safe, reversible, and what was
+            # promised. It is restored after the pull below.
+            if (
+                self.args.yes
+                or not sys.stdin.isatty()
+                or confirm(
+                    "  Shall I stash them and carry on?",
+                    # default YES now: the answer that loses nothing, and the one the
+                    # update screen already told the user it would take.
+                    default=True,
+                    assume_yes=False,
+                    style=self.style,
                 )
-            if confirm(
-                "  Shall I stash them and carry on?",
-                default=False,
-                assume_yes=False,
-                style=self.style,
             ):
                 proc = run_cmd(
                     [
@@ -3379,7 +3416,22 @@ class Installer:
                 suffix = f"  {s.dim('(' + detail + ')')}" if detail else ""
                 self.say(f"    {paint(mark)} {name}{suffix}")
         if self.stashed:
-            self.say(s.yellow("  Your local changes are stashed: git stash pop to restore."))
+            # Restore them. Telling the user to run `git stash pop` themselves is homework
+            # for changes that, in the common case, the TOOL made - and a stash nobody
+            # pops is how work gets lost three updates later.
+            proc = (
+                run_cmd(["git", "-C", str(self.repo), "stash", "pop"])
+                if self.repo
+                else None
+            )
+            if proc is not None and proc.returncode == 0:
+                self.say(s.dim("  Your local changes are back."))
+                self.stashed = False
+            else:
+                # A conflict against what the pull brought in. Leave the stash alone and
+                # say exactly how to get it: losing it silently would be far worse.
+                self.say(s.yellow("  Your local changes could not be restored automatically."))
+                self.say(s.dim("  They are safe in the stash: git stash pop  (resolve conflicts)"))
         if aborted:
             self.say("")
             self.say("Fix the failed step above and run me again - I'm safe to repeat.")

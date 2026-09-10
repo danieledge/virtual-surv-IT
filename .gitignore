@@ -144,3 +144,13 @@ docs/demos/**/*.html
 # Research review commissioned 2026-09-02 - internal assessment, same treatment as
 # the other docs/internal plans and audits above.
 docs/internal/research-review-2026-09-02.md
+
+# Settings backups the tool writes beside the file it is editing (2026-09-10). Every
+# configure run, model change or permissions write drops a dated `settings.json.bak-<date>`
+# next to its target; none of them were ignored, so a clone went dirty from files the USER
+# never wrote and the next update refused to run. The .bak shape is a backup by definition
+# and never belongs in the history.
+.claude/settings.json.bak
+.claude/*.bak
+.claude/*.bak-*
+*.json.bak-*
