@@ -13,7 +13,7 @@
    third party reconstruct what was done, and retrofitting it later is expensive and lossy. The
    governance **extras** (control mappings, model-validation opinions, ops runbook / change
    request, split artifact packs) stay opt-in via the artifact menu - right-sizing still applies.
-   Frame outputs as *consumable by a model-governance or audit reviewer*, never as "SR 11-7 /
+   Frame outputs as *consumable by a model-governance or audit reviewer*, never as "SR 26-2 /
    SS1/23 compliant" (formal MRM scope for surveillance code review is contested; make no
    compliance claims). Spec: `docs/templates/review-report.md` + `docs/review/output-format.md`.
 4a. **Code ships only with tests and an independent QA pass - no workflow exempts it.** The
@@ -44,7 +44,7 @@
    critique step names the standard it checks against - the **5 C's** for findings
    (`docs/review/output-format.md`), **BABOK quality criteria** for requirements
    (unambiguous · testable · atomic · consistent · complete), **ISO/IEC 29119-shaped**
-   completeness for QA evidence, **SR 11-7-style** documentation expectations for validation
+   completeness for QA evidence, **SR 26-2-style** documentation expectations for validation
    reports - the critic is never the author, and the deliverable records which standard it was
    checked against. A critique step with no named standard is a defect in the process, not
    diligence. Prefer cheap binary gate checks (present / absent → regenerate) over critique

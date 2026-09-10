@@ -103,7 +103,7 @@ email, which is an email and stays a `.txt` (see the last row).
 | UAT plan & results | `uat-plan.md` | acceptance-criteria-driven UAT |
 | Reg-change impact assessment | `reg-change-impact.md` | traced obligation→scenario/control/data |
 | Threshold-tuning pack | `threshold-tuning-pack.md` | **FFIEC/FATF** - ATL/BTL + segmentation |
-| TM model-validation pack | `tm-model-validation.md` | **SR 11-7** + FFIEC BSA/AML |
+| TM model-validation pack | `tm-model-validation.md` | **SR 26-2** (which superseded SR 11-7 *and* SR 21-8, the BSA/AML statement) + FFIEC BSA/AML. Check first whether the scenario is a **model** at all: a threshold rule is a deterministic rule-based process and likely is not - see `docs/scope-and-stack.md` |
 | Data dictionary | `data-dictionary.md` | **DAMA-DMBOK** field-level |
 | MI / dashboard spec | `mi-spec.md` | metrics + lineage + access |
 | Segmentation analysis | `segmentation-analysis.md` | risk-based segments → thresholds |
@@ -118,11 +118,11 @@ email, which is an email and stays a `.txt` (see the last row).
 | QA Handover (test evidence) | `qa-handover.md` | independent QA sign-off evidence |
 | Change Request / RFC | `change-request.md` | feeds your change control / CAB |
 | Ops Runbook + Release Notes | `ops-runbook.md`, `release-notes.md` | feed ops/support + release |
-| Model Validation Report | `model-validation-report.md` | **SR 11-7**, **PRA SS1/23** |
+| Model Validation Report | `model-validation-report.md` | **SR 26-2**, **PRA SS1/23**. For a statistical or ML model; a deterministic rule wants the tuning register instead |
 | Decision & open-questions log | `decision-log.md` | the **DoD "open questions dispositioned"** gate |
 | Alert investigation / case review | `alert-investigation.md` | analyst disposition record (close / escalate / SAR) |
 | SAR/STR referral pack | `sar-str-referral.md` | **CDR 2016/957** - reasons-to-suspect + 5yr retention |
-| Tuning decision register | `tuning-decision-register.md` | **SR 11-7**/FFIEC model-change-management (running log) |
+| Tuning decision register | `tuning-decision-register.md` | **SR 26-2**/FFIEC change management (running log). **This is the artifact for a threshold rule**, which SR 26-2 likely does not treat as a model |
 | Control mapping | `control-mapping.md` | scenario -> obligation -> internal control -> effectiveness |
 | Data lineage | `data-lineage.md` | feed -> field -> transform -> scenario (+ RTS 25, reconciliation) |
 | **Engagement summary email** (always, at close) | `engagement-summary-email.md` | PM cover note - **`.txt` in the workspace `VSIT/engagements/<slug>/`**, signed as Morgan ("Hi," if recipient unknown) |
@@ -198,7 +198,7 @@ developers and QA reviewers can trust what the team hands over.
   (MIT). `/deep-review` runs the detailed, multi-dimension review (bugs, security,
   architecture, impact analysis); regulated findings (secrets, PII, broken traceability) are
   never filtered.
-- **SR 11-7 / PRA SS1/23** - model-risk governance for any ML detection.
+- **SR 26-2 / PRA SS1/23** - model-risk governance for any ML detection. SR 26-2 replaced SR 11-7 on 17 Apr 2026 and narrowed "model" to exclude deterministic rule-based processes; it also excludes generative AI entirely. Detail and the classification question: `docs/scope-and-stack.md`.
 - **Eval regression gate** - prompt/skill/agent-definition changes are validated by the eval
   harness (`/run-evals`): full pytest (contract + docs-consistency tests) plus a live golden-slice
   spot check for prompt changes; a change that drops a previously passing golden case does not land.

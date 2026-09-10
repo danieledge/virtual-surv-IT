@@ -17,7 +17,7 @@ omission when off, CLAUDE.md §6a). Key frameworks per jurisdiction:
 - **EU:** MLR / 6AMLD (AML), Market Abuse Regulation (MAR), MiFID II.
 - **UK:** MLR 2017 / JMLSG (AML), UK MAR, FCA SYSC / SUP record-keeping, PRA SS1/23 (model risk).
 - **US:** BSA / FinCEN (AML), SEC & FINRA rules, Dodd-Frank, CFTC, SEC Rule 17a-4 / FINRA 4511
-  (recordkeeping & retention), SR 11-7 (model risk).
+  (recordkeeping & retention), **SR 26-2** (model risk - see below).
 - **Singapore (MAS):** Securities and Futures Act (SFA) - market manipulation & insider
   trading; MAS AML/CFT Notices (e.g. 626); MAS guidelines.
 - **Hong Kong (SFC):** Securities and Futures Ordinance (SFO) - market misconduct (manipulation,
@@ -27,7 +27,24 @@ omission when off, CLAUDE.md §6a). Key frameworks per jurisdiction:
   risk management principles.
 - **Cross-cutting (AML):** FATF recommendations underpin the AML regimes above.
 - **Cross-cutting (model risk):** apply the applicable model-risk standard to every statistical
-  or ML detection model - SR 11-7 (US), PRA SS1/23 (UK), and the JFSA/MAS equivalents.
+  or ML detection model - **SR 26-2** (US), PRA SS1/23 (UK), and the JFSA/MAS equivalents.
+
+> ### SR 11-7 was rescinded on 17 April 2026
+>
+> **SR 26-2** replaced it (with OCC Bulletin 2026-13 and an FDIC statement) and also
+> superseded **SR 21-8**, the BSA/AML model-risk statement. Anything citing SR 11-7 is
+> citing withdrawn guidance. <https://www.federalreserve.gov/supervisionreg/srletters/SR2602.htm>
+>
+> The core disciplines are unchanged. Three things matter here:
+>
+> 1. **"Model" is narrower** - a *complex quantitative method*, expressly excluding
+>    deterministic rule-based processes. A threshold scenario is very likely **not a model**,
+>    so its artifact is the **tuning decision register**, not a validation report. Statistical
+>    and ML detection still are models. Say which, and why; the determination is the firm's.
+> 2. **Generative and agentic AI are out of scope** - not the standard to cite for this
+>    team's own outputs.
+> 3. **Principles, not enforceable standards.** Cite as expectations met, never as
+>    "complies with".
 
 > The compliance review assesses against **these** jurisdictions. State explicitly which
 > regime(s) apply to a given deliverable and which don't. Edit this list if your footprint changes.

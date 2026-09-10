@@ -180,7 +180,7 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       author** checked each major deliverable against its profession's named criteria
       (findings → the 5 C's shape in `docs/review/output-format.md`; requirements → BABOK
       quality criteria; QA evidence → ISO/IEC 29119-shaped completeness; validation reports →
-      SR 11-7-style documentation expectations), and the deliverable records which standard
+      SR 26-2-style documentation expectations, which replaced SR 11-7 on 17 Apr 2026), and the deliverable records which standard
       it was checked against (operating guide, Outcome discipline 6). Ungrounded
       "second-look" passes do not satisfy this gate. **When off,** this item is **N/A, not a
       failure** - say so plainly rather than silently omitting it.

@@ -15,7 +15,7 @@
 > done, and a quick review in this skeleton is still short. The **opt-in governance extras**
 > (control mappings, model-validation opinions, ops runbook / change request, a split
 > artifact pack) are selected via the artifact menu, never assumed. Frame the output as
-> *structured so a model-governance or audit reviewer can consume it* - never as "SR 11-7 /
+> *structured so a model-governance or audit reviewer can consume it* - never as "SR 26-2 /
 > SS1/23 compliant" (whether surveillance code review falls in formal MRM scope is contested;
 > make no compliance claims).
 

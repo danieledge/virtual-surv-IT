@@ -2,7 +2,10 @@
 
 > Produced and maintained by `tuning-analyst`; reviewed by `compliance-reviewer` at each DoD
 > gate. A running log - not a point-in-time report - of every threshold and parameter change
-> applied to a detection scenario. Satisfies SR 11-7 / FFIEC model-change-management obligations.
+> applied to a detection scenario. Satisfies SR 26-2 / FFIEC change-management expectations.
+> **For a threshold rule this is the primary governance artifact**, not a model-validation
+> report: SR 26-2 excludes deterministic rule-based processes from the definition of a model
+> (`docs/scope-and-stack.md`).
 
 > **Document control** · ID `TDR-001` · Version `0.1` · Status `Draft | In review | Approved`
 > · Classification `Confidential` · Owner `<tuning-analyst / model owner>` · As-of `<YYYY-MM-DD>`
@@ -34,13 +37,15 @@
   review after deployment - mark as `Pending` until confirmed.
 - Changes to live detection logic also require `rules-developer` implementation and
   `model-validator` / `compliance-reviewer` sign-off (ref DoD gate).
-- SR 11-7 requires that material model changes are independently validated - flag in column M.
+- SR 26-2 expects material changes to a *model* to be independently validated - flag in column M.
+  Where the scenario is a deterministic rule and therefore not a model, the same column still
+  earns its place as the change-management record; say which basis applies.
 
 ---
 
 ## Change log
 
-| # | Date applied | Scenario | Parameter | From value | To value | Evidence / tuning pack ref | ATL-BTL ref | Approver | Implemented by | Effect on alert volume (measured) | Material change (SR 11-7)? | Notes |
+| # | Date applied | Scenario | Parameter | From value | To value | Evidence / tuning pack ref | ATL-BTL ref | Approver | Implemented by | Effect on alert volume (measured) | Material change (SR 26-2)? | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 001 | <YYYY-MM-DD> | <scenario name> | <param name> | <old value> | <new value> | THP-<NNN> | ATL-<NNN> / BTL-<NNN> | <approver name / role> | `rules-developer` | <e.g. -12% alerts; 2% coverage loss - measured YYYY-MM-DD> | Yes / No | <any notes> |
 | 002 | | | | | | | | | | Pending | | |

@@ -26,7 +26,7 @@ attention they get; classify with the power/interest grid in §4.
 | STK-002 | MLRO / Financial Crime | AML | … | H | SAR/STR quality, FATF alignment | AML penalty exposure, SAR rejection rate |
 | STK-003 | Surveillance analysts | Operations | … | M | alert quality, low false positives | alert fatigue, poor explainability |
 | STK-004 | Data engineering / IT | Platform | … | M | feed stability, retention, residency | data-quality incidents, retention gaps |
-| STK-005 | Internal Audit / Model Risk | Assurance | … | M | traceability, SR 11-7 / SS1/23 evidence | undocumented thresholds, missing test evidence |
+| STK-005 | Internal Audit / Model Risk | Assurance | … | M | traceability, SR 26-2 / SS1/23 evidence | undocumented thresholds, missing test evidence |
 | STK-006 | Regulator (indirect) | External | … | H | demonstrable obligation coverage (§2) | coverage gaps, inadequate SAR filing |
 
 ## 3. RACI

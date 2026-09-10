@@ -1,7 +1,15 @@
 # TM Model Validation Pack - <TM SYSTEM / SCENARIO SET>
 
 > Produced by `/validate-tm-model` (`tuning-analyst` data work + independent `model-validator`
-> verdict). Periodic "is the detection still fit for purpose" review - SR 11-7 + FFIEC BSA/AML.
+> verdict). Periodic "is the detection still fit for purpose" review - SR 26-2 + FFIEC BSA/AML.
+>
+> **First, is this a model at all?** SR 26-2 (17 Apr 2026, replacing SR 11-7 and the BSA/AML
+> statement SR 21-8) narrowed "model" to a *complex quantitative method or approach* and
+> expressly excludes **deterministic rule-based processes**. A threshold-based TM scenario is
+> on its face one of those, so this pack may be the wrong artifact for it: the right one is
+> the **tuning decision register**. Use this pack for a statistical or ML detection model, or
+> where the firm's model-risk function has classified the scenario as a model. Record which,
+> and on whose determination - it is the firm's call, not the team's.
 > Synthetic/masked data only (§5). Authored in `.md`, rendered to `.html`.
 
 > **Document control** · ID `TMV-001` · Version `0.1` · Status `Draft | In review | Approved`
@@ -36,7 +44,7 @@ Completeness, accuracy, timeliness and reconciliation of the feeds the model dep
 `data-quality-reviewer`). A late/partial feed silently degrades detection.
 
 ## 4. Model assumptions - stated and challenged
-List every assumption the model rests on and the challenge applied. SR 11-7 requires that
+List every assumption the model rests on and the challenge applied. SR 26-2 expects that
 assumptions are identified, documented, and independently tested.
 
 | # | Assumption | Where it appears in logic | Challenge / test applied | Result | Basis |

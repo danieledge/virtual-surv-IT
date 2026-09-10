@@ -100,6 +100,13 @@ guarantee, channel by channel - is [`docs/safety-model.md`](safety-model.md).
 ## Domain evidence base (general reference, not project memory)
 Provenance for the regulatory content the team ships. This is **domain-general** (it applies to any
 surveillance engagement), so it lives here; per-engagement findings do not.
+
+> **SR 11-7 below is a record of what was verified, and when.** It was rescinded on
+> 17 Apr 2026 and replaced by SR 26-2, which also superseded SR 21-8 for BSA/AML systems.
+> The entries are left as written rather than rewritten, because changing them would
+> falsify the account of what was actually checked against at the time. For what to cite
+> **today**, and for the change that matters most - SR 26-2 excludes deterministic
+> rule-based processes from the definition of a model - see `docs/scope-and-stack.md`.
 - ✅ **AML/TM tuning - VERIFIED**: ATL/BTL, risk-based segmentation, SR 11-7 model validation, FFIEC
   BSA/AML.
 - ✅ **FCA Market Watch 79 - VERIFIED**

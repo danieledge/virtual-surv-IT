@@ -592,3 +592,37 @@ def test_inbound_jira_tracks_progress_on_transitions_not_every_mutation():
     assert "it is the default" in public
     skill = _flat(_read(".claude/skills/engage/SKILL.md"))
     assert "track progress on that ticket as you go" in skill
+
+
+def test_no_document_cites_sr_11_7_as_current_guidance():
+    """SR 11-7 was rescinded on 17 Apr 2026 and replaced by SR 26-2, which also superseded
+    SR 21-8 for BSA/AML systems. A compliance product citing withdrawn guidance is the
+    thing a reader notices first.
+
+    Two kinds of mention are legitimate and are the only ones allowed through: naming it as
+    rescinded/replaced/superseded/withdrawn, and the dated evidence records in house-rules,
+    which document what was verified against at the time and would be falsified by a
+    rewrite.
+    """
+    import re
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parent.parent
+    allowed = re.compile(
+        r"rescind|replac|supersed|withdraw|predecessor|do not cite it as current",
+        re.IGNORECASE,
+    )
+    offenders = []
+    for md in repo.glob("docs/**/*.md"):
+        if "/adr/" in md.as_posix() or "/internal/" in md.as_posix():
+            continue  # dated records, ignored by design
+        if md.name == "house-rules.md":
+            continue  # carries its own "this is a record of what was verified" banner
+        for n, line in enumerate(md.read_text(encoding="utf-8").splitlines(), 1):
+            if "SR 11-7" in line and not allowed.search(line):
+                offenders.append(f"{md.relative_to(repo)}:{n}")
+    for n, line in enumerate((repo / "CLAUDE.md").read_text(encoding="utf-8").splitlines(), 1):
+        if "SR 11-7" in line and not allowed.search(line):
+            offenders.append(f"CLAUDE.md:{n}")
+
+    assert offenders == [], "SR 11-7 cited as current in:\n  " + "\n  ".join(offenders)

@@ -148,7 +148,7 @@ signed as Morgan), and human sign-off.
 
 ## 8. Ways of working & artifacts
 
-- **Frameworks:** BABOK+EARS, ISO/IEC/IEEE 29148 + Gherkin, ADRs+C4, OWASP ASVS / CWE, SR 11-7 /
+- **Frameworks:** BABOK+EARS, ISO/IEC/IEEE 29148 + Gherkin, ADRs+C4, OWASP ASVS / CWE, SR 26-2 /
   SS1/23, and Anthropic's *Building Effective Agents* patterns - menu and templates in
   `docs/WAYS-OF-WORKING.md`; review method in `docs/code-review-method.md`.
 - **Traceability spine:** `BRD-001 → FSD-001 → code → test → obligation`, tracked in the RTM

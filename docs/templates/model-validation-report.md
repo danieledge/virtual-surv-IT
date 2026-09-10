@@ -1,7 +1,13 @@
 # Model Validation Report - <MODEL NAME / VERSION>
 
 > Produced by `model-validator`, **independent** of `ml-engineer` (CLAUDE.md §7).
-> Aligned to model-risk governance: US SR 11-7, UK PRA SS1/23.
+> Aligned to model-risk governance: US **SR 26-2** (which replaced SR 11-7 on 17 Apr 2026,
+> and superseded SR 21-8 for BSA/AML systems), UK PRA SS1/23.
+>
+> Use this for a **statistical or ML** detection model. SR 26-2 excludes deterministic
+> rule-based processes from the definition of a model, so a threshold rule wants the
+> **tuning decision register** instead - `docs/scope-and-stack.md` has the distinction and
+> whose call it is.
 
 > **Document control** · ID `MVR-001` · Version `0.1` · Status `Draft | In review | Approved`
 > · Classification `Confidential` · Owner `<name / role>` · As-of `<YYYY-MM-DD>`

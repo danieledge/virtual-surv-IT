@@ -41,7 +41,8 @@ The domain and spec shorthand used throughout the repo and the team's artifacts.
 | SAR / STR / STOR | Suspicious Activity Report / Suspicious Transaction Report / Suspicious Transaction and Order Report |
 | SARIF | Static Analysis Results Interchange Format - the standard JSON format analyser tools emit findings in |
 | SME | Subject-Matter Expert |
-| SR 11-7 | The US Federal Reserve's supervisory guidance on model risk management |
+| SR 26-2 | The US Federal Reserve's supervisory guidance on model risk management since 17 Apr 2026. Replaced SR 11-7, and superseded SR 21-8 for BSA/AML systems. Narrower: a "model" must be a *complex quantitative method*, which excludes deterministic rule-based processes, and generative AI is out of scope entirely |
+| SR 11-7 | The **rescinded** predecessor to SR 26-2 (withdrawn 17 Apr 2026). Still cited widely in the industry; do not cite it as current |
 | TM | Transaction Monitoring |
 | UAT | User Acceptance Testing |
 

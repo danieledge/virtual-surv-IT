@@ -83,7 +83,7 @@ EARS phrasing required; use the REQ-NF-### series for stable IDs.
 | ID | NFR (EARS) | Category | Driver / obligation | Priority |
 |----|------------|----------|---------------------|----------|
 | REQ-NF-001 | The system shall retain alert records for <n> years without modification | Retention / immutability | SEC 17a-4 / FCA SYSC | Must |
-| REQ-NF-002 | When an alert is generated, the system shall produce a traceable audit record linking alert to logic to obligation within <n> seconds | Auditability | MAR / SR 11-7 | Must |
+| REQ-NF-002 | When an alert is generated, the system shall produce a traceable audit record linking alert to logic to obligation within <n> seconds | Auditability | MAR / SEC 17a-4 | Must |
 | REQ-NF-003 | The system shall process <n> events per day with end-to-end latency not exceeding <t> minutes | Performance | <internal SLA> | Must |
 | REQ-NF-004 | The system shall operate without storing PII or MNPI outside the approved data classification boundary | Data safety | GDPR / CLAUDE.md §5 | Must |
 

@@ -83,7 +83,7 @@ flowchart TD
 | Control | Step | Type (preventive/detective) | Obligation (§2) |
 |---------|------|-----------------------------|-----------------|
 | Reconciliation check | step 1 | detective | FCA SYSC record-keeping |
-| Alert audit trail | triage | detective | MAR / SR 11-7 |
+| Alert audit trail | triage | detective | MAR / SEC 17a-4 |
 
 ## 10. KPIs & SLAs
 Measurable performance targets for the process. Agree baselines and review cadence with the

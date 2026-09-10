@@ -447,7 +447,7 @@
     "docs/scope-and-stack.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 767
+      "baseline_tokens": 1014
     },
     "docs/sme/comms-surveillance.md": {
       "tier": "DEFERRED",
