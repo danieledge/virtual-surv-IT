@@ -1153,3 +1153,58 @@ def test_an_older_caller_without_the_unarchive_hook_still_works():
     launcher_tiers.FinishedApp.on_key(app, _Key("u"))
 
     assert "not available" in app.note
+
+
+def test_a_pasted_jira_url_lands_in_the_buffer():
+    """Live report, 2026-09-11: "I can't paste a URL into the Jira ticket prompt on
+    PowerShell."
+
+    A bracketed paste arrives as a Paste EVENT, not as key presses, so a screen with only
+    an on_key handler drops it silently: nothing appears and no error is shown. RequestApp
+    has always had on_paste; JiraApp never did. The prompt_toolkit tier binds
+    Keys.BracketedPaste, so only the Textual tier was affected - and that is the default on
+    a capable terminal.
+    """
+    import launcher_tiers
+
+    class _Paste:
+        def __init__(self, text):
+            self.text = text
+
+        def stop(self):
+            pass
+
+    app = launcher_tiers.JiraApp.__new__(launcher_tiers.JiraApp)
+    app.buf = ""
+    app.paint = lambda: None
+
+    launcher_tiers.JiraApp.on_paste(app, _Paste("https://acme.atlassian.net/browse/SURV-142"))
+    assert app.buf == "https://acme.atlassian.net/browse/SURV-142"
+
+
+def test_a_paste_with_a_trailing_newline_does_not_carry_it():
+    """Terminals commonly append one, and a URL with a newline in it reads as garbage."""
+    import launcher_tiers
+
+    class _Paste:
+        def __init__(self, text):
+            self.text = text
+
+        def stop(self):
+            pass
+
+    app = launcher_tiers.JiraApp.__new__(launcher_tiers.JiraApp)
+    app.buf = ""
+    app.paint = lambda: None
+
+    launcher_tiers.JiraApp.on_paste(app, _Paste("SURV-142\n"))
+    assert app.buf == "SURV-142"
+
+
+def test_both_typed_input_screens_handle_paste():
+    """These are the only two screens that accept typed text. One having the handler and
+    the other not is exactly how this bug survived."""
+    import launcher_tiers
+
+    for cls in (launcher_tiers.JiraApp, launcher_tiers.RequestApp):
+        assert callable(getattr(cls, "on_paste", None)), cls.__name__

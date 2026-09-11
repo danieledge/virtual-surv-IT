@@ -50,6 +50,12 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   instruct, so they fell back to prose. The plugin's own repo is on the legacy layout, which
   is why none of it surfaced, and no guard test carried a new-layout path. Both layouts are
   accepted now and the tests cover both.
+- **A pasted Jira URL lands in the ticket prompt.** A bracketed paste arrives as a Paste
+  event, not as key presses, and `JiraApp` had only an `on_key` handler, so the paste was
+  dropped with nothing shown and no error. The request composer has always had the handler
+  and the prompt_toolkit tier binds `BracketedPaste`, so only the Jira prompt in the Textual
+  tier was affected - which is the default tier, and the one screen where pasting matters
+  most, since nobody types a Jira URL by hand.
 - **The guards' own launcher can no longer be used to disarm them.** `run-guard.sh` reads a
   cached interpreter name, executes it and returns its exit code, and nothing checked what
   the string was: a file containing `/bin/true` made every hook exit 0, the raw-data wall

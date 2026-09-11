@@ -1985,6 +1985,26 @@ class JiraApp(TierApp):
 
         self.foot((("enter", "start"), ("^t", "unattended"), ("^u", "clear"), ("esc", "back")))
 
+    def on_paste(self, event) -> None:
+        """A pasted ticket URL has to land, and without this it did not.
+
+        Live report (2026-09-11): "I can't paste a URL into the Jira ticket prompt on
+        PowerShell." A bracketed paste arrives as a Paste EVENT, not as a sequence of key
+        presses, so a screen with only an on_key handler drops it silently - the user sees
+        nothing appear and no error. RequestApp has had this handler all along and JiraApp
+        never did, which is why pasting works when typing a request and not when pasting a
+        ticket; the prompt_toolkit tier binds Keys.BracketedPaste, so it was unaffected,
+        and this screen is exactly the one where pasting matters most, since a Jira URL is
+        long and nobody types it.
+
+        Whitespace is collapsed rather than stripped: a URL has none, and a paste of
+        "SURV-142 see this" keeps both parts for _key_of to read.
+        """
+        text = getattr(event, "text", "") or ""
+        self.buf += " ".join(text.split())
+        event.stop()
+        self.paint()
+
     def on_key(self, event) -> None:
         key = event.key
         if key in ("escape", "ctrl+c"):
