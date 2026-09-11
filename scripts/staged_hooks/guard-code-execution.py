@@ -426,6 +426,82 @@ def _team_invoked_this_session(payload) -> bool:
     return False  # no stamp anywhere = the team was never invoked here - dormant
 
 
+def _resolves_into_plugin_scripts(seg: str) -> bool:
+    """Does this segment name a script inside the PLUGIN'S OWN scripts directory?
+
+    WHY (2026-09-11 review). Three _TEAM_ALLOW branches carried no name check at all:
+
+        python -m scripts.<anything>
+        python scripts/<anything>
+        bash scripts/<anything>
+
+    _TEAM_SCRIPT_NAMES applied only to the quoted and absolute forms. So in plugin mode,
+    reviewing a client repo with its own scripts directory - which is very common -
+    `python scripts/deploy.py` and `bash scripts/run_all.sh` ran with no consent prompt.
+    Executing the code under review is the one thing this gate exists to stop.
+
+    The name list cannot fix it alone: it holds 24 names while the plugin ships 64 scripts,
+    so tightening those branches against it would break /dashboard and /run-evals, and
+    extending it to all 64 creates a hand-maintained list that goes stale, which is already
+    a standing problem here.
+
+    Location is the better discriminator and it is available. This file sits two levels
+    below the plugin root, so the plugin's own scripts directory is computable. A relative
+    `scripts/x.py` resolves against the invocation's cwd, which in plugin mode is the CLIENT
+    project, so it lands outside the plugin and is refused; the same command inside the
+    plugin's own repo resolves inside and is allowed.
+
+    Residual, stated rather than hidden: a lexical guard cannot resolve `-m` lookups through
+    sys.path, so the module form falls back to "does the plugin actually ship that script".
+    This narrows a wide hole, it does not close it. ADR-002 covers the general residual.
+    """
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        plugin_scripts = os.path.realpath(os.path.join(here, "..", "..", "scripts"))
+    except Exception:  # noqa: BLE001
+        return False  # cannot locate ourselves: do not hand out the allowance
+
+    root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    saw_path = False
+    for match in re.finditer(r"(?:^|\s)([^\s\"']*scripts[/\\][^\s\"']+)", seg):
+        saw_path = True
+        referenced = match.group(1)
+        # WHITELISTED BASENAME FIRST, and this ordering is the whole correctness of the
+        # function. The bundled-plugin form is
+        #     python3 "$CLAUDE_SKILL_DIR/../../../scripts/render_html.py" ...
+        # which carries an UNEXPANDED shell variable, so it cannot be resolved by anyone,
+        # let alone by a lexical guard. That is exactly why the basename whitelist exists
+        # (see the module docstring: "invoked by absolute path from a foreign project,
+        # basename-whitelisted"). My first version resolved before checking the name and
+        # refused all three bundled cases, breaking /engage from a foreign project - caught
+        # by tests/test_guards.py, which was right and I was wrong.
+        # Split on BOTH separators, never os.path.basename: this guard runs on Linux too,
+        # where basename does not treat a backslash as a separator, so a Windows command
+        # (`py C:\plugin\scripts\check_artifacts.py`) came back whole and matched nothing.
+        # The rest of this file is careful about `[/\\]` everywhere for the same reason.
+        leaf = re.split(r"[/\\]", referenced)[-1]
+        if re.fullmatch(_TEAM_SCRIPT_NAMES, leaf):
+            continue
+        # Not one of ours by name: then it must be one of ours by LOCATION, which is what
+        # closes the hole this function was added for. A client repo's scripts/deploy.py
+        # satisfies neither.
+        try:
+            resolved = os.path.realpath(os.path.join(root, referenced))
+        except Exception:  # noqa: BLE001
+            return False
+        if os.path.dirname(resolved) != plugin_scripts:
+            return False
+    if saw_path:
+        return True
+
+    # `-m scripts.<name>` carries no path to resolve, so judge it by whether the plugin
+    # actually ships that script.
+    module = re.search(r"-m\s+scripts\.([A-Za-z_][A-Za-z0-9_]*)", seg)
+    if module:
+        return os.path.isfile(os.path.join(plugin_scripts, module.group(1) + ".py"))
+    return True
+
+
 def main() -> None:
     try:
         payload = json.load(sys.stdin)
@@ -450,7 +526,9 @@ def main() -> None:
     # Evaluate each segment independently: allow the team's own tooling, block anything that
     # executes code. A blocked segment anywhere in the command blocks the whole command.
     for seg in _segments(cmd):
-        if _TEAM_ALLOW.match(seg) or _company_allowed(seg):
+        if (_TEAM_ALLOW.match(seg) and _resolves_into_plugin_scripts(seg)) or _company_allowed(
+            seg
+        ):
             continue
         if _EXEC_RE.search(seg):
             _block(cmd, seg)

@@ -50,6 +50,22 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   instruct, so they fell back to prose. The plugin's own repo is on the legacy layout, which
   is why none of it surfaced, and no guard test carried a new-layout path. Both layouts are
   accepted now and the tests cover both.
+- **The guards' own launcher can no longer be used to disarm them.** `run-guard.sh` reads a
+  cached interpreter name, executes it and returns its exit code, and nothing checked what
+  the string was: a file containing `/bin/true` made every hook exit 0, the raw-data wall
+  included, in every session, silently. It now validates the basename at all three sites
+  that execute the cache, and `guard-consent-writes` protects the files that decide what
+  runs on every hook call: the interpreter caches in both layouts, the daemon and its
+  client, and the port file. Protecting the guards while leaving their launcher writable
+  was not a boundary, and neither half is sufficient alone.
+- **A reviewed repo's own `scripts/` directory is no longer treated as the team's tooling.**
+  Three `_TEAM_ALLOW` branches carried no name check, so in plugin mode `python
+  scripts/deploy.py` and `bash scripts/run_all.sh` in a client repo ran with no consent
+  prompt, which is the one thing the execution gate exists to stop. The basename whitelist
+  could not fix it alone (24 names against 64 shipped scripts), so a script must now be ours
+  by NAME or by LOCATION. Residual, stated in the code: `-m` carries no path and a lexical
+  guard cannot resolve it through `sys.path`, so that form falls back to whether the plugin
+  actually ships the script.
 - **The findings-pack guard refuses a `..` segment.** Its regex anchors on a path *segment*,
   so `artifacts/../data/findings-x.jsonl` matched the required shape while pointing somewhere
   else entirely. Containment inside `CLAUDE_PROJECT_DIR` was tried and reverted: an absolute

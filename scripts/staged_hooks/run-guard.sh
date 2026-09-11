@@ -292,6 +292,25 @@ DAEMON_CLIENT="$_root/scripts/guard_daemon_client.py"
 # read one line from a file - `read` is a shell builtin, same job, zero forks. IFS=
 # preserves the same "only the trailing newline is stripped" behavior $(cat ...) had
 # (a bare `read` would otherwise also trim leading/trailing whitespace via word-splitting).
+# Is this cached string actually a python interpreter?
+#
+# WHY (2026-09-11 review). The cache holds a command name that this script EXECUTES and
+# whose exit code it returns. Nothing checked what it was. A file containing `/bin/true`
+# made every hook exit 0 - the raw-data wall included - in every session, silently, and the
+# cache files were not write-protected either. A full disarm through a file nobody looks at.
+#
+# Basename test only, deliberately: executing the candidate to prove it is python is exactly
+# the App Execution Alias hang this cache exists to avoid (see the note at the top of this
+# file). This does not make the cache trustworthy, it removes the one-line disarm; the
+# write-protection in guard-consent-writes is the other half.
+_looks_like_python() {
+	case "${1##*/}" in
+	python | python[0-9] | python[0-9].[0-9] | python[0-9].[0-9][0-9] | py) return 0 ;;
+	python.exe | python[0-9].exe | python[0-9].[0-9].exe | py.exe) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
 if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
 	# Same two-location rule as CACHE below; resolved here too because this fast path
 	# runs before CACHE is set (it exits before reaching it on a hit).
@@ -301,7 +320,8 @@ if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
 	fi
 	if [ -f "$_fastcache" ]; then
 		IFS= read -r _fastcached <"$_fastcache" 2>/dev/null
-		if [ -n "$_fastcached" ] && command -v "$_fastcached" >/dev/null 2>&1; then
+		if [ -n "$_fastcached" ] && _looks_like_python "$_fastcached" &&
+			command -v "$_fastcached" >/dev/null 2>&1; then
 			"$_fastcached" -S "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
 			exit $?
 		fi
@@ -363,7 +383,8 @@ case "$_measured_ms" in
 esac
 if [ -z "$_measured_ms" ] && [ -f "$CACHE" ]; then
 	_known_good=$(cat "$CACHE" 2>/dev/null)
-	if [ -n "$_known_good" ] && command -v "$_known_good" >/dev/null 2>&1; then
+	if [ -n "$_known_good" ] && _looks_like_python "$_known_good" &&
+		command -v "$_known_good" >/dev/null 2>&1; then
 		# Whole-second `date +%s` only, matching the rest of this script - `%N` (sub-second)
 		# is a GNU extension BSD/macOS `date` does not reliably support, and the costs this
 		# measures are already multi-second under the conditions that motivate this fix, so
@@ -449,7 +470,8 @@ fi
 
 if [ -f "$CACHE" ]; then
 	cached=$(cat "$CACHE" 2>/dev/null)
-	if [ -n "$cached" ] && command -v "$cached" >/dev/null 2>&1; then
+	if [ -n "$cached" ] && _looks_like_python "$cached" &&
+		command -v "$cached" >/dev/null 2>&1; then
 		if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
 			"$cached" -S "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
 			exit $?

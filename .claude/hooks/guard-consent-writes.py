@@ -95,9 +95,27 @@ _PRECOMMIT_RE = re.compile(r"\.pre-commit-config\.ya?ml\b")
 # (scripts/bash_hook_dispatcher.py, end of path) - deliberately does NOT match
 # scripts/staged_hooks/bash_hook_dispatcher.py, which the model must keep editing freely,
 # same as every other staged_hooks/*.py file.
+# WIDENED 2026-09-11. This protected the hook SCRIPTS and the dispatcher, and nothing else
+# in the path that runs them. Three other files decide what executes on every hook call and
+# were all writable:
+#
+#   .claude/.guard-interpreter, VSIT/local/guard-interpreter
+#       run-guard.sh reads this and EXECUTES it, returning its exit code. A file holding
+#       `/bin/true` made every hook exit 0, raw-data wall included, in every session.
+#   scripts/guard_daemon.py, scripts/guard_daemon_client.py
+#       with the daemon on, which is the default, these run on every hook call.
+#   .claude/.guard-daemon-port
+#       names where the client connects.
+#
+# Protecting the guards while leaving their launcher writable is not a boundary. run-guard.sh
+# now also refuses a cached interpreter whose basename is not a python binary; that is the
+# other half and neither is sufficient alone.
 _HOOK_PATH_RE = re.compile(
     r"(\.claude[/\\]hooks[/\\]|(^|[/\\])hooks[/\\]hooks\.json$"
-    r"|(^|[/\\])scripts[/\\]bash_hook_dispatcher\.py$)"
+    r"|(^|[/\\])scripts[/\\]bash_hook_dispatcher\.py$"
+    r"|(^|[/\\])scripts[/\\]guard_daemon(_client)?\.py$"
+    r"|(^|[/\\])\.claude[/\\]\.guard-[A-Za-z0-9._-]+$"
+    r"|(^|[/\\])VSIT[/\\]local[/\\]guard-[A-Za-z0-9._-]+$)"
 )
 
 # `.git/config` and `.git/hooks/` are CONSENT-EQUIVALENT execution config (audit 2026-08-01).
@@ -153,7 +171,12 @@ _GIT_EXEC_KEY = re.compile(
 # 2026-08-07: extended to the live dispatcher path too, same rationale as _HOOK_PATH_RE above -
 # a Bash mutation of scripts/bash_hook_dispatcher.py is exactly as disarming as one on a guard
 # under .claude/hooks/.
-_HOOK_PATH_FRAGMENT = r"(?:\.claude[/\\]hooks[/\\]|scripts[/\\]bash_hook_dispatcher\.py)"
+_HOOK_PATH_FRAGMENT = (
+    r"(?:\.claude[/\\]hooks[/\\]|scripts[/\\]bash_hook_dispatcher\.py"
+    r"|scripts[/\\]guard_daemon(?:_client)?\.py"
+    r"|\.claude[/\\]\.guard-[A-Za-z0-9._-]+"
+    r"|VSIT[/\\]local[/\\]guard-[A-Za-z0-9._-]+)"
+)
 _HOOK_MUTATE = re.compile(
     rf">\s*\S*{_HOOK_PATH_FRAGMENT}"
     rf"|(?:^|[;&|\s])(?:sed\s+-i|tee|cp|mv|dd|install|ln|chmod|chown|truncate|rm)\b"
