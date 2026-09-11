@@ -116,7 +116,8 @@ first prompt. When present, this is the answer - **do not ask the question at al
 - **`--jira <url-or-key>` (rides with `--new`)** - the engagement's request IS the
   named ticket: a colleague raised it in Jira, a human picked it up in the go menu (that
   pick is the approval to start). First action after the banner: fetch the issue
-  (summary, description, comments, attachment names) via the project's configured Jira
+  (summary, description, **the whole comment thread**, attachment names - the thread is
+  usually where the request ended up, and a later comment beats the description) via the project's configured Jira
   access (`references/integrations.md` - **read it on this flag even with no
   `INTEGRATIONS=` line**, since [j] is offered on unconfigured projects too; the URL
   form names the exact instance). No configured access and no usable tools means say

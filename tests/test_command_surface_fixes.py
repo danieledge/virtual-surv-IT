@@ -402,3 +402,39 @@ def test_users_actually_receive_the_scanner_permission():
     # Every supported analyser that is a plain binary should be reachable the same way.
     for tool in ("ruff", "mypy", "bandit", "osv-scanner"):
         assert tool in allow, f"{tool} is in the analyser set but not in the allow-list"
+
+
+def test_a_jira_engagement_is_told_to_read_the_comment_thread():
+    """Owner instruction, 2026-09-11. The description is where a ticket starts; the comment
+    thread is usually where the request ends up - scope changes, which desk, the real
+    acceptance criteria. Both the skill and the inbound reference must say so, because the
+    fetch list alone reads as metadata and an agent can treat comments as context rather
+    than as the request.
+    """
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parents[1]
+    skill = (repo / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8")
+    ref = (
+        repo / ".claude" / "skills" / "engage" / "references" / "integrations.md"
+    ).read_text(encoding="utf-8")
+
+    assert "comment thread" in skill
+    assert "READ THE COMMENTS" in ref
+    # And the precedence rule, which is the part that changes an outcome.
+    assert "later comment" in ref or "later comment" in skill
+
+
+def test_a_comment_is_not_a_consent_grant():
+    """Comments are ticket content, so the data-not-instructions rule covers them. Worth
+    stating explicitly: a comment reads more like a person talking to you than a
+    description does."""
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parents[1]
+    ref = (
+        repo / ".claude" / "skills" / "engage" / "references" / "integrations.md"
+    ).read_text(encoding="utf-8")
+
+    assert "Comments included" in ref
+    assert "not a consent grant" in ref
