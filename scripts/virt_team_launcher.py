@@ -1954,14 +1954,32 @@ def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> s
     must never begin by default because a screen failed to render)."""
     ink = _Ink()
     err = sys.stderr
+
+    def _downgraded(why: str) -> str:
+        """Say the unattended run is NOT happening, and why.
+
+        Falling back to an attended run is the right safety call - an unattended run must
+        never begin by default because a screen failed. Doing it SILENTLY was the bug
+        (reported 2026-09-11): the human toggled unattended, got an ordinary run, and the
+        only clue was the session then asking the consent questions an unattended run never
+        asks. The run is still useful, so this informs rather than aborts."""
+        print(ink.warn("    !  cannot start an UNATTENDED run: " + why), file=err)
+        print(
+            ink.dim("       Starting an ATTENDED one instead - it will ask you the"),
+            file=err,
+        )
+        print(ink.dim("       execution and data questions in the session."), file=err)
+        return ""
+
     try:
         from launcher_app import AUTO_CANCELLED
 
         answers = _tiered_screen("auto_preflight_screen", project_dir, _this_module(), ref)
-    except Exception:
-        return ""
+    except Exception as exc:
+        _report_crash("unattended pre-flight", exc)
+        return _downgraded("the pre-flight screen crashed")
     if answers is None:
-        return ""
+        return _downgraded("no display tier could draw the pre-flight screen")
     if answers == AUTO_CANCELLED:
         return "__again__"
     match = _JIRA_KEY_RE.search(ref) if not request_text else None
@@ -2436,7 +2454,8 @@ def _decision_from_pick(
                     return "__again__"
                 if decision:
                     return decision
-                auto = False  # pre-flight could not run - fall through to a normal run
+                # pre-flight could not run; _auto_run_decision has already said so
+                auto = False
             if ref:
                 print(ink.dim(f"    -> starting new engagement from {ref}"), file=sys.stderr)
                 return _jira_command(project_dir, ref)

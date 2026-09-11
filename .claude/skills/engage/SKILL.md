@@ -78,6 +78,13 @@ deletes any existing marker, fail-safe).
   automatically). Never spec a menu that exceeds them; give **every** question a short `header`
   (≤12 chars - the ones to use are named per question below).
 
+**`--auto` SKIPS THIS ENTIRE STEP - ask nothing, not even one question.** Execution consent
+and the data attestation were answered by the human at the launcher's pre-flight, before this
+session existed, and an unattended run has nobody to ask (`--permission-mode dontAsk` denies
+the tool outright). Read `references/auto-mode.md` and go to 0b. Live report 2026-09-11: a
+`--jira ... --auto` run asked for both, because this rule was written only in the flags
+section above and not here, where the asking happens.
+
 With the target known: show both disclaimers (text) at startup, then ask in a **single
 `AskUserQuestion` call**, including **only** the questions whose gate is met:
 - **Work-type** (header `Work type`) - *only if the classification is genuinely ambiguous after

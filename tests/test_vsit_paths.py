@@ -228,5 +228,5 @@ def test_a_destination_that_already_exists_is_never_overwritten(tmp_path):
 
 
 def test_the_menu_entry_is_wired():
-    assert ih._ADVANCED_ACTIONS.get("15") == "relocate"
+    assert ih._ADVANCED_ACTIONS.get("14") == "relocate"
     assert callable(ih.run_relocate_to_vsit)

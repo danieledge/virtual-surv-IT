@@ -18,11 +18,20 @@
 Word it exactly as an **intent** question, not a grant - the menu answer does NOT open the gate,
 and the options must say so or the user is misled into thinking they've consented:
 *"Should the team execute the code under review (run tests / profile)?"* →
-- **Yes - I'll grant consent** (trusted code, safe/dev or sandbox env, synthetic data only §5).
+- **Yes - I'll grant consent** (code you trust, in a safe/dev or sandbox environment).
   *Description must include:* "this answer alone doesn't unlock anything - I'll give you a
   one-line command to type; execution stays hard-blocked until you do."
-- **No - static analysis only** (dynamic/perf findings stay 🧠 inferred; any existing consent
-  marker gets deleted).
+- **No - don't run the code under review** (only findings that need it to RUN stay 🧠 inferred;
+  any existing consent marker gets deleted).
+
+**Ask about the code under review and nothing else** (owner, 2026-09-11, on the live wording):
+- **Don't restate the data attestation.** Data safety is its own question in the same batch;
+  "synthetic data only" here reads as a condition of consenting and muddles two decisions.
+- **Don't say "static analysis only".** The gate covers the **untrusted code under review**,
+  never the team's own tooling - converters, renderers and analysers are allow-listed and run
+  either way (handbook §7). No blocks running *their* code; it is not a read-only mode, and
+  analyser output stays 📊 observed. Only findings needing the reviewed code to execute
+  (a test result, a profile) drop to 🧠 inferred.
 
 Record the answer; don't re-ask per command. Default to **No** if unsure; **never** run code of
 unknown provenance or touch production data/systems.

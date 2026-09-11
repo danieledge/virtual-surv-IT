@@ -61,10 +61,10 @@ def _args(**overrides):
 
 _OPTIONS = (
     ("1", "Environment setup only (deps + status line, no clone sync)"),
-    ("6", "Machine defaults (docx, citations, review tools, map skeleton, model)"),
-    ("9", "Clean plugin cache (remove stale cached copies of the plugin from ~/.claude)"),
+    ("5", "Machine defaults (docx, citations, review tools, map skeleton, model)"),
+    ("8", "Clean plugin cache (remove stale cached copies of the plugin from ~/.claude)"),
     ("", "-- internal / prototype --"),
-    ("13", "Org extensions (review/edit the standard workflow this machine applies)"),
+    ("12", "Org extensions (review/edit the standard workflow this machine applies)"),
     ("b", "Back"),
 )
 
@@ -94,16 +94,16 @@ def test_arrowing_and_enter_picks_the_row_you_are_looking_at(ptk):
     row returned. Positional dispatch has broken that twice in this repo (the launcher's
     settings screen on 2026-08-28, and an Advanced-menu renumbering before it)."""
     chosen, _ = _run(ptk, "\x1b[B\r")  # down once: row 1 -> row 6
-    assert chosen == "6"
+    assert chosen == "5"
     chosen, _ = _run(ptk, "\x1b[B\x1b[B\r")  # down twice
-    assert chosen == "9"
+    assert chosen == "8"
 
 
 def test_typing_a_key_still_works_for_people_who_know_the_number(ptk):
     """A picker that punishes muscle memory from the numbered menu is a downgrade, not an
     upgrade. Single-character keys jump to their row."""
-    chosen, _ = _run(ptk, "9\r")
-    assert chosen == "9"
+    chosen, _ = _run(ptk, "8\r")
+    assert chosen == "8"
 
 
 def test_escape_is_a_decision_not_an_unavailability(ptk):
@@ -122,7 +122,7 @@ def test_divider_rows_are_not_selectable(ptk):
 
     keys = [key for key, _label, _blurb, _writes in installer_app._rows(_OPTIONS, None)]
     assert "" not in keys
-    assert keys == ["1", "6", "9", "13", "b"]
+    assert keys == ["1", "5", "8", "12", "b"]
 
 
 def test_the_explanation_leaves_the_label_and_goes_to_the_pane(ptk):
@@ -701,7 +701,10 @@ def test_the_update_decides_before_it_runs_not_during(ptk, monkeypatch):
     # set of steps than the one that runs.
     assert "Preflight checks" in captured["titles"]
     assert any("Sync to origin" in t for t in captured["titles"])
-    assert len(captured["titles"]) == 7, "the update subset is seven steps, deliberately"
+    assert len(captured["titles"]) == 8, "the update subset is eight steps, deliberately"
+    # Added 2026-09-11: the offline vulnerability database goes stale, and an update is when
+    # someone already expects a fetch. It is a no-op when osv-scanner is absent.
+    assert "Vulnerability database" in captured["titles"]
 
 
 def test_cancelling_the_update_runs_nothing(ptk, monkeypatch):

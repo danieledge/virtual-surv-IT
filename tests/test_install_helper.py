@@ -4018,8 +4018,8 @@ def test_menu_option_4_maps_to_advanced_submenu():
 
     assert MENU_ACTIONS["4"] == "advanced"
     assert _ADVANCED_ACTIONS["3"] == "formats"
-    assert _ADVANCED_ACTIONS["5"] == "demo"
-    assert _ADVANCED_ACTIONS["10"] == "aliasmanage"
+    assert _ADVANCED_ACTIONS["5"] == "machinedefaults"
+    assert _ADVANCED_ACTIONS["9"] == "aliasmanage"
 
 
 def test_write_team_preferences_regulatory_citations_flag(tmp_path):
@@ -6145,18 +6145,17 @@ def test_advanced_submenu_full_mapping():
         "2": "statusline",
         "3": "formats",
         "4": "model",
-        "5": "demo",
-        "6": "machinedefaults",
-        "7": "dashboard",
-        "8": "fixbashrc",
-        "9": "cleanplugincache",
-        "10": "aliasmanage",
-        "11": "gitbashperf",
-        "12": "codeintel",
-        "13": "extensions",
-        "14": "reprobe",
-        "15": "relocate",
-        "16": "osvdb",
+        "5": "machinedefaults",
+        "6": "dashboard",
+        "7": "fixbashrc",
+        "8": "cleanplugincache",
+        "9": "aliasmanage",
+        "10": "gitbashperf",
+        "11": "codeintel",
+        "12": "extensions",
+        "13": "reprobe",
+        "14": "relocate",
+        "15": "osvdb",
         "b": "back",
     }
 
@@ -6223,7 +6222,7 @@ def test_choose_action_configure_direct_and_aliasmanage_via_advanced(monkeypatch
     monkeypatch.setattr("builtins.input", lambda prompt="": "2")
     assert ih.choose_action(ih.Style(False)) == "configure"
 
-    answers = iter(["4", "10"])  # Advanced -> Manage the alias
+    answers = iter(["4", "9"])  # Advanced -> Manage the alias
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     assert ih.choose_action(ih.Style(False)) == "aliasmanage"
 
@@ -6710,9 +6709,9 @@ def test_menu_loops_back_and_runs_a_second_action_before_quit(monkeypatch, tmp_p
         "run_alias_manage",
         lambda style, mm, assume_yes=False, demo=False, repo_hint=None: calls.append("alias") or 0,
     )
-    # 4,10 = Advanced -> Manage the alias, loop back, 2 = Configure, answer the
+    # 4,9 = Advanced -> Manage the alias, loop back, 2 = Configure, answer the
     # directory prompt, loop back again, then exhausted answers feed "q".
-    _menu_session(monkeypatch, tmp_path, ["4", "10", "2", str(tmp_path)])
+    _menu_session(monkeypatch, tmp_path, ["4", "9", "2", str(tmp_path)])
     rc = ih.main([])
     assert rc == 0
     assert calls == ["alias", "configure"]  # BOTH ran, in order, in one session
@@ -9184,3 +9183,77 @@ def test_a_source_format_refusal_names_an_out_of_date_cli():
         "this refusal means the CLI ran and rejected our argument, which is not the same "
         "as a CLI that could not run at all"
     )
+
+
+# --- the menu must not paint over what an action just printed (2026-09-11) ---------------------
+#
+# Three live reports in one sitting, three different menu items, one cause: "clickikg
+# vulnarability fatabase in advances flashes something and returns to menu", "how tonise the
+# team, day tondsybflashes text and returns to menu", "why wint gusrd daemon start" - the last
+# of which was not broken at all (--check-daemon-start passes every check); its output was just
+# unreadable. The picker is a full-screen app, so anything printed before it is covered when it
+# draws. The pause is the read-receipt.
+
+
+def test_a_pause_holds_the_screen_when_someone_is_at_the_keyboard(monkeypatch, capsys):
+    import install_helper as ih
+
+    asked = []
+    monkeypatch.setattr("builtins.input", lambda prompt="": asked.append(prompt) or "")
+    monkeypatch.setattr(ih.sys.stdin, "isatty", lambda: True, raising=False)
+    monkeypatch.setattr(ih.sys.stdout, "isatty", lambda: True, raising=False)
+    ih.pause_before_menu(ih.Style(False))
+    assert len(asked) == 1 and "menu" in asked[0]
+
+
+def test_the_pause_is_silent_when_nobody_is_there(monkeypatch):
+    """A piped or CI run must never block on a read-receipt nobody can give."""
+    import install_helper as ih
+
+    monkeypatch.setattr("builtins.input", lambda prompt="": (_ for _ in ()).throw(AssertionError))
+    monkeypatch.setattr(ih.sys.stdin, "isatty", lambda: False, raising=False)
+    ih.pause_before_menu(ih.Style(False))  # must not raise
+
+
+def test_the_pause_survives_ctrl_c_and_eof(monkeypatch):
+    """Ctrl-C here means "get on with it", not "abort the installer"."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.sys.stdin, "isatty", lambda: True, raising=False)
+    monkeypatch.setattr(ih.sys.stdout, "isatty", lambda: True, raising=False)
+    for boom in (EOFError, KeyboardInterrupt):
+        monkeypatch.setattr("builtins.input", lambda prompt="", b=boom: (_ for _ in ()).throw(b()))
+        ih.pause_before_menu(ih.Style(False))
+
+
+def test_an_action_pauses_before_the_menu_repaints(monkeypatch, tmp_path):
+    """Behavioural, because the bug was a missing call on a live path.
+
+    Runs a real action through the real dispatch loop and asserts the pause happened
+    between the action finishing and the picker being asked for the next choice - which is
+    the exact window the output was being lost in."""
+    import install_helper as ih
+
+    order = []
+    monkeypatch.setattr(
+        ih,
+        "run_configure",
+        lambda target, style, mm, assume_yes=False, demo=False: order.append("action") or 0,
+    )
+    monkeypatch.setattr(ih, "pause_before_menu", lambda style: order.append("pause"))
+    _menu_session(monkeypatch, tmp_path, ["2", str(tmp_path)])
+    assert ih.main([]) == 0
+    assert order == ["action", "pause"]
+
+
+def test_backing_out_of_a_picker_does_not_pause(monkeypatch, tmp_path):
+    """Nothing was printed, so there is nothing to hold the screen for - a pause there is
+    an extra keypress charged for changing your mind."""
+    import install_helper as ih
+
+    paused = []
+    monkeypatch.setattr(ih, "pause_before_menu", lambda style: paused.append(1))
+    monkeypatch.setattr(ih, "_pick_project", lambda *a, **k: None)  # they left
+    _menu_session(monkeypatch, tmp_path, ["2"])
+    assert ih.main([]) == 0
+    assert paused == []

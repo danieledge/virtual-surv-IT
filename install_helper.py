@@ -1594,18 +1594,21 @@ _ADVANCED_ACTIONS = {
     "2": "statusline",
     "3": "formats",
     "4": "model",
-    "5": "demo",
-    "6": "machinedefaults",
-    "7": "dashboard",
-    "8": "fixbashrc",
-    "9": "cleanplugincache",
-    "10": "aliasmanage",
-    "11": "gitbashperf",
-    "12": "codeintel",
-    "13": "extensions",
-    "14": "reprobe",
-    "15": "relocate",
-    "16": "osvdb",
+    # "Demo" removed 2026-09-11 (owner: "remove the demo thats redundant") - every subset
+    # already honours --demo, the full run explains itself as it goes, and a menu item whose
+    # only job was to preview another menu item earned its place back when the flow was
+    # unfamiliar. Items below renumbered to close the gap rather than leave a hole at 5.
+    "5": "machinedefaults",
+    "6": "dashboard",
+    "7": "fixbashrc",
+    "8": "cleanplugincache",
+    "9": "aliasmanage",
+    "10": "gitbashperf",
+    "11": "codeintel",
+    "12": "extensions",
+    "13": "reprobe",
+    "14": "relocate",
+    "15": "osvdb",
     "b": "back",
 }
 
@@ -2016,6 +2019,28 @@ def _choose_submenu(style: Style, title: str, options: tuple, actions: dict) -> 
         print(f"  1-{len(actions) - 1} or b, please.")
 
 
+def pause_before_menu(style: Style) -> None:
+    """Hold the screen until the reader has read it, before the picker paints over it.
+
+    WHY (two live reports, 2026-09-11: "clickikg vulnarability fatabase in advances flashes
+    something and returns to menu" and "how tonise the team, day tondsybflashes text and
+    returns to menu"). Actions that only PRINT - a help page, a "nothing to download for"
+    note, a diagnostic summary - returned straight into `choose_action`, which repaints the
+    menu over them. The output was correct and the action worked; it was on screen for a
+    frame. Two different items, same cause, so the pause belongs in the loop rather than in
+    each action.
+
+    Silent when nobody is at the keyboard (piped stdin, CI, a closed terminal) so scripted
+    runs never block, and a Ctrl-C or EOF here just returns to the menu - this is a
+    read-receipt, not a question."""
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        return
+    try:
+        input(style.dim("  Press Enter to return to the menu... "))
+    except (EOFError, KeyboardInterrupt):
+        print("")
+
+
 def choose_action(style: Style) -> str:
     """The interactive front door: pick which subset to run. Callers gate on a tty;
     a closed stdin or empty answer takes the full run. 'diagnostics'/'advanced' open a
@@ -2124,44 +2149,43 @@ def choose_action(style: Style) -> str:
                     # the first " (", so a dash kept all 55 characters in the label column
                     # and pushed the row past the divider at phone width (independent TUI
                     # review, 2026-08-31).
-                    ("5", "Demo (watch a full run without changing anything)"),
                     (
-                        "6",
+                        "5",
                         "This machine's defaults (what a new project starts with)",
                     ),
-                    ("7", "Rebuild the team dashboard"),
-                    ("8", "Fix a slow ~/.bashrc (checks first, applies only if needed)"),
-                    ("9", "Clean stale plugin cache (removes old installs, keeps the active one)"),
+                    ("6", "Rebuild the team dashboard"),
+                    ("7", "Fix a slow ~/.bashrc (checks first, applies only if needed)"),
+                    ("8", "Clean stale plugin cache (removes old installs, keeps the active one)"),
                     (
-                        "10",
+                        "9",
                         "The 'virt-surv' command (re-register it, or change what 'go' launches)",
                     ),
                     (
-                        "11",
+                        "10",
                         "Git Bash speed fix (for slow Bash calls on Windows)",
                     ),
                     (
-                        "12",
+                        "11",
                         "Code intelligence (exact symbols and line ranges when reading "
                         "Java, Scala, SQL and more; optional)",
                     ),
                     (
-                        "13",
+                        "12",
                         "Standard workflow for this machine (the analysers, close actions "
                         "and instructions every project inherits)",
                     ),
                     (
-                        "14",
+                        "13",
                         "Look for installed tools again (run this after installing one, so "
                         "the team stops calling it missing)",
                     ),
                     (
-                        "15",
+                        "14",
                         "Tidy team files into one VSIT folder (shows you the plan before "
                         "moving anything)",
                     ),
                     (
-                        "16",
+                        "15",
                         "Vulnerability database (lets the dependency scanner work with no "
                         "network; downloads once)",
                     ),
@@ -2998,6 +3022,55 @@ class Installer:
             )
             return list(self.CODE_INTEL_PREFIXES)
         return specs
+
+    def vuln_db_step(self) -> None:
+        """Top up the offline vulnerability database, in the flow rather than off a menu.
+
+        WHY IT IS A STEP (owner, 2026-09-11: "the install/uodate shouod handle the
+        vulnaribility datase just like anybother tool eg the code paraew etc initate as part
+        or that flow"). osv-scanner is registered `auto`, so it is used whenever present -
+        but it is only ever invoked with --offline, and --offline against an absent database
+        reports NOTHING. That is the worst shape a gap can take: the review runs, finishes
+        clean, and the empty dependency-finding class looks like good news. Installing the
+        binary and having a usable scanner were two different things, and only one of them
+        was in the flow.
+
+        SOFT, like code intelligence. No network, a proxy, or an air-gapped box are all
+        normal - the scanner then behaves exactly as it did before and the rest of the run
+        is unaffected. This reports the outcome and moves on; it must never fail an install.
+        """
+        self.step_intro(
+            "The dependency scanner reads a local vulnerability database so it never has "
+            "to reach the network mid-review. The database is downloaded once, separately "
+            "from the scanner itself - without it, dependency vulnerabilities are simply "
+            "never reported."
+        )
+        if shutil.which("osv-scanner") is None:
+            self.step_skip("Vulnerability database", "osv-scanner not installed - nothing to fill")
+            return
+        if osv_db_present():
+            self.step_ok("Vulnerability database", f"already present ({osv_db_dir()})")
+            return
+        if self.demo:
+            self.step_ok("Vulnerability database", "would download it (demo)")
+            return
+        if not confirm(
+            "  Download the vulnerability database now? (one-off, needs the network)",
+            default=True,
+            assume_yes=getattr(self.args, "yes", False),
+            style=self.style,
+        ):
+            self.step_skip(
+                "Vulnerability database",
+                "skipped - Advanced > Vulnerability database does it later",
+            )
+            return
+        run_osv_db_download(self.style, self.marks, demo=False)
+        if osv_db_present():
+            self.step_ok("Vulnerability database", f"downloaded to {osv_db_dir()}")
+        else:
+            # Not an error: run_osv_db_download has already printed the manual copy path.
+            self.step_skip("Vulnerability database", "could not download - scanner unchanged")
 
     def code_intel_step(self) -> None:
         """Attempt the code-intelligence extras, and treat failure as a normal outcome.
@@ -4537,7 +4610,7 @@ class Installer:
             # allow a quick update without the full 13-step process where the user needs to
             # confirm everything again").
             #
-            # Six steps, and the omissions are the point. Status line, alias, permissions,
+            # A short plan, and the omissions are the point. Status line, alias, permissions,
             # preferences, model, machine defaults and pip are all things the human already
             # decided; re-asking them is not thoroughness, it is a reason not to update. What
             # remains is exactly what makes new code take effect: pull it, then refresh the
@@ -4557,6 +4630,11 @@ class Installer:
                     lambda: "Plugin " + ("update" if self.mode == "update" else "install"),
                     self.plugin,
                 ),
+                # In the update too, not just the install: the database goes stale, and an
+                # update is the moment someone is already expecting a fetch. It is a no-op
+                # when the scanner is absent, so the six-step promise above still holds for
+                # everyone who does not have it.
+                ("Vulnerability database", self.vuln_db_step),
             ]
         if self.subset == "statusline":
             return [
@@ -4641,6 +4719,7 @@ class Installer:
             ("Quick setup or manual?", self.quick_setup_choice),
             ("Optional pip requirements", self.optional_pip),
             ("Code intelligence (optional)", self.code_intel_step),
+            ("Vulnerability database (optional)", self.vuln_db_step),
             ("Claude Code marketplace", self.marketplace),
             (lambda: "Plugin " + ("update" if self.mode == "update" else "install"), self.plugin),
             ("Status line", self.statusline_step),
@@ -6055,30 +6134,9 @@ def run_configure(
     print(rule_header(6, TOTAL_STEPS, "Refreshing the analyser-availability cache", style))
     rc = max(rc, run_tool_cache_refresh(project, style, mark_map, demo=demo))
 
-    # osv-scanner is registered with the implicit `auto` state, so it is USED when present.
-    # It is only ever invoked with --offline, which needs a database that is downloaded
-    # rather than installed with the binary - so "installed" and "usable" are two different
-    # things here, and the gap is invisible: a review simply reports no dependency findings.
-    # Offer the one network step now, while a person is here, rather than let it be
-    # discovered mid-review by someone who cannot see why the finding class is empty
-    # (2026-09-10 owner request: "lets have the TUI handle the database download").
-    if shutil.which("osv-scanner") and not osv_db_present():
-        print("")
-        print(style.dim("  The dependency scanner is installed but has no offline database."))
-        print(style.dim("  Without it, dependency vulnerabilities are simply never reported."))
-        if demo:
-            print(style.dim("    would offer to download it (demo - nothing written)"))
-        elif confirm(
-            "  Download it now? (one-off, needs the network)",
-            default=True,
-            assume_yes=assume_yes,
-            style=style,
-        ):
-            # Never fatal: a blocked download leaves the scanner exactly as it was, and
-            # run_osv_db_download prints the manual copy path for an air-gapped machine.
-            run_osv_db_download(style, mark_map, demo=demo)
-        else:
-            print(style.dim("    skipped - Advanced menu item 16 does it later"))
+    # The vulnerability database is NOT offered here any more (2026-09-11). It is a
+    # machine-level asset shared by every project, so asking once per project configured
+    # was the wrong scope - it became `vuln_db_step` in the install and update flows.
 
     # 2026-08-12 user request: "recommended should set the model to sonnet" - under the
     # recommended-defaults path (assume_yes True here) this now explicitly PINS sonnet in
@@ -11090,23 +11148,6 @@ def _main(argv=None) -> int:
                 elif action == "gitbashperf":
                     run_gitbash_perf(style, marks(), args.yes, args.demo)
                     did_anything = did_anything or not args.demo
-                elif action == "demo":
-                    # A one-shot preview of the full flow, not a persistent toggle - restored
-                    # afterward so picking "Demo" once doesn't silently keep every LATER menu
-                    # choice in demo mode too, which would be a confusing sticky side effect.
-                    print(
-                        style.yellow(
-                            "DEMO MODE - the full interactive run; nothing is executed or written."
-                        )
-                    )
-                    saved_demo, args.demo = args.demo, True
-                    saved_run_cmd = run_cmd
-                    run_cmd = make_demo_runner(style)
-                    try:
-                        Installer(args, style, marks(), subset="full").run()
-                    finally:
-                        run_cmd = saved_run_cmd
-                        args.demo = saved_demo
                 else:
                     subset = "full" if action == "full" else action
                     if subset == "update" and not args.demo:
@@ -11117,6 +11158,7 @@ def _main(argv=None) -> int:
                         in_app = run_update_in_app(args, style)
                         if in_app is not None:
                             did_anything = True
+                            pause_before_menu(style)
                             continue
                     elif subset in _IN_APP_SUBSETS and not args.demo:
                         # Same complaint, same fix (owner report + screenshot,
@@ -11127,6 +11169,7 @@ def _main(argv=None) -> int:
                         if in_app is not None:
                             menu_rc = max(menu_rc, in_app or 0)
                             did_anything = True
+                            pause_before_menu(style)
                             continue
                     if args.demo:
                         print(
@@ -11169,6 +11212,9 @@ def _main(argv=None) -> int:
                 traceback.print_exc()
                 print("")
                 menu_rc = max(menu_rc, 1)
+            # A traceback is the one thing that MUST survive the repaint, so this covers the
+            # failure path too - it is outside the try/except, not inside the success branch.
+            pause_before_menu(style)
 
     subset = "full"
     if args.demo:

@@ -1124,3 +1124,52 @@ def test_both_tiers_confirm_a_sign_off():
     assert "cannot be undone" in vtl.SIGN_OFF_CONFIRM
     # The Textual tier resolves the same constant, so the two cannot word it differently.
     assert launcher_tiers._sign_off_confirm() == vtl.SIGN_OFF_CONFIRM
+
+
+# --- an unattended run that cannot start must SAY SO (2026-09-11) ------------------------------
+#
+# Live report: "i chose jira engagement and unattended but im being prompted for execution gate
+# daya safety in the claude session", and the command carried no `--auto`. The pre-flight screen
+# had failed to run, so the launcher fell back to an ordinary attended run - the right call - but
+# said nothing, so the only symptom was the session asking questions an unattended run never
+# asks. These pin the telling, not the falling back.
+
+
+def _decision_without_a_preflight(monkeypatch, capsys, project, mod, boom: bool):
+    monkeypatch.setattr(mod, "_tiered_screen", _raiser if boom else _none)
+    monkeypatch.setattr(mod, "_report_crash", lambda *a, **k: None)
+    decision = mod._auto_run_decision(project, "SURV-9")
+    return decision, capsys.readouterr().err
+
+
+def _raiser(*a, **k):
+    raise RuntimeError("no tier")
+
+
+def _none(*a, **k):
+    return None
+
+
+def test_a_preflight_that_cannot_draw_tells_the_user_before_downgrading(tmp_path, monkeypatch, capsys):
+    mod = _load("virt_team_launcher")
+    decision, out = _decision_without_a_preflight(monkeypatch, capsys, _project(tmp_path), mod, boom=False)
+    assert decision == ""  # still falls back - an unattended run must not start by default
+    assert "UNATTENDED" in out and "ATTENDED" in out
+    assert "execution and data questions" in out
+
+
+def test_a_preflight_that_crashes_also_tells_the_user(tmp_path, monkeypatch, capsys):
+    mod = _load("virt_team_launcher")
+    decision, out = _decision_without_a_preflight(monkeypatch, capsys, _project(tmp_path), mod, boom=True)
+    assert decision == ""
+    assert "crashed" in out and "ATTENDED" in out
+
+
+def test_the_crash_is_reported_rather_than_swallowed(tmp_path, monkeypatch):
+    """The `except Exception: return ""` used to discard the reason entirely."""
+    mod = _load("virt_team_launcher")
+    reported: list[str] = []
+    monkeypatch.setattr(mod, "_tiered_screen", _raiser)
+    monkeypatch.setattr(mod, "_report_crash", lambda where, exc=None: reported.append(where))
+    mod._auto_run_decision(_project(tmp_path), "SURV-9")
+    assert reported == ["unattended pre-flight"]

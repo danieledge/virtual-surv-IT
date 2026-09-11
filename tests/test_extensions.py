@@ -652,7 +652,7 @@ def test_a_local_bare_repo_is_recognised_as_a_git_source(tmp_path):
 
 
 def test_the_org_menu_entry_is_wired():
-    assert ih._ADVANCED_ACTIONS.get("13") == "extensions"
+    assert ih._ADVANCED_ACTIONS.get("12") == "extensions"
     assert callable(ih.run_extensions_editor)
 
 
@@ -770,7 +770,7 @@ def test_a_stale_inventory_says_how_old_it_is(tmp_path):
 def test_the_manual_reprobe_is_wired():
     """Installing a tool by hand - ShellCheck, gitleaks, ctags - needs a way to say
     "look again"; the code-intel step only clears the cache for the tool it installs."""
-    assert ih._ADVANCED_ACTIONS.get("14") == "reprobe"
+    assert ih._ADVANCED_ACTIONS.get("13") == "reprobe"
     assert callable(ih.run_tool_reprobe)
 
 

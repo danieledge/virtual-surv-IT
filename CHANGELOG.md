@@ -20,8 +20,8 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 - **`osv-scanner` joins the analyser set as the eighth supported tool**, covering dependency
   vulnerabilities - a finding class the team could not see at all. Always run `--offline`:
   that mode is the only reason it qualifies where `semgrep` and `pip-audit` did not. New
-  Advanced menu item 16 downloads the vulnerability database once, so scans afterwards need
-  no network, and `virt-surv configure` offers it when the scanner is installed without one -
+  The install and update flows now carry a **Vulnerability database** step that downloads it
+  once, so scans afterwards need no network (Advanced > Vulnerability database re-runs it) -
   "installed" and "usable" are two different things here, and the gap is invisible, since a
   review with no database simply reports no dependency findings. The database goes where
   osv-scanner itself looks rather than a location of ours: anywhere else would need an
@@ -37,7 +37,49 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   both renderers. Ctrl-D arrives as the byte `\x04` and not every terminal delivers it,
   which left the composer with no way to send at all.
 
+- **The vulnerability database is filled by the install and the update**, not off a menu
+  item someone has to know about (owner: "the install/uodate shouod handle the vulnaribility
+  datase just like anybother tool eg the code paraew etc"). It is a soft step on the code
+  intelligence pattern: a no-op when `osv-scanner` is absent, one confirmable download when
+  the scanner is there without a database, and never able to fail an install. It moved out
+  of `virt-surv configure` at the same time, because the database is machine-level and
+  asking once per project configured was the wrong scope.
+
+### Changed
+- **The Advanced submenu drops "Demo"** (owner: "remove the demo thats redundant"). Every
+  subset already honours `--demo`, the full run explains itself as it goes, and an item
+  whose only job was to preview another item earned its place when the flow was unfamiliar.
+  Items 6-16 renumber to 5-15.
+
 ### Fixed
+- **The menu no longer paints over what an action just printed.** Three reports in one
+  sitting, three different items - the vulnerability database, "How to use the team, day to
+  day", and the guard-daemon start check - all "flashes something and returns to menu". One
+  cause: the picker is a full-screen app, so it covers anything printed before it draws. The
+  actions were working; the guard-daemon check in particular passes all five of its checks.
+  A read-receipt pause now holds the screen on every path back to the picker, including
+  after a traceback, and is silent when nobody is at the keyboard.
+- **An unattended run that cannot start now says so.** Reported as "i chose jira engagement
+  and unattended but im being prompted for execution gate daya safety in the claude session",
+  and the launched command carried no `--auto` at all. When the pre-flight screen cannot draw,
+  the launcher falls back to an ordinary attended run - the right call, since an unattended
+  run must never begin by default because a screen failed - but it did so silently, so the
+  only symptom was the session asking questions an unattended run never asks. The fallback
+  stays; it now names itself and the reason, and a crash there is recorded rather than
+  swallowed.
+- **`--auto` is exempted from the opening gate where the gate is written.** The rule that an
+  unattended run asks nothing lived only in the flags section fifty lines above the step that
+  does the asking, so a session working through step 0a in order asked anyway.
+- **The execution-consent question stopped borrowing the data question** (owner: "asking for
+  execution consent but then references synthetic data only ... thats a seperate thing"). The
+  "Yes" option listed "synthetic data only" as a condition of consenting, which is a separate
+  question in the same batch. "No - static analysis only" also overstated what No costs: the
+  gate covers the untrusted code under review, never the team's own tooling, which is
+  allow-listed and runs either way. Analyser output stays observed; only findings that
+  genuinely needed the reviewed code to execute drop to inferred.
+- **Installer diagnostic bundles are git-ignored.** `--check-daemon-start` and friends write
+  a timestamped `.txt` beside the repo to be handed back whole; one landed untracked in the
+  repo root.
 - **The three guard hooks look for the session stamp where it is actually written.** The
   `VSIT/` layout became the default for projects with neither layout present on 2026-08-28
   (`PREFER_NEW_LAYOUT`), and `engage_probe` and `engagement_state` write the acting-session

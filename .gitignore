@@ -158,3 +158,9 @@ docs/internal/research-review-2026-09-02.md
 # Deep framework review commissioned 2026-09-11 - internal assessment, same treatment as
 # the other docs/internal reviews above.
 docs/internal/deep-review-2026-09-11.md
+
+# Diagnostic bundles written beside the repo by the installer's check actions
+# (--check-daemon-start, --check-hook-latency and friends). They are meant to be handed
+# back whole to whoever is helping, not committed - each is a timestamped snapshot of one
+# machine. Added 2026-09-11 after one landed untracked in the repo root.
+virt-surv-*-diagnostic-*.txt
