@@ -69,7 +69,12 @@ _SETTINGS_RE = re.compile(r"\.claude[/\\]settings(\.local)?\.json")
 # The sanctioned writers (engage_probe, engagement_state) write it from inside their own
 # process, which a lexical Bash guard never sees - only a command that NAMES the file
 # can be judged, and no legitimate command needs to.
-_STAMP_RE = re.compile(r"artifacts[/\\]\.team-session\.json")
+# The acting-session stamp, in EITHER layout. Named once so the reader below and this
+# write-protection regex cannot disagree about where the file lives - they did, and the
+# result was a stamp that was neither found nor protected in any project created since
+# PREFER_NEW_LAYOUT became the default on 2026-08-28.
+_STAMP_NAME = ".team-session.json"
+_STAMP_RE = re.compile(r"(?:artifacts|VSIT[/\\]engagements)[/\\]\.team-session\.json")
 _STAMP_MUTATE_VERB = re.compile(r"^(rm|unlink|mv|truncate|shred)\b")
 
 # .pre-commit-config.yaml is execution config: `git commit` runs its hook entries
@@ -188,7 +193,7 @@ _FIND_MUTATE = re.compile(r"^find\b.*\s-(?:exec(?:dir)?|delete)\b")
 # read with a harmless stderr redirect (a real false positive found in live use, 2026-07-01).
 _REDIRECT_INTO_PROTECTED = re.compile(
     r">\s*\S*(\.exec-consent|\.claude[/\\]settings(\.local)?\.json|\.pre-commit-config\.ya?ml"
-    r"|\.git[/\\]config\b|artifacts[/\\]\.team-session\.json)"
+    r"|\.git[/\\]config\b|(?:artifacts|VSIT[/\\]engagements)[/\\]\.team-session\.json)"
 )
 
 _WRITE_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
@@ -282,13 +287,23 @@ def _team_invoked_this_session(payload) -> bool:
     if not sid:
         return True
     root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
-    try:
-        stamp = json.loads(
-            open(os.path.join(root, "artifacts", ".team-session.json"), encoding="utf-8").read()
-        ).get("session")
-    except Exception:
-        return False
-    return stamp == sid
+    # BOTH LAYOUTS since 2026-09-11, matching guard-code-execution. This read the legacy
+    # path literally while the writers place the stamp through vsit_paths.engagements_dir(),
+    # which resolves to VSIT/engagements/ for any project with neither layout present, the
+    # default since PREFER_NEW_LAYOUT became true on 2026-08-28. So in every project created
+    # since then the stamp was never found and this returned False, leaving the
+    # settings write-protection off for engaged sessions.
+    for stamp_path in (
+        os.path.join(root, "VSIT", "engagements", _STAMP_NAME),
+        os.path.join(root, "artifacts", _STAMP_NAME),
+    ):
+        try:
+            stamp = json.loads(open(stamp_path, encoding="utf-8").read()).get("session")
+        except Exception:
+            continue
+        if stamp == sid:
+            return True
+    return False
 
 
 def _block(what: str) -> None:

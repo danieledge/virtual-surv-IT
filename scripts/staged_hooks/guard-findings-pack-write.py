@@ -94,12 +94,25 @@ _SCOPED_AGENTS = frozenset(
     {"code-reviewer", "compliance-reviewer", "model-validator", "performance-reviewer"}
 )
 
-# Matches .../artifacts/<slug>/data/findings-<anything>.jsonl (workspace) or
-# .../artifacts/data/findings-<anything>.jsonl (flat pack), absolute or relative, either
-# slash style. Anchored at the end so a path that merely CONTAINS this shape somewhere in
-# the middle (not as its actual target) does not slip through.
+# Matches <root>/<slug>/data/findings-<anything>.jsonl (workspace) or
+# <root>/data/findings-<anything>.jsonl (flat pack), absolute or relative, either slash
+# style, where <root> is EITHER layout's engagements root. Anchored at the end so a path
+# that merely CONTAINS this shape somewhere in the middle does not slip through.
+#
+# BOTH LAYOUTS since 2026-09-11. This matched `artifacts/` only, while the four
+# pack-writing reviewers are told to write `VSIT/engagements/<slug>/data/findings-*.jsonl`
+# (code-reviewer.md and its three siblings). PREFER_NEW_LAYOUT has been true since
+# 2026-08-28, so every project created since then got VSIT/ and every one of those reviewers
+# was blocked on its own pack and fell back to prose - the double-context cost the Write
+# grant exists to remove. The plugin's own repo is on the legacy layout, which is why nothing
+# noticed, and no test here carried a VSIT path.
+#
+# Deliberately a literal alternation rather than an import of vsit_paths: a hook must not
+# depend on the scripts package being importable (the same reasoning that keeps this file's
+# line counting independent of findings_pack_io).
 _ALLOWED_PATH_RE = re.compile(
-    r"(^|[/\\])artifacts[/\\](?:[^/\\]+[/\\])?data[/\\]findings-[^/\\]+\.jsonl$"
+    r"(^|[/\\])(?:artifacts|VSIT[/\\]engagements)"
+    r"[/\\](?:[^/\\]+[/\\])?data[/\\]findings-[^/\\]+\.jsonl$"
 )
 
 # Keep in sync with docs/team-operating-guide.md's orchestration-discipline bullet ("roughly
@@ -184,6 +197,36 @@ def _new_finding_count(tool_name: str, tool_input: dict) -> "int | None":
     return None
 
 
+def _pack_path_ok(path: str) -> bool:
+    """Is this the agent's OWN pack, and nowhere else?
+
+    The shape regex alone was not enough (2026-09-11 review). It anchors on a SEGMENT, so
+    every one of these matched and was allowed:
+
+        /etc/artifacts/data/findings-x.jsonl          any absolute prefix
+        artifacts/../data/findings-x.jsonl            traversal out of the root
+        artifacts/../../../etc/artifacts/data/f.jsonl traversal, then back in
+
+    So: reject any `..` segment outright, and require the resolved path to sit inside the
+    project. A grant scoped to one file is worth nothing if the path to it can leave and
+    come back.
+    """
+    if not _ALLOWED_PATH_RE.search(path):
+        return False
+    # `..` anywhere is the actual escape: the regex anchors on a SEGMENT, so
+    # `artifacts/../data/findings-x.jsonl` and `artifacts/../../../etc/artifacts/data/
+    # findings-x.jsonl` both matched the shape while pointing somewhere else entirely.
+    return not any(part == ".." for part in re.split(r"[/\\]", path))
+
+    # NOT ALSO containment inside CLAUDE_PROJECT_DIR, deliberately. An absolute path to the
+    # pack is a supported form and is pinned by tests
+    # (test_scoped_agents_can_edit_an_absolute_findings_pack_path, and the Windows
+    # `C:\project\artifacts\...` pair), and this hook cannot know which project such a path
+    # belongs to - the agent may legitimately be working outside cwd. A containment check
+    # here therefore broke a documented contract while adding nothing that the `..` rule
+    # does not already cover: without `..`, a path cannot climb out of wherever it names.
+
+
 def main() -> int:
     try:
         payload = json.load(sys.stdin)
@@ -200,7 +243,7 @@ def main() -> int:
 
     # Scoping half: only the four named reviewer agents are restricted to their own pack
     # path - applies to both Write and Edit, the same narrow grant extended to a second tool.
-    if agent_type in _SCOPED_AGENTS and not _ALLOWED_PATH_RE.search(path):
+    if agent_type in _SCOPED_AGENTS and not _pack_path_ok(path):
         _block_scope(agent_type, path)
 
     # Size-limit half: applies to BOTH Write and Edit now (2026-08-07 JSONL migration - see

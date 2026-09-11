@@ -154,3 +154,7 @@ docs/internal/research-review-2026-09-02.md
 .claude/*.bak
 .claude/*.bak-*
 *.json.bak-*
+
+# Deep framework review commissioned 2026-09-11 - internal assessment, same treatment as
+# the other docs/internal reviews above.
+docs/internal/deep-review-2026-09-11.md

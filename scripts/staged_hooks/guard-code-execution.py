@@ -69,6 +69,10 @@ _PY = r"(?:python(?:3(?:\.\d+)?)?|(?<![\w.-])py)"
 # (`python C:\plugin\scripts\render_html.py`) and a slash-only allow-list blocked them (0.4.1).
 _SEP = r"[/\\]"
 
+# The acting-session stamp's filename. Named once so the two layout paths below cannot
+# disagree with each other.
+_STAMP_NAME = ".team-session.json"
+
 # The interpreter as the TEAM_ALLOW list sees it: a bare name, OR a full path to one, with
 # or without .exe, quoted or not (2026-08-26 live report, corp Windows). Plugin mode on a
 # box with an unreliable PATH resolves `<python>` to an absolute interpreter - the real
@@ -371,6 +375,18 @@ def _block(cmd: str, segment: str | None = None) -> None:
     sys.exit(2)
 
 
+def _stamp_candidates(root):
+    """Every place the acting-session stamp may live, newest layout first.
+
+    Kept as a literal pair rather than resolved through vsit_paths, for the reason given at
+    the call site: a hook must stay importable-independent of the scripts package.
+    """
+    return (
+        os.path.join(root, "VSIT", "engagements", _STAMP_NAME),
+        os.path.join(root, "artifacts", _STAMP_NAME),
+    )
+
+
 def _team_invoked_this_session(payload) -> bool:
     """Session scoping (2026-08-17, user decision): this gate protects the TEAM'S review
     workflow - never execute the code under review without a human grant - so it arms
@@ -389,13 +405,25 @@ def _team_invoked_this_session(payload) -> bool:
     if not sid:
         return True  # cannot tell - fail toward armed
     root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
-    try:
-        stamp = json.loads(
-            open(os.path.join(root, "artifacts", ".team-session.json"), encoding="utf-8").read()
-        ).get("session")
-    except Exception:
-        return False  # no stamp = the team was never invoked here - dormant
-    return stamp == sid
+    # BOTH LAYOUTS since 2026-09-11. This read the legacy path literally while the writers
+    # place the stamp through vsit_paths.engagements_dir(), which has resolved to
+    # VSIT/engagements/ for any project with neither layout present since PREFER_NEW_LAYOUT
+    # became true on 2026-08-28. So in every project created since then the stamp was never
+    # found, this returned False, and the gate was OFF: an engaged session could run the
+    # code under review with no consent. The plugin's own repo is on the legacy layout,
+    # which is why it went unnoticed, and no test here carried a new-layout path.
+    #
+    # A literal pair, not an import of vsit_paths: a hook must not depend on the scripts
+    # package being importable. Checking both costs one stat on a file that usually is not
+    # there.
+    for stamp_path in _stamp_candidates(root):
+        try:
+            stamp = json.loads(open(stamp_path, encoding="utf-8").read()).get("session")
+        except Exception:
+            continue
+        if stamp == sid:
+            return True
+    return False  # no stamp anywhere = the team was never invoked here - dormant
 
 
 def main() -> None:

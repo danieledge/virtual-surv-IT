@@ -393,3 +393,61 @@ def test_live_guard_matches_staged_once_applied():
         "live guard-findings-pack-write.py differs from its staged copy - "
         "run: bash scripts/apply-guard-findings-pack-write.sh"
     )
+
+
+# ------------------------------------------------ both layouts, and no escaping either
+
+
+def test_scoped_agents_can_write_the_new_layout_pack():
+    """The four reviewers are told to write VSIT/engagements/<slug>/data/findings-*.jsonl
+    (code-reviewer.md and its three siblings). This guard matched `artifacts/` only, and
+    PREFER_NEW_LAYOUT has been true since 2026-08-28, so every project created since then
+    blocked its own reviewers on their own pack and they fell back to prose - the
+    double-context cost the Write grant exists to remove. Found 2026-09-11.
+    """
+    for agent in ("code-reviewer", "compliance-reviewer", "model-validator",
+                  "performance-reviewer"):
+        assert not _blocks(
+            "Write",
+            {"file_path": "VSIT/engagements/my-slug/data/findings-my-slug.jsonl"},
+            agent,
+        ), agent
+
+
+def test_scoped_agents_can_write_a_flat_new_layout_pack():
+    assert not _blocks(
+        "Write", {"file_path": "VSIT/engagements/data/findings-x.jsonl"}, "model-validator"
+    )
+
+
+def test_new_layout_absolute_and_windows_paths_work_too():
+    """Same contract the legacy layout already had."""
+    assert not _blocks(
+        "Edit",
+        {"file_path": "/home/user/project/VSIT/engagements/s/data/findings-s.jsonl"},
+        "compliance-reviewer",
+    )
+    assert not _blocks(
+        "Write",
+        {"file_path": r"C:\project\VSIT\engagements\s\data\findings-s.jsonl"},
+        "model-validator",
+    )
+
+
+def test_a_traversal_segment_is_refused_in_either_layout():
+    """The regex anchors on a SEGMENT, so these matched its shape while pointing somewhere
+    else entirely. A grant scoped to one file is worth nothing if the path can leave."""
+    for bad in (
+        "artifacts/../data/findings-x.jsonl",
+        "artifacts/../../../etc/artifacts/data/findings-x.jsonl",
+        "VSIT/engagements/../../data/findings-x.jsonl",
+        r"VSIT\engagements\..\..\data\findings-x.jsonl",
+    ):
+        assert _blocks("Write", {"file_path": bad}, "code-reviewer"), bad
+
+
+def test_a_non_pack_path_is_still_refused_in_the_new_layout():
+    assert _blocks(
+        "Write", {"file_path": "VSIT/engagements/s/data/notes.md"}, "code-reviewer"
+    )
+    assert _blocks("Write", {"file_path": "src/app.py"}, "code-reviewer")
