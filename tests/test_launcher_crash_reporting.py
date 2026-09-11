@@ -213,3 +213,99 @@ def test_a_confirmed_preflight_whose_answers_fail_is_reported(monkeypatch, tmp_p
 
     assert _preflight(monkeypatch, tmp_path, _App()) is None
     assert "unattended pre-flight answers" in capsys.readouterr().err
+
+
+# --- the prompt_toolkit tier had the same hole, and it is the one PLUGIN installs use ------------
+#
+# Found on the Windows test VM, 2026-09-11. The installed plugin there (0.37.0) ships
+# prompt_toolkit and has NO vendor/textual and no scripts/launcher_textual.py at all - so
+# instrumenting only the Textual adapter would have left the renderer that was actually
+# drawing the gate as silent as before. Same shape, same cost: a crash returns None, the
+# caller reads None as "could not draw", and an authorised unattended run becomes an
+# ordinary attended one.
+
+
+def _vendor_on_path():
+    """The vendored prompt_toolkit, without which auto_preflight_screen takes its
+    "this tier is unavailable" return before it reaches anything worth testing."""
+    vendor = str(REPO_ROOT / "vendor")
+    if vendor not in sys.path:
+        sys.path.insert(0, vendor)
+
+
+def _ptk_preflight(monkeypatch, tmp_path, boom=None, drew=True):
+    _vendor_on_path()
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.delenv("VIRT_SURV_DEBUG", raising=False)
+    import launcher_app
+    import virt_team_launcher as vtl
+
+    monkeypatch.setattr(vtl, "_ptk_ui", lambda: True)
+
+    def _screen(mod, **kw):
+        if drew:
+            kw["body_fn"]()  # the screen appearing is _body being called
+        if boom is not None:
+            raise boom
+        return None
+
+    monkeypatch.setattr(launcher_app, "screen", _screen)
+    return launcher_app.auto_preflight_screen(tmp_path, vtl, "SURV-9")
+
+
+def test_a_ptk_preflight_that_dies_after_drawing_is_reported(monkeypatch, tmp_path, capsys):
+    out = _ptk_preflight(monkeypatch, tmp_path, boom=RuntimeError("console went away"))
+    assert out is None  # the degrade stays
+    err = capsys.readouterr().err
+    assert "console went away" in err
+    assert "prompt_toolkit" in err and "after drawing" in err
+
+
+def test_a_ptk_preflight_that_never_drew_is_recorded_differently(monkeypatch, tmp_path, capsys):
+    """NoConsoleScreenBufferError fires before the first render - seen for real on Windows
+    when stderr is not a console screen buffer. The human saw no screen, so nor should the
+    log say one appeared."""
+    out = _ptk_preflight(monkeypatch, tmp_path, boom=RuntimeError("no console"), drew=False)
+    assert out is None
+    err = capsys.readouterr().err
+    assert "no draw" in err and "after drawing" not in err
+
+
+def test_a_confirmed_ptk_preflight_whose_answers_fail_is_reported(monkeypatch, tmp_path, capsys):
+    """Confirmed means a human authorised it; dropping that in silence is the worst case."""
+    _vendor_on_path()
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.delenv("VIRT_SURV_DEBUG", raising=False)
+    import launcher_app
+    import virt_team_launcher as vtl
+
+    monkeypatch.setattr(vtl, "_ptk_ui", lambda: True)
+
+    def _screen(mod, **kw):
+        kw["body_fn"]()
+        return None
+
+    monkeypatch.setattr(launcher_app, "screen", _screen)
+    real = launcher_app._preflight_model
+
+    def _broken():
+        model = real()
+        model["answers"] = lambda state: (_ for _ in ()).throw(KeyError("on_budget"))
+        model["state"]["confirmed"] = True
+        return model
+
+    monkeypatch.setattr(launcher_app, "_preflight_model", _broken)
+    assert launcher_app.auto_preflight_screen(tmp_path, vtl, "SURV-9") is None
+    assert "unattended pre-flight answers" in capsys.readouterr().err
+
+
+def test_reporting_a_screen_crash_never_raises(monkeypatch, tmp_path):
+    """It sits on a degrade path; it must not become the thing that breaks it."""
+    import launcher_app
+
+    class _Mod:
+        @staticmethod
+        def _report_crash(where, exc=None):
+            raise RuntimeError("the reporter itself is broken")
+
+    launcher_app._report_screen_crash(_Mod(), "somewhere", ValueError("x"))

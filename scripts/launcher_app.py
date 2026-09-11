@@ -1683,6 +1683,17 @@ def _preflight_model() -> dict:
     }
 
 
+def _report_screen_crash(mod, where: str, exc: BaseException) -> None:
+    """Record a screen failure this tier would otherwise swallow. Never raises.
+
+    `mod` is the host launcher module, which owns the crash log. Reporting must not be the
+    thing that breaks a degrade, so every failure here is dropped."""
+    try:
+        mod._report_crash(where, exc)
+    except Exception:  # noqa: BLE001 - reporting must never re-raise
+        pass
+
+
 def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
     """The single authorisation gate for an unattended run (2026-08-20).
 
@@ -1717,8 +1728,17 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
     RUN_MODES = model["modes"]
     _value = model["value_of"]
     idx = [0]
+    # DID IT DRAW? This tier has no `ran` flag of its own, so a crash after the human had
+    # filled the screen in was indistinguishable from "this tier cannot run" - and both
+    # returned a silent None, which the caller reads as "could not draw" and answers by
+    # starting an ORDINARY run. _body is called on every render, so the first call is the
+    # screen appearing. See the report of 2026-09-11, where exactly this happened on a
+    # PLUGIN install - which ships prompt_toolkit and no Textual, so this is the renderer
+    # that was actually drawing that gate.
+    drew = [False]
 
     def _body():
+        drew[0] = True
         out = [("class:group", f"  {g['jira']}Unattended run: {ref}\n\n")]
         out.append(("class:warn", "  This session will not stop to ask you anything.\n\n"))
         for i, (key, kind, label, note) in enumerate(rows):
@@ -1829,11 +1849,23 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
             output=output,
             project_dir=project_dir,
         )
-    except Exception:
+    except Exception as exc:
+        _report_screen_crash(
+            mod,
+            "the unattended pre-flight (prompt_toolkit, %s)"
+            % ("after drawing" if drew[0] else "no draw"),
+            exc,
+        )
         return None
     if not state["confirmed"]:
         return AUTO_CANCELLED
-    return model["answers"](state)
+    try:
+        return model["answers"](state)
+    except Exception as exc:
+        # A human confirmed this. Losing an authorisation in silence is the worst outcome
+        # the gate has.
+        _report_screen_crash(mod, "building the unattended pre-flight answers", exc)
+        return None
 
 
 REQUEST_SKIPPED = "__request_skipped__"

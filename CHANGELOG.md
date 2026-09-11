@@ -52,6 +52,18 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   Items 6-16 renumber to 5-15.
 
 ### Fixed
+- **The prompt_toolkit renderer had the same silent hole, and it is the one plugin installs
+  use.** Found on the Windows test VM: the plugin cache there ships `prompt_toolkit` and has
+  no `vendor/textual` and no `scripts/launcher_textual.py` at all, so instrumenting only the
+  Textual adapter would have left the renderer actually drawing the gate as silent as
+  before. Its `except Exception: return None` around the screen is now reported, and the
+  answer-building after a human confirms is wrapped too. That tier had no "did it draw"
+  flag, so a crash after someone filled the screen in was indistinguishable from a tier that
+  could not run; the body renderer now records the first paint, and the log says which.
+  Verified on Windows Server 2025 / Python 3.12: the report fires, names the exception,
+  writes the log and prints where it is. Under a real console the screen draws and does not
+  crash, so this is not a blanket Windows fault.
+
 - **A crash in the unattended pre-flight became an attended engagement, silently.** Live
   report: the gate drew, the human armed it, no `.auto-pending.json` was written and the
   session launched attended. A cancelled pre-flight cannot produce that - it returns to the
