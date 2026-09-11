@@ -38,6 +38,24 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   which left the composer with no way to send at all.
 
 ### Fixed
+- **The three guard hooks look for the session stamp where it is actually written.** The
+  `VSIT/` layout became the default for projects with neither layout present on 2026-08-28
+  (`PREFER_NEW_LAYOUT`), and `engage_probe` and `engagement_state` write the acting-session
+  stamp through `vsit_paths.engagements_dir()`. All three hooks read `artifacts/` literally.
+  In every project created since that date: the execution gate never armed, so an **engaged**
+  session could run the code under review, its tests, anything, with no human consent;
+  settings were not write-protected while engaged; the stamp itself was unprotected where it
+  actually lives, which is a disarm channel; and `_ALLOWED_PATH_RE` blocked the four
+  pack-writing reviewers from the exact path `code-reviewer.md` and its three siblings
+  instruct, so they fell back to prose. The plugin's own repo is on the legacy layout, which
+  is why none of it surfaced, and no guard test carried a new-layout path. Both layouts are
+  accepted now and the tests cover both.
+- **The findings-pack guard refuses a `..` segment.** Its regex anchors on a path *segment*,
+  so `artifacts/../data/findings-x.jsonl` matched the required shape while pointing somewhere
+  else entirely. Containment inside `CLAUDE_PROJECT_DIR` was tried and reverted: an absolute
+  path to the pack is a supported form, including the Windows `C:\project\artifacts\...`
+  case, and a hook cannot know which project such a path belongs to. Without `..` a path
+  cannot climb out of wherever it names.
 - **An update no longer refuses over changes the user never made.** The tool dirties its own
   clone: `.claude/settings.json` and `.claude/team-preferences.json` are tracked and every
   configure run or settings toggle writes one of them, while the dated `settings.json.bak-*`

@@ -15,6 +15,15 @@
 🏷️ **Current version: 0.37.0** (2026-08-25) · 📖 [0.33-cycle overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
 
 **Biggest features this cycle: the front door became a launcher, and the token bill got engineered.**
+- 🛡️ **The safety gates were off in every new project, and now are not** (unreleased). The
+  `VSIT/` layout became the default for new projects on 2026-08-28 and the three guard hooks
+  were never told: they looked for the acting-session stamp under the old `artifacts/` path
+  only. So in any project created since, the execution gate never armed, an engaged session
+  could run the code under review with no human consent, settings were not write-protected,
+  and the four reviewers were blocked from writing their own findings pack and fell back to
+  prose. This repo is on the legacy layout, which is exactly why nothing surfaced it, and no
+  guard test carried a new-layout path. Found by an adversarial review, fixed in both layouts,
+  and the tests now cover both.
 - 🚪 **`virt-surv go` is the front door** (0.34.0). The resume-or-new decision, environment
   probe and interpreter discovery are computed *outside* the LLM and pre-encoded into the
   session's first prompt - no more burning turns rediscovering the machine. Engagements can
