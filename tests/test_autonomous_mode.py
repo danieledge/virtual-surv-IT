@@ -1138,6 +1138,7 @@ def test_both_tiers_confirm_a_sign_off():
 def _decision_without_a_preflight(monkeypatch, capsys, project, mod, boom: bool):
     monkeypatch.setattr(mod, "_tiered_screen", _raiser if boom else _none)
     monkeypatch.setattr(mod, "_report_crash", lambda *a, **k: None)
+    monkeypatch.setattr(mod, "_hold_for_reader", lambda: None)
     decision = mod._auto_run_decision(project, "SURV-9")
     return decision, capsys.readouterr().err
 
@@ -1155,6 +1156,9 @@ def test_a_preflight_that_cannot_draw_tells_the_user_before_downgrading(tmp_path
     decision, out = _decision_without_a_preflight(monkeypatch, capsys, _project(tmp_path), mod, boom=False)
     assert decision == ""  # still falls back - an unattended run must not start by default
     assert "UNATTENDED" in out and "ATTENDED" in out
+    # Never "could not draw": a screen that drew, was filled in and then failed on the way
+    # out arrives here as None too, and that wording sends the reader to the wrong place.
+    assert "could not draw" not in out
     assert "execution and data questions" in out
 
 
@@ -1173,3 +1177,40 @@ def test_the_crash_is_reported_rather_than_swallowed(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "_report_crash", lambda where, exc=None: reported.append(where))
     mod._auto_run_decision(_project(tmp_path), "SURV-9")
     assert reported == ["unattended pre-flight"]
+
+
+def test_leaving_the_preflight_says_the_unattended_run_did_not_start(tmp_path, monkeypatch, capsys):
+    """The case that actually happened (2026-09-11): the pre-flight drew, the human left it,
+    and the launcher went back to the menu without a word - so the next thing they started
+    was attended and nothing said why. No .auto-pending.json is written on this path, which
+    is how it was told apart from a pre-flight that never drew."""
+    mod = _load("virt_team_launcher")
+    from launcher_app import AUTO_CANCELLED
+
+    monkeypatch.setattr(mod, "_tiered_screen", lambda *a, **k: AUTO_CANCELLED)
+    monkeypatch.setattr(mod, "_hold_for_reader", lambda: None)
+    project = _project(tmp_path)
+    assert mod._auto_run_decision(project, "SURV-9") == "__again__"
+    out = capsys.readouterr().err
+    assert "NOT started" in out
+    assert "Ctrl-D or F2" in out  # the key that would have started it
+    assert not (project / ".claude" / ".auto-pending.json").exists()
+
+
+def test_the_reader_is_held_before_a_full_screen_app_covers_the_message(tmp_path, monkeypatch):
+    """Printing it is not enough - the menu repaints over anything left on screen."""
+    mod = _load("virt_team_launcher")
+    from launcher_app import AUTO_CANCELLED
+
+    held = []
+    monkeypatch.setattr(mod, "_tiered_screen", lambda *a, **k: AUTO_CANCELLED)
+    monkeypatch.setattr(mod, "_hold_for_reader", lambda: held.append(1))
+    mod._auto_run_decision(_project(tmp_path), "SURV-9")
+    assert held == [1]
+
+
+def test_the_hold_is_silent_when_nobody_is_there(monkeypatch):
+    mod = _load("virt_team_launcher")
+    monkeypatch.setattr("builtins.input", lambda prompt="": (_ for _ in ()).throw(AssertionError))
+    monkeypatch.setattr(mod.sys.stdin, "isatty", lambda: False, raising=False)
+    mod._hold_for_reader()  # must not raise

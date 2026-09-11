@@ -1941,6 +1941,25 @@ def _expire_stale_auto_consent(project_dir: Path) -> bool:
     return True
 
 
+def _hold_for_reader() -> None:
+    """Keep a message on screen until it has been read, before a full-screen app covers it.
+
+    The menu and every other screen here are full-screen apps: they take the terminal and
+    repaint it, so a line printed on the way back to one is on screen for a frame. The same
+    fault was found across the installer's menus on 2026-09-11 and fixed the same way. This
+    is a read-receipt, not a question - silent when nobody is at the keyboard, and a Ctrl-C
+    or EOF here just carries on rather than aborting the launcher."""
+    try:
+        if not sys.stdin.isatty() or not sys.stderr.isatty():
+            return
+    except Exception:
+        return
+    try:
+        input("       Press Enter to go back to the menu... ")
+    except (EOFError, KeyboardInterrupt):
+        print("", file=sys.stderr)
+
+
 def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> str:
     """Authorise and start an unattended run, from a TICKET or a typed request.
 
@@ -1969,6 +1988,7 @@ def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> s
             file=err,
         )
         print(ink.dim("       execution and data questions in the session."), file=err)
+        _hold_for_reader()
         return ""
 
     try:
@@ -1979,8 +1999,25 @@ def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> s
         _report_crash("unattended pre-flight", exc)
         return _downgraded("the pre-flight screen crashed")
     if answers is None:
-        return _downgraded("no display tier could draw the pre-flight screen")
+        # NOT "could not draw" (2026-09-11). A screen that drew, was filled in, and then
+        # failed on the way out also arrives here as None, and telling someone who had just
+        # used that screen it could not be drawn sends them looking in the wrong place.
+        return _downgraded("the pre-flight did not complete - see the crash log above")
     if answers == AUTO_CANCELLED:
+        # LEAVING THE PRE-FLIGHT WAS SILENT, and the menu is a full-screen app that paints
+        # over anything printed before it, so the human went back to the menu with no idea
+        # the unattended run had been abandoned - and whatever they started next was
+        # attended. Reported 2026-09-11 ("it prompted me with the menu to autheoise fode
+        # exevution etc in the tui snd rhe unatttebded went orange", yet no --auto and no
+        # .auto-pending.json, which only a cancelled pre-flight explains). The screen starts
+        # on Ctrl-D or F2 ONLY - Enter toggles a row and Esc cancels - so the key is named
+        # here rather than left on a screen that has already gone.
+        print(ink.warn("    !  unattended run NOT started - you left the pre-flight"), file=err)
+        print(ink.dim("       Nothing was authorised and nothing has begun."), file=err)
+        print(ink.dim("       On that screen: Space/Enter toggles a row; Ctrl-D or F2"), file=err)
+        print(ink.dim("       STARTS the run; Esc cancels. F2 is there for terminals"), file=err)
+        print(ink.dim("       that swallow Ctrl-D."), file=err)
+        _hold_for_reader()
         return "__again__"
     match = _JIRA_KEY_RE.search(ref) if not request_text else None
     if match:
@@ -2365,9 +2402,20 @@ def _auto_offered(project_dir: Path) -> bool:
     [j] itself, where the menu item is always present and what it can DO is gated."""
     try:
         import engage_probe
-
+    except Exception as exc:
+        # "I COULD NOT TELL" IS NOT "THE PROJECT SAID NO" (2026-09-11). Both used to return
+        # False here, which paints no toggle, makes Ctrl-T a dead key, and starts an
+        # ordinary run - with nothing said. A human who armed unattended and got an attended
+        # run had no way to find out why, and the same failed import also costs them the
+        # step-0 probe, so one unimportable module reads as two unrelated faults. The
+        # default when the preference is simply absent is True (engage_probe:782), so an
+        # unreadable module must not be the one path that silently answers no.
+        _report_crash("unattended availability check", exc)
+        return False
+    try:
         return bool(engage_probe.resolve_preferences(project_dir).get("autonomous_mode"))
-    except Exception:
+    except Exception as exc:
+        _report_crash("unattended availability check", exc)
         return False
 
 

@@ -117,3 +117,99 @@ def test_a_crashed_app_is_not_read_as_a_choice(monkeypatch, tmp_path, capsys):
     exc = launcher_textual._crashed(_Crashed(), "the menu")
     assert isinstance(exc, RuntimeError)
     assert "died mid-handler" in capsys.readouterr().err
+
+
+# --- the unattended pre-flight was the one adapter still swallowing (2026-09-11) ---------------
+#
+# Live report: the human filled in the unattended gate and armed it, no `.auto-pending.json`
+# was written, and the session launched ATTENDED. Cancelling cannot produce that - it returns
+# "__again__" and starts nothing - so the screen drew and then failed on the way out, and the
+# bare `except Exception: return None` turned that into "this tier could not draw". Upstream
+# that means an ordinary run. A crash became an attended engagement, in silence.
+
+
+class _Widgets:
+    """Stands in for the vendored Textual widgets module."""
+
+    def __init__(self, app):
+        self._app = app
+
+    def PreflightApp(self, *a, **k):  # noqa: N802 - mirrors the real class name
+        return self._app
+
+
+def _preflight(monkeypatch, tmp_path, app, run=None):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.delenv("VIRT_SURV_DEBUG", raising=False)
+    import launcher_textual
+
+    monkeypatch.setattr(launcher_textual, "_widgets", lambda: _Widgets(app))
+    monkeypatch.setattr(launcher_textual, "_true_terminal_size", _null_context)
+    return launcher_textual.auto_preflight_screen(tmp_path, None, "SURV-9")
+
+
+class _null_context:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def test_a_preflight_that_dies_after_drawing_is_reported(monkeypatch, tmp_path, capsys):
+    class _App:
+        ran = True
+
+        def run(self):
+            raise RuntimeError("driver died on exit")
+
+    assert _preflight(monkeypatch, tmp_path, _App()) is None  # the degrade itself stays
+    err = capsys.readouterr().err
+    assert "driver died on exit" in err
+    # The human SAW the screen, so the record has to agree with them about that.
+    assert "after drawing" in err
+
+
+def test_a_preflight_that_never_drew_says_so_instead(monkeypatch, tmp_path, capsys):
+    class _App:
+        ran = False
+
+        def run(self):
+            raise RuntimeError("no terminal")
+
+    assert _preflight(monkeypatch, tmp_path, _App()) is None
+    err = capsys.readouterr().err
+    assert "no draw" in err and "after drawing" not in err
+
+
+def test_a_preflight_that_crashed_mid_handler_is_not_read_as_an_answer(
+    monkeypatch, tmp_path, capsys
+):
+    """`crashed` is set by the app itself; the state left behind is not a human's choice."""
+
+    class _App:
+        ran = True
+        confirmed = True
+        crashed = RuntimeError("died mid-handler")
+        state = {}
+
+        def run(self):
+            return None
+
+    assert _preflight(monkeypatch, tmp_path, _App()) is None
+    assert "died mid-handler" in capsys.readouterr().err
+
+
+def test_a_confirmed_preflight_whose_answers_fail_is_reported(monkeypatch, tmp_path, capsys):
+    """Confirmed means a human authorised it. Losing that silently is the worst outcome."""
+
+    class _App:
+        ran = True
+        confirmed = True
+        state = {}  # missing every key the answers builder indexes
+
+        def run(self):
+            return None
+
+    assert _preflight(monkeypatch, tmp_path, _App()) is None
+    assert "unattended pre-flight answers" in capsys.readouterr().err

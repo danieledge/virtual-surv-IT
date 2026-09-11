@@ -602,6 +602,13 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
         model = _preflight_model()
     except Exception:  # noqa: BLE001
         return None
+    # REPORTED, not swallowed (2026-09-11). This gate is the one screen where returning a
+    # silent None is worst: the caller reads None as "could not draw" and starts an ORDINARY
+    # run, so a crash here turns an authorised unattended run into an attended one with
+    # nothing said. Live report: the human filled this screen in and armed it, no
+    # `.auto-pending.json` was written, and the session launched attended. The menu and the
+    # request composer already reported through these helpers; this screen did not.
+    app = None
     try:
         app = widgets.PreflightApp(
             project_dir,
@@ -614,13 +621,28 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
         )
         with _true_terminal_size():
             app.run()
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        # A crash AFTER the screen drew is a different fact from one before it, and the
+        # human saw the difference even when the log did not record it.
+        drew = bool(getattr(app, "ran", False))
+        _report_outside_loop(
+            "the unattended pre-flight (textual, %s)" % ("after drawing" if drew else "no draw"),
+            exc,
+        )
+        return None
+    if _crashed(app, "the unattended pre-flight (textual)") is not None:
         return None
     if not getattr(app, "ran", False):
         return None
     if not getattr(app, "confirmed", False):
         return AUTO_CANCELLED
-    return model["answers"](app.state)
+    try:
+        return model["answers"](app.state)
+    except Exception as exc:  # noqa: BLE001
+        # The screen ran and was confirmed; only the shaping of its answers failed. Silence
+        # here would discard a completed authorisation.
+        _report_outside_loop("building the unattended pre-flight answers", exc)
+        return None
 
 
 def jira_screen(project_dir: Path, mod, output=None):

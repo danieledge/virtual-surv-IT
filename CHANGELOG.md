@@ -52,6 +52,31 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   Items 6-16 renumber to 5-15.
 
 ### Fixed
+- **A crash in the unattended pre-flight became an attended engagement, silently.** Live
+  report: the gate drew, the human armed it, no `.auto-pending.json` was written and the
+  session launched attended. A cancelled pre-flight cannot produce that - it returns to the
+  menu and starts nothing - so the screen drew and then failed on the way out, and the
+  adapter's bare `except Exception: return None` reads upstream as "this tier could not
+  draw", which means start an ordinary run. It was the one adapter of its kind not
+  reporting; the menu and the request composer already routed through `_crashed()` and
+  `_report_outside_loop()`. The unattended gate now reports on all three paths - a crash
+  around `app.run()` (recording whether the screen had drawn, because that is what the human
+  saw), a crash Textual recorded internally, and a failure building the answers after a
+  human confirmed them. The degrade itself is unchanged.
+- **The downgrade no longer claims "no display tier could draw".** A screen that drew, was
+  filled in and then failed arrives as `None` too, and that wording sends the reader
+  looking in the wrong place. It points at the crash log instead.
+- **Leaving the unattended pre-flight says so.** It returned to the menu without a word, and
+  the menu is a full-screen app that paints over anything printed on the way back, so the
+  next thing started was attended with no explanation. The message now names what was
+  authorised (nothing) and which key starts the run - Ctrl-D or F2, since Space and Enter
+  only toggle rows - and is held on screen until read.
+- **`_auto_offered` stopped answering "no" when it merely could not tell.** A failed
+  `engage_probe` import and a project that turned autonomy off both returned `False`, which
+  paints no toggle and makes Ctrl-T a dead key with nothing said. The default when the
+  preference is absent is `True`, so an unreadable module must not be the one path that
+  silently answers no. It is now recorded.
+
 - **The menu no longer paints over what an action just printed.** Three reports in one
   sitting, three different items - the vulnerability database, "How to use the team, day to
   day", and the guard-daemon start check - all "flashes something and returns to menu". One
