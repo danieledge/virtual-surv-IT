@@ -828,9 +828,11 @@ def jira_screen(project_dir: Path, mod, output=None):
     bindings rather than a focusable widget so the shared `screen()` shell - and its
     stderr-only output contract - is reused unchanged.
 
-    Returns the ref to pass to `--jira` (URL when one was pasted, bare key otherwise),
-    JIRA_CANCELLED on Esc, or None when the app cannot run here (the caller then uses the
-    plain `_jira_decision` prompt, which stays fully maintained)."""
+    Returns the ref to pass to `--jira` (URL when one was pasted, bare key otherwise), or
+    `(ref, True)` when unattended was armed with Ctrl-T - the pair form exists so a caller
+    cannot start an unattended run without noticing that it did. JIRA_CANCELLED on Esc, or
+    None when the app cannot run here (the caller then uses the plain `_jira_decision`
+    prompt, which stays fully maintained and now offers unattended too)."""
     try:
         p = mod._ptk_ui()
         if not p:

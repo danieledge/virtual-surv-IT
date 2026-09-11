@@ -1214,3 +1214,69 @@ def test_the_hold_is_silent_when_nobody_is_there(monkeypatch):
     monkeypatch.setattr("builtins.input", lambda prompt="": (_ for _ in ()).throw(AssertionError))
     monkeypatch.setattr(mod.sys.stdin, "isatty", lambda: False, raising=False)
     mod._hold_for_reader()  # must not raise
+
+
+# --- the plain ticket prompt had no unattended option at all (2026-09-11) -----------------------
+#
+# Spotted from the outside by the owner: "it did pick up the jira param and its url entered
+# so there is somethibg soecific fsiling sbout the --auto and the write out of the cobfig".
+# Both facts, one cause. _jira_decision is the fallback used when no app tier can draw; it
+# collected the ticket, returned _jira_command WITHOUT auto, and never mentioned autonomy -
+# so the ref arrived intact, --auto never appeared and no .auto-pending.json was written.
+# Nothing looked wrong, which is what made it survive.
+
+
+def _plain_jira(monkeypatch, tmp_path, answers, offered=True, decision="CMD --auto"):
+    mod = _load("virt_team_launcher")
+    monkeypatch.setattr(mod, "_auto_offered", lambda p: offered)
+    monkeypatch.setattr(mod, "_auto_run_decision", lambda p, ref: decision)
+    monkeypatch.setattr(mod, "_jira_enabled", lambda p: True)
+    feed = iter(answers)
+    monkeypatch.setattr("builtins.input", lambda *a, **k: next(feed))
+    return mod, mod._jira_decision(_project(tmp_path))
+
+
+def test_the_plain_ticket_prompt_offers_an_unattended_run(monkeypatch, tmp_path, capsys):
+    _mod, out = _plain_jira(monkeypatch, tmp_path, ["SURV-9", "y"])
+    assert out == "CMD --auto"
+    assert "unattended" in capsys.readouterr().err.lower()
+
+
+def test_declining_leaves_the_plain_prompt_exactly_as_it_was(monkeypatch, tmp_path):
+    _mod, out = _plain_jira(monkeypatch, tmp_path, ["SURV-9", "n"])
+    assert out.endswith("--jira SURV-9")  # an ordinary attended run, unchanged
+
+
+def test_a_project_that_turned_autonomy_off_is_never_asked(monkeypatch, tmp_path, capsys):
+    """The question is an affordance, and a project that said no should not see it."""
+    _mod, out = _plain_jira(monkeypatch, tmp_path, ["SURV-9"], offered=False)
+    assert out.endswith("--jira SURV-9")
+    assert "unattended" not in capsys.readouterr().err.lower()
+
+
+def test_a_gate_that_cannot_draw_still_starts_the_attended_run(monkeypatch, tmp_path):
+    """The authorisation gate has no plain-text rendering by design - it is the whole safety
+    story of an unattended run and is not collected through a bare prompt. When it cannot be
+    drawn the run must still happen, attended; _auto_run_decision says why."""
+    _mod, out = _plain_jira(monkeypatch, tmp_path, ["SURV-9", "y"], decision="")
+    assert out.endswith("--jira SURV-9")
+
+
+def test_leaving_the_gate_from_the_plain_prompt_goes_back_to_the_menu(monkeypatch, tmp_path):
+    _mod, out = _plain_jira(monkeypatch, tmp_path, ["SURV-9", "y"], decision="__again__")
+    assert out == "__again__"
+
+
+def test_the_url_survives_the_unattended_question(monkeypatch, tmp_path):
+    """The ref was the one thing that always worked; the question must not cost it."""
+    mod = _load("virt_team_launcher")
+    seen = {}
+    monkeypatch.setattr(mod, "_auto_offered", lambda p: True)
+    monkeypatch.setattr(mod, "_jira_enabled", lambda p: True)
+    monkeypatch.setattr(
+        mod, "_auto_run_decision", lambda p, ref: seen.setdefault("ref", ref) and "CMD"
+    )
+    feed = iter(["https://example.invalid/browse/SURV-9", "y"])
+    monkeypatch.setattr("builtins.input", lambda *a, **k: next(feed))
+    mod._jira_decision(_project(tmp_path))
+    assert seen["ref"] == "https://example.invalid/browse/SURV-9"

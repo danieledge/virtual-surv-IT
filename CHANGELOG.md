@@ -52,6 +52,19 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   Items 6-16 renumber to 5-15.
 
 ### Fixed
+- **The plain ticket prompt had no unattended option at all.** `_jira_decision` is the
+  fallback the launcher uses when no app tier can draw. It collected the ticket, returned an
+  ordinary `--jira` command and never mentioned autonomy - so the ref arrived intact,
+  `--auto` never appeared, no `.auto-pending.json` was written, and nothing on screen looked
+  wrong. Spotted from the outside by the owner, from the shape of the symptoms: "it did pick
+  up the jira param and its url entered so there is somethibg soecific fsiling sbout the
+  --auto and the write out of the cobfig" - both facts, one cause. It now asks, and routes to
+  the same authorisation gate every other path uses. A project that turned autonomy off is
+  never asked, and declining leaves the prompt exactly as it was. The gate itself still has
+  no plain-text rendering, by design - it is the whole safety story of an unattended run and
+  is not something to collect through a bare prompt - so where it cannot be drawn the run
+  proceeds attended, and now says so rather than doing it in silence.
+
 - **The prompt_toolkit renderer had the same silent hole, and it is the one plugin installs
   use.** Found on the Windows test VM: the plugin cache there ships `prompt_toolkit` and has
   no `vendor/textual` and no `scripts/launcher_textual.py` at all, so instrumenting only the

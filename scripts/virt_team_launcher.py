@@ -1808,6 +1808,32 @@ def _jira_decision(project_dir: Path) -> str:
     # Pass the URL through when one was given - the session can use the exact instance
     # host; a bare key relies on the project's configured Jira access alone.
     ref = raw if "://" in raw else key
+    # UNATTENDED WAS SILENTLY UNAVAILABLE HERE (2026-09-11). This prompt is the fallback the
+    # launcher uses when no app tier can draw, and it collected the ticket, started an
+    # ORDINARY run and never mentioned autonomy - so a human who came to [j] to start an
+    # unattended run got an attended one, with the ticket picked up correctly and nothing
+    # amiss to see. The owner spotted the shape from the outside: "it did pick up the jira
+    # param and its url entered so there is somethibg soecific fsiling sbout the --auto and
+    # the write out of the cobfig". Both symptoms, one cause - this path never asks.
+    if _auto_offered(project_dir):
+        print(
+            ink.bold("    Run this unattended (nobody watching)? [y/N]: "), end="", file=err
+        )
+        try:
+            wants_auto = input().strip().lower() in ("y", "yes")
+        except (EOFError, KeyboardInterrupt):
+            wants_auto = False
+        if wants_auto:
+            # _auto_run_decision draws the authorisation gate, which has no plain-text
+            # rendering by design - it is the whole safety story of an unattended run and
+            # is not something to collect through a bare prompt. If it cannot draw, that
+            # function now says so and this falls through to an attended run, which is the
+            # correct outcome; what was wrong was doing it without a word.
+            decision = _auto_run_decision(project_dir, ref)
+            if decision == "__again__":
+                return "__again__"
+            if decision:
+                return decision
     print(ink.dim(f"    -> starting new engagement from {key}"), file=err)
     return _jira_command(project_dir, ref)
 

@@ -871,7 +871,10 @@ def test_jira_url_becomes_a_preseeded_decision(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(project)
     mod = _load()
     monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
-    answers = iter(["j", "https://jira.corp.example/browse/SURV-123"])
+    # "n" declines the unattended question the plain prompt now asks (2026-09-11): it used
+    # to have no such option at all, which is how an unattended pick became an attended run
+    # with the ticket handled perfectly and nothing to see.
+    answers = iter(["j", "https://jira.corp.example/browse/SURV-123", "n"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = mod.main()
     out = capsys.readouterr()
@@ -889,7 +892,7 @@ def test_jira_bare_key_and_invalid_input(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(project)
     mod = _load()
     monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
-    answers = iter(["j", "surv-42"])
+    answers = iter(["j", "surv-42", "n"])  # declining the unattended question
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = mod.main()
     out = capsys.readouterr()
