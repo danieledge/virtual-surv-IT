@@ -31,6 +31,10 @@ Claude Code adds to the prompt, and both always return 0. So this dispatcher:
 
 A hook that produces no output contributes nothing - no blank lines, no separators - so a
 dormant session emits exactly what it did before: nothing at all.
+
+STAGED COPY (2026-09-12): this file became write-protected in the same pass that widened
+the consent-write guard to every dispatcher-registered script, so like the guards it is
+edited here and promoted by a human with scripts/apply-prompt-hook-dispatcher.sh.
 """
 
 from __future__ import annotations
@@ -94,6 +98,18 @@ def _run_hook(module: ModuleType, payload_text: str) -> str:
 
 
 def main() -> int:
+    # The REAL stdout is made UTF-8 here, before any hook runs. Each hook reconfigures
+    # "its" stdout on Windows, but under this dispatcher that is the StringIO stand-in,
+    # so the process's own stdout stayed on the console code page; the first captured
+    # line (the persona anchor opens with an emoji) then raised on the final write and
+    # the catch-all below turned the whole injection into silence. Every /engage on the
+    # Windows runner opened with no anchor and no probe, and the only trace was a test
+    # that compared empty to empty (found on the Windows VM, 2026-09-12).
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
     try:
         payload_text = sys.stdin.read()
     except Exception:
