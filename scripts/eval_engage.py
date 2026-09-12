@@ -49,6 +49,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import ntpath
 import os
 import re
 import shutil
@@ -64,7 +65,7 @@ from typing import Any
 
 import yaml
 
-from scripts.eval_score import score
+from scripts.eval_score import TripwireContext, scan_tripwires, score, tripwires_off
 
 
 def _vsit_paths():
@@ -250,6 +251,28 @@ def engage_cases() -> list[str]:
     return out
 
 
+def case_mode(manifest: dict, force_plugin: bool = False) -> str:
+    """How a case is laid out: "repo" (a sandbox copy of this repo IS the project) or "plugin".
+
+    `mode: plugin` in expected.yaml declares it per case; `--plugin-mode` forces it for every
+    case in the run. The CLI wins, on the same reasoning as --timeout: an explicit flag is a
+    human overriding the corpus, and forcing plugin mode across the set is how a release check
+    asks "does the whole corpus still pass the way people actually install this?".
+    """
+    if force_plugin:
+        return "plugin"
+    declared = str(manifest.get("mode") or "repo").strip().lower()
+    return "plugin" if declared == "plugin" else "repo"
+
+
+def overlay_fixtures(fixtures: Path, dest: Path) -> None:
+    """Copy a case's fixtures/ tree over `dest`. Portable (no rsync - the Windows VM has none)."""
+    if not fixtures.is_dir():
+        return
+    dest.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(fixtures, dest, symlinks=False, dirs_exist_ok=True)
+
+
 def case_workflow(case_id: str) -> str:
     """The live-orchestrator command a case declares (default /engage)."""
     try:
@@ -265,26 +288,31 @@ def _claude_cfg_path() -> Path:
     return Path.home() / ".claude.json"
 
 
-def ensure_workspace_trust(path: Path) -> None:
+def ensure_workspace_trust(path: Path, configs: list[Path] | None = None) -> None:
     """Pre-accept the trust dialog for a sandbox path (headless runs cannot click it).
 
     Without trust, project settings are IGNORED - .claude skills would not load (no
     /engage) and, worse, the guard hooks under test would be silently disarmed. This is
     the remedy the CLI itself prints. Reverted by drop_workspace_trust() after the run.
+
+    `configs` (2026-09-13, plugin mode): the config files to stamp. Plugin mode passes the
+    THROWAWAY home's, so a plugin-mode run never writes to the developer's real ~/.claude.json
+    at all - and therefore never leaves a stale trust entry in it either.
     """
-    cfg = _claude_cfg_path()
-    data = json.loads(cfg.read_text(encoding="utf-8")) if cfg.is_file() else {}
-    data.setdefault("projects", {}).setdefault(str(path), {})["hasTrustDialogAccepted"] = True
-    cfg.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-
-def drop_workspace_trust(path: Path) -> None:
-    cfg = _claude_cfg_path()
-    if not cfg.is_file():
-        return
-    data = json.loads(cfg.read_text(encoding="utf-8"))
-    if data.get("projects", {}).pop(str(path), None) is not None:
+    for cfg in configs or [_claude_cfg_path()]:
+        data = json.loads(cfg.read_text(encoding="utf-8")) if cfg.is_file() else {}
+        data.setdefault("projects", {}).setdefault(str(path), {})["hasTrustDialogAccepted"] = True
+        cfg.parent.mkdir(parents=True, exist_ok=True)
         cfg.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def drop_workspace_trust(path: Path, configs: list[Path] | None = None) -> None:
+    for cfg in configs or [_claude_cfg_path()]:
+        if not cfg.is_file():
+            continue
+        data = json.loads(cfg.read_text(encoding="utf-8"))
+        if data.get("projects", {}).pop(str(path), None) is not None:
+            cfg.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 def build_sandbox(dest: Path) -> None:
@@ -336,6 +364,492 @@ def build_target_sandbox(source: Path, dest: Path, team_preferences: dict) -> No
     (claude_dir / "team-preferences.json").write_text(
         json.dumps(team_preferences, indent=2) + "\n", encoding="utf-8"
     )
+
+
+# --------------------------------------------------------------------------- plugin mode
+#
+# WHY (2026-09-13, owner request). Every case above runs REPO-AS-PROJECT: the sandbox is a copy
+# of this repo, so the plugin root and the project root are the same directory and the hooks
+# come from the repo's own .claude/settings.json. That is not how anyone installs this. The
+# default install is a MARKETPLACE install: a cache copy under the user's config home, a client
+# project that is not the plugin repo, hooks wired through the plugin's own hooks/hooks.json
+# and ${CLAUDE_PLUGIN_ROOT}. A day of live reports from the owner's corporate Windows laptop
+# found five defects, and every one of them lived in that gap.
+#
+# So this builds the default install's shape on disk, in a throwaway HOME:
+#
+#   <run>/plugin/
+#     home/                                     HOME + USERPROFILE for the session
+#       .claude.json                            workspace trust (never the real one)
+#       .claude/                                CLAUDE_CONFIG_DIR
+#         plugins/installed_plugins.json        the v2 registry, one local-scope entry
+#         plugins/known_marketplaces.json       the marketplace, sourced from the copy below
+#         plugins/marketplaces/<marketplace>/   the "checked-out" marketplace: a repo copy
+#         plugins/cache/<mkt>/<plugin>/<ver>/   the CACHE copy the session actually loads
+#     proj/                                     the CLIENT project: cwd, empty but for fixtures
+#
+# Portability is a requirement, not a nicety: the owner runs this by hand on a Windows VM and
+# the manual CI job runs it on Linux. So the copy is shutil.copytree (never rsync, which the
+# Windows box does not have), every path is a Path, nothing is symlinked, and names Windows
+# cannot create are skipped on BOTH platforms so the two layouts are identical.
+PLUGIN_MARKETPLACE = "virtual-surv-it"
+PLUGIN_NAME = "compliance-surveillance-team"
+
+# Never copied into the marketplace checkout or the cache copy. `evals/` is the load-bearing
+# one (same reason as SANDBOX_EXCLUDES: ground truth must be structurally unreachable), and
+# `docs/assets` is 5.4M of PNGs no case reads.
+PLUGIN_COPY_EXCLUDES = (
+    ".git",
+    ".venv",
+    "venv",
+    "evals",
+    "node_modules",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    "artifacts",
+    "docs/assets",
+    ".claude/.exec-consent",
+)
+
+# Names Windows cannot create. Skipped on every platform, so a layout built on Linux is the
+# same layout the Windows VM gets - a copy that silently differs per OS is worse than a copy
+# that is missing a file both times.
+_WIN_RESERVED = frozenset(
+    ["con", "prn", "aux", "nul"]
+    + [f"com{i}" for i in range(1, 10)]
+    + [f"lpt{i}" for i in range(1, 10)]
+)
+_WIN_FORBIDDEN_CHARS = set('<>:"|?*')
+# Classic MAX_PATH is 260; anything past this in the built layout is worth warning about
+# before a person watches a Windows run fail halfway through a copy.
+_WIN_PATH_WARN = 240
+
+
+def windows_nameable(name: str) -> bool:
+    """False for a file name Windows refuses: reserved device names, `<>:"|?*`, trailing . or space."""
+    if not name or name != name.rstrip(". "):
+        return False
+    if _WIN_FORBIDDEN_CHARS & set(name):
+        return False
+    return name.split(".", 1)[0].lower() not in _WIN_RESERVED
+
+
+def _copy_ignore(root: Path, excludes: tuple[str, ...]):
+    """shutil.copytree ignore callable honouring both bare names and repo-relative paths."""
+    rel_excludes = {e.replace("\\", "/") for e in excludes if "/" in e}
+    name_excludes = {e for e in excludes if "/" not in e}
+
+    def ignore(dirpath: str, names: list[str]) -> set[str]:
+        base = Path(dirpath)
+        skipped: set[str] = set()
+        for name in names:
+            if name in name_excludes or not windows_nameable(name):
+                skipped.add(name)
+                continue
+            try:
+                rel = (base / name).relative_to(root).as_posix()
+            except ValueError:
+                rel = name
+            if rel in rel_excludes:
+                skipped.add(name)
+        return skipped
+
+    return ignore
+
+
+def copy_plugin_tree(source: Path, dest: Path, excludes: tuple[str, ...] = PLUGIN_COPY_EXCLUDES):
+    """Portable, symlink-free copy of the plugin source. Returns the destination."""
+    shutil.copytree(
+        source, dest, ignore=_copy_ignore(source, excludes), symlinks=False, dirs_exist_ok=True
+    )
+    return dest
+
+
+def long_paths(root: Path, limit: int = _WIN_PATH_WARN) -> list[str]:
+    """Every path under `root` longer than `limit` characters - the Windows MAX_PATH warning."""
+    return sorted(str(p) for p in root.rglob("*") if len(str(p)) > limit)
+
+
+def long_path_note(root: Path, limit: int = _WIN_PATH_WARN) -> str:
+    """One line about MAX_PATH headroom in a built layout, or "" when there is nothing to say.
+
+    Deliberately one line with the WORST case in it, not a list. The classic Windows limit is
+    260 characters and the layout is deep by construction (config home -> plugins -> cache ->
+    marketplace -> plugin -> version -> the repo tree), so the actionable number is how long
+    the longest path got and where the checkout would have to live to stay under it.
+    """
+    over = long_paths(root, limit)
+    if not over:
+        return ""
+    worst = max(over, key=len)
+    return (
+        f"MAX_PATH note: {len(over)} path(s) exceed {limit} chars, longest {len(worst)} "
+        f"({worst}). Only matters on Windows without long paths enabled - keep the checkout "
+        "shallow there (C:\\dev\\vsit) or turn LongPathsEnabled on."
+    )
+
+
+@dataclass
+class PluginLayout:
+    """Where everything in a plugin-mode run lives. Paths only - no behaviour of its own."""
+
+    root: Path
+    home: Path
+    config_dir: Path
+    marketplace_dir: Path
+    cache_dir: Path
+    project: Path
+    version: str
+    marketplace: str = PLUGIN_MARKETPLACE
+    plugin: str = PLUGIN_NAME
+
+    @property
+    def registry_file(self) -> Path:
+        return self.config_dir / "plugins" / "installed_plugins.json"
+
+    @property
+    def marketplaces_file(self) -> Path:
+        return self.config_dir / "plugins" / "known_marketplaces.json"
+
+    @property
+    def claude_json_files(self) -> list[Path]:
+        # Written in both places deliberately: `~/.claude.json` is where the CLI keeps
+        # per-project trust with a default config home, and a CLAUDE_CONFIG_DIR install keeps
+        # it inside that directory. Writing both costs a few hundred bytes and removes the
+        # need to guess which one this CLI build reads.
+        return [self.home / ".claude.json", self.config_dir / ".claude.json"]
+
+    def session_env(self) -> dict[str, str]:
+        """The env that makes the session use the throwaway home and nothing else.
+
+        HOME and USERPROFILE together, because a Windows CLI reads USERPROFILE while anything
+        POSIX-shaped in the same session (Git Bash, the guard's `sh` wrapper) reads HOME.
+        HOMEDRIVE/HOMEPATH follow on Windows for the same reason - a shell that expands `~`
+        from those would otherwise resolve it to the real profile.
+        """
+        env = {
+            "HOME": str(self.home),
+            "USERPROFILE": str(self.home),
+            "CLAUDE_CONFIG_DIR": str(self.config_dir),
+            "XDG_CONFIG_HOME": str(self.home / ".config"),
+        }
+        # ntpath.splitdrive, not os.path.splitdrive: the drive letter has to be recognised by
+        # the SHAPE of the path, not by the platform the harness happens to be running on -
+        # otherwise a layout built for a Windows path never gets HOMEDRIVE/HOMEPATH, and a
+        # POSIX path is unaffected either way (ntpath finds no drive in "/home/x").
+        drive, tail = ntpath.splitdrive(str(self.home))
+        if drive:
+            env["HOMEDRIVE"] = drive
+            env["HOMEPATH"] = tail
+        return env
+
+
+def _iso_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
+def build_plugin_layout(
+    dest: Path,
+    source_root: Path = REPO_ROOT,
+    version: str | None = None,
+    probe_cache: bool = False,
+) -> PluginLayout:
+    """Lay out a default marketplace install in a throwaway HOME, and return where it went.
+
+    `probe_cache=True` pre-writes the VSIT/local/engage-probe.json that `virt-surv go` writes,
+    so the open takes the corp fast path; the default is the SLOW path (nothing pre-written),
+    because that is what a first `/engage` in a fresh client project actually does.
+    """
+    version = version or _plugin_version(source_root)
+    home = dest / "home"
+    config_dir = home / ".claude"
+    marketplace_dir = config_dir / "plugins" / "marketplaces" / PLUGIN_MARKETPLACE
+    cache_dir = config_dir / "plugins" / "cache" / PLUGIN_MARKETPLACE / PLUGIN_NAME / version
+    project = dest / "proj"
+    layout = PluginLayout(
+        root=dest,
+        home=home,
+        config_dir=config_dir,
+        marketplace_dir=marketplace_dir,
+        cache_dir=cache_dir,
+        project=project,
+        version=version,
+    )
+
+    marketplace_dir.parent.mkdir(parents=True, exist_ok=True)
+    copy_plugin_tree(source_root, marketplace_dir)
+    # The cache copy is made FROM the marketplace checkout, which is the order the real
+    # install works in - so a file the marketplace copy dropped cannot reappear in the cache.
+    cache_dir.parent.mkdir(parents=True, exist_ok=True)
+    copy_plugin_tree(marketplace_dir, cache_dir, excludes=())
+    project.mkdir(parents=True, exist_ok=True)
+
+    stamp = _iso_now()
+    layout.registry_file.parent.mkdir(parents=True, exist_ok=True)
+    layout.registry_file.write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "plugins": {
+                    f"{PLUGIN_NAME}@{PLUGIN_MARKETPLACE}": [
+                        {
+                            # "local" (project-scoped), the shape `/plugin install` writes
+                            # for a per-project install: it carries projectPath as well as
+                            # installPath, and the client project is what it points at.
+                            "scope": "local",
+                            "projectPath": str(project),
+                            "installPath": str(cache_dir),
+                            "version": version,
+                            "installedAt": stamp,
+                            "lastUpdated": stamp,
+                        }
+                    ]
+                },
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    layout.marketplaces_file.write_text(
+        json.dumps(
+            {
+                PLUGIN_MARKETPLACE: {
+                    # A directory source, not github/git: the marketplace here IS the sandbox
+                    # copy of this repo, and a run that reached the network would not be
+                    # testing the copy on disk.
+                    "source": {"source": "directory", "path": str(marketplace_dir)},
+                    "installLocation": str(marketplace_dir),
+                    "lastUpdated": stamp,
+                }
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    if probe_cache:
+        write_probe_cache(layout)
+    return layout
+
+
+def session_interpreter() -> str:
+    """The interpreter the SESSION will see, not the one this driver runs on.
+
+    The cached probe report is served to the session verbatim, so writing `sys.executable` here
+    would hand it the repo venv - the exact thing _session_env() strips from PATH, and for the
+    same reason (the venv has no user-site Markdown/bleach, so render_html "could not" run,
+    observed twice). Resolve the name over the same venv-less PATH the session gets.
+    """
+    venv = os.environ.get("VIRTUAL_ENV") or ""
+    path = os.pathsep.join(
+        p
+        for p in os.environ.get("PATH", "").split(os.pathsep)
+        if p and not (venv and p.startswith(venv))
+    )
+    for name in ("python3", "python", "py"):
+        hit = shutil.which(name, path=path)
+        if hit:
+            return Path(hit).as_posix()
+    return Path(sys.executable).as_posix()
+
+
+def write_probe_cache(layout: PluginLayout) -> Path:
+    """Pre-write the probe cache `virt-surv go` leaves behind (the corp fast-path variant).
+
+    Same keys the launcher's _write_probe_cache writes, so the prefetch hook's freshness
+    checks (TTL, prefs mtime, git identity, plugin version) all pass and the open serves the
+    cached report instead of computing one. A non-git client project stamps empty git
+    identity, which is exactly what the hook compares against for such a project.
+    """
+    out = _vsit_paths().local_file("engage_probe", layout.project)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    prefs = _vsit_paths().preferences_file(layout.project)
+    payload = {
+        "computed_at_epoch": int(time.time()),
+        "computed_at": datetime.now().isoformat(timespec="seconds"),
+        "plugin_version": layout.version,
+        "prefs_mtime": int(prefs.stat().st_mtime) if prefs.is_file() else 0,
+        "git_branch": "",
+        "git_head": "",
+        "interpreter": session_interpreter(),
+        "report": (
+            f"PLUGIN_ROOT={layout.cache_dir.as_posix()}\n"
+            f"PROJECT_DIR={layout.project.as_posix()}\n"
+            "BRANCH=\nPLUGIN_VERSION=" + layout.version + "\n"
+            "pre-computed by the eval harness standing in for `virt-surv go`\n"
+        ),
+    }
+    out.write_text(json.dumps(payload, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    return out
+
+
+# Only these keys are ever read out of the real config, and only to let the throwaway home
+# authenticate the same way an interactive session does. Nothing is ever written back to the
+# real home, and no other key crosses over: a plugin-mode run must not inherit the developer's
+# projects, trust decisions, plugin registry or preferences, because inheriting them is what
+# would hide the very defects this mode exists to find.
+_AUTH_KEYS = ("oauthAccount", "userID", "hasCompletedOnboarding", "firstStartTime")
+_AUTH_FILES = (".credentials.json",)
+
+
+def seed_session_auth(
+    layout: PluginLayout,
+    real_config_dir: Path | None = None,
+    real_claude_json: Path | None = None,
+) -> list[str]:
+    """Copy ONLY the credential material into the throwaway home. Returns what was seeded."""
+    real_config_dir = real_config_dir or (Path.home() / ".claude")
+    real_claude_json = real_claude_json or _claude_cfg_path()
+    seeded: list[str] = []
+    for name in _AUTH_FILES:
+        src = real_config_dir / name
+        if src.is_file():
+            shutil.copy2(src, layout.config_dir / name)
+            seeded.append(name)
+    carried: dict[str, Any] = {}
+    if real_claude_json.is_file():
+        try:
+            data = json.loads(real_claude_json.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            data = {}
+        carried = {k: data[k] for k in _AUTH_KEYS if k in data}
+    if carried:
+        for cfg in layout.claude_json_files:
+            existing = {}
+            if cfg.is_file():
+                try:
+                    existing = json.loads(cfg.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    existing = {}
+            existing.update(carried)
+            cfg.parent.mkdir(parents=True, exist_ok=True)
+            cfg.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+        seeded += sorted(carried)
+    return seeded
+
+
+def _bundled_cli(windows: bool) -> str | None:
+    """The CLI shipped inside the installed SDK, if there is one (its first search step)."""
+    try:
+        import claude_agent_sdk as _sdk
+    except ImportError:
+        return None
+    bundled = Path(_sdk.__file__).parent / "_bundled" / ("claude.exe" if windows else "claude")
+    return str(bundled) if bundled.is_file() else None
+
+
+def resolve_cli_path(windows: bool | None = None) -> str:
+    """The `claude` executable the Agent SDK would spawn, resolved the same way it does.
+
+    Mirrors claude_agent_sdk/_internal/transport/subprocess_cli.py::_find_cli (read
+    2026-09-13): bundled first, then PATH, then a per-platform list of install locations. The
+    Windows branch matters - `shutil.which("claude")` there can hand back npm's `claude.cmd`
+    shim, which CreateProcess refuses to run, so a native `claude.exe` is preferred and the
+    POSIX-shaped fallbacks are not probed at all. Used for --dry-run only: the real launch
+    goes through the SDK, which does its own resolution.
+
+    `windows` is a parameter rather than a read of os.name so the branch is testable without
+    monkeypatching the os module out from under pathlib.
+    """
+    if windows is None:
+        windows = os.name == "nt" or sys.platform.startswith("win")
+    bundled = _bundled_cli(windows)
+    if bundled:
+        return bundled
+    hit = shutil.which("claude")
+    if hit and not windows:
+        return hit
+    if windows:
+        exe = shutil.which("claude.exe")
+        if exe:
+            return exe
+        native = Path.home() / ".local" / "bin" / "claude.exe"
+        if native.is_file():
+            return str(native)
+        return hit or "claude"
+    for candidate in (
+        Path.home() / ".npm-global/bin/claude",
+        Path("/usr/local/bin/claude"),
+        Path.home() / ".local/bin/claude",
+        Path.home() / "node_modules/.bin/claude",
+        Path.home() / ".yarn/bin/claude",
+        Path.home() / ".claude/local/claude",
+    ):
+        if candidate.is_file():
+            return str(candidate)
+    return "claude"
+
+
+def launch_command(
+    cwd: Path,
+    plugin_root: Path | None,
+    team_model: str = "opus",
+    cli: str | None = None,
+    windows: bool | None = None,
+) -> list[str]:
+    """The argv the SDK builds for a session, for --dry-run to print.
+
+    `--plugin-dir` is the exact option (claude --help: "Load a plugin from a directory or .zip
+    for this session only"), and it is what the SDK emits for
+    `plugins=[{"type": "local", "path": ...}]` - subprocess_cli.py lines 602-608. Everything
+    else here is the flag the corresponding ClaudeAgentOptions field produces.
+    """
+    cmd = [
+        cli or resolve_cli_path(windows),
+        "--print",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        team_model,
+        "--permission-mode",
+        "default",
+        "--setting-sources=project",
+        "--include-hook-events",
+    ]
+    if plugin_root is not None:
+        cmd += ["--plugin-dir", str(plugin_root)]
+    cmd += ["--add-dir", str(cwd)]
+    return cmd
+
+
+def describe_dry_run(
+    case_id: str,
+    cwd: Path,
+    plugin_root: Path | None,
+    env: dict[str, str],
+    workflow_cmd: str,
+    team_model: str,
+    extra_notes: list[str] | None = None,
+) -> str:
+    """The human-readable dry-run report: layout, env overrides, and the launch command.
+
+    Exists so the owner can check a plugin-mode layout on the Windows VM without spending a
+    live session on it - the copy, the registry JSON and the resolved CLI path are exactly
+    what a real run would use.
+    """
+    lines = [
+        f"# dry run: {case_id}",
+        f"cwd (the project the session opens in): {cwd}",
+        f"plugin root (--plugin-dir):             {plugin_root or '(none: repo-as-project mode)'}",
+        f"front-door command:                     {workflow_cmd}",
+        f"orchestrator model:                     {team_model}",
+        "",
+        "## env overrides for the spawned CLI",
+    ]
+    lines += [f"  {k}={v}" for k, v in sorted(env.items())]
+    lines += [
+        "",
+        "## launch command (the SDK builds this argv; session flags it adds are omitted)",
+        "  " + subprocess.list2cmdline(launch_command(cwd, plugin_root, team_model)),
+    ]
+    if extra_notes:
+        lines += ["", "## notes", *(f"  {note}" for note in extra_notes)]
+    lines += ["", "Nothing was launched. Drop --dry-run to run it for real."]
+    return "\n".join(lines)
 
 
 # --------------------------------------------------------------------------- LLM calls
@@ -538,6 +1052,58 @@ def _transcript_lines(
     return lines
 
 
+def event_entry(message: Any, msg_type: str) -> dict:
+    """One captured event: the repr that was always kept, plus STRUCTURED tool traffic.
+
+    WHY the structured fields (2026-09-13). The tripwires in scripts.eval_score read what the
+    run DID - which path a Read errored on, what a Bash `ls` targeted, whether the
+    UserPromptSubmit hook injected anything. All of that was present in the capture only as
+    `repr(message)[:4000]`: truncated mid-object on a long tool input, and parseable only by
+    picking a Python repr apart. Recording the fields directly makes the tripwires read data
+    instead of prose, and the repr stays for everything else that was ever read out of it.
+    """
+    entry: dict = {"type": msg_type, "repr": repr(message)[:4000]}
+    tools: list[dict] = []
+    results: list[dict] = []
+    content = getattr(message, "content", None) or []
+    # A UserMessage's content may be a plain string; iterating that yields characters.
+    blocks = [] if isinstance(content, str) else content
+    # Blocks are recognised by their ATTRIBUTES, not by class name, for the same reason
+    # _transcript_lines takes the SDK classes as parameters: this stays usable and testable
+    # without the Agent SDK installed.
+    for block in blocks:
+        if hasattr(block, "tool_use_id"):
+            results.append(
+                {
+                    "tool_use_id": getattr(block, "tool_use_id", ""),
+                    "is_error": bool(getattr(block, "is_error", False)),
+                    # Capped: a tool result can be a whole file, and the tripwires only ever
+                    # look for an error phrase or a path near the top of one.
+                    "text": json.dumps(getattr(block, "content", None), default=str)[:4000],
+                }
+            )
+        elif hasattr(block, "name") and hasattr(block, "input"):
+            tools.append(
+                {
+                    "id": getattr(block, "id", ""),
+                    "name": getattr(block, "name", ""),
+                    "input": getattr(block, "input", {}) or {},
+                }
+            )
+    if tools:
+        entry["tools"] = tools
+    if results:
+        entry["tool_results"] = results
+    if msg_type == "HookEventMessage":
+        data = getattr(message, "data", None) or {}
+        entry["hook"] = {
+            "event": getattr(message, "hook_event_name", "") or data.get("hook_event") or "",
+            "subtype": getattr(message, "subtype", "") or "",
+            "output": json.dumps(data, default=str)[:8000],
+        }
+    return entry
+
+
 async def run_engage_session(
     cap: SessionCapture,
     scenario: str,
@@ -642,6 +1208,11 @@ async def run_engage_session(
         # exec-consent guard is not present to enforce it another way).
         plugins=plugins or [],
         disallowed_tools=disallowed_tools or [],
+        # Hook lifecycle frames in the message stream (2026-09-13). The missing-injection
+        # tripwire needs to see whether the plugin's UserPromptSubmit hooks fired and what
+        # they returned; without this the harness cannot tell "the anchor was not injected"
+        # from "the harness cannot see injections". Purely additive capture.
+        include_hook_events=True,
     )
 
     # can_use_tool requires streaming input mode: a single-message async iterable stands in
@@ -719,10 +1290,10 @@ async def run_engage_session(
                     inflight.discard(data.get("task_id"))
             elif msg_type in ("AssistantMessage", "UserMessage"):
                 result_pending = False  # conversation moved on - the prior result wasn't final
-            event_entry = {"type": msg_type, "repr": repr(message)[:4000]}
-            cap.events.append(event_entry)
+            entry = event_entry(message, msg_type)
+            cap.events.append(entry)
             if events_fh is not None:
-                events_fh.write(json.dumps(event_entry) + "\n")
+                events_fh.write(json.dumps(entry, default=str) + "\n")
                 events_fh.flush()
             if isinstance(message, AssistantMessage):
                 from_subagent = message.parent_tool_use_id is not None
@@ -1058,10 +1629,29 @@ async def run_case(
 
     out_dir = run_root / (f"{case_id}-resume" if sandbox_override else case_id)
     out_dir.mkdir(parents=True, exist_ok=True)
+    mode = case_mode(manifest, getattr(args, "plugin_mode", False))
+    layout: PluginLayout | None = None
+    layout_notes: list[str] = []
     if sandbox_override is not None:
         sandbox = sandbox_override  # shared, pre-existing state - never rebuilt, never deleted
         print(f"  [{case_id}] resuming in kept sandbox {sandbox}")
         args.keep_sandbox = True
+    elif mode == "plugin":
+        print(f"  [{case_id}] building plugin-mode layout (throwaway HOME, cache copy)...")
+        layout = build_plugin_layout(
+            out_dir / "plugin", probe_cache=bool(manifest.get("probe_cache"))
+        )
+        sandbox = layout.project
+        overlay_fixtures(case_dir / "fixtures", sandbox)
+        if not getattr(args, "no_inherit_auth", False):
+            seeded = seed_session_auth(layout)
+            print(f"  [{case_id}] seeded auth into the throwaway home: {seeded or 'nothing found'}")
+        layout_notes += [n for n in [long_path_note(layout.root)] if n]
+        for note in layout_notes:
+            # Reported, not raised. On Linux it is advice about the Windows VM; on Windows the
+            # copy that just succeeded proves long paths are enabled there, so it is a note
+            # about how little headroom is left before a deeper tree stops copying.
+            print(f"  [{case_id}] {note}", file=sys.stderr)
     else:
         sandbox = out_dir / "sandbox"
         print(f"  [{case_id}] building sandbox...")
@@ -1078,7 +1668,43 @@ async def run_case(
             subprocess.run(  # nosec B603 B607
                 ["rsync", "-a", f"{fixtures}/", f"{sandbox}/"], check=True, capture_output=True
             )
-    ensure_workspace_trust(sandbox)
+    plugin_root = layout.cache_dir if layout else sandbox
+    trust_configs = layout.claude_json_files if layout else None
+    # What the tripwires need to know about this run's shape, persisted so --rescore over a
+    # saved run scans against the same roots instead of guessing them from the directory.
+    (out_dir / "run-meta.json").write_text(
+        json.dumps(
+            {
+                "mode": mode,
+                "project_root": str(sandbox),
+                "plugin_root": str(plugin_root),
+                "workflow": workflow_cmd,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    if getattr(args, "dry_run", False):
+        env = {**_session_env(), **(layout.session_env() if layout else {})}
+        report = describe_dry_run(
+            case_id,
+            sandbox,
+            layout.cache_dir if layout else None,
+            env,
+            workflow_cmd,
+            args.team_model,
+            extra_notes=layout_notes,
+        )
+        print(report)
+        (out_dir / "dry-run.txt").write_text(report + "\n", encoding="utf-8")
+        return {
+            "case": case_id,
+            "mode": mode,
+            "dry_run": True,
+            "passed": True,
+            "deterministic": {"recall": None, "skipped": "dry run"},
+        }
+    ensure_workspace_trust(sandbox, trust_configs)
     # Snapshot what the HARNESS seeded, before the team can touch it. Persisted so --rescore
     # over a saved run applies the same exclusion instead of silently re-admitting fixtures.
     baseline = fixture_baseline(sandbox)
@@ -1107,8 +1733,15 @@ async def run_case(
                 sim_log,
                 workflow_cmd=workflow_cmd,
                 team_model=args.team_model,
-                extra_env={str(k): str(v) for k, v in (manifest.get("session_env") or {}).items()},
+                extra_env={
+                    **{str(k): str(v) for k, v in (manifest.get("session_env") or {}).items()},
+                    # Plugin mode last: the throwaway home is not negotiable by a manifest.
+                    **(layout.session_env() if layout else {}),
+                },
                 include_subagents=not getattr(args, "exclude_subagent_output", False),
+                # The CACHE copy, never the marketplace checkout and never this repo - the
+                # session must load the plugin from where an install puts it.
+                plugins=[{"type": "local", "path": str(layout.cache_dir)}] if layout else None,
             ),
             timeout=timeout_s if timeout_s > 0 else None,  # 0 = no wall clock; budget is the stop
         )
@@ -1120,13 +1753,13 @@ async def run_case(
         cap.error = f"{type(exc).__name__}: {exc}"
         print(f"  [{case_id}] SESSION ERROR: {cap.error}", file=sys.stderr)
     finally:
-        drop_workspace_trust(sandbox)
+        drop_workspace_trust(sandbox, trust_configs)
     duration = time.monotonic() - started
 
     transcript = "".join(cap.transcript)
     (out_dir / "transcript.md").write_text(transcript, encoding="utf-8")
     (out_dir / "events.jsonl").write_text(
-        "\n".join(json.dumps(e) for e in cap.events), encoding="utf-8"
+        "\n".join(json.dumps(e, default=str) for e in cap.events), encoding="utf-8"
     )
     # Track D (token plan Phase 0, 2026-08-18): case runs now persist the same per-message
     # usage series --target-path mode always kept, plus the computed attribution - so cost
@@ -1157,6 +1790,7 @@ async def run_case(
             "session_error": cap.is_error,
             "error": cap.error,
             "duration_s": round(duration, 1),
+            "mode": mode,
         }
     )
     result["passed"] = result["passed"] and not cap.timed_out and not cap.is_error
@@ -1167,7 +1801,9 @@ async def run_case(
     append_result(result_record(result, out_dir.parent.name))
 
     if not args.keep_sandbox:
-        shutil.rmtree(sandbox, ignore_errors=True)
+        # Plugin mode: the whole layout goes, not just the client project - the throwaway
+        # home holds two repo copies and (when seeded) copied credential material.
+        shutil.rmtree(layout.root if layout else sandbox, ignore_errors=True)
     return result
 
 
@@ -1252,7 +1888,7 @@ async def run_target(
     transcript = "".join(cap.transcript)
     (out_dir / "transcript.md").write_text(transcript, encoding="utf-8")
     (out_dir / "events.jsonl").write_text(
-        "\n".join(json.dumps(e) for e in cap.events), encoding="utf-8"
+        "\n".join(json.dumps(e, default=str) for e in cap.events), encoding="utf-8"
     )
     (out_dir / "usage-series.jsonl").write_text(
         "\n".join(json.dumps(u) for u in cap.usage_series), encoding="utf-8"
@@ -1444,6 +2080,72 @@ def raw_evidence_findings(
     return findings
 
 
+def read_events(out_dir: Path) -> list[dict]:
+    """The run's captured event stream, one JSON object per line (missing file -> empty)."""
+    path = out_dir / "events.jsonl"
+    if not path.is_file():
+        return []
+    events: list[dict] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict):
+            events.append(obj)
+    return events
+
+
+def rescore_project_root(out_dir: Path) -> Path:
+    """The project a saved run actually worked in, for --rescore to probe.
+
+    Repo-as-project runs keep it at `<case>/sandbox`, which is what this always assumed. A
+    plugin-mode run's project is the CLIENT directory inside the layout, so rescoring one
+    against `<case>/sandbox` would probe a directory that does not exist and score every
+    artifact as missing. run-meta.json records where it really was.
+    """
+    meta_file = out_dir / "run-meta.json"
+    if meta_file.is_file():
+        try:
+            root = (json.loads(meta_file.read_text(encoding="utf-8")) or {}).get("project_root")
+        except (OSError, json.JSONDecodeError):
+            root = None
+        if root:
+            return Path(root)
+    return out_dir / "sandbox"
+
+
+def tripwire_context(
+    out_dir: Path, sandbox: Path, transcript: str, manifest: dict
+) -> TripwireContext:
+    """Assemble what the tripwires scan: the capture plus this run's project/plugin roots.
+
+    Roots come from run-meta.json where the run wrote one, so a `--rescore` of a plugin-mode
+    run scans against the cache copy it actually loaded rather than against the client project.
+    Pre-2026-09-13 runs have no run-meta.json; for those the sandbox is both roots, which is
+    exactly true of repo-as-project mode.
+    """
+    meta: dict = {}
+    meta_file = out_dir / "run-meta.json"
+    if meta_file.is_file():
+        try:
+            meta = json.loads(meta_file.read_text(encoding="utf-8")) or {}
+        except (OSError, json.JSONDecodeError):
+            meta = {}
+    workflow = meta.get("workflow") or manifest.get("workflow") or ""
+    return TripwireContext(
+        transcript=transcript,
+        events=read_events(out_dir),
+        project_root=str(meta.get("project_root") or sandbox),
+        plugin_root=str(meta.get("plugin_root") or sandbox),
+        allowed_roots=[str(r) for r in (manifest.get("tripwire_allowed_roots") or [])],
+        expects_engaged_open=str(workflow).startswith("/engage"),
+    )
+
+
 async def score_run(
     case_id: str,
     out_dir: Path,
@@ -1487,10 +2189,27 @@ async def score_run(
     )
 
     expected = {k: v for k, v in manifest.items() if not k.startswith("_")}
-    det = score(expected, findings)
+    wires = scan_tripwires(
+        tripwire_context(out_dir, sandbox, transcript, manifest),
+        tripwires_off(expected),
+    )
+    if wires:
+        for wire in wires:
+            print(f"  [{case_id}] TRIPWIRE {wire['id']}: {wire['evidence'][0]}", file=sys.stderr)
+    (out_dir / "tripwires.json").write_text(json.dumps(wires, indent=2), encoding="utf-8")
+    det = score(expected, findings, wires)
 
+    # `judge: none` in a manifest (2026-09-13): a case whose ground truth is entirely
+    # deterministic - the plugin-mode case asserts where files landed and that no tripwire
+    # fired, none of which an LLM judge can add anything to. Declaring it in the manifest
+    # (rather than relying on whoever runs it remembering --skip-judge) keeps the case cheap
+    # by construction. A rubric is still declared and still resolves, so forcing the judge on
+    # is a matter of removing one line.
     judge_result: dict = {"skipped": True}
-    if not args.skip_judge:
+    manifest_judge = str(manifest.get("judge") or "").strip().lower()
+    if manifest_judge in ("none", "off", "skip"):
+        judge_result = {"skipped": True, "reason": "manifest declares judge: none"}
+    elif not args.skip_judge:
         for attempt in (1, 2):
             try:
                 judge_result = await judge(transcript, listing, rubric, args.aux_model)
@@ -1651,6 +2370,10 @@ def result_record(result: dict, run_id: str, mode: str = "run", version: str | N
         "recall": det.get("recall"),
         "must_find_missed": det.get("must_find_missed") or [],
         "traps_triggered": det.get("false_positive_traps_triggered") or [],
+        # 2026-09-13: which tripwires fired, so a trend row records the mechanical channel
+        # as well as the keyword one. Empty on every pre-tripwire row, which is accurate.
+        "tripwires_triggered": det.get("tripwires_triggered") or [],
+        "layout_mode": result.get("mode") or "repo",
         "judge_score": jd.get("weighted_score"),
         "judge_pass": jd.get("pass"),
         "cost_usd": result.get("cost_usd"),
@@ -1739,17 +2462,20 @@ def _write_report(run_root: Path, results: list[dict]) -> Path:
     lines = [
         f"# Live /engage eval run - {run_root.name}",
         "",
-        "| Case | Verdict | Recall | Must-find missed | Traps | Judge | Gates | Cost | Turns |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| Case | Mode | Verdict | Recall | Must-find missed | Traps | Tripwires | Judge | "
+        "Gates | Cost | Turns |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in results:
         det = r["deterministic"]
         jd = r.get("judge", {})
         jscore = jd.get("weighted_score", "-")
         lines.append(
-            f"| {r['case']} | {'PASS' if r['passed'] else 'FAIL'} | {det.get('recall')} "
+            f"| {r['case']} | {r.get('mode', 'repo')} | {'PASS' if r['passed'] else 'FAIL'} "
+            f"| {det.get('recall')} "
             f"| {', '.join(det.get('must_find_missed', [])) or '-'} "
             f"| {', '.join(det.get('false_positive_traps_triggered', [])) or '-'} "
+            f"| {', '.join(det.get('tripwires_triggered', [])) or '-'} "
             f"| {jscore} | {r.get('gates_answered', '?')} | {r.get('cost_usd') or '?'} "
             f"| {r.get('num_turns') or '?'} |"
         )
@@ -1835,6 +2561,30 @@ def main() -> int:
     )
     ap.add_argument("--aux-model", default="sonnet", help="normalizer/judge model (default sonnet)")
     ap.add_argument("--skip-judge", action="store_true", help="deterministic scoring only")
+    ap.add_argument(
+        "--plugin-mode",
+        action="store_true",
+        help="run EVERY selected case the way the plugin is actually installed: a throwaway "
+        "HOME (HOME + USERPROFILE + CLAUDE_CONFIG_DIR, so the real ~/.claude is neither read "
+        "nor written), a marketplace registry and a CACHE copy of the plugin, and a CLIENT "
+        "project as cwd that is empty apart from the case's fixtures. Hooks come from the "
+        "plugin's own hooks/hooks.json via CLAUDE_PLUGIN_ROOT, not from this repo's "
+        ".claude/settings.json. A case can declare it for itself with `mode: plugin`",
+    )
+    ap.add_argument(
+        "--no-inherit-auth",
+        action="store_true",
+        help="plugin mode: do NOT copy credential material into the throwaway home. The "
+        "session will be unauthenticated, so this is for layout inspection, not for a live "
+        "run (see --dry-run)",
+    )
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="build each case's sandbox (or plugin-mode layout) and print the exact command "
+        "that would be launched, then stop. No session, no tokens - the cheap way to check a "
+        "layout on the Windows VM. The report is also written to <run>/<case>/dry-run.txt",
+    )
     ap.add_argument(
         "--keep-sandbox", action="store_true", help="keep each case's sandbox for inspection"
     )
@@ -1949,7 +2699,7 @@ def main() -> int:
             score_run(
                 case_id,
                 out_dir,
-                out_dir / "sandbox",
+                rescore_project_root(out_dir),
                 transcript_file.read_text(encoding="utf-8"),
                 manifest,
                 rubric,
@@ -2017,14 +2767,17 @@ def main() -> int:
     if unknown:
         ap.error(f"not /engage cases (see --list): {unknown}")
 
-    try:
-        import claude_agent_sdk  # noqa: F401
-    except ImportError:
-        print(
-            "claude-agent-sdk not importable - activate the repo venv: . .venv/bin/activate",
-            file=sys.stderr,
-        )
-        return 2
+    if not args.dry_run:
+        # A dry run never launches a session, so it must not need the SDK either - that is
+        # what makes it usable on a Windows VM before anything else is set up there.
+        try:
+            import claude_agent_sdk  # noqa: F401
+        except ImportError:
+            print(
+                "claude-agent-sdk not importable - activate the repo venv: . .venv/bin/activate",
+                file=sys.stderr,
+            )
+            return 2
 
     run_root = RUNS_ROOT / _now_utc()
     run_root.mkdir(parents=True, exist_ok=True)
@@ -2034,13 +2787,20 @@ def main() -> int:
     for case_id in targets:
         results.append(asyncio.run(run_case(case_id, args, run_root)))
         r = results[-1]
+        if r.get("dry_run"):
+            continue
         det = r["deterministic"]
         print(
             f"{'PASS' if r['passed'] else 'FAIL'}  {case_id}  recall={det.get('recall')}  "
             f"traps={len(det.get('false_positive_traps_triggered', []))}  "
+            f"tripwires={','.join(det.get('tripwires_triggered', [])) or '-'}  "
             f"judge={r.get('judge', {}).get('weighted_score', '-')}  "
             f"gates={r['gates_answered']}  cost=${r.get('cost_usd') or '?'}"
         )
+
+    if args.dry_run:
+        print(f"\ndry run only - {len(results)} layout(s) built under {run_root}")
+        return 0
 
     report = _write_report(run_root, results)
     n_pass = sum(r["passed"] for r in results)

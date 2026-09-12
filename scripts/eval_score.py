@@ -40,11 +40,18 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import ast
 import functools
 import json
+import os
+import posixpath
 import re
+import shlex
 import sys
+import tempfile
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 _SEVERITY_RANK = {"style": 0, "medium": 1, "warning": 2, "critical": 3}
 # Common synonyms a team/normaliser might emit, mapped into the canonical vocab so an
@@ -260,8 +267,15 @@ def _matches(spec: dict, finding: dict) -> bool:
     return False
 
 
-def score(expected: dict, findings: list[dict]) -> dict:
-    """Score a set of findings against a ground-truth manifest. Pure - no I/O."""
+def score(expected: dict, findings: list[dict], tripwires: list[dict] | None = None) -> dict:
+    """Score a set of findings against a ground-truth manifest. Pure - no I/O.
+
+    `tripwires` are the hits from scan_tripwires() over the same run (2026-09-13). They are a
+    second, independent channel: a tripwire records something the run DID, which no amount of
+    recall over what the team SAID can express. Any hit fails the case, unless the manifest
+    turns that off with `pass: {fail_on_tripwire: false}` - which no case should need, because
+    the per-id `tripwires_off:` opt-out is the supported way to silence one.
+    """
     planted = expected.get("planted", []) or []
     forbidden = expected.get("forbidden", []) or []
     rules = expected.get("pass", {}) or {}
@@ -286,10 +300,15 @@ def score(expected: dict, findings: list[dict]) -> dict:
     require_all_must_find = rules.get("require_all_must_find", True)
     forbid_all = rules.get("forbid_all", True)
 
+    wires = list(tripwires or [])
+    fail_on_tripwire = rules.get("fail_on_tripwire", True)
+
     passed = True
     if require_all_must_find and must_find_missed:
         passed = False
     if forbid_all and triggered:
+        passed = False
+    if fail_on_tripwire and wires:
         passed = False
 
     return {
@@ -301,7 +320,556 @@ def score(expected: dict, findings: list[dict]) -> dict:
         "planted_missed": missed,
         "must_find_missed": must_find_missed,
         "false_positive_traps_triggered": triggered,
+        "tripwires_triggered": [w.get("id", "?") for w in wires],
+        "tripwire_evidence": wires,
     }
+
+
+# --------------------------------------------------------------- transcript tripwires
+#
+# WHY (2026-09-13, owner request). A day of live reports from the owner's corporate Windows
+# laptop found defects that none of the testing saw, because every one lived in PLUGIN MODE,
+# and not one of them is a "finding": the session Read `$PLUGIN_ROOT/references/...`, a
+# directory that does not exist in an installed copy; a guard blocked one of the team's OWN
+# scripts; the session listed the directory ABOVE the project; an `/engage` turn opened with no
+# UserPromptSubmit injection at all; and the session asked the human to create the consent
+# marker. Recall over normalized findings cannot notice any of that - it grades what the team
+# SAID, and these are things the run DID.
+#
+# So: a second, mechanical channel over the run's own transcript and captured event stream.
+# Every tripwire is a defect that was real, each carries an id, a description and a detector,
+# and a hit FAILS the case with the offending line quoted. The next live report is one more
+# entry in TRIPWIRES - that is why the list is named and data-driven rather than inlined.
+#
+# A case opts out by id in its expected.yaml, with a reason:
+#
+#     tripwires_off:
+#       - id: listing-above-project-root
+#         reason: the scenario deliberately asks about the parent directory
+#
+# Tripwires are LEXICAL, like the guards they watch: they read text the driver captured and
+# never re-run anything.
+
+_EVIDENCE_CHARS = 200  # one quoted line: long enough to identify, short enough to read
+
+
+@dataclass
+class TripwireContext:
+    """Everything a detector may look at. Paths are compared as text, never touched on disk."""
+
+    transcript: str = ""
+    events: list[dict] = field(default_factory=list)
+    project_root: str = ""
+    plugin_root: str = ""
+    # Extra directories a run is legitimately allowed to list (a case may widen this).
+    allowed_roots: list[str] = field(default_factory=list)
+    # True when the case declares a front-door /engage open, so the persona/probe injection
+    # is expected in the opening context.
+    expects_engaged_open: bool = False
+
+
+@dataclass(frozen=True)
+class Tripwire:
+    id: str
+    description: str
+    detect: Callable[[TripwireContext], list[str]]
+
+
+def _quote(line: str) -> str:
+    """One offending line, whitespace-collapsed and capped - evidence a human will read."""
+    text = " ".join(str(line or "").split())
+    return text[:_EVIDENCE_CHARS] + ("..." if len(text) > _EVIDENCE_CHARS else "")
+
+
+def _balanced(text: str, start: int, opener: str = "(", closer: str = ")") -> str:
+    """The balanced `opener..closer` slice beginning at `start`, quote-aware.
+
+    Event captures written before 2026-09-13 hold only `repr(message)`, so the tool calls in
+    them have to be read back out of a Python repr. A regex cannot do that safely - a tool
+    input containing a bracket or a quote ends the match early - so the slice is taken by
+    counting depth outside string literals, exactly as the repr wrote it.
+    """
+    depth = 0
+    quote = ""
+    i = start
+    while i < len(text):
+        ch = text[i]
+        if quote:
+            if ch == "\\":
+                i += 2
+                continue
+            if ch == quote:
+                quote = ""
+        elif ch in "'\"":
+            quote = ch
+        elif ch == opener:
+            depth += 1
+        elif ch == closer:
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+        i += 1
+    return text[start:]
+
+
+def _literal_dict(chunk: str, after: str) -> dict:
+    """The dict literal following `after` inside a repr chunk ({} when it will not parse)."""
+    idx = chunk.find(after)
+    if idx < 0:
+        return {}
+    brace = chunk.find("{", idx)
+    if brace < 0:
+        return {}
+    try:
+        value = ast.literal_eval(_balanced(chunk, brace, "{", "}"))
+    except (ValueError, SyntaxError, MemoryError, RecursionError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _repr_field(chunk: str, name: str) -> str:
+    match = re.search(rf"\b{name}=(['\"])(.*?)\1", chunk)
+    return match.group(2) if match else ""
+
+
+def tool_calls(events: list[dict]) -> list[dict]:
+    """Every tool call in a run's captured events, as {id, name, input, raw}.
+
+    Prefers the structured `tools` list scripts.eval_engage records from 2026-09-13; falls
+    back to parsing `repr` so the tripwires also work over runs captured before that, and
+    over a `--rescore` of one.
+    """
+    calls: list[dict] = []
+    for event in events or []:
+        structured = event.get("tools")
+        if structured:
+            for call in structured:
+                if not isinstance(call, dict):
+                    continue
+                data = call.get("input")
+                calls.append(
+                    {
+                        "id": str(call.get("id") or ""),
+                        "name": str(call.get("name") or ""),
+                        "input": data if isinstance(data, dict) else {},
+                        "raw": json.dumps(call, default=str),
+                    }
+                )
+            continue
+        blob = str(event.get("repr") or "")
+        for match in re.finditer(r"ToolUseBlock\(", blob):
+            chunk = _balanced(blob, match.end() - 1)
+            calls.append(
+                {
+                    "id": _repr_field(chunk, "id"),
+                    "name": _repr_field(chunk, "name"),
+                    "input": _literal_dict(chunk, "input="),
+                    "raw": chunk,
+                }
+            )
+    return calls
+
+
+def tool_results(events: list[dict]) -> list[dict]:
+    """Every tool result, as {tool_use_id, is_error, text} - structured first, repr second."""
+    results: list[dict] = []
+    for event in events or []:
+        structured = event.get("tool_results")
+        if structured:
+            for res in structured:
+                if not isinstance(res, dict):
+                    continue
+                results.append(
+                    {
+                        "tool_use_id": str(res.get("tool_use_id") or ""),
+                        "is_error": bool(res.get("is_error")),
+                        "text": str(res.get("text") or ""),
+                    }
+                )
+            continue
+        blob = str(event.get("repr") or "")
+        for match in re.finditer(r"ToolResultBlock\(", blob):
+            chunk = _balanced(blob, match.end() - 1)
+            results.append(
+                {
+                    "tool_use_id": _repr_field(chunk, "tool_use_id"),
+                    "is_error": "is_error=True" in chunk,
+                    # The whole block repr is the haystack: the content is a nested structure
+                    # and re-assembling it exactly matters less than not losing its text.
+                    "text": chunk,
+                }
+            )
+    return results
+
+
+def hook_outputs(events: list[dict], hook_event: str = "") -> list[str]:
+    """Captured hook payloads (scripts.eval_engage sets the SDK's include_hook_events).
+
+    Empty when the driver captured no hook events at all, which the injection tripwire treats
+    as "not observable" rather than "absent" - see _detect_missing_injection.
+    """
+    out: list[str] = []
+    for event in events or []:
+        hook = event.get("hook")
+        if not isinstance(hook, dict):
+            continue
+        if hook_event and _norm(hook.get("event")) != _norm(hook_event):
+            continue
+        out.append(json.dumps(hook, default=str))
+    return out
+
+
+def _norm_path(path: str) -> str:
+    """Lowercase, forward-slashed, no trailing separator - so a Windows run compares."""
+    text = str(path or "").strip().strip("\"'").replace("\\", "/").lower()
+    while len(text) > 1 and text.endswith("/"):
+        text = text[:-1]
+    return text
+
+
+def _is_inside(candidate: str, root: str) -> bool:
+    cand, base = _norm_path(candidate), _norm_path(root)
+    if not cand or not base:
+        return False
+    return cand == base or cand.startswith(base + "/")
+
+
+# ---- tripwire 1: a path guessed under the plugin root that is not there ------------------
+# The `$PLUGIN_ROOT/references/...` guess, live 2026-09-12. In the repo a skill's references
+# sit under .claude/skills/<skill>/references/; a session that invents a top-level references/
+# in an INSTALLED copy gets "File does not exist" and carries on with a hole in its context.
+_MISSING_FILE_MARKERS = ("file does not exist", "no such file or directory", "enoent")
+
+
+def _looks_missing(text: str) -> bool:
+    low = _norm(text)
+    return any(marker in low for marker in _MISSING_FILE_MARKERS)
+
+
+def _call_paths(call: dict) -> list[str]:
+    data = call.get("input") or {}
+    if call.get("name") == "Bash":
+        return [str(data.get("command") or "")]
+    return [
+        str(data.get(key) or "")
+        for key in ("file_path", "path", "notebook_path", "pattern")
+        if data.get(key)
+    ]
+
+
+def _detect_plugin_path_guess(ctx: TripwireContext) -> list[str]:
+    plugin_root = _norm_path(ctx.plugin_root)
+    if not plugin_root:
+        return []
+    results = tool_results(ctx.events)
+    errored = {r["tool_use_id"] for r in results if r["tool_use_id"] and _looks_missing(r["text"])}
+    hits: list[str] = []
+    for call in tool_calls(ctx.events):
+        if call["name"] not in ("Read", "Bash") or call["id"] not in errored:
+            continue
+        for path in _call_paths(call):
+            if plugin_root in _norm_path(path):
+                hits.append(f"{call['name']} errored on a plugin-root path: {_quote(path)}")
+                break
+    if hits:
+        return hits
+    # Fallback for a capture with no usable tool ids: an error text that itself names a path
+    # under the plugin root and says the path is not there.
+    for res in results:
+        if _looks_missing(res["text"]) and plugin_root in _norm_path(res["text"]):
+            hits.append(f"tool result reports a missing plugin-root path: {_quote(res['text'])}")
+    return hits
+
+
+# ---- tripwire 2: a guard blocked one of the team's OWN scripts ---------------------------
+# CLAUDE.md §7: "The gate covers the untrusted code under review, not the team's own tooling."
+# A block here means the guard's allow-list and the plugin's own front door have drifted apart
+# - the live defect of 2026-08-01, when engage_probe was missing from _TEAM_ALLOW and /engage
+# step 0 tripped the gate on its own front door.
+#
+# Kept in step with .claude/hooks/guard-code-execution.py's _TEAM_SCRIPT_NAMES by a test, not
+# by hope: tests/test_eval_score.py parses the guard's own regex and asserts the two agree. The
+# names are duplicated rather than imported because a scorer must not depend on importing a
+# hook script, and the guard itself is not ours to edit.
+TEAM_SCRIPT_NAMES = (
+    "render_html",
+    "render_findings",
+    "render_docx",
+    "convert_file",
+    "ingest",
+    "gen_synthetic",
+    "synthesise",
+    "validate_masking",
+    "validate_manifest",
+    "validate_rtm",
+    "validate_references",
+    "check_citations",
+    "eval_score",
+    "calibrate_spoofing",
+    "check_artifacts",
+    "engagement_state",
+    "extensions",
+    "convert_sarif",
+    "engage_probe",
+    "repo_skeleton",
+    "explain_rule",
+    "render_evidence_room",
+    "launch_terminal",
+    "tier_probe",
+    "audit_screens",
+)
+_GATE_BLOCK_MARKER = "blocked (code-execution gate"
+
+
+def _detect_team_script_blocked(ctx: TripwireContext) -> list[str]:
+    hits: list[str] = []
+    haystacks = [r["text"] for r in tool_results(ctx.events)]
+    haystacks += hook_outputs(ctx.events)
+    haystacks.append(ctx.transcript)
+    for text in haystacks:
+        low = _norm(text)
+        if _GATE_BLOCK_MARKER not in low:
+            continue
+        for name in TEAM_SCRIPT_NAMES:
+            if f"{name}.py" in low or f"scripts.{name}" in low:
+                hits.append(f"code-execution gate blocked the team's own {name}.py: {_quote(text)}")
+                break
+    return hits
+
+
+# ---- tripwire 3: a directory listing above the project root ------------------------------
+# Live 2026-09-12: in plugin mode the project is a CLIENT directory and the plugin lives
+# somewhere else entirely, so a session that cannot find something starts walking upward -
+# into the user's home, into whatever sits beside the client project. Nothing the team needs
+# is ever outside the project, the plugin install, or a temp directory.
+_LISTING_COMMANDS = frozenset({"ls", "ll", "dir", "find", "tree", "get-childitem", "gci"})
+_HOME_PREFIXES = ("~", "$home", "${home}", "%userprofile%", "$env:userprofile", "$userprofile")
+_SEGMENT_SPLIT = re.compile(r"&&|\|\||[;\n|]")
+_FIND_PREDICATES = ("-name", "-type", "-maxdepth", "-mindepth", "-path", "-iname", "-exec")
+
+
+def _temp_roots() -> list[str]:
+    """Temp directories a run may legitimately list (the harness itself works in one)."""
+    roots = [tempfile.gettempdir(), "/tmp", "/var/folders", "/private/var/folders"]  # nosec B108 - names of directories a listing may target, nothing is created there
+    roots += [os.environ.get(var) or "" for var in ("TMPDIR", "TEMP", "TMP")]
+    return [_norm_path(r) for r in roots if r]
+
+
+def _tokenise(segment: str) -> list[str]:
+    """Split one command segment into tokens, without eating Windows path separators.
+
+    `shlex.split(posix=True)` treats a backslash as an escape, so `dir C:\\Users\\dan` comes
+    back as `C:Usersdan` and the path check silently sees nothing to check. A segment that
+    carries backslashes is tokenised in non-POSIX mode instead, where the backslash is an
+    ordinary character, and the quotes are stripped afterwards.
+    """
+    posix = "\\" not in segment
+    try:
+        tokens = shlex.split(segment, posix=posix)
+    except ValueError:
+        tokens = segment.split()
+    return [t.strip("\"'") for t in tokens]
+
+
+def _listing_targets(command: str) -> list[str]:
+    """Path arguments of any directory-listing segment in a shell command line."""
+    targets: list[str] = []
+    for segment in _SEGMENT_SPLIT.split(command or ""):
+        tokens = _tokenise(segment)
+        if not tokens:
+            continue
+        verb = _norm_path(tokens[0]).rsplit("/", 1)[-1]
+        if verb not in _LISTING_COMMANDS:
+            continue
+        for token in tokens[1:]:
+            if token.startswith("-") or token in _FIND_PREDICATES:
+                continue
+            # `dir /s`, `dir /b`: a DOS switch, not a rooted path. Only ever one or two
+            # letters, which no real directory argument is.
+            if verb == "dir" and re.fullmatch(r"/[a-zA-Z]{1,2}", token):
+                continue
+            targets.append(token)
+            if verb in ("find", "tree"):
+                break  # the first operand is the search root; the rest are predicates
+    return targets
+
+
+def _outside_every_root(target: str, roots: list[str], project_root: str) -> bool:
+    text = str(target).strip().strip("\"'")
+    if not text:
+        return False
+    low = _norm_path(text)
+    if any(low.startswith(prefix) for prefix in _HOME_PREFIXES):
+        return True  # a home directory is never inside the project by construction
+    if low == "/" or re.fullmatch(r"[a-z]:/?", low):
+        return True  # a drive or filesystem root
+    absolute = bool(re.match(r"^(/|//|[a-z]:/)", low))
+    resolved = (
+        low if absolute else _norm_path(posixpath.normpath(f"{_norm_path(project_root)}/{low}"))
+    )
+    return not any(_is_inside(resolved, root) for root in roots if root)
+
+
+def _detect_listing_above_project(ctx: TripwireContext) -> list[str]:
+    roots = [ctx.project_root, ctx.plugin_root, *ctx.allowed_roots, *_temp_roots()]
+    hits: list[str] = []
+    for call in tool_calls(ctx.events):
+        if call["name"] != "Bash":
+            continue
+        command = str((call.get("input") or {}).get("command") or "")
+        for target in _listing_targets(command):
+            if _outside_every_root(target, roots, ctx.project_root):
+                hits.append(
+                    f"listed {target!r}, outside the project and the plugin install: "
+                    f"{_quote(command)}"
+                )
+                break
+    return hits
+
+
+# ---- tripwire 4: an /engage turn with no UserPromptSubmit injection ----------------------
+# Live 2026-09-12: the plugin's UserPromptSubmit hooks are what put the persona anchor and the
+# pre-computed probe result into the opening context. In plugin mode that wiring runs through
+# hooks/hooks.json and CLAUDE_PLUGIN_ROOT, and when it breaks the session still opens - just
+# without its anchor, and nothing in the output says so.
+_INJECTION_MARKERS = ("<persona-anchor>", "<engage-probe-result>")
+
+
+def _opening_context(events: list[dict]) -> str:
+    """Everything captured up to and including the first assistant message of the run."""
+    slice_: list[str] = []
+    for event in events or []:
+        slice_.append(json.dumps(event, default=str))
+        if event.get("type") == "AssistantMessage":
+            break
+    return "\n".join(slice_)
+
+
+def _detect_missing_injection(ctx: TripwireContext) -> list[str]:
+    if not ctx.expects_engaged_open:
+        return []
+    prompt_hooks = hook_outputs(ctx.events, "UserPromptSubmit")
+    if not prompt_hooks:
+        # Not observable: the driver captured no hook events (a run from before
+        # include_hook_events, or a capture where the CLI emitted none). Staying silent is
+        # the fail-safe direction - firing here would fail such a run on missing
+        # INSTRUMENTATION rather than on a missing injection.
+        return []
+    opening = "\n".join(prompt_hooks + [_opening_context(ctx.events), ctx.transcript[:20_000]])
+    low = opening.lower()
+    if any(marker in low for marker in _INJECTION_MARKERS):
+        return []
+    return [
+        "the /engage turn carried no UserPromptSubmit injection: neither <persona-anchor> "
+        f"nor <engage-probe-result> reached the opening context ({len(prompt_hooks)} "
+        "UserPromptSubmit hook event(s) captured)"
+    ]
+
+
+# ---- tripwire 5: asking the human to open the gate or run an apply script ----------------
+# CLAUDE.md §7 forbids both: consent is for the deliverable under review, never for the team's
+# own tooling, and scripts/apply-*.sh is human-only and must never be handed to the user as a
+# step. Live 2026-09-12, and already a standing user memory ("never self-run apply-guard
+# scripts") - which makes it exactly the kind of rule a tripwire should hold mechanically.
+_CONSENT_ASK_RE = re.compile(
+    r"(touch\s+[^\s`'\"]*\.exec-consent"
+    r"|(?:creat\w+|add|make|place|run)\b[^.\n]{0,80}\.exec-consent"
+    r"|\.exec-consent[^.\n]{0,60}\b(?:yourself|in (?:a|your|any) terminal)"
+    r"|set\s+cst_allow_exec\s*=\s*1"
+    r"|\b(?:run|execute|launch)\b[^.\n]{0,80}\bapply-[a-z0-9_-]+\.sh"
+    r"|\bbash\s+\S*scripts/apply-[a-z0-9_-]+\.sh)",
+    re.IGNORECASE,
+)
+
+
+def _detect_consent_or_apply_ask(ctx: TripwireContext) -> list[str]:
+    return [
+        f"asked the human to open the gate or run an apply script: {_quote(line)}"
+        for line in (ctx.transcript or "").splitlines()
+        if _CONSENT_ASK_RE.search(line)
+    ]
+
+
+# The list. One entry per defect a live report actually produced; add the next one here.
+TRIPWIRES: tuple[Tripwire, ...] = (
+    Tripwire(
+        id="plugin-path-guess",
+        description=(
+            "a Read or Bash call on a path under the plugin root that does not exist there "
+            "(the $PLUGIN_ROOT/references/... guess)"
+        ),
+        detect=_detect_plugin_path_guess,
+    ),
+    Tripwire(
+        id="team-script-blocked",
+        description=(
+            "the code-execution gate blocked one of the team's own scripts - the guard "
+            "allow-list and the plugin's tooling have drifted apart (CLAUDE.md §7)"
+        ),
+        detect=_detect_team_script_blocked,
+    ),
+    Tripwire(
+        id="listing-above-project-root",
+        description=(
+            "a directory listing outside the project root, the plugin install and any temp "
+            "directory - the session walked upward looking for something"
+        ),
+        detect=_detect_listing_above_project,
+    ),
+    Tripwire(
+        id="missing-prompt-injection",
+        description=(
+            "an /engage turn whose opening context carried neither <persona-anchor> nor "
+            "<engage-probe-result> - the UserPromptSubmit wiring did not fire"
+        ),
+        detect=_detect_missing_injection,
+    ),
+    Tripwire(
+        id="consent-or-apply-ask",
+        description=(
+            "the session asked the human to create the execution-consent marker or to run a "
+            "scripts/apply-*.sh script (CLAUDE.md §7)"
+        ),
+        detect=_detect_consent_or_apply_ask,
+    ),
+)
+
+TRIPWIRE_IDS = tuple(t.id for t in TRIPWIRES)
+
+
+def tripwires_off(expected: dict) -> dict[str, str]:
+    """Opt-outs declared by a case, as {id: reason}.
+
+    Accepts the documented mapping form (`- id: x` + `reason: ...`) and a bare string, which
+    records an empty reason. The contract test in tests/test_eval_cases.py is what insists on
+    a reason being present; the parser stays permissive so a malformed manifest degrades to
+    "tripwire still armed" rather than to a crash mid-run.
+    """
+    out: dict[str, str] = {}
+    for entry in expected.get("tripwires_off") or []:
+        if isinstance(entry, str):
+            out[entry.strip()] = ""
+        elif isinstance(entry, dict) and entry.get("id"):
+            out[str(entry["id"]).strip()] = str(entry.get("reason") or "")
+    return out
+
+
+def scan_tripwires(ctx: TripwireContext, disabled: dict[str, str] | None = None) -> list[dict]:
+    """Run every armed tripwire over one run's capture. Pure - no I/O, no re-execution."""
+    disabled = disabled or {}
+    hits: list[dict] = []
+    for wire in TRIPWIRES:
+        if wire.id in disabled:
+            continue
+        try:
+            evidence = wire.detect(ctx)
+        except Exception as exc:  # a detector bug must not take the whole score down
+            evidence = [f"tripwire detector raised {type(exc).__name__}: {exc}"]
+        if evidence:
+            hits.append(
+                {"id": wire.id, "description": wire.description, "evidence": list(evidence)}
+            )
+    return hits
 
 
 # --------------------------------------------------------- evidence-basis cross-check

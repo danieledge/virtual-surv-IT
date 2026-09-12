@@ -11,6 +11,8 @@ parses. The Agent SDK network path is deliberately out of scope.
 from __future__ import annotations
 
 import json
+import os
+import pathlib
 
 import pytest
 
@@ -197,8 +199,10 @@ def test_report_tabulates_every_case(tmp_path):
         _result("process-full-lifecycle", False, recall=0.5, judge=0.4, missed=["LIFE-2"]),
     ]
     text = ee._write_report(tmp_path, results).read_text(encoding="utf-8")
-    assert "| process-light-engagement | PASS | 1.0" in text
-    assert "| process-full-lifecycle | FAIL | 0.5" in text
+    # The Mode column was added with plugin mode (2026-09-13); a result dict without one is a
+    # repo-as-project run, which is what every case was before the flag existed.
+    assert "| process-light-engagement | repo | PASS | 1.0" in text
+    assert "| process-full-lifecycle | repo | FAIL | 0.5" in text
     assert "LIFE-2" in text
     assert "**1/2 passed.**" in text
 
@@ -707,3 +711,362 @@ def test_usage_attribution_empty_series_is_safe():
     att = usage_attribution([])
     assert att["total_cost_usd"] is None
     assert att["output_split"]["main_loop"]["output_tokens"] == 0
+
+
+# --- plugin mode (2026-09-13) -----------------------------------------------------------
+#
+# The layout builder is the part of plugin mode that can be wrong without anyone noticing: a
+# registry key with the wrong shape, a cache copy that still carries evals/, a HOME that is not
+# actually isolated, a client project the fixture quietly polluted. All of that is checkable
+# without spending a session, which is what these tests do. The launch OPTION is pinned too -
+# --plugin-dir is what the SDK emits for plugins=[{"type": "local", ...}], and a rename there
+# would otherwise only show up as a live run that silently loads no plugin.
+
+
+def _mini_plugin_source(tmp_path):
+    """A tiny stand-in for the repo: enough structure to assert the copy rules on."""
+    src = tmp_path / "src"
+    (src / ".claude-plugin").mkdir(parents=True)
+    (src / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"name": "compliance-surveillance-team", "version": "9.9.9"}), encoding="utf-8"
+    )
+    (src / "hooks").mkdir()
+    (src / "hooks" / "hooks.json").write_text('{"hooks": {}}', encoding="utf-8")
+    (src / "scripts").mkdir()
+    (src / "scripts" / "engage_probe.py").write_text("# probe\n", encoding="utf-8")
+    (src / "evals" / "cases").mkdir(parents=True)
+    (src / "evals" / "cases" / "expected.yaml").write_text("case: secret\n", encoding="utf-8")
+    (src / "docs" / "assets").mkdir(parents=True)
+    (src / "docs" / "assets" / "big.png").write_bytes(b"0" * 10)
+    (src / "docs" / "guide.md").write_text("# guide\n", encoding="utf-8")
+    (src / "node_modules").mkdir()
+    (src / "node_modules" / "junk.js").write_text("junk", encoding="utf-8")
+    return src
+
+
+def _layout(tmp_path, **kw):
+    return ee.build_plugin_layout(tmp_path / "run", source_root=_mini_plugin_source(tmp_path), **kw)
+
+
+def test_plugin_layout_puts_the_cache_copy_where_an_install_does(tmp_path):
+    layout = _layout(tmp_path)
+    assert layout.version == "9.9.9"
+    assert layout.cache_dir == (
+        layout.config_dir / "plugins" / "cache" / ee.PLUGIN_MARKETPLACE / ee.PLUGIN_NAME / "9.9.9"
+    )
+    assert (layout.cache_dir / "hooks" / "hooks.json").is_file()
+    assert (layout.cache_dir / ".claude-plugin" / "plugin.json").is_file()
+
+
+def test_plugin_layout_registry_has_the_v2_shape(tmp_path):
+    layout = _layout(tmp_path)
+    registry = json.loads(layout.registry_file.read_text(encoding="utf-8"))
+    assert registry["version"] == 2
+    key = f"{ee.PLUGIN_NAME}@{ee.PLUGIN_MARKETPLACE}"
+    entry = registry["plugins"][key][0]
+    assert entry["scope"] == "local"
+    assert entry["projectPath"] == str(layout.project)
+    assert entry["installPath"] == str(layout.cache_dir)
+    assert entry["version"] == "9.9.9"
+    assert entry["installedAt"].endswith("Z")
+
+
+def test_plugin_layout_marketplace_points_at_the_repo_copy(tmp_path):
+    layout = _layout(tmp_path)
+    markets = json.loads(layout.marketplaces_file.read_text(encoding="utf-8"))
+    entry = markets[ee.PLUGIN_MARKETPLACE]
+    # A directory source, never github/git: a run that reached the network would not be
+    # testing the copy on disk.
+    assert entry["source"] == {"source": "directory", "path": str(layout.marketplace_dir)}
+    assert entry["installLocation"] == str(layout.marketplace_dir)
+    assert (layout.marketplace_dir / "hooks" / "hooks.json").is_file()
+
+
+def test_plugin_cache_copy_excludes_the_ground_truth_and_the_bulk(tmp_path):
+    """evals/ is the load-bearing exclusion: blindness has to be structural, as in the repo
+    sandbox. node_modules and docs/assets are bulk, not secrecy."""
+    layout = _layout(tmp_path)
+    for copy in (layout.cache_dir, layout.marketplace_dir):
+        assert not (copy / "evals").exists()
+        assert not (copy / "node_modules").exists()
+        assert not (copy / "docs" / "assets").exists()
+        assert (copy / "docs" / "guide.md").is_file()
+
+
+def test_plugin_client_project_is_empty_until_a_fixture_lands(tmp_path):
+    layout = _layout(tmp_path)
+    assert layout.project.is_dir()
+    assert list(layout.project.iterdir()) == []
+
+    fixtures = tmp_path / "fixtures"
+    fixtures.mkdir()
+    (fixtures / "alert_threshold_check.py").write_text("x = 1\n", encoding="utf-8")
+    ee.overlay_fixtures(fixtures, layout.project)
+    assert [p.name for p in layout.project.iterdir()] == ["alert_threshold_check.py"]
+
+
+def test_plugin_layout_never_writes_outside_its_own_root(tmp_path):
+    layout = _layout(tmp_path)
+    for path in (layout.home, layout.project, layout.cache_dir, layout.registry_file):
+        assert str(path).startswith(str(layout.root))
+
+
+def test_plugin_session_env_isolates_home_on_posix(tmp_path):
+    layout = _layout(tmp_path)
+    env = layout.session_env()
+    assert env["HOME"] == str(layout.home)
+    assert env["USERPROFILE"] == str(layout.home)  # set on POSIX too, so a fake is never real
+    assert env["CLAUDE_CONFIG_DIR"] == str(layout.config_dir)
+    assert "HOMEDRIVE" not in env  # no drive letter on a POSIX path
+
+
+def test_plugin_session_env_carries_homedrive_for_a_windows_shaped_home(tmp_path):
+    """A Windows shell derives `~` from HOMEDRIVE/HOMEPATH, so a throwaway home that sets only
+    HOME/USERPROFILE would still resolve `~` to the real profile."""
+    layout = _layout(tmp_path)
+    layout.home = pathlib.PureWindowsPath(r"C:\runs\r1\home")
+    env = layout.session_env()
+    assert env["HOMEDRIVE"] == "C:"
+    assert env["HOMEPATH"] == "\\runs\\r1\\home"
+    assert env["USERPROFILE"] == r"C:\runs\r1\home"
+
+
+def test_plugin_layout_writes_trust_into_the_throwaway_home_only(tmp_path):
+    layout = _layout(tmp_path)
+    ee.ensure_workspace_trust(layout.project, layout.claude_json_files)
+    for cfg in layout.claude_json_files:
+        data = json.loads(cfg.read_text(encoding="utf-8"))
+        assert data["projects"][str(layout.project)]["hasTrustDialogAccepted"] is True
+    ee.drop_workspace_trust(layout.project, layout.claude_json_files)
+    for cfg in layout.claude_json_files:
+        assert json.loads(cfg.read_text(encoding="utf-8"))["projects"] == {}
+
+
+def test_auth_seeding_copies_credentials_and_nothing_else(tmp_path):
+    layout = _layout(tmp_path)
+    real_config = tmp_path / "realhome" / ".claude"
+    real_config.mkdir(parents=True)
+    (real_config / ".credentials.json").write_text('{"token": "x"}', encoding="utf-8")
+    real_cfg = tmp_path / "realhome" / ".claude.json"
+    real_cfg.write_text(
+        json.dumps(
+            {
+                "userID": "u1",
+                "oauthAccount": {"emailAddress": "a@b"},
+                "projects": {"/somewhere/private": {"hasTrustDialogAccepted": True}},
+                "installedPlugins": ["something-else"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    seeded = ee.seed_session_auth(layout, real_config, real_cfg)
+    assert ".credentials.json" in seeded and "userID" in seeded
+    carried = json.loads(layout.claude_json_files[0].read_text(encoding="utf-8"))
+    assert carried["userID"] == "u1"
+    # The developer's own projects and plugin registry must NOT cross over - inheriting them
+    # is what would hide the defects plugin mode exists to find.
+    assert "projects" not in carried and "installedPlugins" not in carried
+
+
+def test_windows_unnameable_files_are_skipped_on_every_platform(tmp_path):
+    assert ee.windows_nameable("normal.py")
+    assert not ee.windows_nameable("aux")
+    assert not ee.windows_nameable("COM1.txt")
+    assert not ee.windows_nameable("what?.md")
+    assert not ee.windows_nameable("trailing.")
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "keep.md").write_text("k", encoding="utf-8")
+    (src / "a:b.md").write_text("x", encoding="utf-8")
+    ee.copy_plugin_tree(src, tmp_path / "dst")
+    assert [p.name for p in (tmp_path / "dst").iterdir()] == ["keep.md"]
+
+
+def test_long_path_note_reports_the_worst_case_only_when_there_is_one(tmp_path):
+    root = tmp_path / "r"
+    root.mkdir()
+    (root / "short.md").write_text("x", encoding="utf-8")
+    assert ee.long_path_note(root, limit=4000) == ""
+    note = ee.long_path_note(root, limit=1)
+    assert "MAX_PATH" in note and "short.md" in note and "Windows" in note
+
+
+def test_probe_cache_variant_writes_what_go_would_have(tmp_path):
+    layout = _layout(tmp_path, probe_cache=True)
+    import scripts.vsit_paths as vsit_paths
+
+    cache = vsit_paths.local_file("engage_probe", layout.project)
+    payload = json.loads(cache.read_text(encoding="utf-8"))
+    assert payload["plugin_version"] == "9.9.9"
+    assert "PLUGIN_ROOT=" in payload["report"]
+    assert payload["prefs_mtime"] == 0  # a preferences-less client project stamps 0, not -1
+    # The cached report is served to the session verbatim, so the interpreter in it must be
+    # the one the SESSION sees - never this driver's repo venv, which has no user-site
+    # Markdown/bleach and would make render_html "impossible" inside the run.
+    venv = os.environ.get("VIRTUAL_ENV")
+    if venv:
+        assert not payload["interpreter"].startswith(venv)
+
+
+def test_case_mode_defaults_to_repo_and_honours_the_manifest_and_the_flag():
+    assert ee.case_mode({}) == "repo"
+    assert ee.case_mode({"mode": "plugin"}) == "plugin"
+    assert ee.case_mode({"mode": "repo"}, force_plugin=True) == "plugin"
+    assert ee.case_mode({"mode": "nonsense"}) == "repo"
+
+
+def test_launch_command_passes_plugin_dir_and_the_hook_event_flag(tmp_path):
+    cmd = ee.launch_command(tmp_path / "proj", tmp_path / "cache", cli="/bin/claude")
+    assert cmd[0] == "/bin/claude"
+    # The exact option the SDK emits for plugins=[{"type": "local", "path": ...}]
+    # (claude_agent_sdk/_internal/transport/subprocess_cli.py, read 2026-09-13).
+    assert "--plugin-dir" in cmd
+    assert cmd[cmd.index("--plugin-dir") + 1] == str(tmp_path / "cache")
+    assert "--include-hook-events" in cmd
+    assert "--setting-sources=project" in cmd
+
+
+def test_launch_command_omits_plugin_dir_in_repo_mode(tmp_path):
+    assert "--plugin-dir" not in ee.launch_command(tmp_path, None, cli="/bin/claude")
+
+
+class _FakeShutil:
+    """Stands in for the shutil the resolver reaches for. Patched on the module, never on the
+    real shutil: the layout builder needs the genuine copytree in the same test session."""
+
+    def __init__(self, table):
+        self._table = table
+
+    def which(self, name):
+        return self._table.get(name)
+
+
+def test_cli_resolution_prefers_a_native_exe_on_windows(monkeypatch):
+    """shutil.which on Windows can hand back npm's claude.cmd shim, which CreateProcess
+    refuses to spawn - the SDK prefers a native claude.exe, and so must the dry run."""
+    monkeypatch.setattr(ee, "_bundled_cli", lambda windows: None)
+    monkeypatch.setattr(
+        ee,
+        "shutil",
+        _FakeShutil({"claude": r"C:\npm\claude.cmd", "claude.exe": r"C:\bin\claude.exe"}),
+    )
+    assert ee.resolve_cli_path(windows=True) == r"C:\bin\claude.exe"
+
+
+def test_cli_resolution_takes_the_path_hit_on_posix(monkeypatch):
+    monkeypatch.setattr(ee, "_bundled_cli", lambda windows: None)
+    monkeypatch.setattr(ee, "shutil", _FakeShutil({"claude": "/usr/local/bin/claude"}))
+    assert ee.resolve_cli_path(windows=False) == "/usr/local/bin/claude"
+
+
+def test_cli_resolution_prefers_the_sdks_bundled_binary(monkeypatch):
+    """The SDK's own first search step - a bundled CLI wins over anything on PATH."""
+    monkeypatch.setattr(ee, "_bundled_cli", lambda windows: "/sdk/_bundled/claude")
+    assert ee.resolve_cli_path(windows=False) == "/sdk/_bundled/claude"
+
+
+def test_dry_run_report_names_the_layout_and_launches_nothing(tmp_path):
+    layout = _layout(tmp_path)
+    report = ee.describe_dry_run(
+        "process-plugin-mode-open",
+        layout.project,
+        layout.cache_dir,
+        layout.session_env(),
+        "/engage",
+        "opus",
+        extra_notes=["MAX_PATH note: nothing to report"],
+    )
+    assert str(layout.project) in report
+    assert "--plugin-dir" in report
+    assert f"HOME={layout.home}" in report
+    assert "MAX_PATH note" in report
+    assert "Nothing was launched" in report
+
+
+# --- structured event capture -----------------------------------------------------------
+class _ToolUse:
+    def __init__(self, tid, name, data):
+        self.id, self.name, self.input = tid, name, data
+
+
+class _ToolResult:
+    def __init__(self, tid, content, is_error):
+        self.tool_use_id, self.content, self.is_error = tid, content, is_error
+
+
+class _Hook:
+    hook_event_name = "UserPromptSubmit"
+    subtype = "hook_response"
+    data = {"output": "<persona-anchor>x</persona-anchor>", "exit_code": 0}
+
+
+def test_event_entry_records_tool_calls_structurally():
+    msg = _Msg(_ToolUse("t1", "Read", {"file_path": "/x/y.md"}))
+    entry = ee.event_entry(msg, "AssistantMessage")
+    assert entry["tools"] == [{"id": "t1", "name": "Read", "input": {"file_path": "/x/y.md"}}]
+    assert entry["repr"]  # the repr stays: everything that ever read it still can
+
+
+def test_event_entry_records_tool_results_structurally():
+    msg = _Msg(_ToolResult("t1", [{"type": "text", "text": "File does not exist."}], True))
+    entry = ee.event_entry(msg, "UserMessage")
+    assert entry["tool_results"][0]["tool_use_id"] == "t1"
+    assert entry["tool_results"][0]["is_error"] is True
+    assert "does not exist" in entry["tool_results"][0]["text"]
+
+
+def test_event_entry_records_hook_payloads():
+    entry = ee.event_entry(_Hook(), "HookEventMessage")
+    assert entry["hook"]["event"] == "UserPromptSubmit"
+    assert "<persona-anchor>" in entry["hook"]["output"]
+
+
+def test_captured_events_feed_the_tripwires_end_to_end(tmp_path):
+    """The whole chain: capture -> events.jsonl -> tripwire context -> a firing tripwire."""
+    out_dir = tmp_path / "case"
+    out_dir.mkdir()
+    entries = [
+        ee.event_entry(
+            _Msg(_ToolUse("t1", "Read", {"file_path": "/plug/references/x.md"})),
+            "AssistantMessage",
+        ),
+        ee.event_entry(_Msg(_ToolResult("t1", "File does not exist.", True)), "UserMessage"),
+    ]
+    (out_dir / "events.jsonl").write_text(
+        "\n".join(json.dumps(e) for e in entries), encoding="utf-8"
+    )
+    (out_dir / "run-meta.json").write_text(
+        json.dumps(
+            {
+                "mode": "plugin",
+                "project_root": "/proj",
+                "plugin_root": "/plug",
+                "workflow": "/engage",
+            }
+        ),
+        encoding="utf-8",
+    )
+    ctx = ee.tripwire_context(out_dir, tmp_path, "", {"workflow": "/engage"})
+    assert ctx.plugin_root == "/plug" and ctx.expects_engaged_open is True
+    ids = [h["id"] for h in ee.scan_tripwires(ctx, {})]
+    assert "plugin-path-guess" in ids
+
+
+def test_rescore_finds_a_plugin_runs_client_project(tmp_path):
+    """--rescore assumed `<case>/sandbox`; a plugin-mode run's project is inside the layout,
+    so rescoring one against the old path would score every artifact as missing."""
+    out_dir = tmp_path / "case"
+    out_dir.mkdir()
+    assert ee.rescore_project_root(out_dir) == out_dir / "sandbox"
+    (out_dir / "run-meta.json").write_text(
+        json.dumps({"mode": "plugin", "project_root": str(out_dir / "plugin" / "proj")}),
+        encoding="utf-8",
+    )
+    assert ee.rescore_project_root(out_dir) == out_dir / "plugin" / "proj"
+
+
+def test_tripwire_context_falls_back_to_the_sandbox_without_run_meta(tmp_path):
+    ctx = ee.tripwire_context(tmp_path, tmp_path / "sandbox", "", {"workflow": "/engage-light"})
+    assert ctx.project_root == str(tmp_path / "sandbox")
+    assert ctx.plugin_root == str(tmp_path / "sandbox")  # repo-as-project: the two are one
+    assert ctx.expects_engaged_open is True

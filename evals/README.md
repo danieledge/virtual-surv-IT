@@ -109,6 +109,95 @@ with `--max-budget`, run at milestones. As with `/run-evals`, treat raw keyword 
 starting point: adjudicate misses/traps against the transcript before calling a regression
 (baseline precedent: `evals/eval-baseline-0.27.0.md`).
 
+## Transcript tripwires (the mechanical channel)
+
+Recall grades what the team **said**. A tripwire records what the run **did** - and on
+2026-09-12 a day of live reports from a corporate Windows laptop produced five defects that
+were invisible to every finding-based number in this harness. `scripts.eval_score.TRIPWIRES` is
+a named list of detectors over the run's `transcript.md` and `events.jsonl`; **any hit fails the
+case**, with the offending line quoted into `<run>/<case>/tripwires.json` and into
+`score.json`'s `tripwires_triggered` / `tripwire_evidence`.
+
+| id | fires when |
+|---|---|
+| `plugin-path-guess` | a Read or Bash call errored "File does not exist" on a path under the plugin root (the invented `$PLUGIN_ROOT/references/...`) |
+| `team-script-blocked` | the code-execution gate blocked one of the team's OWN scripts - the guard allow-list and the plugin's tooling have drifted apart (CLAUDE.md §7) |
+| `listing-above-project-root` | a directory listing (`ls` / `dir` / `find` / `Get-ChildItem`) whose target is outside the project root, the plugin install and every temp directory |
+| `missing-prompt-injection` | an `/engage` turn whose opening context carried neither `<persona-anchor>` nor `<engage-probe-result>` - the UserPromptSubmit wiring did not fire |
+| `consent-or-apply-ask` | the session asked the human to create the execution-consent marker or to run a `scripts/apply-*.sh` script |
+
+Tripwires apply to **every** case. A case opts one out by id, with a reason - CI
+(`tests/test_eval_cases.py`) rejects an opt-out that names an unknown id or carries no reason:
+
+```yaml
+tripwires_off:
+  - id: listing-above-project-root
+    reason: the scenario deliberately asks the team about the parent directory
+```
+
+Two notes on reading a hit. `missing-prompt-injection` stays **silent** when the run captured no
+hook events at all (a run from before `include_hook_events`, or one where the CLI emitted none):
+not observable is not the same as absent, and failing a run for missing instrumentation would be
+worse than missing the defect. And the detectors are **lexical**, like the guards they watch -
+they read the capture, they never re-run anything.
+
+**Adding one.** The next live report is one more entry in `TRIPWIRES`: an `id`, a `description`
+that says what the defect was, and a `detect(ctx)` returning the offending lines. Add a firing
+and a non-firing unit test in `tests/test_eval_score.py` alongside the others.
+
+## Plugin mode (`mode: plugin` / `--plugin-mode`)
+
+Every other case runs **repo-as-project**: the sandbox is a copy of this repo, so the plugin
+root and the project root are one directory and the hooks come from this repo's
+`.claude/settings.json`. **Nobody installs it that way**, which is exactly why the five defects
+above went unseen. Plugin mode builds the default marketplace install instead:
+
+```
+<run>/<case>/plugin/
+  home/                                   HOME + USERPROFILE (+ HOMEDRIVE/HOMEPATH on Windows)
+    .claude.json                          workspace trust - the real ~/.claude.json is never touched
+    .claude/                              CLAUDE_CONFIG_DIR
+      plugins/installed_plugins.json      the v2 registry, one local-scope entry
+      plugins/known_marketplaces.json     the marketplace, source = the repo copy below
+      plugins/marketplaces/<marketplace>/ the marketplace "checkout": a copy of this repo
+      plugins/cache/<mkt>/<plugin>/<ver>/ the CACHE copy the session actually loads
+  proj/                                   the CLIENT project: cwd, empty apart from fixtures/
+```
+
+The session is launched with `cwd = proj/` and the plugin loaded from the **cache copy** via the
+SDK's `plugins=[{"type": "local", "path": ...}]`, which the transport turns into the CLI's
+`--plugin-dir` (`claude --help`: *"Load a plugin from a directory or .zip for this session
+only"*). So the hooks are the plugin's own `hooks/hooks.json`, resolved through
+`${CLAUDE_PLUGIN_ROOT}` - this repo's `.claude/settings.json` is never loaded, because this repo
+is not the project. Both repo copies exclude `evals/` for the same reason the repo sandbox does:
+ground truth has to be structurally unreachable.
+
+Both platforms are supported on purpose (the owner runs this by hand on a Windows VM; the manual
+CI job runs it on Linux). The copy is `shutil.copytree`, never `rsync`; nothing is symlinked;
+names Windows cannot create are skipped on **both** platforms so the two layouts match; and the
+run prints a `MAX_PATH note` when the built layout gets close to the classic 260-character
+limit - keep the checkout shallow on Windows (`C:\dev\vsit`) or enable long paths.
+
+    python -m scripts.eval_engage --case process-plugin-mode-open --dry-run   # build + print, launch nothing
+    python -m scripts.eval_engage --case process-plugin-mode-open --skip-judge --max-budget 8
+
+`--dry-run` builds the layout and prints the exact command it would launch (also written to
+`<run>/<case>/dry-run.txt`), without a session and without the SDK installed - the cheap way to
+check the layout on the Windows VM. `--plugin-mode` forces the layout for every selected case;
+`--no-inherit-auth` skips seeding credentials into the throwaway home (layout inspection only -
+the session will not authenticate).
+
+**Auth.** A throwaway home has no login, so the builder copies **only** credential material into
+it: `~/.claude/.credentials.json` and the `oauthAccount` / `userID` / `hasCompletedOnboarding` /
+`firstStartTime` keys of `~/.claude.json`. Nothing else crosses over - not the developer's
+projects, trust decisions, plugin registry or preferences - because inheriting those is what
+would hide the defects this mode exists to find. Nothing is ever written back to the real home.
+
+`evals/cases/process-plugin-mode-open/` is the case: a small `/engage` open in a client project
+holding one synthetic two-function file, scored deterministically (`judge: none`) on the
+engagement workspace landing under the **client** project's `VSIT/`, the probe's `PLUGIN_ROOT`
+being carried forward, the review happening, and all five tripwires staying silent.
+
 ## The baseline verdict block (the release gate parses this)
 
 `scripts/release_gate.py` blocks a dev → main promotion unless the version's
@@ -200,6 +289,8 @@ case: review-seeded-bugs-py
 workflow: /deep-review          # the skill the blind run inlines
 rubric: code-review             # resolves to evals/rubrics/code-review.md
 input: input_alert_export.py    # the ONLY file shown to the team-under-test
+mode: repo                      # optional: repo (default) | plugin - see "Plugin mode" above
+judge: none                     # optional: skip the LLM judge for a deterministic-only case
 planted:                        # issues the team MUST surface
   - id: SEC-1
     keywords: [hardcoded, secret, credential, password, api key]

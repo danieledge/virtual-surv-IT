@@ -1,0 +1,70 @@
+case: process-plugin-mode-open
+# PLUGIN MODE (2026-09-13): the harness lays the plugin out the way the default marketplace
+# install does - throwaway HOME, registry + cache copy, a CLIENT project as cwd that is not
+# this repo - instead of the repo-as-project sandbox every other case uses. See evals/README.md.
+mode: plugin
+workflow: /engage
+rubric: process-discipline-probe
+# Deterministic only. Everything this case asserts is a fact about where files landed and what
+# the run did; an LLM judge adds nothing to that and costs a model call per run.
+judge: none
+input: scenario.md
+# A short open plus a two-function review; no build, no QA chain, no close ceremony.
+timeout_s: 1800
+description: >
+  The install-shape case. Everything else in the corpus runs repo-as-project, where the plugin
+  root and the project root are the same directory and the hooks come from this repo's
+  .claude/settings.json - which is not how anyone installs this, and is why a day of live
+  reports from a corporate Windows laptop found defects the whole corpus had never touched.
+  A correct run opens through the plugin's own front door from a CACHE copy, resolves and keeps
+  the printed PLUGIN_ROOT, creates its engagement workspace under the CLIENT project's VSIT/
+  (never under the plugin install), reviews the small synthetic file, and trips no tripwire.
+
+planted:
+  - id: PLUG-1
+    # The engagement workspace exists under the CLIENT project. The artifact probe only ever
+    # looks inside the client project, so any of these findings existing IS the assertion that
+    # the workspace landed there and not in the plugin install.
+    keywords: [start-here, engagement-state.json, engagement state, workspace]
+    min_severity: warning
+    must_find: true
+
+  - id: PLUG-2
+    # The probe result reached the session and its PLUGIN_ROOT was carried forward: either the
+    # UserPromptSubmit injection served it or the open read it from the client project. The
+    # session persists it with `engagement_state set-runtime`, so the state file carries
+    # runtime.mode / runtime.plugin_root and the raw-evidence pass sees those lines.
+    keywords: [plugin_root, plugins/cache, engage-probe, probe result, prefetch]
+    exclude_keywords: [probe failed, no probe, probe unavailable]
+    min_severity: warning
+    must_find: true
+
+  - id: PLUG-3
+    # The work asked for actually happened: the two-function file was read and assessed.
+    keywords: [alert_threshold_check, daily_limit, aggregate_daily, is_reportable]
+    min_severity: warning
+    must_find: true
+
+  - id: PLUG-4
+    # The threshold has no rationale and no tuning date (CLAUDE.md §4) - the one seeded issue
+    # in the file, and the thing the scenario explicitly asks about.
+    keywords: [no rationale, undocumented threshold, tuning date, hard-coded threshold,
+               hardcoded threshold]
+    min_severity: warning
+    must_find: false
+
+forbidden:
+  - id: FP-MODULEFORM
+    # Plugin mode's own failure mode: `python -m scripts.<name>` exits 1 outside the repo, and
+    # engage-open says so - the path form is the only one that works from an installed copy.
+    # Invoking the module form here is a real defect, live 2026-09-12.
+    keywords: ["python -m scripts.", "python3 -m scripts.", "py -m scripts."]
+    exclude_keywords: [does not work, exits 1, outside the repo, module form is wrong]
+  - id: FP-REPOASPROJECT
+    # The probe prints a real PLUGIN_ROOT in an installed copy, so claiming repo-as-project
+    # means the session decided its run mode without reading what the probe told it.
+    keywords: [repo-as-project]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

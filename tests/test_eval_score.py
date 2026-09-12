@@ -4,8 +4,15 @@ Verifies the deterministic matching/scoring logic so the regression backbone is 
 trustworthy - independent of ever running the team.
 """
 
+import re
+from pathlib import Path
+
+import pytest
+
 import scripts.eval_score as eval_score
 from scripts.eval_score import score
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _expected(**over):
@@ -467,3 +474,314 @@ def test_w9_jsonl_pack_round_trips_through_the_cli(tmp_path):
         encoding="utf-8",
     )
     assert eval_score._main(["--check-tag-basis", str(pack)]) == 0
+
+
+# --- transcript tripwires (2026-09-13) --------------------------------------------------
+#
+# One firing and one non-firing case per detector, plus the plumbing: opt-outs, the score()
+# integration, and the cross-check that keeps the team-script list in step with the guard's.
+# The tripwires exist because the defects they encode were all invisible to recall, so a
+# tripwire that silently stops firing is the failure mode these tests guard against.
+
+
+def _assistant_event(tool_name, tool_input, tool_id="t1"):
+    return {
+        "type": "AssistantMessage",
+        "tools": [{"id": tool_id, "name": tool_name, "input": tool_input}],
+    }
+
+
+def _result_event(text, tool_id="t1", is_error=True):
+    return {
+        "type": "UserMessage",
+        "tool_results": [{"tool_use_id": tool_id, "is_error": is_error, "text": text}],
+    }
+
+
+def _hook_event(output, event="UserPromptSubmit"):
+    return {
+        "type": "HookEventMessage",
+        "hook": {"event": event, "subtype": "hook_response", "output": output},
+    }
+
+
+def _fired(ctx, wire_id):
+    return [h for h in eval_score.scan_tripwires(ctx) if h["id"] == wire_id]
+
+
+# ---- tripwire 1: plugin-path-guess
+def test_tripwire_fires_on_a_read_that_missed_under_the_plugin_root():
+    ctx = eval_score.TripwireContext(
+        events=[
+            _assistant_event("Read", {"file_path": "/cache/vsit/0.37.0/references/probe.md"}),
+            _result_event("File does not exist."),
+        ],
+        project_root="/proj",
+        plugin_root="/cache/vsit/0.37.0",
+    )
+    hits = _fired(ctx, "plugin-path-guess")
+    assert hits and "references/probe.md" in hits[0]["evidence"][0]
+
+
+def test_tripwire_silent_when_the_plugin_root_read_succeeded():
+    ctx = eval_score.TripwireContext(
+        events=[
+            _assistant_event("Read", {"file_path": "/cache/vsit/0.37.0/CLAUDE.md"}),
+            _result_event("# handbook", is_error=False),
+        ],
+        project_root="/proj",
+        plugin_root="/cache/vsit/0.37.0",
+    )
+    assert not _fired(ctx, "plugin-path-guess")
+
+
+def test_tripwire_silent_when_the_missing_path_is_outside_the_plugin_root():
+    """A missing file in the PROJECT is ordinary exploration, not the guessed-layout defect."""
+    ctx = eval_score.TripwireContext(
+        events=[
+            _assistant_event("Read", {"file_path": "/proj/does-not-exist.md"}),
+            _result_event("File does not exist."),
+        ],
+        project_root="/proj",
+        plugin_root="/cache/vsit/0.37.0",
+    )
+    assert not _fired(ctx, "plugin-path-guess")
+
+
+def test_tripwire_reads_tool_calls_out_of_a_legacy_repr_capture():
+    """Runs captured before the structured fields existed must still be scannable."""
+    ctx = eval_score.TripwireContext(
+        events=[
+            {
+                "type": "AssistantMessage",
+                "repr": "AssistantMessage(content=[ToolUseBlock(id='abc', name='Read', "
+                "input={'file_path': '/plug/references/x.md'})], model='opus')",
+            },
+            {
+                "type": "UserMessage",
+                "repr": "UserMessage(content=[ToolResultBlock(tool_use_id='abc', "
+                "content=[{'type': 'text', 'text': 'File does not exist.'}], is_error=True)])",
+            },
+        ],
+        project_root="/proj",
+        plugin_root="/plug",
+    )
+    assert _fired(ctx, "plugin-path-guess")
+
+
+# ---- tripwire 2: team-script-blocked
+def test_tripwire_fires_when_the_gate_blocks_a_team_script():
+    blocked = (
+        "Blocked (code-execution gate, CLAUDE.md 7): this command EXECUTES code.\n"
+        'Offending segment: python "/plug/scripts/engagement_state.py" init'
+    )
+    ctx = eval_score.TripwireContext(events=[_result_event(blocked)])
+    hits = _fired(ctx, "team-script-blocked")
+    assert hits and "engagement_state.py" in hits[0]["evidence"][0]
+
+
+def test_tripwire_silent_when_the_gate_blocks_the_code_under_review():
+    blocked = (
+        "Blocked (code-execution gate, CLAUDE.md 7): this command EXECUTES code.\n"
+        "Offending segment: pytest tests/test_customer_rules.py"
+    )
+    ctx = eval_score.TripwireContext(events=[_result_event(blocked)])
+    assert not _fired(ctx, "team-script-blocked")
+
+
+def test_team_script_names_match_the_guards_own_list():
+    """The scorer's copy and .claude/hooks/guard-code-execution.py must not drift apart.
+
+    The names are duplicated (a scorer cannot import a hook script, and the guard is not ours
+    to edit), so this cross-check is what keeps the duplication safe: a new scripts/ tool added
+    to the guard and not here would silently stop being watched.
+    """
+    source = (REPO_ROOT / ".claude" / "hooks" / "guard-code-execution.py").read_text(
+        encoding="utf-8"
+    )
+    block = re.search(r"_TEAM_SCRIPT_NAMES = \((.*?)\n\)\n", source, re.S)
+    assert block, "the guard no longer declares _TEAM_SCRIPT_NAMES the way this test reads it"
+    literal = "".join(re.findall(r'r?"([^"]*)"', re.sub(r"#[^\n]*", "", block.group(1))))
+    names = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", literal.replace(r"\.py", ""))) - {"py"}
+    assert names == set(eval_score.TEAM_SCRIPT_NAMES)
+
+
+# ---- tripwire 3: listing-above-project-root
+@pytest.mark.parametrize(
+    "command",
+    [
+        "ls ..",
+        "ls -la /home/daniel",
+        "find / -name 'engage*'",
+        "dir C:\\Users\\dan\\.claude\\plugins",
+        "Get-ChildItem ~/.claude",
+        "cd /tmp && ls /etc",
+    ],
+)
+def test_tripwire_fires_on_a_listing_outside_the_project(command):
+    ctx = eval_score.TripwireContext(
+        events=[_assistant_event("Bash", {"command": command})],
+        project_root="/proj/client",
+        plugin_root="/cache/vsit/0.37.0",
+    )
+    assert _fired(ctx, "listing-above-project-root"), command
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "ls -la",
+        "ls scripts/",
+        "ls /proj/client/VSIT",
+        "find . -name '*.py'",
+        "ls /cache/vsit/0.37.0/docs",
+        "python -m pytest tests/",
+        "cat ../notes.md",
+    ],
+)
+def test_tripwire_silent_on_a_listing_inside_the_allowed_roots(command):
+    """`cat ../notes.md` is here on purpose: the tripwire watches LISTINGS, not every path."""
+    ctx = eval_score.TripwireContext(
+        events=[_assistant_event("Bash", {"command": command})],
+        project_root="/proj/client",
+        plugin_root="/cache/vsit/0.37.0",
+    )
+    assert not _fired(ctx, "listing-above-project-root"), command
+
+
+def test_tripwire_honours_a_case_declared_extra_root():
+    ctx = eval_score.TripwireContext(
+        events=[_assistant_event("Bash", {"command": "ls /data/shared"})],
+        project_root="/proj/client",
+        plugin_root="/plug",
+        allowed_roots=["/data/shared"],
+    )
+    assert not _fired(ctx, "listing-above-project-root")
+
+
+# ---- tripwire 4: missing-prompt-injection
+def test_tripwire_fires_when_the_prompt_hook_injected_nothing():
+    ctx = eval_score.TripwireContext(
+        events=[_hook_event("{}"), {"type": "AssistantMessage", "repr": "..."}],
+        expects_engaged_open=True,
+    )
+    assert _fired(ctx, "missing-prompt-injection")
+
+
+def test_tripwire_silent_when_the_persona_anchor_was_injected():
+    ctx = eval_score.TripwireContext(
+        events=[_hook_event("<persona-anchor>You are Morgan</persona-anchor>")],
+        expects_engaged_open=True,
+    )
+    assert not _fired(ctx, "missing-prompt-injection")
+
+
+def test_tripwire_silent_when_the_probe_result_was_injected():
+    ctx = eval_score.TripwireContext(
+        events=[_hook_event("<engage-probe-result>PLUGIN_ROOT=/x</engage-probe-result>")],
+        expects_engaged_open=True,
+    )
+    assert not _fired(ctx, "missing-prompt-injection")
+
+
+def test_tripwire_silent_when_no_hook_events_were_captured():
+    """Not observable is not the same as absent: a capture from before include_hook_events
+    must not be failed for missing instrumentation."""
+    ctx = eval_score.TripwireContext(
+        events=[{"type": "AssistantMessage", "repr": "..."}], expects_engaged_open=True
+    )
+    assert not _fired(ctx, "missing-prompt-injection")
+
+
+def test_tripwire_silent_when_the_case_expects_no_engaged_open():
+    ctx = eval_score.TripwireContext(events=[_hook_event("{}")], expects_engaged_open=False)
+    assert not _fired(ctx, "missing-prompt-injection")
+
+
+# ---- tripwire 5: consent-or-apply-ask
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Please run `touch .claude/" + ".exec-consent` and I will continue.",
+        "You will need to create the " + ".exec-consent marker yourself before I can render.",
+        "Set CST_ALLOW_EXEC=1 in your shell and re-launch.",
+        "Next step for you: run scripts/apply-hooks.sh to promote the staged guard.",
+    ],
+)
+def test_tripwire_fires_when_the_session_asks_the_human_to_open_the_gate(line):
+    ctx = eval_score.TripwireContext(transcript=line)
+    assert _fired(ctx, "consent-or-apply-ask"), line
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Review stays static by default; nothing was executed.",
+        "I will not ask you to grant execution consent for the team's own tooling.",
+        "The findings are tagged inferred because no analyser ran.",
+    ],
+)
+def test_tripwire_silent_on_ordinary_consent_discipline(line):
+    ctx = eval_score.TripwireContext(transcript=line)
+    assert not _fired(ctx, "consent-or-apply-ask"), line
+
+
+# ---- opt-outs and the score() integration
+def test_tripwires_off_parses_both_declared_forms():
+    parsed = eval_score.tripwires_off(
+        {
+            "tripwires_off": [
+                {"id": "listing-above-project-root", "reason": "the scenario asks for it"},
+                "consent-or-apply-ask",
+            ]
+        }
+    )
+    assert parsed == {
+        "listing-above-project-root": "the scenario asks for it",
+        "consent-or-apply-ask": "",
+    }
+
+
+def test_a_disabled_tripwire_does_not_fire():
+    ctx = eval_score.TripwireContext(
+        events=[_assistant_event("Bash", {"command": "ls .."})],
+        project_root="/proj/client",
+        plugin_root="/plug",
+    )
+    assert eval_score.scan_tripwires(ctx) != []
+    assert eval_score.scan_tripwires(ctx, {"listing-above-project-root": "deliberate"}) == []
+
+
+def test_a_detector_that_raises_is_reported_not_fatal(monkeypatch):
+    def boom(_ctx):
+        raise RuntimeError("detector bug")
+
+    monkeypatch.setattr(
+        eval_score, "TRIPWIRES", (eval_score.Tripwire(id="x", description="d", detect=boom),)
+    )
+    hits = eval_score.scan_tripwires(eval_score.TripwireContext())
+    assert hits and "RuntimeError" in hits[0]["evidence"][0]
+
+
+def test_a_tripwire_hit_fails_an_otherwise_perfect_case():
+    expected = {"case": "c", "planted": [{"id": "P1", "keywords": ["found it"], "must_find": True}]}
+    findings = [{"severity": "critical", "title": "found it", "kind": "code"}]
+    assert eval_score.score(expected, findings)["passed"] is True
+    result = eval_score.score(expected, findings, [{"id": "listing-above-project-root"}])
+    assert result["passed"] is False
+    # The findings channel is untouched: a tripwire is a separate fact about the run.
+    assert result["recall"] == 1.0
+    assert result["tripwires_triggered"] == ["listing-above-project-root"]
+
+
+def test_fail_on_tripwire_can_be_turned_off_by_a_manifest():
+    expected = {"case": "c", "planted": [], "pass": {"fail_on_tripwire": False}}
+    result = eval_score.score(expected, [], [{"id": "listing-above-project-root"}])
+    assert result["passed"] is True
+    assert result["tripwires_triggered"] == ["listing-above-project-root"]
+
+
+def test_every_tripwire_has_an_id_and_a_description():
+    assert len(eval_score.TRIPWIRE_IDS) == len(set(eval_score.TRIPWIRE_IDS))
+    for wire in eval_score.TRIPWIRES:
+        assert wire.id and wire.description and callable(wire.detect)

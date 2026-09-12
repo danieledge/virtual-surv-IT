@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from scripts.eval_score import score
+from scripts.eval_score import TRIPWIRE_IDS, score
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CASES_ROOT = REPO_ROOT / "evals" / "cases"
@@ -306,3 +306,65 @@ def test_empty_run_scores_correctly(case_dir):
             "scorer has stopped discriminating"
         )
         assert set(result["must_find_missed"]) == must_find_ids
+
+
+# --- plugin mode and tripwire opt-outs (2026-09-13) -------------------------------------
+
+
+def test_declared_mode_is_one_the_harness_knows(case_dir):
+    """`mode:` is either absent (repo-as-project, the corpus default) or `plugin`.
+
+    A typo here would not fail loudly - case_mode() falls back to "repo" - so the case would
+    silently run in the wrong layout and its plugin-mode assertions would pass for the wrong
+    reason. Pin it in CI instead.
+    """
+    declared = _load_expected(case_dir).get("mode")
+    assert declared in (None, "repo", "plugin"), (
+        f"{case_dir.name}: mode {declared!r} is not one the harness builds (repo | plugin)"
+    )
+
+
+def test_declared_judge_setting_is_one_the_harness_knows(case_dir):
+    declared = _load_expected(case_dir).get("judge")
+    assert declared in (None, "none", "off", "skip"), (
+        f"{case_dir.name}: judge {declared!r} is not a setting the harness honours - omit the "
+        "key to run the rubric judge, or set `judge: none` for a deterministic-only case"
+    )
+
+
+def test_tripwire_opt_outs_name_a_real_tripwire_and_carry_a_reason(case_dir):
+    """A silenced tripwire must say WHICH one and WHY.
+
+    The tripwires encode defects that reached a live corporate laptop, so turning one off is a
+    decision that needs to be readable later. The parser in eval_score is deliberately
+    permissive (a malformed opt-out leaves the tripwire armed rather than crashing a run); this
+    is where the discipline is enforced.
+    """
+    expected = _load_expected(case_dir)
+    declared = expected.get("tripwires_off") or []
+    assert isinstance(declared, list), f"{case_dir.name}: tripwires_off must be a list"
+    for entry in declared:
+        assert isinstance(entry, dict), (
+            f"{case_dir.name}: each tripwires_off entry must be a mapping with id and reason"
+        )
+        assert entry.get("id") in TRIPWIRE_IDS, (
+            f"{case_dir.name}: tripwires_off names {entry.get('id')!r}, which is not a "
+            f"tripwire ({sorted(TRIPWIRE_IDS)})"
+        )
+        assert str(entry.get("reason") or "").strip(), (
+            f"{case_dir.name}: tripwires_off[{entry.get('id')}] has no reason"
+        )
+
+
+def test_the_corpus_covers_plugin_mode_at_all():
+    """At least one case must run the way the plugin is actually installed.
+
+    Until 2026-09-13 every case ran repo-as-project, and a day of live reports from a corporate
+    Windows laptop found five defects that all lived in the gap. Losing the last plugin-mode
+    case would reopen it silently.
+    """
+    modes = [_load_expected(d).get("mode") for d in CASE_DIRS]
+    assert "plugin" in modes, (
+        "no case declares `mode: plugin` - the corpus would be back to testing only the "
+        "repo-as-project layout nobody installs"
+    )
