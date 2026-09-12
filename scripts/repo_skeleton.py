@@ -940,7 +940,7 @@ def _add_tree_sitter_edges(root: Path, files: list[str], graph: dict[str, set[st
     for rel in sources:
         try:
             specifiers = _ts_import_specifiers(root / rel)
-        except Exception:
+        except Exception:  # nosec B112 - a file the parser rejects contributes no edges, the same as a cold grammar
             continue
         is_jvm = _rel_suffix(rel) in _JVM_EDGE_EXTS
         for spec in specifiers:

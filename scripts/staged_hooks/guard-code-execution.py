@@ -785,7 +785,7 @@ def _plugin_script_dirs() -> list:
     try:
         here = os.path.dirname(os.path.abspath(__file__))
         add(os.path.join(here, "..", ".."), check_manifest=False)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # nosec B110 - a root we cannot locate is simply not admitted; the gate stays closed
         pass
     if os.environ.get("CLAUDE_PLUGIN_ROOT"):
         add(os.environ["CLAUDE_PLUGIN_ROOT"])
@@ -808,7 +808,7 @@ def _plugin_script_dirs() -> list:
         try:
             with open(os.path.join(plugins, name), encoding="utf-8-sig") as fh:
                 data = json.load(fh)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001  # nosec B112 - an absent or unreadable registry admits no roots; nothing is lost but an allowance
             continue
         for candidate in strings(data):
             if os.sep in candidate or "/" in candidate:
@@ -822,7 +822,7 @@ def _plugin_script_dirs() -> list:
                 if ".claude-plugin" in dirnames:
                     add(dirpath)
                     dirnames[:] = []
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001  # nosec B110 - a cache folder we cannot walk admits no roots; the gate stays closed
             pass
     try:
         with open(
@@ -831,7 +831,7 @@ def _plugin_script_dirs() -> list:
             repo_path = json.load(fh).get("repo_path")
         if repo_path:
             add(repo_path)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # nosec B110 - no installer config means no recorded clone; nothing to admit
         pass
     return found
 

@@ -181,8 +181,16 @@ def _force_utf8_output() -> None:
 # READING is unchanged: older naive values stay valid strings and are only ever compared
 # or displayed as text, never parsed back into a datetime.
 def _today() -> str:
-    """Today's date in UTC, ISO (YYYY-MM-DD) - the shape every dated field here uses."""
-    return _dt.datetime.now(_dt.timezone.utc).date().isoformat()
+    """Today's LOCAL calendar date, ISO (YYYY-MM-DD) - the shape every dated field here uses.
+
+    Local, not UTC (2026-09-13). The audit fix pass made the timestamps timezone-aware and,
+    in the same change, made this the UTC date; but the dashboard dates every session by the
+    local day (fromtimestamp on the transcript's mtime), and budget-status compares the two.
+    For an hour after midnight BST, and for the whole evening anywhere east of Greenwich,
+    "spent today" summed a different day's sessions and read $0. Timestamps keep their
+    offset (see _utc_now_iso); the calendar day a human means is the local one.
+    """
+    return _dt.date.today().isoformat()
 
 
 def _utc_now_iso(timespec: str = "seconds") -> str:

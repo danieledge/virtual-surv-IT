@@ -1688,6 +1688,9 @@ def test_recorded_timestamps_are_timezone_aware(tmp_path):
     _run(tmp_path, "sign-off", "--by", "Daniel")
     at = load_state(tmp_path)["ratifications"][0]["at"]
     assert _dt.datetime.fromisoformat(at).tzinfo is not None
-    # Dates stay plain YYYY-MM-DD (every consumer compares them as text) but are now UTC.
+    # Dates stay plain YYYY-MM-DD (every consumer compares them as text) and are the LOCAL
+    # calendar day, the same day the dashboard stamps on every session: this pinned the UTC
+    # day for one evening (2026-09-12) and budget-status summed the wrong day's spend for an
+    # hour after midnight BST.
     opened = load_state(tmp_path)["engagement"]["opened"]
-    assert opened == _dt.datetime.now(_dt.timezone.utc).date().isoformat()
+    assert opened == _dt.date.today().isoformat()
