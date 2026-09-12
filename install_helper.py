@@ -2188,6 +2188,43 @@ def pause_before_menu(style: Style) -> None:
         print("")
 
 
+class _NotAConsole:
+    """A stdin proxy whose isatty() is False; everything else passes through."""
+
+    def __init__(self, inner):
+        self._inner = inner
+
+    def isatty(self) -> bool:
+        return False
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+
+def _demote_fake_console_stdin() -> None:
+    """On Windows, the NUL device answers isatty() True (it is a character device), so a
+    scripted run such as `python install_helper.py --demo < /dev/null` under Git Bash took
+    the interactive-menu path that every other platform skips. GetConsoleMode is the check
+    that tells a real console from NUL, a pipe or a file: it fails for anything that is not
+    a console. When it fails, stdin is wrapped so every `sys.stdin.isatty()` in this file
+    (there are many) sees the truth without each being edited. First seen on the Windows
+    CI leg after the 2026-09-12 audit; no effect anywhere but Windows."""
+    if os.name != "nt":
+        return
+    try:
+        if not sys.stdin.isatty():
+            return
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        handle = kernel32.GetStdHandle(-10)  # STD_INPUT_HANDLE
+        mode = ctypes.c_uint32()
+        if kernel32.GetConsoleMode(handle, ctypes.byref(mode)) == 0:
+            sys.stdin = _NotAConsole(sys.stdin)
+    except Exception:  # noqa: BLE001 - a probe; never let it cost a launch  # nosec B110 - advisory probe
+        pass
+
+
 def choose_action(style: Style) -> str:
     """The interactive front door: pick which subset to run. Callers gate on a tty;
     a closed stdin or empty answer takes the full run. 'diagnostics'/'advanced' open a
@@ -2251,7 +2288,12 @@ def choose_action(style: Style) -> str:
                         input(f"{s.cyan('  What shall it be?')} {s.bold('[1]')}: ").strip().lower()
                     )
                 except EOFError:
-                    return "full"
+                    # A stream that has ended cannot answer the NEXT prompt either. This
+                    # used to return "full", and on the Windows CI runner (where Git
+                    # Bash's /dev/null is the NUL device, which isatty() calls a terminal)
+                    # the demo ran the whole install 1,907 times in 30 minutes, once per
+                    # EOF, until the job was cancelled (2026-09-12). Enter still means [1].
+                    return "quit"
                 if not answer:
                     return "full"
                 if answer in MENU_ACTIONS:
@@ -11039,6 +11081,7 @@ def _dispatch_folder_subcommand(argv: list) -> Optional[int]:
 def main(argv=None) -> int:
     """Entry point: _main plus the last-resort Ctrl-C net (menu, banner, prompts that
     sit outside an Installer run). Exit code 130 mirrors the shell convention."""
+    _demote_fake_console_stdin()
     try:
         dispatched = _dispatch_folder_subcommand(argv if argv is not None else sys.argv[1:])
         if dispatched is not None:

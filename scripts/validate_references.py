@@ -230,7 +230,13 @@ def _scanned_files(root: Path) -> list[Path]:
         base = root / directory
         if not base.is_dir():
             continue
-        files += [p for p in base.rglob("*.md") if not any(part in str(p) for part in _SKIP_PARTS)]
+        # as_posix(): on Windows str(p) carries backslashes and none of the "/x/" skip parts
+        # match, so transcripts and case fixtures got scanned there and nowhere else (first
+        # Windows CI run after the 2026-09-12 audit: seven "unresolved" references, all from
+        # files this list exists to skip).
+        files += [
+            p for p in base.rglob("*.md") if not any(part in p.as_posix() for part in _SKIP_PARTS)
+        ]
     return sorted(files)
 
 
@@ -295,7 +301,7 @@ def find_orphans(root: Path = REPO_ROOT) -> list[str]:
             referenced.add(Path(ref).name)
     orphans = []
     for path in sorted((root / "docs").rglob("*.md")):
-        if any(part in str(path) for part in _SKIP_PARTS):
+        if any(part in path.as_posix() for part in _SKIP_PARTS):
             continue
         if path.name not in referenced:
             orphans.append(str(path.relative_to(root)))

@@ -948,6 +948,7 @@ def test_the_safety_and_advisory_target_sets_agree_across_the_two_files(monkeypa
     assert gd._FAIL_CLOSED_TARGETS == client._SAFETY_TARGETS
 
 
+@pytest.mark.skipif(not hasattr(os, "getuid"), reason="ownership check is POSIX-only")
 def test_a_port_file_owned_by_another_account_is_ignored(monkeypatch, tmp_path):
     """H-26: the port file says where every guard decision is sent. One this user does not
     own is treated as "no daemon" - a cold start, never a guard skipped."""
@@ -960,10 +961,18 @@ def test_a_port_file_owned_by_another_account_is_ignored(monkeypatch, tmp_path):
     real_stat = os.stat
 
     class _Foreign:
+        # Delegates everything but st_uid: client.os IS the os module, so this patch is
+        # global for the test's duration and pathlib's own stat calls (with
+        # follow_symlinks=..., reading st_size and friends) go through it too - the first
+        # Windows CI run after the 2026-09-12 audit showed both.
         def __init__(self, inner):
+            self._inner = inner
             self.st_uid = inner.st_uid + 1
 
-    monkeypatch.setattr(client.os, "stat", lambda p: _Foreign(real_stat(p)))
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+    monkeypatch.setattr(client.os, "stat", lambda p, **kw: _Foreign(real_stat(p, **kw)))
     assert client.read_port_and_token(tmp_path) == (None, None)
 
 

@@ -1838,6 +1838,9 @@ def main(argv: list[str] | None = None) -> int:
     generated = _dt.datetime.now().strftime("%Y-%m-%d %H:%M")
     if args.json_out:
         payload = emit_json(projects, usage, generated)
+        # A fresh clone has no dashboard-ui/data/ (the file is gitignored, the dir is not
+        # tracked), so the first `npm run data` on CI failed on the write (2026-09-12).
+        args.json_out.parent.mkdir(parents=True, exist_ok=True)
         args.json_out.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
@@ -1846,6 +1849,7 @@ def main(argv: list[str] | None = None) -> int:
             "run `npm run dashboard` in dashboard-ui/ to build the UI."
         )
     else:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(render(projects, usage, generated), encoding="utf-8")
         print(f"Dashboard written to {args.out} - open it in a browser (file://).")
     return 0
