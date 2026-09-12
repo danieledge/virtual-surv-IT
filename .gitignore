@@ -164,3 +164,7 @@ docs/internal/deep-review-2026-09-11.md
 # back whole to whoever is helping, not committed - each is a timestamped snapshot of one
 # machine. Added 2026-09-11 after one landed untracked in the repo root.
 virt-surv-*-diagnostic-*.txt
+
+# Independent automation/workflow audit commissioned 2026-09-12 - internal assessment, same
+# treatment as the other docs/internal reviews above (report, per-lane findings, test log).
+docs/internal/independent-audit-2026-09-12/
