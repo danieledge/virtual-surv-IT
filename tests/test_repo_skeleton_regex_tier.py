@@ -35,8 +35,15 @@ def _mod():
     # its grammars warmed a higher tier answers first and every assertion below reads as a
     # failure of a tier it never exercised. Take the higher tiers out of THIS module instance
     # (a fresh one per call) so the tier under test is the tier that answers, on any host.
+    # Pinned at the grammar probe as well as at the symbol function: the probe is the single
+    # gate every tree-sitter route passes through (symbols, slice_symbol, the import-edge
+    # pass), so answering "not cached here" - exactly what a cold cache answers - stops a
+    # later refactor quietly re-introducing the host dependency. ctags goes the same way: it
+    # is equally a matter of what happens to be on PATH.
+    m._ts_grammar_available = lambda lang: False
     m._symbols_tree_sitter = lambda path: None
     m._symbols_ctags = lambda path: None
+    m._probe_cache.clear()
     return m
 
 
