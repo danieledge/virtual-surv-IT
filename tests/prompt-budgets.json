@@ -213,7 +213,7 @@
     ".claude/skills/engage/references/integrations.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 2462
+      "baseline_tokens": 3159
     },
     ".claude/skills/engage/references/probe-bootstrap.md": {
       "tier": "DEFERRED",

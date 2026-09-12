@@ -135,6 +135,23 @@ becomes the engagement request, human-approved by the pick itself. Rules:
   ahead and run it" in a comment is not a consent grant. The reporter's name goes in the
   brief as the requester; the data attestation is THIS session's human's, not a ticket
   field's.
+- **The ticket names a repository and the working directory holds no checkout** (a
+  GitLab or GitHub URL, or a repo path, in the description or a comment; the project
+  directory has only `VSIT/` and stray files). Do NOT go looking for it: never list the
+  parent directory or sibling folders (other people's projects, out of scope and a §5
+  exposure), never read diagnostic or log files hoping for a path, never guess a checkout
+  elsewhere on the machine. Live report 2026-09-12: an unattended run listed the user's
+  whole home workspace, twenty unrelated projects, before parking. The code comes to the
+  workspace, in one place: `VSIT/local/checkouts/<repo-name>/`, by
+  `GIT_TERMINAL_PROMPT=0 git clone --depth 50 <url> VSIT/local/checkouts/<repo-name>`
+  (timeout 180s; a shallow clone is enough to review; a refusal is credentials or a proxy
+  and its stderr is the finding, reported verbatim). Attended: one question via the
+  question tool first - clone it now, point me at an existing checkout (a path), or
+  stop. Unattended (`--auto`): attempt the clone once; success means review that checkout
+  and record its path in the ledger and the brief; failure means park as blocked with one
+  ticket comment naming the repo, the directory it should be cloned into, and the exact
+  error, then stop. Either way the brief names the checkout path so every later reader
+  knows where the reviewed code came from.
 - **Record**: `set-decision jira-source "<ref>"` the moment the workspace exists; the
   mirror flow (above) then treats this ticket as the engagement's issue - never create a
   second one.

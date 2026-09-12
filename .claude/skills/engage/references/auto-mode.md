@@ -69,6 +69,12 @@ required, or you stop making progress:
 `set-status blocked`, record why, post one comment to the ticket naming exactly what you
 need, and stop. A parked engagement resumes normally.
 
+Parking is a decision you reach in one step, not after a search. The code the ticket names
+is not here: try the one clone `references/integrations.md` describes, then park. Never
+walk the filesystem looking for it, and never list anything above the project directory
+(live report 2026-09-12: an unattended run enumerated the user's whole home workspace on
+the way to parking).
+
 **Guessing the deliverable is the one failure this mode must never produce.** An agent that
 quietly invents requirements is worse than one that stops.
 
