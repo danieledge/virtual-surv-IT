@@ -7046,9 +7046,29 @@ def run_setup_alias(
                 ("head", f"  Add the alias to {label}?\n"),
                 ("dim", f"  {rc_path}\n"),
             ],
+            # Described, not dumped. The detail pane used to carry the whole one-line
+            # function, which a narrow pane wraps into an unreadable block of shell (live
+            # report with a photo, corp Windows laptop, 2026-09-12). What the reader needs
+            # is what the line does and where it goes; the exact text is printed above in
+            # the console, and the file is theirs to open.
             detail=[
                 ("head", "What gets added"),
-                ("plain", line),
+                (
+                    "plain",
+                    "One line at the end of the file: a shell function named virt-surv.",
+                ),
+                (
+                    "plain",
+                    "virt-surv go (or engage) asks the launcher what to do, then starts "
+                    "Claude Code with the team in the current project. Any other "
+                    "arguments open this installer's menu.",
+                ),
+                (
+                    "dim",
+                    f"Stamped '{_ALIAS_STAMP.lstrip('# ')}' so a later update finds and "
+                    "replaces exactly this line and nothing else. The exact text is "
+                    "printed above.",
+                ),
                 *(
                     [
                         (
@@ -7060,11 +7080,7 @@ def run_setup_alias(
                     if not resolved
                     else []
                 ),
-                (
-                    "dim",
-                    "Only this one line, at the end of the file. Nothing else in it is "
-                    "read or changed.",
-                ),
+                ("dim", "Nothing else in the file is read or changed."),
             ],
             yes="add the alias",
             no=f"leave {label} alone",
