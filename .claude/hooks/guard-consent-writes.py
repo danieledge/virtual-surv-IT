@@ -56,10 +56,58 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import sys
 
 _MARKER = ".exec-consent"
-_SETTINGS_RE = re.compile(r"\.claude[/\\]settings(\.local)?\.json")
+
+# The human sign-off marker (W-2, 2026-09-12). Sign-off is the last gate in the Definition
+# of Done and it is the HUMAN's word, so the file that records it belongs in the same
+# always-protected tier as the consent marker: a model that can create it can sign off its
+# own work. Matched on any path ending in the name, and lexically in a Bash command.
+_SIGN_OFF = ".human-sign-off"
+
+# ANCHORED at the extension (2026-09-12 audit, H-21). This was unanchored, so
+# `.claude/settings.json.bak` and `.claude/settings.json.bak-2026-09-11` - both present in
+# this repo - were protected as if they were live config, and every command naming a backup
+# was blocked. A backup is not the wiring; the wiring is the file the harness reads.
+_SETTINGS_RE = re.compile(r"\.claude[/\\]settings(\.local)?\.json(?![\w.-])", re.IGNORECASE)
+
+# PATH NORMALISATION (2026-09-12 audit, H-7 and H-8). The only normalisation applied before
+# matching was backslash -> slash, and every regex below was case-SENSITIVE. Two disarms
+# followed directly:
+#   * `Write(".claude/.EXEC-CONSENT")` passed this guard on a case-insensitive filesystem
+#     (Windows, default macOS) while guard-code-execution's `os.path.isfile` resolved to the
+#     same file and returned True - the model granting itself execution consent in one call;
+#   * `Write(".claude/./hooks/guard-raw-data.py")` missed _HOOK_PATH_RE entirely and rewrote
+#     a live guard, because `.` and `..` segments were never collapsed.
+# guard-findings-pack-write.py had already fixed the `..` half for its own path check, with a
+# comment describing this exact class of bug; the fix lived in one guard of the family and
+# not the others. Case folding is applied on every platform, not just the case-insensitive
+# ones: over-matching a path nobody legitimately writes is the safe direction, and the
+# raw-data guard's marker has been IGNORECASE since ADR-002 rec 12 for the same reason.
+_DOT_SEGMENT_RE = re.compile(r"/\./")
+_LEADING_DOT_RE = re.compile(r"(?:^|(?<=[\s\"'=]))\./")
+_PARENT_SEGMENT_RE = re.compile(r"(?!\.\.(?:/|$))[^/\s\"']+/\.\./")
+
+
+def _norm(text: str) -> str:
+    """Backslash-normalised, `.`/`..`-collapsed, case-folded text for path matching.
+
+    Applied to a Write/Edit file_path and to a Bash SEGMENT alike, so it must be safe on a
+    whole command string: it only ever rewrites path-shaped runs, and bounds its own
+    iteration so a pathological input cannot spin here."""
+    norm = (text or "").replace("\\", "/")
+    for _ in range(8):
+        collapsed = norm.replace("//", "/")
+        collapsed = _DOT_SEGMENT_RE.sub("/", collapsed)
+        collapsed = _LEADING_DOT_RE.sub("", collapsed)
+        collapsed = _PARENT_SEGMENT_RE.sub("", collapsed)
+        if collapsed == norm:
+            break
+        norm = collapsed
+    return norm.lower()
+
 
 # The acting-session stamp behind guard session-scoping (2026-08-17): the execution gate
 # arms only for the session whose id matches this file, so a model that could clobber or
@@ -74,13 +122,17 @@ _SETTINGS_RE = re.compile(r"\.claude[/\\]settings(\.local)?\.json")
 # result was a stamp that was neither found nor protected in any project created since
 # PREFER_NEW_LAYOUT became the default on 2026-08-28.
 _STAMP_NAME = ".team-session.json"
-_STAMP_RE = re.compile(r"(?:artifacts|VSIT[/\\]engagements)[/\\]\.team-session\.json")
-_STAMP_MUTATE_VERB = re.compile(r"^(rm|unlink|mv|truncate|shred)\b")
+_STAMP_RE = re.compile(
+    r"(?:artifacts|VSIT[/\\]engagements)[/\\]\.team-session\.json", re.IGNORECASE
+)
+# `del` joins the list for Windows shells (2026-09-12, H-18) - Git Bash is the documented
+# hook shell, but a Bash tool call can still reach cmd/PowerShell verbs on that platform.
+_STAMP_MUTATE_VERB = re.compile(r"^(rm|unlink|del|mv|truncate|shred)\b", re.IGNORECASE)
 
 # .pre-commit-config.yaml is execution config: `git commit` runs its hook entries
 # (`language: system` executes any command), so a model-writable config is a consent-free
 # execution path (ADR-002 rec 14c). Write-protected; read-only inspection rides _SAFE_VERB.
-_PRECOMMIT_RE = re.compile(r"\.pre-commit-config\.ya?ml\b")
+_PRECOMMIT_RE = re.compile(r"\.pre-commit-config\.ya?ml\b", re.IGNORECASE)
 
 # The guards themselves + their wiring: a model that can edit these can neuter every gate.
 # Enforced on the precise Write/Edit channel; the Bash channel checks MUTATION only (see
@@ -110,12 +162,54 @@ _PRECOMMIT_RE = re.compile(r"\.pre-commit-config\.ya?ml\b")
 # Protecting the guards while leaving their launcher writable is not a boundary. run-guard.sh
 # now also refuses a cached interpreter whose basename is not a python binary; that is the
 # other half and neither is sufficient alone.
+# WIDENED AGAIN 2026-09-12 (audit H-16). The list was still hand-maintained against the
+# dispatcher of the day, and had gone stale against the wiring: `prompt_hook_dispatcher.py`
+# and `stop_hook_dispatcher.py` are wired directly in settings.json/hooks.json,
+# `locked_menu_guard.py` is a BLOCKING PreToolUse hook, `module_form_redirect.py` holds the
+# permission-decision channel (it can emit `permissionDecision: allow`), and
+# `enumeration_redirect.py`, `exploration_redirect.py`, `document_input_redirect.py`,
+# `post_edit_lint.py`, `subagent_return_budget.py`, `session_resume_brief.py`,
+# `persona_anchor.py`, `engage_probe_prefetch.py`, `dod_stop_gate.py` and
+# `todo_panel_nudge.py` all run on a hook event. `vsit_paths.py` is imported by several of
+# them. Every one was model-writable.
+#
+# Named as an explicit alternation rather than derived from settings.json at runtime: the
+# wiring file is itself a thing this guard protects, so deriving the protected set FROM it
+# would make the protection only as trustworthy as the file it protects. The cost is that a
+# newly-registered hook has to be added here in the same change - stated, and covered by
+# tests/test_guard_hook_registry.py.
+_HOOK_SCRIPT_NAMES = (
+    r"(?:bash_hook_dispatcher|prompt_hook_dispatcher|stop_hook_dispatcher"
+    r"|guard_daemon|guard_daemon_client|locked_menu_guard|post_edit_lint"
+    r"|subagent_return_budget|document_input_redirect|module_form_redirect"
+    r"|enumeration_redirect|exploration_redirect|session_resume_brief|persona_anchor"
+    r"|engage_probe_prefetch|dod_stop_gate|todo_panel_nudge|vsit_paths)"
+)
 _HOOK_PATH_RE = re.compile(
     r"(\.claude[/\\]hooks[/\\]|(^|[/\\])hooks[/\\]hooks\.json$"
-    r"|(^|[/\\])scripts[/\\]bash_hook_dispatcher\.py$"
-    r"|(^|[/\\])scripts[/\\]guard_daemon(_client)?\.py$"
+    rf"|(^|[/\\])scripts[/\\]{_HOOK_SCRIPT_NAMES}\.py$"
     r"|(^|[/\\])\.claude[/\\]\.guard-[A-Za-z0-9._-]+$"
-    r"|(^|[/\\])VSIT[/\\]local[/\\]guard-[A-Za-z0-9._-]+$)"
+    r"|(^|[/\\])VSIT[/\\]local[/\\]guard-[A-Za-z0-9._-]+$)",
+    re.IGNORECASE,
+)
+
+# The STAGING surface (2026-09-12 audit, H-2/W-16). `scripts/staged_hooks/*` and the
+# `scripts/apply-*.sh` scripts that promote a staged file over a live guard are the one
+# remaining way to replace every guard from inside a session: stage the edit, run the apply
+# script. guard-code-execution now refuses to RUN an apply script at all; this is the other
+# half, refusing to WRITE the thing it would install.
+#
+# Deliberately NOT protected in every session. The staging workflow is how guard fixes get
+# authored, and a dormant or ordinary engaged session must keep doing it - that is the whole
+# reason staged_hooks/ was carved OUT of the protection in the first place. The condition is
+# engaged AND the execution-consent marker present: a session that already holds an execution
+# grant must not ALSO be able to rewrite the gate that granted it. Those two capabilities in
+# one session are the combination that turns a staged edit into a live one; either alone is
+# the ordinary, intended workflow. Maintenance past this goes through CST_ALLOW_CONFIG_EDIT,
+# which is human-set, like every other escape hatch here.
+_STAGING_PATH_RE = re.compile(
+    r"((^|[/\\])scripts[/\\]staged_hooks[/\\]|(^|[/\\])scripts[/\\]apply-[A-Za-z0-9._-]*\.sh)",
+    re.IGNORECASE,
 )
 
 # `.git/config` and `.git/hooks/` are CONSENT-EQUIVALENT execution config (audit 2026-08-01).
@@ -127,7 +221,7 @@ _HOOK_PATH_RE = re.compile(
 # `core.hooksPath`. Reads stay allowed (they ride _SAFE_VERB / _SAFE_GIT).
 # Boundary is "not a word char, dot or hyphen" rather than "start or separator": the path can
 # appear mid-command as a bare argument (`cp /tmp/evil .git/config`), where a space precedes it.
-_GIT_CONFIG_RE = re.compile(r"(?:^|[^\w.-])\.git[/\\](?:config\b|hooks[/\\])")
+_GIT_CONFIG_RE = re.compile(r"(?:^|[^\w.-])\.git[/\\](?:config\b|hooks[/\\])", re.IGNORECASE)
 
 # `git config` writing a key whose VALUE git later EXECUTES. Blocked regardless of verb, because
 # the execution happens in a later git operation, not in this command - so the default-deny path
@@ -172,15 +266,23 @@ _GIT_EXEC_KEY = re.compile(
 # a Bash mutation of scripts/bash_hook_dispatcher.py is exactly as disarming as one on a guard
 # under .claude/hooks/.
 _HOOK_PATH_FRAGMENT = (
-    r"(?:\.claude[/\\]hooks[/\\]|scripts[/\\]bash_hook_dispatcher\.py"
-    r"|scripts[/\\]guard_daemon(?:_client)?\.py"
+    r"(?:\.claude[/\\]hooks[/\\]"
+    rf"|scripts[/\\]{_HOOK_SCRIPT_NAMES}\.py"
     r"|\.claude[/\\]\.guard-[A-Za-z0-9._-]+"
     r"|VSIT[/\\]local[/\\]guard-[A-Za-z0-9._-]+)"
 )
+_MUTATE_VERBS = r"(?:sed\s+-i|tee|cp|mv|dd|install|ln|chmod|chown|truncate|rm|del)"
 _HOOK_MUTATE = re.compile(
     rf">\s*\S*{_HOOK_PATH_FRAGMENT}"
-    rf"|(?:^|[;&|\s])(?:sed\s+-i|tee|cp|mv|dd|install|ln|chmod|chown|truncate|rm)\b"
-    rf"[^;&|]*{_HOOK_PATH_FRAGMENT}"
+    rf"|(?:^|[;&|\s]){_MUTATE_VERBS}\b[^;&|]*{_HOOK_PATH_FRAGMENT}",
+    re.IGNORECASE,
+)
+# Same shape for the staging surface, applied only under the engaged+marker condition above.
+_STAGING_PATH_FRAGMENT = r"(?:scripts[/\\]staged_hooks[/\\]|scripts[/\\]apply-[A-Za-z0-9._-]*\.sh)"
+_STAGING_MUTATE = re.compile(
+    rf">\s*\S*{_STAGING_PATH_FRAGMENT}"
+    rf"|(?:^|[;&|\s]){_MUTATE_VERBS}\b[^;&|]*{_STAGING_PATH_FRAGMENT}",
+    re.IGNORECASE,
 )
 
 # Verbs that only read or delete the protected files - safe directions. Deleting the marker
@@ -215,11 +317,170 @@ _FIND_MUTATE = re.compile(r"^find\b.*\s-(?:exec(?:dir)?|delete)\b")
 # A redirect is only a write to a protected file if its TARGET is one - `ls x 2>/dev/null` is a
 # read with a harmless stderr redirect (a real false positive found in live use, 2026-07-01).
 _REDIRECT_INTO_PROTECTED = re.compile(
-    r">\s*\S*(\.exec-consent|\.claude[/\\]settings(\.local)?\.json|\.pre-commit-config\.ya?ml"
-    r"|\.git[/\\]config\b|(?:artifacts|VSIT[/\\]engagements)[/\\]\.team-session\.json)"
+    r">\s*\S*(\.exec-consent|\.human-sign-off"
+    r"|\.claude[/\\]settings(\.local)?\.json|\.pre-commit-config\.ya?ml"
+    r"|\.git[/\\]config\b|(?:artifacts|VSIT[/\\]engagements)[/\\]\.team-session\.json)",
+    re.IGNORECASE,
 )
 
 _WRITE_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
+
+# An `env` key the guards read (2026-09-12 audit, H-1). settings.json's `env` block is
+# exported into hook subprocesses, so writing `{"env": {"CST_ALLOW_EXEC": "1"}}` there opens
+# the execution gate for every future session from inside the repo - the exact channel both
+# guards' docstrings claim the model does not have. Blocked in EVERY session, engaged or not,
+# because a dormant session must not pre-forge what a later engaged session inherits
+# (CLAUDE.md's dormancy carve-out). Ordinary settings.json edits stay allowed in a dormant
+# session by owner decision; only the CST_ env keys are lifted out of that.
+_CST_KEY_RE = re.compile(r"[\"']?CST_[A-Za-z0-9_]*[\"']?\s*[:=]", re.IGNORECASE)
+_CST_BASH_RE = re.compile(r"CST_ALLOW", re.IGNORECASE)
+
+# Search verbs whose PATTERN operand is text ABOUT a path, not a path (2026-09-12, H-21).
+# `grep -r '.git/config' docs/` was blocked as though it were writing git config. The
+# raw-data guard fixed this same false-positive class for itself on 2026-08-01; this brings
+# the consent guard in line.
+_SEARCH_VERBS = ("grep", "egrep", "fgrep", "rg", "ag", "ack", "ripgrep")
+_PATTERN_FLAGS = ("-e", "-f", "--regexp", "--file")
+
+# Heredoc opener: `<<EOF`, `<<-EOF`, `<<'EOF'`, `<<"EOF"`.
+_HEREDOC_START_RE = re.compile(r"<<-?\s*([\"']?)([A-Za-z_][A-Za-z0-9_]*)\1")
+
+_OPERATOR_PREFIXES = (">", "<", "|", "&", ";", "$", "(", ")")
+
+
+def _strip_heredoc_bodies(cmd: str) -> str:
+    """Drop heredoc BODIES, keeping the opener and terminator lines.
+
+    Reproduced live during the 2026-09-12 audit: `cat > /tmp/.../t2.py <<'PYEOF'` writing an
+    unrelated analysis script into a scratchpad was blocked because the body happened to
+    contain the literal string `.exec-consent`. The guard's own block message already
+    conceded the case ("a documentation heredoc that merely mentioned the path"). A body is
+    DATA being written somewhere, and where it is written is decided on the opener line,
+    which is kept and still checked - including its redirect target.
+
+    This does mean a mutation hidden inside a heredoc body is no longer read as one. That
+    body only executes if it is fed to a shell (`bash <<'EOF' ... EOF`), and
+    guard-code-execution blocks heredoc-into-interpreter outright as of the same audit
+    (H-10), so the pair closes where each half alone would not.
+    """
+    lines = cmd.split("\n")
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        out.append(line)
+        i += 1
+        for _quote, delim in _HEREDOC_START_RE.findall(line):
+            while i < len(lines) and lines[i].strip() != delim:
+                i += 1
+            if i < len(lines):
+                out.append(lines[i])
+                i += 1
+    return "\n".join(out)
+
+
+def _search_residual(segment: str) -> str | None:
+    """A search command minus its PATTERN operand, or None when it is not a search."""
+    try:
+        tokens = shlex.split(segment)
+    except Exception:  # noqa: BLE001 - unparseable: judge the whole segment as before
+        return None
+    if not tokens or os.path.basename(tokens[0]) not in _SEARCH_VERBS:
+        return None
+    kept = [tokens[0]]
+    pattern_taken = False
+    i = 1
+    while i < len(tokens):
+        tok = tokens[i]
+        base = tok.split("=", 1)[0]
+        if base in _PATTERN_FLAGS:
+            pattern_taken = True
+            kept.append(tok)
+            if "=" not in tok:
+                i += 2  # the flag's value IS the pattern (or a pattern file) - drop it
+                continue
+            i += 1
+            continue
+        if tok.startswith("-") and len(tok) > 1:
+            kept.append(tok)
+            i += 1
+            continue
+        if not pattern_taken:
+            pattern_taken = True  # the first bare token is the pattern
+            i += 1
+            continue
+        kept.append(tok)
+        i += 1
+    return " ".join(kept)
+
+
+def _cd_target(segment: str) -> str | None:
+    """The directory a `cd`/`pushd` segment moves to, or None."""
+    match = re.match(r"^(?:cd|pushd)\s+(?:-\S+\s+)*([^\s;&|]+)\s*$", segment.strip(), re.IGNORECASE)
+    if not match:
+        return None
+    target = match.group(1).strip("\"'")
+    return target or None
+
+
+def _requalify(text: str, cwd: str) -> str:
+    """Re-attach *cwd* to the relative path operands of *text*.
+
+    WHY (2026-09-12 audit, H-9). Every Bash check here matches the literal path string inside
+    ONE segment, and `cd` in an earlier segment changes what a later bare filename means. Three
+    disarms followed, none of which names a protected path in the segment that does the work:
+    `cd artifacts && rm .team-session.json`, `cd .claude && printf ... > .guard-daemon-port`,
+    and the raw-data guard's own `cd data && head raw/...`.
+
+    Best-effort and lexical, like everything else here. The residual, stated: a cd through a
+    variable, a subshell, `cd -`, or a path built at runtime is still invisible - this tracks
+    the literal, single-segment `cd <dir>` form, which is the one the disarms above use. The
+    verb (token 0) is never requalified, so the safe-verb and delete-is-fail-safe rules keep
+    reading the real command.
+    """
+    tokens = text.split()
+    if not tokens:
+        return text
+    out = [tokens[0]]
+    base = cwd.rstrip("/")
+    for tok in tokens[1:]:
+        lead = ""
+        rest = tok
+        while rest[:1] in (">", "<"):
+            lead += rest[0]
+            rest = rest[1:]
+        bare = rest.strip("\"'")
+        if (
+            not bare
+            or rest.startswith("-")
+            or bare[:1] in ("/", "~")
+            or bare[:1] in _OPERATOR_PREFIXES
+        ):
+            out.append(tok)
+            continue
+        out.append(f"{lead}{base}/{bare}")
+    return " ".join(out)
+
+
+def _introduces_cst_env(text: str) -> bool:
+    """Does this new settings content declare an `env` key starting CST_?
+
+    A full document parses, so the `env` block is read precisely. An Edit carries a FRAGMENT
+    that will not parse, so it falls back to a lexical scan - over-matching a CST_ key in a
+    settings edit is the safe direction, and no legitimate settings edit needs to name one.
+    """
+    if not text:
+        return False
+    try:
+        data = json.loads(text)
+    except Exception:  # noqa: BLE001 - a fragment, not a document
+        return bool(_CST_KEY_RE.search(text))
+    if isinstance(data, dict):
+        env = data.get("env")
+        if isinstance(env, dict):
+            return any(str(key).upper().startswith("CST_") for key in env)
+        return False
+    return bool(_CST_KEY_RE.search(text))
 
 
 def _segments(cmd: str) -> list[str]:
@@ -280,7 +541,36 @@ def _truthy(val: str | None) -> bool:
     return bool(val) and val.strip().lower() not in ("", "0", "false", "no", "off")
 
 
-def _protected(text: str, engaged: bool) -> bool:
+def _declared_in_settings_env(name: str) -> bool:
+    """Is *name* set through a settings.json `env` block rather than the launch environment?
+
+    The twin of guard-code-execution's copy (see its docstring for the full reasoning, H-1):
+    this guard's own docstring says CST_ALLOW_CONFIG_EDIT is human-only because "the model
+    cannot set it for this hook subprocess", which is true of the launch environment and
+    false of a settings `env` block. A failure to read means "not declared", so a project
+    with no settings at all keeps the launch-environment override - this function only ever
+    removes an authorisation, never grants one.
+    """
+    root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    for leaf in ("settings.json", "settings.local.json"):
+        try:
+            with open(os.path.join(root, ".claude", leaf), encoding="utf-8") as handle:
+                data = json.load(handle)
+        except Exception:  # noqa: BLE001 - absent/unreadable/unparseable: not declared  # nosec B112 - absent/unreadable/unparseable settings file: not declared
+            continue
+        env = data.get("env") if isinstance(data, dict) else None
+        if isinstance(env, dict) and name in env:
+            return True
+    return False
+
+
+def _exec_consent_present() -> bool:
+    """Does this project hold the human execution-consent marker? (see _STAGING_PATH_RE)"""
+    root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    return os.path.isfile(os.path.join(root, ".claude", _MARKER))
+
+
+def _protected(text: str, engaged: bool, staging_locked: bool = False) -> bool:
     """Two tiers (2026-08-17, user decision). ALWAYS protected, every session: the
     consent marker (grant integrity - a dormant session could otherwise pre-forge it
     for a later engaged session to inherit), the session stamp (disarm channel),
@@ -289,17 +579,55 @@ def _protected(text: str, engaged: bool) -> bool:
     settings*.json - harness config stays human-only while the team drives the
     session, but a dormant session managing its own permissions (or /doctor reading
     config through an interpreter, the 2026-08-17 live report) is plain Claude Code
-    and is not interfered with."""
-    norm = (text or "").replace("\\", "/")
+    and is not interfered with.
+
+    2026-09-12 additions: the human sign-off marker joins the ALWAYS tier (W-2 - a model
+    that can create it can sign off its own work), and `staging_locked` adds a third,
+    narrower tier for `scripts/staged_hooks/**` and `scripts/apply-*.sh`, armed only when
+    the session is BOTH engaged and already holding execution consent (see
+    _STAGING_PATH_RE for why that pair, and not either alone)."""
+    norm = _norm(text)
     always = (
         _MARKER in norm
+        or _SIGN_OFF in norm
         or bool(_STAMP_RE.search(norm))
         or bool(_PRECOMMIT_RE.search(norm))
         or bool(_GIT_CONFIG_RE.search(norm))
     )
     if always:
         return True
+    if staging_locked and _STAGING_PATH_RE.search(norm):
+        return True
     return engaged and bool(_SETTINGS_RE.search(norm))
+
+
+# See guard-code-execution.py's copy for the full rationale: the stamp used to hold ONE
+# session id, so a second /engage disarmed the first session and a resume disarmed itself.
+# It now carries a list, capped, newest last. Both formats are read.
+_MAX_STAMPED_SESSIONS = 8
+
+
+def _stamped_session_ids(stamp_path) -> tuple:
+    """Every session id this stamp file arms, legacy and current formats alike."""
+    try:
+        with open(stamp_path, encoding="utf-8") as handle:
+            data = json.loads(handle.read())
+    except Exception:  # noqa: BLE001 - absent/unreadable/unparseable: arms nothing
+        return ()
+    if not isinstance(data, dict):
+        return ()
+    ids = []
+    for key in ("session", "session_id"):
+        value = data.get(key)
+        if isinstance(value, str) and value:
+            ids.append(value)
+    sessions = data.get("sessions")
+    if isinstance(sessions, list):
+        for entry in sessions[-_MAX_STAMPED_SESSIONS:]:
+            value = entry.get("id") if isinstance(entry, dict) else entry
+            if isinstance(value, str) and value:
+                ids.append(value)
+    return tuple(ids)
 
 
 def _team_invoked_this_session(payload) -> bool:
@@ -320,11 +648,7 @@ def _team_invoked_this_session(payload) -> bool:
         os.path.join(root, "VSIT", "engagements", _STAMP_NAME),
         os.path.join(root, "artifacts", _STAMP_NAME),
     ):
-        try:
-            stamp = json.loads(open(stamp_path, encoding="utf-8").read()).get("session")
-        except Exception:
-            continue
-        if stamp == sid:
+        if sid in _stamped_session_ids(stamp_path):
             return True
     return False
 
@@ -357,24 +681,74 @@ def main() -> None:
     except Exception:
         sys.exit(0)  # malformed payload - never brick the session (matches the other guards)
 
-    if _truthy(os.environ.get("CST_ALLOW_CONFIG_EDIT")):
-        sys.exit(0)
-
     tool = payload.get("tool_name", "")
     tool_input = payload.get("tool_input", {}) or {}
     engaged = _team_invoked_this_session(payload)
+    staging_locked = engaged and _exec_consent_present()
+
+    # The CST_ env-key rule is checked BEFORE the maintenance escape hatch, and before the
+    # dormancy tiers: CST_ALLOW_CONFIG_EDIT is itself one of the variables settings.json's
+    # `env` block can hand this subprocess, so honouring it first would let the very thing
+    # being blocked authorise the block's removal (2026-09-12 audit, H-1).
+    if tool in _WRITE_TOOLS:
+        target = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
+        if _SETTINGS_RE.search(_norm(target)):
+            new_text = tool_input.get("content") or tool_input.get("new_string") or ""
+            if _introduces_cst_env(new_text):
+                _block(
+                    "a CST_* key in .claude/settings.json's `env` block - that block is "
+                    "exported into hook subprocesses, so it is a way to grant execution or "
+                    "config-edit consent to every future session from inside the repo. The "
+                    "human sets CST_ variables in the LAUNCH environment"
+                )
+    elif tool == "Bash":
+        raw_cmd = tool_input.get("command", "") or ""
+        for seg in _segments(_strip_heredoc_bodies(raw_cmd)):
+            if _SETTINGS_RE.search(_norm(seg)) and _CST_BASH_RE.search(seg):
+                _block(
+                    "a CST_ALLOW* variable in .claude/settings.json via Bash - the settings "
+                    "`env` block is exported into hook subprocesses, so writing one there "
+                    "grants consent to every future session. The human sets CST_ variables "
+                    "in the LAUNCH environment"
+                )
+
+    if _truthy(os.environ.get("CST_ALLOW_CONFIG_EDIT")):
+        if _declared_in_settings_env("CST_ALLOW_CONFIG_EDIT"):
+            sys.stderr.write(
+                "Ignoring CST_ALLOW_CONFIG_EDIT: it is declared in this project's "
+                ".claude/settings.json `env` block, which is a file the model can write - so "
+                "it is not the human-only launch-environment grant this guard accepts.\n"
+            )
+        else:
+            sys.exit(0)
 
     if tool in _WRITE_TOOLS:
         target = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
-        if _protected(target, engaged):
+        if _protected(target, engaged, staging_locked):
             _block(f"the protected file targeted by {tool} ({target})")
-        if _HOOK_PATH_RE.search((target or "").replace("\\", "/")):
+        if _HOOK_PATH_RE.search(_norm(target)):
             _block(f"the safety hooks themselves ({target}) - editing a guard can neuter it")
         sys.exit(0)
 
     if tool == "Bash":
-        cmd = tool_input.get("command", "") or ""
+        cmd = _strip_heredoc_bodies(tool_input.get("command", "") or "")
+        cwd = ""
         for seg in _segments(cmd):
+            # Track a literal `cd`/`pushd` so a later bare filename is judged against the
+            # directory it actually names (H-9). The cd segment itself is judged too.
+            moved = _cd_target(seg)
+            # The text the path checks see: the search PATTERN operand dropped (H-21), and a
+            # second probe with the tracked cwd re-attached (H-9).
+            scan = _search_residual(seg) or seg
+            probes = [scan]
+            if cwd:
+                probes.append(_requalify(scan, cwd))
+            if moved:
+                cwd = (
+                    moved
+                    if moved.startswith("/")
+                    else (f"{cwd.rstrip('/')}/{moved}" if cwd else moved)
+                )
             stripped = _CTRL_PREFIX.sub("", seg)
             # Consent-EQUIVALENT git execution config. Checked BEFORE the protected-token gate:
             # `git config core.hooksPath /tmp/h` names no protected FILE, so the default-deny
@@ -395,16 +769,23 @@ def main() -> None:
                     f"- git would execute this value on a later git command ({seg[:100]})"
                 )
             # A Bash mutation of a guard file neuters the gate; reads/static analysis stay allowed.
-            if _HOOK_MUTATE.search(seg):
+            # Judged over every probe so a preceding `cd .claude` cannot hide the path (H-9).
+            if any(_HOOK_MUTATE.search(_norm(p)) for p in probes):
                 _block(
                     f"the safety hooks themselves via Bash ({seg[:120]}) - editing a guard "
                     "can neuter it"
                 )
-            if not _protected(seg, engaged):
+            if staging_locked and any(_STAGING_MUTATE.search(_norm(p)) for p in probes):
+                _block(
+                    f"the staged hooks or an apply script via Bash ({seg[:120]}) - this "
+                    "session already holds execution consent, so it must not also be able to "
+                    "rewrite the gate that granted it"
+                )
+            if not any(_protected(p, engaged, staging_locked) for p in probes):
                 continue
             # A redirect can turn any verb into a write (`cat > marker`, `echo x >> settings`) -
             # but only when the redirect TARGET is protected (stderr-to-/dev/null is a read).
-            if _REDIRECT_INTO_PROTECTED.search(seg):
+            if any(_REDIRECT_INTO_PROTECTED.search(_norm(p)) for p in probes):
                 _block("consent-marker/config files via a shell redirect")
             if _FIND_MUTATE.search(seg):
                 _block(f"consent-marker/config files via find -exec/-delete ({seg[:120]})")
@@ -419,14 +800,28 @@ def main() -> None:
             if _SAFE_GIT.match(verb_seg):
                 continue  # read-only git inspection of a protected path (ADR-002 rec 11)
             if _SAFE_VERB.match(verb_seg):
-                # One carve-out from "delete is safe": deleting the SESSION STAMP is a
-                # disarm (the execution gate keys on it), not a fail-safe close.
-                if _STAMP_RE.search(seg) and _STAMP_MUTATE_VERB.match(verb_seg):
+                # The carve-outs from "delete is safe". Deleting the CONSENT MARKER closes
+                # the execution gate, which is why `rm` is a safe verb at all. Deleting
+                # anything else protected is the opposite (2026-09-12 audit, H-18): removing
+                # the session stamp disarms the session-scoped gates, and removing
+                # settings.json takes the hook wiring AND the permissions.deny list that
+                # guard-raw-data names as the real Read/Grep/Glob boundary with it. The stamp
+                # was carved out in 2026-08-17 and the rest was left behind.
+                if _STAMP_MUTATE_VERB.match(verb_seg) and any(
+                    _STAMP_RE.search(_norm(p))
+                    or _SETTINGS_RE.search(_norm(p))
+                    or _PRECOMMIT_RE.search(_norm(p))
+                    or _GIT_CONFIG_RE.search(_norm(p))
+                    or _SIGN_OFF in _norm(p)
+                    for p in probes
+                ):
                     _block(
-                        "the acting-session stamp (artifacts/.team-session.json) - "
-                        "removing it disarms the session-scoped gates"
+                        "config that deleting does not fail safe - the acting-session stamp, "
+                        "settings.json (hook wiring plus the permissions.deny backstop), "
+                        "pre-commit config, git execution config or the human sign-off "
+                        f"marker ({seg[:100]})"
                     )
-                continue  # read or delete - safe direction
+                continue  # read, or delete of the consent marker - safe direction
             # Default-deny: unknown verb touching a protected file (touch/cp/mv/sed -i/git
             # checkout/...) - opening the gate or mutating config must come from the human.
             _block(f"consent-marker/config files via Bash ({seg[:120]})")

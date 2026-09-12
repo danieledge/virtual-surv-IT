@@ -22,6 +22,7 @@ ADR-002 rec 5) into `.claude/settings.json` + `hooks/hooks.json` -> hooks.Sessio
 
 from __future__ import annotations
 
+import datetime as _dt
 import json
 import os
 import sys
@@ -45,6 +46,56 @@ def _vsit_paths():
 
 _LIVE = ("in_progress", "blocked", "closing")
 _MARKS = {"in_progress": "⏳", "blocked": "⛔", "closing": "🔒"}
+
+_STAMP_NAME = ".team-session.json"
+_MAX_STAMPED_SESSIONS = 8
+
+
+def _restamp(engagements: Path, sid: str) -> None:
+    """Add this session id to the acting-session stamp (2026-09-12 audit, H-13 / W-4).
+
+    A `--resume` or a compaction gives the continuing work a NEW session id, and the gates
+    key on the stamp: without this, resuming an engagement silently disarmed the execution
+    gate and the engaged tier of the consent-write guard for the rest of that engagement -
+    the session that most needs them, because it is the one that lost its context. This hook
+    already knows both facts it needs (a pack is live, and which session is asking), and it
+    is the only thing that runs at exactly that moment.
+
+    Append, never replace: the stamp holds a LIST now, so re-stamping here does not disarm
+    whichever other session was already engaged in this project. Capped at the last
+    _MAX_STAMPED_SESSIONS so an abandoned id cannot arm the gate forever. `session_id` is
+    kept at the top level for readers that predate the list format. Best-effort throughout -
+    a resume aid must never break a session start, so every failure path is silent.
+    """
+    stamp_path = engagements / _STAMP_NAME
+    try:
+        data = json.loads(stamp_path.read_text(encoding="utf-8"))
+    except Exception:  # nosec B110 - absent/unreadable: start a fresh stamp
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    sessions = data.get("sessions")
+    if not isinstance(sessions, list):
+        sessions = []
+    # A legacy single-id stamp carries forward as the first list entry, so applying this
+    # never drops an arming that already existed.
+    legacy = data.get("session")
+    if (
+        isinstance(legacy, str)
+        and legacy
+        and not any(isinstance(e, dict) and e.get("id") == legacy for e in sessions)
+    ):
+        sessions.append({"id": legacy, "stamped_at": data.get("stamped") or ""})
+    sessions = [e for e in sessions if not (isinstance(e, dict) and e.get("id") == sid)]
+    sessions.append({"id": sid, "stamped_at": _dt.datetime.now().isoformat(timespec="seconds")})
+    data["sessions"] = sessions[-_MAX_STAMPED_SESSIONS:]
+    data["session_id"] = sid
+    data["session"] = sid  # back-compat for a reader that only knows the single-id format
+    try:
+        engagements.mkdir(parents=True, exist_ok=True)
+        stamp_path.write_text(json.dumps(data) + "\n", encoding="utf-8")
+    except OSError:
+        pass
 
 
 def _force_utf8_output() -> None:
@@ -97,6 +148,12 @@ def main() -> int:
                 live.append((name, state))
         if not live:
             return 0  # dormant: zero added context
+        # A live pack and a real session id: re-arm the gates for the session that is
+        # continuing the work (H-13 / W-4). Done before the brief is printed so a failure in
+        # the brief cannot cost the re-stamp.
+        sid = data.get("session_id")
+        if isinstance(sid, str) and sid:
+            _restamp(artifacts, sid)
         active = None
         try:
             active = json.loads(

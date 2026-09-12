@@ -107,6 +107,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import secrets
 import socketserver
 import sys
@@ -116,6 +117,28 @@ from pathlib import Path
 
 IDLE_TIMEOUT_SECONDS_DEFAULT = 30 * 60
 PORT_FILE_NAME = ".guard-daemon-port"
+
+# How long this daemon's inherited ENVIRONMENT may be served for (2026-09-12 audit, H-19).
+#
+# Staleness was detected by file mtimes only, and the guards read four environment variables
+# that are not files: CST_ALLOW_EXEC, CST_ALLOW_CONFIG_EDIT, CST_COMPANY_ALLOW and
+# CLAUDE_PROJECT_DIR. Those were inherited at fork and never re-read, so a human who launched
+# once with CST_ALLOW_EXEC=1 and then restarted Claude Code WITHOUT it kept a live daemon
+# still authorising execution for up to 30 idle minutes. CST_COMPANY_ALLOW is worse: the
+# guard evaluates it at module IMPORT time, so it was frozen for the daemon's whole lifetime.
+#
+# A daemon cannot re-read an environment it does not have, so the fix is to stop serving from
+# a stale one: past this age the daemon answers "stale, retry" and self-terminates, and the
+# next client starts a fresh process that inherits the CURRENT environment. Five minutes is a
+# few seconds of cold start per hour against an authorisation that should not outlive its
+# session.
+ENV_SNAPSHOT_TTL_SECONDS = 5 * 60
+
+# Targets whose crash must BLOCK rather than allow - see dispatch()'s handler (H-29). Only
+# bash_hook_dispatcher carries the safety guards; everything else injects context or nudges.
+# Kept in step with guard_daemon_client._SAFETY_TARGETS, which makes the same split for the
+# transport layer, and pinned by tests/test_guard_daemon.py.
+_FAIL_CLOSED_TARGETS = frozenset({"bash_hook_dispatcher"})
 
 # 2026-08-14 (multi-target extension): originally hosted exactly ONE script
 # (bash_hook_dispatcher.py). Four more hook scripts fire on their own PreToolUse/
@@ -161,6 +184,18 @@ _TARGET_MODULE_NAMES = (
     "persona_anchor",
     "engage_probe_prefetch",
 )
+
+
+def _state_watch_paths(state_root: Path) -> list:
+    """Per-PROJECT files whose change must restart the daemon (2026-09-12 audit, H-19).
+
+    `settings.json` carries the hook wiring AND the `env` block the guards read, so a daemon
+    serving from before an edit to it is answering with config the project no longer has.
+    It lives under state_root, not module_root, which is why it is not in the list below."""
+    return [
+        state_root / ".claude" / "settings.json",
+        state_root / ".claude" / "settings.local.json",
+    ]
 
 
 def _guard_module_paths(repo_root: Path) -> list:
@@ -232,8 +267,21 @@ class _Handler(socketserver.StreamRequestHandler):
             if not raw:
                 return
             request = json.loads(raw.decode("utf-8"))
+            # Shape validation BEFORE anything reads a field (2026-09-12 audit, H-30). A
+            # JSON array made `request.get` raise AttributeError, and a non-string token made
+            # `secrets.compare_digest` raise TypeError - neither is caught by the except
+            # clause below, so the connection closed with no response and every client fell
+            # back to the slow cold-start path. The outcome was safe (fail-over, not
+            # fail-open) but it was unhandled by accident, and it was a cheap unauthenticated
+            # way to force every guard onto the slow path.
+            if not isinstance(request, dict):
+                self._respond({"exit_code": 0, "stderr": "bad request: not an object"})
+                return
             payload_text = request.get("payload", "")
             token = request.get("token", "")
+            if not isinstance(token, str) or not isinstance(payload_text, str):
+                self._respond({"exit_code": 0, "stderr": "unauthorized"})
+                return
             # Backward-compat default: an older client that predates the multi-target
             # extension never sends "target" at all - it only ever meant
             # bash_hook_dispatcher, so that stays the default rather than a hard error.
@@ -261,6 +309,20 @@ class _Handler(socketserver.StreamRequestHandler):
             )
             return
 
+        # Environment snapshot expiry (H-19) shares the daemon_stale channel: the client
+        # already treats it as "cold-start THIS call, start a fresh daemon for next time",
+        # and a fresh daemon is exactly what re-reads the environment.
+        if time.monotonic() - server.started_at > ENV_SNAPSHOT_TTL_SECONDS:
+            server.stale = True
+            self._respond(
+                {
+                    "exit_code": 0,
+                    "stderr": "daemon environment snapshot expired, restart and retry",
+                    "daemon_stale": True,
+                }
+            )
+            return
+
         current = _mtimes(server.guard_paths)
         if current != server.loaded_mtimes:
             server.stale = True
@@ -280,15 +342,23 @@ class GuardDaemon(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
     daemon_threads = True
 
-    def __init__(self, repo_root: Path, idle_timeout: int = IDLE_TIMEOUT_SECONDS_DEFAULT):
+    def __init__(
+        self,
+        repo_root: Path,
+        idle_timeout: int = IDLE_TIMEOUT_SECONDS_DEFAULT,
+        state_root: Path | None = None,
+    ):
         super().__init__(("127.0.0.1", 0), _Handler)
         self.repo_root = repo_root
         self.idle_timeout = idle_timeout
         self.token = secrets.token_hex(16)
-        self.guard_paths = _guard_module_paths(repo_root)
+        self.guard_paths = _guard_module_paths(repo_root) + _state_watch_paths(
+            state_root if state_root is not None else repo_root
+        )
         self.loaded_mtimes = _mtimes(self.guard_paths)
         self.dispatcher_modules = _load_targets(repo_root)
         self.last_activity = time.monotonic()
+        self.started_at = time.monotonic()  # see ENV_SNAPSHOT_TTL_SECONDS
         self.stale = False
         self._dispatch_lock = threading.Lock()
 
@@ -315,20 +385,31 @@ class GuardDaemon(socketserver.ThreadingTCPServer):
                 exit_code = module.main()
             except BaseException as exc:  # noqa: BLE001 - see below
                 # A raising target must behave the SAME served by the daemon as it does
-                # cold-started (2026-08-27). Every hook module carries its own fail-open
-                # `except Exception: sys.exit(0)` in its __main__ block - and calling
-                # module.main() directly BYPASSES that block entirely, so on this path a
-                # crash escaped, the response was never sent, and the client fell back or
-                # reported a failed hook. The daemon must reproduce what the subprocess
-                # path would have done, not lose it.
+                # cold-started (2026-08-27). Calling module.main() directly BYPASSES the
+                # target's own `if __name__` block, so on this path a crash escaped, the
+                # response was never sent, and the client fell back or reported a failed
+                # hook. The daemon has to reproduce what the subprocess path would have
+                # done, not lose it.
                 #
-                # Exit 0, not the subprocess path's 1: both are non-blocking to the
-                # harness, and 1 is what surfaces to the user as "hook failed with
+                # PER TARGET since 2026-09-12 (audit H-29). The original comment justified a
+                # blanket exit 0 with "every hook module carries its own fail-open `except
+                # Exception: sys.exit(0)` in its __main__ block". That is false for
+                # bash_hook_dispatcher.py, whose __main__ is a bare `sys.exit(main())` with
+                # no handler at all - and it is the one target carrying the safety guards.
+                # The daemon was choosing fail-open for the safety dispatcher on the stated
+                # basis that it was reproducing behaviour it was not reproducing. The
+                # subprocess path would have exited non-zero with a traceback, which the
+                # harness reads as a block; this now matches.
+                #
+                # For the advisory targets, exit 0 rather than the subprocess path's 1: both
+                # are non-blocking, and 1 surfaces to the user as "hook failed with
                 # non-blocking status code" for something that is not their problem. The
-                # reason still travels, on stderr.
-                exit_code = 0
+                # reason travels on stderr either way.
+                fail_closed = target in _FAIL_CLOSED_TARGETS
+                exit_code = 2 if fail_closed else 0
                 stderr_capture.write(
-                    f"{target} raised {type(exc).__name__}: {exc} - failing open\n"
+                    f"{target} raised {type(exc).__name__}: {exc} - "
+                    + ("failing closed (blocked)\n" if fail_closed else "failing open\n")
                 )
             finally:
                 sys.stdin = old_stdin
@@ -362,10 +443,21 @@ def run(
     unchanged) when not given - only plugin-install mode needs them to differ."""
     if state_root is None:
         state_root = module_root
-    daemon = GuardDaemon(module_root, idle_timeout=idle_timeout)
+    daemon = GuardDaemon(module_root, idle_timeout=idle_timeout, state_root=state_root)
     port_file = state_root / ".claude" / PORT_FILE_NAME
     port_file.parent.mkdir(parents=True, exist_ok=True)
     port_file.write_text(f"{daemon.server_address[1]}\n{daemon.token}\n", encoding="utf-8")
+    # 0600 (2026-09-12 audit, H-26). This used default permissions - observed -rw-rw-r-- - so
+    # the auth token was readable by any local account, which is exactly the port-scan gap the
+    # token exists to close. The module docstring addressed READING the file ("they can read
+    # the token from the same file they'd read the port from") and never addressed the fact
+    # that the token is only worth anything if not everyone has it. Best-effort: chmod is a
+    # no-op on some Windows filesystems, and a daemon that cannot tighten permissions must
+    # still start.
+    try:
+        os.chmod(port_file, 0o600)
+    except OSError:
+        pass
     watchdog = threading.Thread(target=daemon.idle_watchdog, daemon=True)
     watchdog.start()
     try:

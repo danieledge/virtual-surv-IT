@@ -11,7 +11,7 @@
         ]
       },
       {
-        "matcher": "Read|Grep|Glob|Write|Edit|MultiEdit|NotebookEdit|NotebookRead|WebFetch|Bash",
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
@@ -36,6 +36,14 @@
           {
             "type": "command",
             "command": "sh \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/hooks/run-guard.sh\" \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/scripts/prompt_hook_dispatcher.py\""
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/hooks/run-guard.sh\" \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/scripts/engage_probe_prefetch.py\""
           }
         ]
       }
