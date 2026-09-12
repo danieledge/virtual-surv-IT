@@ -3740,7 +3740,8 @@ class Installer:
                 "new project on first use, then launches Claude Code with resume-or-new "
                 "already decided."
             )
-            self.say(s.dim(f"  No alias yet? Use: {fallback}"))
+            if not getattr(self, "alias_installed", False):
+                self.say(s.dim(f"  No alias yet? Use: {fallback}"))
             self.say(s.dim("  A Claude Code session already open elsewhere needs a restart."))
         self.say("")
         # The celebratory "summon the team" close is only accurate for a full/setup run
@@ -3978,6 +3979,10 @@ class Installer:
             return
         rc = run_setup_alias(self.style, self.marks, self.args.yes, self.demo, self.args.repo)
         if rc == 0:
+            # Remembered so the closing "Over to you" block does not offer the no-alias
+            # fallback two lines under "Alias setup: see above for what was added" (live
+            # report, 2026-09-12). A demo run writes nothing, so it does not count.
+            self.alias_installed = not self.demo
             self.step_ok("Alias setup", "see above for what was added")
         else:
             self.step_fail("Alias setup", "see above for detail", fatal=False)
