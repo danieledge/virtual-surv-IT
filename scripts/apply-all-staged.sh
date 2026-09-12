@@ -47,6 +47,7 @@ apply_for() {
     guard_daemon.py|guard_daemon_client.py|run-guard.sh)
                                         echo "scripts/apply-guard-daemon.sh" ;;
     module_form_redirect.py)            echo "scripts/apply-module-redirect.sh" ;;
+    prompt_hook_dispatcher.py)          echo "scripts/apply-prompt-hook-dispatcher.sh" ;;
     *)                                  echo "" ;;
   esac
 }

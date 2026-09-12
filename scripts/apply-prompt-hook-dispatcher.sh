@@ -28,6 +28,11 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")/.." && pwd)"
+# The dispatcher file itself is promoted from its staged copy first (2026-09-12): it became
+# write-protected when the consent-write guard was widened to every dispatcher-registered
+# script, so like the guards it is edited under scripts/staged_hooks/ and copied here.
+cp "$here/scripts/staged_hooks/prompt_hook_dispatcher.py" "$here/scripts/prompt_hook_dispatcher.py"
+echo "prompt_hook_dispatcher: staged copy installed to scripts/."
 
 python3 - "$here/.claude/settings.json" "$here/hooks/hooks.json" <<'PY'
 import json, sys
