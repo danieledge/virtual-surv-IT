@@ -556,7 +556,7 @@ def _declared_in_settings_env(name: str) -> bool:
         try:
             with open(os.path.join(root, ".claude", leaf), encoding="utf-8") as handle:
                 data = json.load(handle)
-        except Exception:  # noqa: BLE001 - absent/unreadable/unparseable: not declared
+        except Exception:  # noqa: BLE001 - absent/unreadable/unparseable: not declared  # nosec B112 - absent/unreadable/unparseable settings file: not declared
             continue
         env = data.get("env") if isinstance(data, dict) else None
         if isinstance(env, dict) and name in env:

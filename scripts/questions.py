@@ -190,7 +190,7 @@ def ask(question: Question, mod, tiers=None) -> Answer:
                 continue
             try:
                 answer = render(question, mod)
-            except Exception:
+            except Exception:  # nosec B112 - a tier that raises is a tier that cannot draw; try the next tier
                 continue  # a tier that raises is a tier that cannot draw
             if answer is not None:
                 return answer

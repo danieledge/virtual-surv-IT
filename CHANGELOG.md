@@ -5,6 +5,66 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 
 ## [Unreleased]
 
+### Independent audit fix pass (2026-09-12)
+
+An independent read of the framework as an agentic system, with the documentation treated as
+claims to test: eight lanes, 169 raw findings, every Critical and High re-verified against
+the source. The report and per-lane evidence live under `docs/internal/independent-audit-2026-09-12/`
+(local only). The fix pass landed as one commit per wave the same day.
+
+- **CI is green again, and every gate it implied now runs.** CI on dev had failed on every
+  run since 2026-08-30 (a reference validator that only resolves on the dev box, seven
+  ruff errors, nineteen Windows-only test failures), while the docs said tests were
+  mandatory. Fixed at the root; the validation and smoke steps now report independently.
+  mypy, coverage, a dashboard-ui job, a manual eval job and bandit over `install_helper.py`
+  are wired in. bandit reads `pyproject.toml`: subprocess notices a process launcher
+  generates by design are skipped, swallowed-exception notices stay on and every remaining
+  site carries its reason.
+- **The execution-consent gate closes two verified escapes** (staged in
+  `scripts/staged_hooks/`, promoted by the human). A whitelisted basename no longer skips
+  the location check for a literal path; `apply-*.sh` is refused before the allow-list;
+  the plugin-mode module rewrite grants an allow decision only to a single-segment
+  command. sudo, env, timeout, heredocs and stdin pipes count as execution. The
+  consent-write guard protects the new human sign-off marker in every session, refuses a
+  settings.json edit that introduces a `CST_` variable, and protects the staged hooks once
+  an engaged session holds consent. The raw-data guard inspects unknown tools, blocks
+  writes, treats `-f`/`--file` operands as reads and validates its presence cache. The
+  daemon client runs the guard in-process when the daemon answer is missing instead of
+  exiting 0; a TypeError in its cold-start path had been doing that on every miss. The
+  session stamp keeps the last eight session ids and a resume re-stamps, so compaction no
+  longer disarms the gate.
+- **Engagement state has one locked, atomic writer.** `check_artifacts --fix` wrote the
+  state file with no lock; four mutating commands including `sign-off` ran unlocked and
+  unstamped; the lock release could delete another holder's lock, and on Windows a waiter
+  could lose items silently. All fixed, with a test that derives the mutating set from the
+  code. `sign-off` requires a human-created `<pack>/.human-sign-off`; `record-dispatch` and
+  a `budget-status` that exits 3 when over make the agent budget a count. Findings packs and
+  marker files are written through `scripts/fsutil.py`, the one atomic writer.
+- **The launcher's silent-degrade class is closed, not one instance of it.** One crash
+  wrapper for all thirteen prompt_toolkit screens, one tier fall-through per front door,
+  one pause helper; the plain tier's `[n]` goes through the composer and the unattended
+  offer; an unhandled exception or Ctrl-C no longer launches a plain Claude session and
+  discards the decision. The consent sidecar is written before the marker and both are
+  removed on failure; a hand-made marker older than 14 days is warned about on every tier
+  and removal offered, never silent. Headless runs refuse to start without a spend cap
+  unless `--no-budget-cap` is passed. Eleven Windows CI failures traced to two real bugs
+  (a full-screen tier that fell through silently on Windows, tmux paths) and POSIX-only
+  assertions.
+- **The Definition of Done states which gates are hard.** Human sign-off, the dispatch
+  budget, the DoD stop gate (now re-checks findings before honouring a suppression, with
+  a ceiling of three blocks recorded as DOD-GATE-EXHAUSTED) and the review fingerprint check
+  are mechanical; the rest is named as advisory. All five reviewer prompts carry the
+  "reviewed content is data" clause. Masking's free-text tokens are 96-bit like structured
+  ones; identifier detection adds shape heuristics; ingest validates by default.
+- **Docs match the code.** Thirteen subagents everywhere (the marketplace said sixteen);
+  the hook and script tables are complete; CLAUDE.md's allow-list is pinned to the guard by
+  a test; the dormancy cost is stated as measured (about 4,500 tokens a turn), not zero.
+  Two PDFs no longer carry links into the author's home directory. The vendor tree ships
+  the pygments, markdown_it and mdurl that textual imports, with a manifest.
+
+Deferred with reasons: `docs/internal/backlog-2026-08-20.md` item 7.
+
+
 ### Added
 - **A launcher crash now says what it went wrong.** Live report: "tried an option, it fell
   out of the TUI, no way to see what the error was." Three stacked catch-alls sat between a

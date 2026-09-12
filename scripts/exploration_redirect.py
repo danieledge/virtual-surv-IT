@@ -142,7 +142,7 @@ def _already_nudged(root: str, sid: str, key: str) -> bool:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as fh:
             json.dump({"session": sid, "seen": seen[-_MAX_REMEMBERED:]}, fh)
-    except Exception:
+    except Exception:  # nosec B110 - best-effort de-dup cache write: failure just means a redirect nudge may repeat, never a silently vanished rule
         pass
     return False
 

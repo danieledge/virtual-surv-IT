@@ -108,7 +108,7 @@ def main() -> int:
         _line("ported", ", ".join(ported) or "(none)")
         _line("NOT ported", "setup_screen, archive, jira, browse, artifacts, monitor, update")
         print("     so a first-time setup screen is prompt_toolkit even when Textual works.")
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # nosec B110 - diagnostic print only, feeding no decision
         pass
     print()
     return 0

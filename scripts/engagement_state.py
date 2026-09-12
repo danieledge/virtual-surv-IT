@@ -1632,7 +1632,7 @@ def _state_lock(
                 f"another engagement_state process holds the lock on {artifacts_dir} "
                 f"(age {age:.1f}s) - if it's genuinely dead, delete {lock_path} by hand"
             )
-        time.sleep(_LOCK_RETRY_BASE_SECONDS + random.random() * _LOCK_RETRY_JITTER_SECONDS)
+        time.sleep(_LOCK_RETRY_BASE_SECONDS + random.random() * _LOCK_RETRY_JITTER_SECONDS)  # nosec B311 - jitter for lock-retry backoff timing, not a cryptographic use of randomness
     try:
         # Stamp WHO holds it, so a waiter can tell one stuck holder from a busy queue - and
         # so release can prove the file it is about to delete is still ours.

@@ -193,6 +193,9 @@ _KNOWN_ABSENT = {
         "homelab access notes (gitignored 2026-08-15, owner decision); cited from "
         "docs/internal/README.md by design"
     ),
+    # Proposed by the 2026-09-12 audit's module-split plan (backlog item 7), not built.
+    "scripts/alias_template.py": "proposed in docs/internal/backlog-2026-08-20.md item 7, not built",
+    "installer_settings.py": "proposed in docs/internal/backlog-2026-08-20.md item 7, not built",
     "dashboard-ui/dist/index.html": (
         "build output of `npm run build` in dashboard-ui/, never tracked; the dashboard "
         "skill names it as the file the build produces"
