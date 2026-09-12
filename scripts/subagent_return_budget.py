@@ -315,8 +315,11 @@ def _quiet_state_call(argv: list) -> int | None:
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             return int(state.main(list(argv)))
     except SystemExit as exc:
+        code = exc.code  # None, int or str by contract; only an int is a verdict
+        if code is None:
+            return 0
         try:
-            return int(exc.code)
+            return int(code)
         except (TypeError, ValueError):
             return None
     except Exception:
