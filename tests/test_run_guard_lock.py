@@ -17,6 +17,7 @@ stale-lock reclaim so one crashed holder can't starve every call behind it.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -105,7 +106,13 @@ def test_lock_acquires_promptly_when_claude_dir_does_not_exist_yet(tmp_path):
 def test_concurrent_calls_are_actually_serialized(proj):
     """Real concurrency (a thread pool, not a loop) driving N launcher invocations that each
     record their own start/end wall-clock around a short sleep - proves the lock queues them
-    rather than letting them all run at once, the exact live failure mode this fixes."""
+    rather than letting them all run at once, the exact live failure mode this fixes.
+
+    Also the regression net for the reclaim race (2026-09-12, H-20): the first cut of the
+    dead-holder check reclaimed on a read taken one poll earlier, so it tore down a lock a
+    DIFFERENT caller had created in between and ran alongside it - 1-2 of these 5 calls
+    overlapping, reproducibly. The reclaim re-reads the stamp and only removes a lock that
+    still names the same dead holder."""
     n = 5
     marker = proj / "timings.log"
     target = proj / "record_timing.py"
@@ -136,17 +143,64 @@ def test_concurrent_calls_are_actually_serialized(proj):
 
 
 def test_stale_lock_is_reclaimed_quickly_not_waited_out(proj):
-    """A lock older than the max plausible single-call duration is treated as an abandoned
-    (crashed/killed) holder and reclaimed immediately, not waited out for the full budget."""
+    """A lock whose stamp carries no pid is reclaimed on the AGE backstop.
+
+    The threshold moved from 10s to 120s on 2026-09-12 (audit H-20): 10s sat four lines below
+    this launcher's own recorded measurement of 25-90s cold starts under fan-out contention,
+    so a genuinely working holder was declared abandoned and its lock removed - and its own
+    EXIT trap then deleted whichever other process's lock directory existed by then. Age is
+    the backstop for a pid-less stamp now; the pid test below is the primary signal.
+    """
     lock = _lock_dir(proj)
     lock.mkdir(parents=True)
-    (lock / "acquired-at").write_text(str(int(time.time()) - 30), encoding="utf-8")
+    (lock / "acquired-at").write_text(str(int(time.time()) - 300), encoding="utf-8")
     start = time.monotonic()
     proc = _run(proj)
     elapsed = time.monotonic() - start
     assert proc.returncode == 0
     assert elapsed < 1.0, f"took {elapsed:.2f}s - should reclaim a stale lock near-instantly"
     assert not lock.exists()  # released after this call's own (successful) acquisition
+
+
+def test_a_lock_whose_holder_is_dead_is_reclaimed_whatever_its_age(proj):
+    """The pid is the primary signal (H-20). A holder that crashed or was SIGKILLed - the one
+    case the EXIT trap cannot cover - is gone the moment its pid is gone, and a waiter should
+    not have to sit out a 120-second backstop to find that out."""
+    lock = _lock_dir(proj)
+    lock.mkdir(parents=True)
+    dead_pid = _a_dead_pid()
+    (lock / "acquired-at").write_text(f"{int(time.time())}\n{dead_pid}\n", encoding="utf-8")
+    start = time.monotonic()
+    proc = _run(proj)
+    elapsed = time.monotonic() - start
+    assert proc.returncode == 0
+    assert elapsed < 1.0, f"took {elapsed:.2f}s - a dead holder should be reclaimed at once"
+    assert not lock.exists()
+
+
+def test_a_lock_whose_holder_is_alive_is_never_reclaimed(proj):
+    """The other direction, and the one that mattered: a working holder must keep its lock
+    however long it has been working. This caller waits its budget and then proceeds without
+    the lock (fail open, performance only) - it must NOT tear down a live holder's lock."""
+    lock = _lock_dir(proj)
+    lock.mkdir(parents=True)
+    # This test process is unquestionably alive, so it is the holder pid.
+    (lock / "acquired-at").write_text(
+        f"{int(time.time()) - 300}\n{os.getpid()}\n", encoding="utf-8"
+    )
+    proc = _run(proj, timeout=30)
+    assert proc.returncode == 0
+    assert lock.exists(), "a live holder's lock was reclaimed on age alone"
+
+
+def _a_dead_pid() -> int:
+    """A pid that is certainly not running: spawn a trivial process and wait for it.
+
+    Reusing a hard-coded high number risks colliding with a real process on a busy box, which
+    would turn this into a flaky test of the opposite behaviour."""
+    proc = subprocess.Popen([sys.executable, "-c", "pass"])
+    proc.wait()
+    return proc.pid
 
 
 def test_a_genuinely_held_lock_fails_open_within_the_wait_budget(proj):

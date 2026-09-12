@@ -58,6 +58,7 @@ from __future__ import annotations
 # which Claude Code treats as NON-blocking (the read would proceed). Note the runtime still
 # needs Python >= 3.9 for Path.is_relative_to; run-guard.sh probes for that.
 
+import hashlib
 import json
 import os
 import re
@@ -94,7 +95,15 @@ _SEARCH_VERBS = ("grep", "egrep", "fgrep", "rg", "ag", "ack", "ripgrep")
 # this set the unknown-tool fallback would sweep up the write tools and change a documented,
 # tested behaviour (tests/test_guards.py::test_raw_guard_ignores_out_of_scope_tool) as a side
 # effect of closing a READ gap.
-_OUT_OF_SCOPE_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
+#
+# 2026-09-12 audit (H-23): the justification above was checked against the deny list and did
+# not hold. `.claude/settings.json` carries three `Edit(...)` entries for data/raw and NO
+# `Write(...)` entry at all, so `Write(file_path="data/raw/x.csv")` was permitted by both the
+# deny list and this guard. Write also has a second-order effect this comment missed: content
+# the model creates under data/raw makes `_raw_data_present()` true, which then blocks
+# legitimate ancestor-rooted searches for the rest of the session. The set is now empty -
+# every tool is judged - and the deny-list entries stay as the OS-level backstop.
+_OUT_OF_SCOPE_TOOLS = ()
 
 # Search-tool flags that consume the FOLLOWING token as a value, so that token is neither the
 # pattern nor a file operand. Conservative list - an unknown flag is treated as valueless,
@@ -128,6 +137,22 @@ _FLAGS_WITH_VALUE = {
     "--type-not",
     "-T",
     "--max-depth",
+}
+
+# Of those, the flags whose value is a PATH the tool actually opens or SELECTS, not a pattern
+# (2026-09-12 audit, H-17). Treated as file operands rather than discarded.
+#
+# `--exclude`/`--exclude-dir` are deliberately NOT here, and neither is a `!`-prefixed rg
+# glob: their value names what the search must NOT touch, so reading one as a file operand
+# would block the very command that keeps the search away from raw data - the same
+# over-blocking H-21 catalogued for `find . -not -path './data/raw/*'`. A negated filter is
+# handled in the loop below.
+_FLAGS_WITH_PATH_VALUE = {
+    "-f",
+    "--file",
+    "--include",
+    "-g",
+    "--glob",
 }
 
 # Compound-command segment splitter, mirroring guard-code-execution.py's _segments(): a
@@ -166,8 +191,16 @@ _GIT_MESSAGE_VERBS = ("commit", "tag")
 # (the project dir for a hook subprocess) if the env var is absent.
 # ---------------------------------------------------------------------------
 _project_root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
-_RAW_DIR = (Path(_project_root) / "data" / "raw").resolve()
-_RAW_PRESENT_CACHE = Path(_project_root) / ".claude" / ".raw-data-present"
+# normcase for the same reason _resolve applies it - both sides of every comparison have to
+# be spelled the same way or the Windows case-insensitivity gap (H-7) reopens here instead.
+_RAW_DIR = Path(os.path.normcase(str((Path(_project_root) / "data" / "raw").resolve())))
+# RENAMED 2026-09-12 (audit H-15). It was `.claude/.raw-data-present`, which
+# guard-consent-writes' `_HOOK_PATH_RE` does not match - it covers `.claude/.guard-*`. So the
+# one file that decides whether an ancestor-rooted search is allowed to walk into the raw
+# directory was freely writable. The `.guard-` prefix puts it inside the existing
+# write-protection; the fingerprint validation below is the other half, and neither is
+# sufficient alone. An old-named file left behind is simply ignored.
+_RAW_PRESENT_CACHE = Path(_project_root) / ".claude" / ".guard-raw-present"
 _RAW_PRESENT_CACHE_TTL_SECONDS = 30  # short enough to catch a mid-session data/raw
 # addition quickly; long enough to collapse a burst of Grep/Glob calls into one real walk.
 
@@ -188,16 +221,34 @@ def _raw_data_present() -> bool:
     .claude/.guard-interpreter) collapses a burst of calls into one real walk. The cache is
     never load-bearing: any read/write failure falls straight through to a real check, and
     the fail-closed exception handler below is unchanged.
+
+    VALIDATED (2026-09-12 audit, H-15). The cache was a bare "true"/"false" string that
+    nothing checked, and the file was not write-protected: `Write(".claude/.raw-data-present",
+    "false")` bought a 30-second window in which a path-less Grep or Glob walked into the raw
+    directory and returned its contents, repeatable indefinitely. The cached answer now has to
+    come with a FINGERPRINT of the directory it is an answer about - its own mtime and the
+    sorted names directly inside it - and a mismatch, a malformed file or an expired TTL all
+    fall through to the real walk. The model cannot be stopped from deleting the file, so
+    deletion is equivalent to "no cached answer", which costs a walk and never grants one.
+
+    The fingerprint is one listdir, not a walk, so the cache still does its job: collapsing a
+    burst of Grep/Glob calls into one traversal on a box where every filesystem op is scanned.
     """
     try:
         if not _RAW_DIR.is_dir():
             return False
+        fingerprint = _raw_dir_fingerprint()
         try:
-            cached = _RAW_PRESENT_CACHE.read_text(encoding="utf-8").strip()
+            cached = json.loads(_RAW_PRESENT_CACHE.read_text(encoding="utf-8"))
             age = time.time() - _RAW_PRESENT_CACHE.stat().st_mtime
-            if age < _RAW_PRESENT_CACHE_TTL_SECONDS:
-                return cached == "true"
-        except (OSError, ValueError):
+            if (
+                isinstance(cached, dict)
+                and age < _RAW_PRESENT_CACHE_TTL_SECONDS
+                and cached.get("fingerprint") == fingerprint
+                and isinstance(cached.get("present"), bool)
+            ):
+                return cached["present"]
+        except (OSError, ValueError, TypeError):
             pass  # no valid cache - fall through to a real check
         result = False
         for _root, _dirs, files in os.walk(_RAW_DIR):
@@ -206,13 +257,30 @@ def _raw_data_present() -> bool:
                 break
         try:
             _RAW_PRESENT_CACHE.parent.mkdir(parents=True, exist_ok=True)
-            _RAW_PRESENT_CACHE.write_text("true" if result else "false", encoding="utf-8")
+            _RAW_PRESENT_CACHE.write_text(
+                json.dumps({"present": result, "fingerprint": fingerprint}), encoding="utf-8"
+            )
         except OSError:
             pass  # cache write is an optimization only, never load-bearing
         return result
     except Exception:
         # Cannot tell - assume present so the stricter branch applies (fail closed).
         return True
+
+
+def _raw_dir_fingerprint() -> str:
+    """Cheap identity of the protected directory: its own stat plus its top-level listing.
+
+    One listdir, not a walk - the whole point of the cache is to avoid the walk. Any failure
+    yields a value that cannot match a stored fingerprint, so the caller falls through to the
+    real check, which is the direction that never grants an unearned answer."""
+    try:
+        stat = _RAW_DIR.stat()
+        names = sorted(os.listdir(_RAW_DIR))
+        raw = f"{stat.st_mtime_ns}:{stat.st_size}:" + "|".join(names)
+    except OSError:
+        return ""
+    return hashlib.sha256(raw.encode("utf-8", "replace")).hexdigest()[:32]
 
 
 def _resolve(candidate: str) -> Path:
@@ -227,7 +295,11 @@ def _resolve(candidate: str) -> Path:
     path = Path(candidate)
     if not path.is_absolute():
         path = Path(_project_root) / path
-    return Path(os.path.realpath(str(path))).resolve()
+    # normcase on top of realpath (2026-09-12 audit, H-7): realpath collapses `.`/`..` and
+    # symlinks but preserves CASE, and on Windows - where the filesystem does not - two
+    # spellings of the same directory compared unequal. normcase is a no-op on POSIX, so the
+    # Linux behaviour is byte-identical to before.
+    return Path(os.path.normcase(os.path.realpath(str(path)))).resolve()
 
 
 def _is_under_raw(candidate: str) -> bool:
@@ -261,7 +333,12 @@ def _is_ancestor_of_raw(candidate: str) -> bool:
         resolved = _resolve(candidate)
         return _RAW_DIR.is_relative_to(resolved) and resolved != _RAW_DIR
     except Exception:
-        return False
+        # 2026-09-12 audit (H-27): fail CLOSED, matching _is_under_raw four lines above.
+        # The two halves of the same containment question had opposite polarities, and only
+        # the fail-OPEN one was undocumented - so a Grep rooted at something realpath could
+        # not resolve skipped the ancestor check entirely. The module docstring has always
+        # said this guard "errs on the side of blocking on ambiguous input".
+        return True
 
 
 def _search_file_operands(command: str) -> list[str] | None:
@@ -296,6 +373,21 @@ def _search_file_operands(command: str) -> list[str] | None:
             # it is a FILE, not the pattern.
             if base in ("-e", "-f", "--regexp", "--file"):
                 pattern_taken = True
+            # 2026-09-12 audit (H-17): a flag whose VALUE names a path is a READ of that
+            # path, and the old `i += 2` discarded flag and value together. `grep -f
+            # data/raw/patterns.txt .` and `grep --file=data/raw/p.txt .` both passed,
+            # because grep opens that file to read the patterns out of it. Same for the
+            # include/exclude/glob filters, which can name a raw path just as directly.
+            # Only -e/--regexp genuinely carry a pattern rather than a path.
+            if base in _FLAGS_WITH_PATH_VALUE:
+                if "=" in tok:
+                    value, step = tok.split("=", 1)[1], 1
+                else:
+                    value, step = (tokens[i + 1] if i + 1 < len(tokens) else ""), 2
+                if value and not value.startswith("!"):  # `!` = an rg exclusion, not a read
+                    operands.append(value)
+                i += step
+                continue
             if base in _FLAGS_WITH_VALUE and "=" not in tok:
                 i += 2
                 continue
@@ -308,6 +400,101 @@ def _search_file_operands(command: str) -> list[str] | None:
         operands.append(tok)
         i += 1
     return operands
+
+
+_HEREDOC_START_RE = re.compile(r"<<-?\s*([\"']?)([A-Za-z_][A-Za-z0-9_]*)\1")
+
+
+def _strip_heredoc_bodies(command: str) -> str:
+    """Drop heredoc BODIES, keeping the opener and terminator lines (2026-09-12, H-21).
+
+    A heredoc body is content being WRITTEN somewhere, not a path being read, and where it
+    goes is decided on the opener line - which is kept, redirect and all. Without this, any
+    documentation or commit-message body that merely names the raw directory blocked the
+    command that carried it, which is the prose/argument false-positive class ADR-002 has
+    already fixed three times elsewhere in this guard.
+    """
+    lines = command.split("\n")
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        out.append(line)
+        i += 1
+        for _quote, delim in _HEREDOC_START_RE.findall(line):
+            while i < len(lines) and lines[i].strip() != delim:
+                i += 1
+            if i < len(lines):
+                out.append(lines[i])
+                i += 1
+    return "\n".join(out)
+
+
+def _find_exclusion_residual(segment: str) -> str | None:
+    """A `find` segment with its NEGATED path/name filters removed, or None.
+
+    `find . -not -path './data/raw/*'` is a command that deliberately stays OUT of the raw
+    directory, and it was blocked as if it were reading it (2026-09-12, H-21 - the case named
+    in the audit brief). The excluded pattern is dropped; every other token, including real
+    file operands and any `-exec`, is kept and still judged.
+    """
+    try:
+        tokens = shlex.split(segment)
+    except Exception:  # noqa: BLE001 - unparseable: judge the whole segment as before
+        return None
+    if not tokens or os.path.basename(tokens[0]) != "find":
+        return None
+    kept: list[str] = []
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        if tok in ("-not", "!") and i + 2 < len(tokens) and tokens[i + 1] in _FIND_FILTERS:
+            i += 3  # the negation, the filter and the pattern it excludes
+            continue
+        kept.append(tok)
+        i += 1
+    return " ".join(kept)
+
+
+_FIND_FILTERS = ("-path", "-ipath", "-name", "-iname", "-wholename", "-regex")
+
+
+def _advance_cwd(cwd: str, moved: str) -> str:
+    """Fold one tracked `cd` into the running relative prefix."""
+    if moved.startswith("/") or moved.startswith("~"):
+        return moved
+    return f"{cwd.rstrip('/')}/{moved}" if cwd else moved
+
+
+def _cd_target(segment: str) -> str | None:
+    """The directory a literal `cd`/`pushd` segment moves to, or None."""
+    match = re.match(r"^(?:cd|pushd)\s+(?:-\S+\s+)*([^\s;&|]+)\s*$", segment.strip())
+    if not match:
+        return None
+    return match.group(1).strip("\"'") or None
+
+
+def _requalify(text: str, cwd: str) -> str:
+    """Re-attach *cwd* to the relative operands of *text* (2026-09-12, H-9).
+
+    `cd data && head raw/customers.csv` reads raw records without either segment containing
+    the string this guard matches on. Best-effort and lexical: a cd through a variable, a
+    subshell or `cd -` is still invisible, and that residual is stated rather than hidden.
+    The verb is never requalified, so the search-verb and git-message exemptions above keep
+    reading the real command.
+    """
+    tokens = text.split()
+    if not tokens:
+        return text
+    base = cwd.rstrip("/")
+    out = [tokens[0]]
+    for tok in tokens[1:]:
+        bare = tok.strip("\"'")
+        if not bare or tok.startswith("-") or bare[:1] in ("/", "~", ">", "<", "|", "&", "$"):
+            out.append(tok)
+            continue
+        out.append(f"{base}/{bare}")
+    return " ".join(out)
 
 
 def _segments(command: str) -> list[str]:
@@ -469,8 +656,13 @@ def _extract_path_candidates(tool: str, tool_input: dict) -> list[str]:
         # This is ADVISORY - see module-level docstring for the residual risk note.
         return [tool_input.get("command") or ""]
 
+    if tool in ("Write", "Edit", "MultiEdit"):
+        # 2026-09-12 (H-23). Writes ARE judged now - see _OUT_OF_SCOPE_TOOLS for why the
+        # "covered separately by settings.json" justification did not survive checking.
+        return [tool_input.get("file_path") or ""]
+
     if tool in _OUT_OF_SCOPE_TOOLS:
-        # Writes are not this guard's job - see _OUT_OF_SCOPE_TOOLS.
+        # Deliberately unjudged - see _OUT_OF_SCOPE_TOOLS (currently empty).
         return []
 
     # Unknown tool (a future local-filesystem MCP reader, NotebookRead variants, ...). Rather
@@ -516,12 +708,17 @@ def main() -> None:
     # then apply the search-verb pattern exemption (fix 3) or the git-message exemption
     # per segment - never the whole compound command as if it were one invocation.
     if tool == "Bash":
-        for segment in _segments(tool_input.get("command") or ""):
+        cwd = ""
+        for segment in _segments(_strip_heredoc_bodies(tool_input.get("command") or "")):
+            moved = _cd_target(segment)
             operands = _search_file_operands(segment)
             if operands is not None:
                 for operand in operands:
-                    if _is_under_raw(operand) or _RAW_MARKER_RE.search(operand):
-                        _block(f"raw-data path in search operand - tool={tool}")
+                    for probe in (operand, f"{cwd.rstrip('/')}/{operand}" if cwd else operand):
+                        if _is_under_raw(probe) or _RAW_MARKER_RE.search(probe):
+                            _block(f"raw-data path in search operand - tool={tool}")
+                if moved:
+                    cwd = _advance_cwd(cwd, moved)
                 continue
             msg_operands = _git_message_operands(segment)
             if msg_operands is not None:
@@ -530,9 +727,22 @@ def main() -> None:
                     residual
                 ):
                     _block(f"raw-data path in git commit/tag argument - tool={tool}")
+                if moved:
+                    cwd = _advance_cwd(cwd, moved)
                 continue
-            if any(marker in segment for marker in RAW_MARKERS) or _RAW_MARKER_RE.search(segment):
-                _block(f"raw-data marker in input - tool={tool}")
+            # A `find` that EXCLUDES the raw directory is the opposite of a read of it, so
+            # its negated filters are dropped before matching (H-21).
+            scan = _find_exclusion_residual(segment)
+            if scan is None:
+                scan = segment
+            probes = [scan]
+            if cwd:
+                probes.append(_requalify(scan, cwd))
+            for probe in probes:
+                if any(marker in probe for marker in RAW_MARKERS) or _RAW_MARKER_RE.search(probe):
+                    _block(f"raw-data marker in input - tool={tool}")
+            if moved:
+                cwd = _advance_cwd(cwd, moved)
         sys.exit(0)
 
     # --- Ancestor-rooted / path-less search (fix 2): only when raw data actually exists.

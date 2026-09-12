@@ -156,9 +156,17 @@ def test_quote_smuggling_does_not_wave_through():
     assert LIVE._TEAM_ALLOW.match(cmd) is None  # the hole stays closed in the live guard
 
 
-def test_exec_patterns_identical_to_live_guard():
-    """The fix loosens ONLY the team allow-list; the execution net must not drift."""
-    assert STAGED._EXEC_PATTERNS == LIVE._EXEC_PATTERNS
+def test_exec_patterns_never_shrink_against_the_live_guard():
+    """The execution net may only ever GROW while a fix is staged.
+
+    This asserted byte equality until 2026-09-12, when the audit's H-10 added the
+    stdin-fed execution shapes (`python <<EOF`, `python < file`, a bare interpreter on the
+    receiving end of a pipe) that the net had never covered. Equality was the wrong
+    assertion for that: it forbade a tightening as firmly as a loosening. The property
+    actually worth pinning is that nothing the live guard blocks stops being blocked, so
+    the staged list must be a superset, never a rewrite."""
+    missing = [p for p in LIVE._EXEC_PATTERNS if p not in STAGED._EXEC_PATTERNS]
+    assert not missing, f"staged guard dropped live exec patterns: {missing}"
     assert STAGED._SEGMENT_DELIMS == LIVE._SEGMENT_DELIMS
 
 
@@ -543,5 +551,5 @@ def test_the_report_case_end_to_end():
 def test_widening_the_interpreter_did_not_touch_the_exec_patterns():
     """_PY_ANY is for the allow-list only. If it ever leaks into _EXEC_PATTERNS the change
     stops being additive, and this file's own 'nothing else loosened' guarantee is void."""
-    assert STAGED._EXEC_PATTERNS == LIVE._EXEC_PATTERNS
+    assert not [p for p in LIVE._EXEC_PATTERNS if p not in STAGED._EXEC_PATTERNS]
     assert not any("_PY_ANY" in p for p in STAGED._EXEC_PATTERNS)

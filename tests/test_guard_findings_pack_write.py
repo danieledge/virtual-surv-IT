@@ -405,8 +405,12 @@ def test_scoped_agents_can_write_the_new_layout_pack():
     blocked its own reviewers on their own pack and they fell back to prose - the
     double-context cost the Write grant exists to remove. Found 2026-09-11.
     """
-    for agent in ("code-reviewer", "compliance-reviewer", "model-validator",
-                  "performance-reviewer"):
+    for agent in (
+        "code-reviewer",
+        "compliance-reviewer",
+        "model-validator",
+        "performance-reviewer",
+    ):
         assert not _blocks(
             "Write",
             {"file_path": "VSIT/engagements/my-slug/data/findings-my-slug.jsonl"},
@@ -447,7 +451,75 @@ def test_a_traversal_segment_is_refused_in_either_layout():
 
 
 def test_a_non_pack_path_is_still_refused_in_the_new_layout():
-    assert _blocks(
-        "Write", {"file_path": "VSIT/engagements/s/data/notes.md"}, "code-reviewer"
-    )
+    assert _blocks("Write", {"file_path": "VSIT/engagements/s/data/notes.md"}, "code-reviewer")
     assert _blocks("Write", {"file_path": "src/app.py"}, "code-reviewer")
+
+
+# =========================================== Bash channel (2026-09-12 audit, H-14 / W-7)
+#
+# The scoping was Write/Edit-only while all four scoped agents hold Bash, so the shell was an
+# unrestricted write channel out of a grant CLAUDE.md §6 calls mechanically enforced. Both
+# directions here: the shapes that write outside the pack now block, and the read-only work
+# these agents actually do all day still runs.
+
+import pytest  # noqa: E402 - appended section, kept next to the tests that use it
+
+
+_OUTSIDE_WRITES = (
+    "cat findings.jsonl > /tmp/stolen.jsonl",
+    "echo x >> ../../etc/notes",
+    "tee /tmp/out.txt",
+    "cp artifacts/x/data/findings-a.jsonl /tmp/copy.jsonl",
+    "mv a.txt /tmp/b.txt",
+    "sed -i 's/a/b/' scripts/ingest.py",
+    "touch /tmp/marker",
+    "python -c \"open('/tmp/x','w').write('y')\"",
+)
+
+
+@pytest.mark.parametrize("cmd", _OUTSIDE_WRITES)
+@pytest.mark.parametrize("agent", _SCOPED_AGENTS)
+def test_a_scoped_agent_cannot_write_outside_its_pack_via_bash(agent, cmd):
+    assert _blocks("Bash", {"command": cmd}, agent)
+
+
+_READ_ONLY = (
+    "cat artifacts/x/data/findings-a.jsonl",
+    "grep -c findings artifacts/x/data/findings-a.jsonl",
+    "ls artifacts/x/data",
+    "ruff check scripts/",
+    "git diff --stat",
+    "wc -l artifacts/x/data/findings-a.jsonl 2>/dev/null",
+)
+
+
+@pytest.mark.parametrize("cmd", _READ_ONLY)
+@pytest.mark.parametrize("agent", _SCOPED_AGENTS)
+def test_a_scoped_agent_can_still_read_and_analyse(agent, cmd):
+    assert not _blocks("Bash", {"command": cmd}, agent)
+
+
+@pytest.mark.parametrize("agent", _SCOPED_AGENTS)
+def test_a_scoped_agent_may_append_to_its_own_pack_via_bash(agent):
+    cmd = "echo '{}' >> artifacts/review/data/findings-code.jsonl"
+    assert not _blocks("Bash", {"command": cmd}, agent)
+
+
+@pytest.mark.parametrize("cmd", _OUTSIDE_WRITES)
+def test_an_unscoped_caller_is_untouched_on_bash(cmd):
+    """The orchestrator's own calls and every build agent's: this guard has no opinion."""
+    assert not _blocks("Bash", {"command": cmd}, None)
+    assert not _blocks("Bash", {"command": cmd}, "rules-developer")
+
+
+def test_the_size_cap_and_the_scope_check_agree_on_what_a_pack_path_is():
+    """H-31: the size half used the raw shape regex while the scope half used _pack_path_ok,
+    so a traversal path was refused by one and measured by the other."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("gfpw_staged", STAGED_PATH)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    traversal = "artifacts/../data/findings-x.jsonl"
+    assert mod._ALLOWED_PATH_RE.search(traversal)  # the shape still matches
+    assert not mod._pack_path_ok(traversal)  # and the one definition refuses it

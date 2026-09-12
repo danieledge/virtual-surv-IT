@@ -16,9 +16,11 @@ asserts live matches staged once a human has applied it.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -37,12 +39,21 @@ LAUNCHER_PATHS = (
 )
 
 
+# An ordinary session's project: no execution-consent marker. Pinned since 2026-09-12, when
+# the staging tier (H-2) made the marker's presence part of the guard's decision - otherwise
+# these runs inherit the REPO's own marker and read as an execution-authorised session.
+_NO_CONSENT_DIR = tempfile.mkdtemp(prefix="consent-guard-project-")
+
+
 def _blocks(payload: dict) -> bool:
+    env = {k: v for k, v in os.environ.items() if not k.startswith("CST_")}
+    env["CLAUDE_PROJECT_DIR"] = _NO_CONSENT_DIR
     proc = subprocess.run(
         [sys.executable, str(CONSENT)],
         input=json.dumps(payload),
         capture_output=True,
         text=True,
+        env=env,
     )
     return proc.returncode == 2
 
@@ -51,9 +62,9 @@ def test_the_launcher_files_cannot_be_written():
     """Protecting the guards while leaving the thing that runs them writable is not a
     boundary."""
     for path in LAUNCHER_PATHS:
-        assert _blocks(
-            {"tool_name": "Write", "tool_input": {"file_path": path, "content": "x"}}
-        ), path
+        assert _blocks({"tool_name": "Write", "tool_input": {"file_path": path, "content": "x"}}), (
+            path
+        )
 
 
 def test_the_launcher_files_cannot_be_edited():
@@ -119,7 +130,7 @@ def test_the_validator_guards_every_place_the_cache_is_executed():
     src = RUN_GUARD.read_text(encoding="utf-8")
     executions = re.findall(r'\$\{?(?:_fastcached|_known_good|cached)\}?" -S', src)
     assert len(executions) >= 3, "expected three cache-driven executions"
-    assert src.count("_looks_like_python \"$") >= 3, (
+    assert src.count('_looks_like_python "$') >= 3, (
         "every cache read must be validated, not just some"
     )
 
@@ -158,22 +169,31 @@ def test_a_client_repos_own_scripts_are_not_team_tooling(tmp_path, monkeypatch):
         assert not mod._resolves_into_plugin_scripts(seg), seg
 
 
-def test_a_whitelisted_basename_still_passes_anywhere(tmp_path, monkeypatch):
-    """The pre-existing residual, asserted so nobody "fixes" it by accident.
+def test_the_basename_whitelist_now_only_covers_unresolvable_paths(tmp_path, monkeypatch):
+    """Audit 2026-09-12, H-3. The whitelist used to be checked FIRST and to `continue` on a
+    hit, so location was never enforced for any whitelisted name - and the model holds an
+    unrestricted Write tool. `Write /tmp/scripts/render_html.py` then
+    `python /tmp/scripts/render_html.py` was arbitrary, consent-free execution.
 
-    The bundled-plugin form carries an unexpanded shell variable
-    (`$CLAUDE_SKILL_DIR/../../../scripts/render_html.py`) and cannot be resolved by anyone,
-    so the basename whitelist is what allows it and /engage depends on that from a foreign
-    project. The cost is that a client repo with a file of the same name also passes. That
-    is the whitelist's own trade-off, older than this function, and narrowing it would break
-    the bundled case - which it did, on my first attempt, caught by tests/test_guards.py.
+    The whitelist keeps exactly the case it was added for: a path carrying an UNEXPANDED
+    variable, which nothing can resolve. A fully literal path is resolvable, so it is
+    resolved, and it must land in the plugin's own scripts directory whatever it is called.
     """
     mod = _exec_guard()
     (tmp_path / "scripts").mkdir()
     (tmp_path / "scripts" / "render_html.py").touch()
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
 
-    assert mod._resolves_into_plugin_scripts("python scripts/render_html.py")
+    # literal, resolves outside the plugin - refused despite the allow-listed basename
+    assert not mod._resolves_into_plugin_scripts("python scripts/render_html.py")
+    assert not mod._resolves_into_plugin_scripts("python /tmp/scripts/render_html.py")
+    # unexpanded variable - unresolvable, so the basename is still what decides
+    assert mod._resolves_into_plugin_scripts(
+        'python3 "$CLAUDE_SKILL_DIR/../../../scripts/render_html.py" x.md'
+    )
+    assert not mod._resolves_into_plugin_scripts(
+        'python3 "$CLAUDE_SKILL_DIR/../../../scripts/evil.py"'
+    )
 
 
 def test_the_teams_own_scripts_still_run(monkeypatch):
@@ -207,12 +227,23 @@ def test_a_windows_path_is_matched_by_its_real_basename(tmp_path, monkeypatch):
     no whitelisted name, and the bundled Windows form was refused. Caught by
     tests/test_guards.py after the first fix; the rest of this file already splits on
     `[/\\\\]` everywhere for the same reason.
+
+    Carried forward to the unexpanded-variable form after H-3 (2026-09-12): a literal
+    Windows path is resolvable, so it is now judged by where it resolves, and on Linux
+    `C:\\plugin\\scripts\\...` resolves nowhere near the plugin. The backslash-splitting
+    property the test exists for is unchanged - it is what finds the basename in
+    `%CLAUDE_PLUGIN_ROOT%\\scripts\\check_artifacts.py`, which is the real bundled Windows
+    shape and the one nothing can resolve.
     """
     mod = _exec_guard()
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
 
     for seg in (
-        r"py C:\plugin\scripts\check_artifacts.py",
-        r'python "C:\plugin\scripts\render_html.py" out.md',
+        r"py %CLAUDE_PLUGIN_ROOT%\scripts\check_artifacts.py",
+        r'python "%CLAUDE_PLUGIN_ROOT%\scripts\render_html.py" out.md',
     ):
         assert mod._resolves_into_plugin_scripts(seg), seg
+    # the basename still has to be one of ours, backslashes and all
+    assert not mod._resolves_into_plugin_scripts(r"py %CLAUDE_PLUGIN_ROOT%\scripts\evil.py")
+    # and a fully literal Windows path is judged by location now, not by its name
+    assert not mod._resolves_into_plugin_scripts(r"py C:\plugin\scripts\check_artifacts.py")

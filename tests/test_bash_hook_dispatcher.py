@@ -346,3 +346,126 @@ def test_load_failure_itself_fails_closed_for_safety_guards(monkeypatch, tmp_pat
     monkeypatch.setattr(bhd, "_CHECKS", (("guard_raw_data", broken, {"Read"}, True),))
     monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(json.dumps({"tool_name": "Read"})))
     assert bhd.main() == 2
+
+
+# ==================================== 2026-09-12 safety-hook audit: H-11, H-14, H-24
+#
+# These drive the STAGED dispatcher; the byte-sync test above says when the live one has
+# caught up. Note H-11 also needs the TOP-LEVEL PreToolUse matcher in settings.json and
+# hooks.json widened to `*` by hand - this file's own opening comment says to check both
+# places whenever a guard's tool coverage changes.
+
+
+def _staged_install(tmp_path):
+    """A plugin-shaped install of the STAGED dispatcher and STAGED guards.
+
+    The staged dispatcher resolves its guards relative to its own location
+    (``<parent>/.claude/hooks``), which from scripts/staged_hooks/ points nowhere - so it can
+    only be driven end-to-end from a directory laid out the way the applied copy will be.
+    Returns (dispatcher path, env).
+    """
+    scripts = tmp_path / "scripts"
+    hooks = tmp_path / ".claude" / "hooks"
+    scripts.mkdir(parents=True)
+    hooks.mkdir(parents=True)
+    (scripts / "bash_hook_dispatcher.py").write_text(
+        STAGED.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    staged_dir = REPO_ROOT / "scripts" / "staged_hooks"
+    for guard in (
+        "guard-raw-data.py",
+        "guard-code-execution.py",
+        "guard-consent-writes.py",
+        "guard-findings-pack-write.py",
+    ):
+        (hooks / guard).write_text((staged_dir / guard).read_text(encoding="utf-8"), "utf-8")
+    for redirect in (
+        "document_input_redirect.py",
+        "module_form_redirect.py",
+        "enumeration_redirect.py",
+        "exploration_redirect.py",
+    ):
+        source = REPO_ROOT / "scripts" / redirect
+        if not (staged_dir / redirect).is_file():
+            (scripts / redirect).write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+        else:
+            (scripts / redirect).write_text(
+                (staged_dir / redirect).read_text(encoding="utf-8"), encoding="utf-8"
+            )
+    return scripts / "bash_hook_dispatcher.py", {"CLAUDE_PROJECT_DIR": str(tmp_path)}
+
+
+def _run_staged_install(tmp_path, payload: dict) -> subprocess.CompletedProcess:
+    import os
+
+    dispatcher, env = _staged_install(tmp_path)
+    raw = tmp_path / "data" / "raw"
+    raw.mkdir(parents=True, exist_ok=True)
+    (raw / "trades.csv").write_text("account,amount\nACC1,100\n", encoding="utf-8")
+    full_env = dict(os.environ)
+    full_env.update(env)
+    return subprocess.run(
+        [sys.executable, str(dispatcher)],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        env=full_env,
+        timeout=30,
+    )
+
+
+def test_a_tool_nobody_has_heard_of_still_reaches_the_raw_data_guard(tmp_path):
+    """H-11. guard-raw-data.py has claimed since 2026-08-01 that "any UNKNOWN tool gets a
+    defence-in-depth substring scan of its string inputs rather than a free pass" (ADR-002
+    rec 22). The registry here was a closed allow-list, so that branch could never fire: an
+    MCP filesystem reader, a future first-party read tool, Task, WebSearch - all skipped
+    before the guard saw them."""
+    payload = {
+        "tool_name": "mcp__somefs__read_file",
+        "tool_input": {"path": str(tmp_path / "data" / "raw" / "trades.csv")},
+    }
+    assert _run_staged_install(tmp_path, payload).returncode == 2
+
+
+def test_an_unknown_tool_with_unrelated_inputs_is_untouched(tmp_path):
+    payload = {"tool_name": "mcp__jira__create_issue", "tool_input": {"summary": "fix the parser"}}
+    assert _run_staged_install(tmp_path, payload).returncode == 0
+
+
+def test_the_raw_path_backstop_blocks_a_read_without_the_guard_module(tmp_path):
+    """H-24. Three documented fail-open paths are each justified by "the settings.json deny
+    list still backs Read/Grep/Glob" - and that list only exists in repo-as-project mode. A
+    plugin install ships hooks/hooks.json and no settings.json at all."""
+    payload = {
+        "tool_name": "Read",
+        "tool_input": {"file_path": str(tmp_path / "data" / "raw" / "trades.csv")},
+    }
+    proc = _run_staged_install(tmp_path, payload)
+    assert proc.returncode == 2
+    assert "raw-data wall" in proc.stderr
+
+
+def test_the_raw_path_backstop_leaves_everything_else_alone(tmp_path):
+    (tmp_path / "data" / "masked").mkdir(parents=True)
+    payload = {
+        "tool_name": "Read",
+        "tool_input": {"file_path": str(tmp_path / "data" / "masked" / "trades.csv")},
+    }
+    proc = _run_staged_install(tmp_path, payload)
+    assert proc.returncode == 0
+    assert "raw-data wall" not in proc.stderr
+
+
+def test_the_findings_pack_guard_is_registered_for_bash(tmp_path):
+    """H-14 / W-7: the four scoped reviewers all hold Bash, and the guard was registered for
+    Write and Edit only, so the shell was an unrestricted write channel out of a grant
+    CLAUDE.md §6 calls mechanically enforced."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("bhd_staged", STAGED)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    entry = next(c for c in mod._CHECKS if c[0] == "guard_findings_pack_write")
+    assert "Bash" in entry[2]
+    raw_entry = next(c for c in mod._CHECKS if c[0] == "guard_raw_data")
+    assert raw_entry[2] is None, "the raw-data guard must see every tool - scope lives in it"

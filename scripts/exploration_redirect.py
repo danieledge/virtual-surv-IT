@@ -59,17 +59,64 @@ def _prefs_int(root: str, key: str, default: int) -> int:
         return default
 
 
+_STAMP_NAME = ".team-session.json"
+_MAX_STAMPED_SESSIONS = 8
+
+
+def _stamp_candidates(root: str):
+    """Every place the acting-session stamp may live, newest layout first.
+
+    2026-09-12 audit (H-22). The safety guards were taught both layouts on 2026-09-11; this
+    rule and its sibling were not, so in any VSIT-layout project - the default since
+    2026-08-28 - it was permanently silent. Copied rather than imported: a hook must not
+    depend on the scripts package being importable.
+    """
+    return (
+        os.path.join(root, "VSIT", "engagements", _STAMP_NAME),
+        os.path.join(root, "artifacts", _STAMP_NAME),
+    )
+
+
+def _state_dir(root: str) -> str:
+    """Where this rule's per-session nudge state belongs - the engagements root that
+    actually exists, same two-layout rule as the stamp above (H-22)."""
+    vsit = os.path.join(root, "VSIT", "engagements")
+    if os.path.isdir(vsit):
+        return vsit
+    return os.path.join(root, "artifacts")
+
+
+def _stamped_session_ids(stamp_path: str) -> tuple:
+    """Every session id this stamp arms - legacy {"session": id} and the current
+    {"session_id": ..., "sessions": [...]} alike (2026-09-12, H-13)."""
+    try:
+        with open(stamp_path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except Exception:  # noqa: BLE001 - absent/unreadable: arms nothing
+        return ()
+    if not isinstance(data, dict):
+        return ()
+    ids = []
+    for key in ("session", "session_id"):
+        value = data.get(key)
+        if isinstance(value, str) and value:
+            ids.append(value)
+    sessions = data.get("sessions")
+    if isinstance(sessions, list):
+        for entry in sessions[-_MAX_STAMPED_SESSIONS:]:
+            value = entry.get("id") if isinstance(entry, dict) else entry
+            if isinstance(value, str) and value:
+                ids.append(value)
+    return tuple(ids)
+
+
 def _team_invoked_this_session(payload: dict) -> bool:
     """Same stamp as the exec gate. Advisory polarity: anything unknown means SILENT."""
     sid = payload.get("session_id")
     if not sid:
         return False
     root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
-    try:
-        with open(os.path.join(root, "artifacts", ".team-session.json"), encoding="utf-8") as fh:
-            return json.load(fh).get("session") == sid
-    except Exception:
-        return False
+    return any(sid in _stamped_session_ids(path) for path in _stamp_candidates(root))
 
 
 def _already_nudged(root: str, sid: str, key: str) -> bool:
@@ -78,7 +125,7 @@ def _already_nudged(root: str, sid: str, key: str) -> bool:
     Best-effort on every failure path: an unwritable or corrupt state file means the nudge
     may repeat, which is mildly annoying, rather than the rule silently vanishing.
     """
-    path = os.path.join(root, "artifacts", _STATE_NAME)
+    path = os.path.join(_state_dir(root), _STATE_NAME)
     digest = hashlib.sha256(f"{sid}\n{key}".encode("utf-8")).hexdigest()[:16]
     seen = []
     try:

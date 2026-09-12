@@ -115,17 +115,23 @@ def test_unknown_tool_unrelated_input_allowed(project_with_raw):
 
 
 @pytest.mark.parametrize("tool", ["Write", "Edit", "MultiEdit", "NotebookEdit"])
-def test_write_tools_stay_out_of_scope(project_with_raw, tool):
-    """The unknown-tool fallback must not sweep up the WRITE tools.
+def test_write_tools_are_judged_too(project_with_raw, tool):
+    """Reversed by the 2026-09-12 audit (H-23).
 
-    This guard exists to stop raw records reaching the model's context (egress to the
-    provider). Writing to data/raw egresses nothing, and is covered separately by the
-    data/raw write-protect in .claude/settings.json and by guard-consent-writes.py.
-    Caught live: the first cut of the fallback blocked `Write data/raw/x` and broke
-    tests/test_guards.py::test_raw_guard_ignores_out_of_scope_tool, changing a documented
-    behaviour as a side effect of closing a READ gap.
+    The write tools were out of scope on the stated basis that writing to data/raw is
+    "covered separately by the data/raw write-protect in .claude/settings.json". Checking the
+    deny list against that claim: it carries three `Edit(...)` entries and NO `Write(...)`
+    entry, so `Write(file_path="data/raw/x.csv")` was permitted by the deny list AND by this
+    guard. A write also has a read-side consequence the old reasoning missed - content the
+    model creates under data/raw makes `_raw_data_present()` true, which then blocks
+    legitimate ancestor-rooted searches for the rest of the session.
     """
-    assert not _blocks(project_with_raw, tool, {"file_path": "data/raw/x"})
+    assert _blocks(project_with_raw, tool, {"file_path": "data/raw/x"})
+
+
+@pytest.mark.parametrize("tool", ["Write", "Edit", "MultiEdit", "NotebookEdit"])
+def test_write_tools_outside_raw_are_untouched(project_with_raw, tool):
+    assert not _blocks(project_with_raw, tool, {"file_path": "data/masked/x"})
 
 
 # ------------------------------------------------ gap 2: ancestor-rooted / path-less search
@@ -168,29 +174,59 @@ def test_direct_raw_path_still_blocks(project_with_raw):
 # the FILE cache exactly as real usage would - same reason _run() below already shells out.
 
 
+# The cache file was renamed to `.claude/.guard-raw-present` on 2026-09-12 (audit H-15) so
+# that guard-consent-writes' existing `.claude/.guard-*` write-protection covers it. Its
+# payload is now JSON carrying the answer AND a fingerprint of the directory the answer is
+# about, so a cached value that no longer describes the real directory is not trusted.
+_CACHE_NAME = ".guard-raw-present"
+
+
 def test_pathless_grep_writes_a_presence_cache_file(project_with_raw):
-    cache = project_with_raw / ".claude" / ".raw-data-present"
+    cache = project_with_raw / ".claude" / _CACHE_NAME
     assert not cache.exists()
     assert _blocks(project_with_raw, "Grep", {"pattern": "account"})
     assert cache.is_file()
-    assert cache.read_text(encoding="utf-8").strip() == "true"
+    payload = json.loads(cache.read_text(encoding="utf-8"))
+    assert payload["present"] is True
+    assert payload["fingerprint"]
 
 
-def test_cached_presence_used_within_ttl_even_if_the_file_is_then_removed(project_with_raw):
-    """Proves the cache is actually consulted, not just written: prime it with raw data
-    present, then remove the only raw file and call again immediately - a fresh, uncached
-    check would now correctly return False, but a cache hit inside the 30s TTL should still
-    return the stale (but not yet expired) True."""
-    assert _blocks(project_with_raw, "Grep", {"pattern": "account"})  # primes the cache
-    for f in (project_with_raw / "data" / "raw").iterdir():
-        f.unlink()
-    assert _blocks(project_with_raw, "Grep", {"pattern": "account"})  # still cached True
+def test_a_valid_cache_entry_is_consulted_not_rewritten(project_with_raw):
+    """Proves the cache is actually read, not merely written: a hit does no write, so the
+    file's mtime is unchanged by the second call. (The old test proved consultation by
+    showing a STALE answer was trusted after the directory changed - which is precisely the
+    behaviour H-15 removed, so it could not survive the fix.)"""
+    assert _blocks(project_with_raw, "Grep", {"pattern": "account"})
+    cache = project_with_raw / ".claude" / _CACHE_NAME
+    first = cache.stat().st_mtime_ns
+    assert _blocks(project_with_raw, "Grep", {"pattern": "account"})
+    assert cache.stat().st_mtime_ns == first
+
+
+def test_a_cache_entry_that_no_longer_describes_the_directory_is_not_trusted(project_with_raw):
+    """The disarm H-15 found: `Write(<cache>, "false")` bought a 30-second window in which a
+    path-less Grep walked into the raw directory. The fingerprint is what refuses it."""
+    cache = project_with_raw / ".claude" / _CACHE_NAME
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(json.dumps({"present": False, "fingerprint": "forged"}), encoding="utf-8")
+    assert _blocks(project_with_raw, "Grep", {"pattern": "account"})
+    # the old bare-string format is not a valid entry either
+    cache.write_text("false", encoding="utf-8")
+    assert _blocks(project_with_raw, "Grep", {"pattern": "account"})
+
+
+def test_deleting_the_cache_is_equivalent_to_present(project_with_raw):
+    """The model cannot be stopped from removing the file, so removal has to cost a real
+    walk rather than grant an answer."""
+    assert _blocks(project_with_raw, "Grep", {"pattern": "account"})
+    (project_with_raw / ".claude" / _CACHE_NAME).unlink()
+    assert _blocks(project_with_raw, "Grep", {"pattern": "account"})
 
 
 def test_expired_cache_is_not_trusted(project_with_raw):
     """A cache entry older than the TTL must trigger a real re-check, not be trusted blindly
-    - the opposite of the previous test, forcing the expiry branch instead of the hit one."""
-    cache = project_with_raw / ".claude" / ".raw-data-present"
+    - the opposite of the consultation test above, forcing the expiry branch."""
+    cache = project_with_raw / ".claude" / _CACHE_NAME
     cache.parent.mkdir(parents=True, exist_ok=True)
     cache.write_text("false", encoding="utf-8")  # stale + wrong: real data IS present
     stale = time.time() - 31  # just past the 30s TTL
@@ -202,7 +238,7 @@ def test_cache_write_failure_does_not_break_the_check(project_with_raw):
     """Cache write is an optimization only, never load-bearing - if the cache PATH is
     unwritable (here: occupied by a directory instead of a file), the guard must still
     reach the correct, real answer rather than erroring or silently allowing."""
-    cache = project_with_raw / ".claude" / ".raw-data-present"
+    cache = project_with_raw / ".claude" / _CACHE_NAME
     cache.mkdir(parents=True)  # occupies the path so write_text() must fail
     assert _blocks(project_with_raw, "Grep", {"pattern": "account"})
 
@@ -456,3 +492,79 @@ def test_live_guard_matches_staged_once_applied():
         "live guard-raw-data.py differs from its staged copy - "
         "run: bash scripts/apply-guard-raw-coverage.sh"
     )
+
+
+# ============================================================ 2026-09-12 safety-hook audit
+#
+# H-9 (cd), H-17 (pattern-file and filter operands), H-21 (heredoc bodies and find
+# exclusions), H-27 (unresolvable search roots). Each pair is a disarm that now blocks and
+# the legitimate command beside it that still runs.
+
+
+def test_cd_then_a_relative_read_of_raw_is_blocked(project_with_raw):
+    """`cd data && head raw/trades.csv` reads raw records without either segment carrying
+    the string this guard matches on."""
+    cmd = "cd " + "data" + " && head " + "raw" + "/trades.csv"
+    assert _blocks(project_with_raw, "Bash", {"command": cmd})
+
+
+def test_cd_then_an_unrelated_read_still_runs(project_with_raw):
+    assert not _blocks(project_with_raw, "Bash", {"command": "cd data && head masked/trades.csv"})
+
+
+def test_a_pattern_file_under_raw_is_a_read(project_with_raw):
+    """grep OPENS the file named by -f/--file to read its patterns out of it, so the value
+    is a file operand. It used to be discarded with the flag."""
+    prefix = "data" + "/" + "raw"
+    assert _blocks(project_with_raw, "Bash", {"command": f"grep -f {prefix}/patterns.txt ."})
+    assert _blocks(project_with_raw, "Bash", {"command": f"grep --file={prefix}/p.txt ."})
+
+
+def test_an_include_filter_naming_raw_is_a_read(project_with_raw):
+    prefix = "data" + "/" + "raw"
+    assert _blocks(project_with_raw, "Bash", {"command": f"grep -r --include={prefix}/*.csv x ."})
+
+
+def test_a_search_pattern_mentioning_raw_is_still_not_a_read(project_with_raw):
+    marker = "data" + "/" + "raw"
+    cmd = f'grep -n "{marker}" .claude/settings.json'
+    assert not _blocks(project_with_raw, "Bash", {"command": cmd})
+
+
+def test_an_rg_exclusion_glob_is_not_a_read(project_with_raw):
+    marker = "data" + "/" + "raw"
+    assert not _blocks(project_with_raw, "Bash", {"command": f"rg -g '!{marker}/**' account ."})
+
+
+def test_a_find_exclusion_of_the_raw_directory_is_not_a_read(project_with_raw):
+    """The case named in the audit brief: an EXCLUSION was blocked as if it were a read."""
+    marker = "data" + "/" + "raw"
+    cmd = f"find . -not -path './{marker}/*' -name '*.py'"
+    assert not _blocks(project_with_raw, "Bash", {"command": cmd})
+
+
+def test_a_find_that_really_targets_raw_is_still_blocked(project_with_raw):
+    marker = "data" + "/" + "raw"
+    assert _blocks(project_with_raw, "Bash", {"command": f"find {marker} -name '*.csv'"})
+
+
+def test_a_heredoc_body_mentioning_the_raw_directory_is_not_a_read(project_with_raw):
+    marker = "data" + "/" + "raw"
+    cmd = f"cat > /tmp/notes.md <<'MDEOF'\nNever read {marker}/ records.\nMDEOF"
+    assert not _blocks(project_with_raw, "Bash", {"command": cmd})
+
+
+def test_a_heredoc_whose_opener_redirects_into_raw_is_still_blocked(project_with_raw):
+    marker = "data" + "/" + "raw"
+    cmd = f"cat > {marker}/x.csv <<'EOF'\na,b\nEOF"
+    assert _blocks(project_with_raw, "Bash", {"command": cmd})
+
+
+def test_an_unresolvable_search_root_fails_closed(project_with_raw):
+    """_is_under_raw catches every exception and blocks; _is_ancestor_of_raw did the
+    opposite four lines below it, and only the fail-open half was undocumented (H-27)."""
+    assert _blocks(project_with_raw, "Grep", {"pattern": "x", "path": "\x00not-a-path"})
+
+
+def test_a_resolvable_search_root_outside_the_project_still_runs(project_without_raw):
+    assert not _blocks(project_without_raw, "Grep", {"pattern": "x", "path": "data/masked"})

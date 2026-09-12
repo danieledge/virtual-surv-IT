@@ -9,8 +9,10 @@ command substitution hiding inside double quotes behind a safe verb.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -18,14 +20,25 @@ _STAGED = _ROOT / "scripts" / "staged_hooks" / "guard-consent-writes.py"
 
 ALLOW, BLOCK = 0, 2
 
+# An ordinary session's project: no execution-consent marker. Pinned explicitly since
+# 2026-09-12, when the staging tier (H-2) made "does this project hold the consent marker"
+# part of the guard's decision - without this these tests read the REPO's own marker, which
+# has been open since 2026-07-06, and judged every run as an execution-authorised session.
+_NO_CONSENT_DIR = tempfile.mkdtemp(prefix="consent-guard-project-")
 
-def _run(payload) -> int:
+
+def _run(payload, env_extra: dict | None = None) -> int:
+    env = {k: v for k, v in os.environ.items() if not k.startswith("CST_")}
+    env["CLAUDE_PROJECT_DIR"] = _NO_CONSENT_DIR
+    if env_extra:
+        env.update(env_extra)
     proc = subprocess.run(
         [sys.executable, str(_STAGED)],
         input=json.dumps(payload),
         capture_output=True,
         text=True,
         timeout=30,
+        env=env,
     )
     return proc.returncode
 

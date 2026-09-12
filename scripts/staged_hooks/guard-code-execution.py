@@ -49,10 +49,47 @@ def _truthy(val: str | None) -> bool:
     return bool(val) and val.strip().lower() not in ("", "0", "false", "no", "off")
 
 
+def _declared_in_settings_env(name: str) -> bool:
+    """Is *name* set through a settings.json `env` block rather than the launch environment?
+
+    WHY (2026-09-12 audit, H-1). Both this guard and guard-consent-writes.py assert in their
+    own docstrings that CST_ALLOW_EXEC / CST_ALLOW_CONFIG_EDIT are human-only "because the
+    model cannot set it for this hook subprocess". That is true of the launch environment and
+    false of `.claude/settings.json`, whose `env` block Claude Code exports into hook
+    subprocesses - and which a dormant session may edit. So the variable is authoritative
+    only when the project's settings do NOT declare it: a value that arrived through a
+    model-writable file is exactly the channel the "human-only" claim excludes.
+
+    Reads both settings files because either one can carry `env`. Any read/parse failure
+    means "not declared", which keeps the launch-environment override working on a project
+    with no settings at all - the common case, and the safe direction here (this function
+    only ever REMOVES an authorisation, never grants one).
+    """
+    root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    for leaf in ("settings.json", "settings.local.json"):
+        try:
+            with open(os.path.join(root, ".claude", leaf), encoding="utf-8") as handle:
+                data = json.load(handle)
+        except Exception:  # noqa: BLE001 - absent/unreadable/unparseable: not declared
+            continue
+        env = data.get("env") if isinstance(data, dict) else None
+        if isinstance(env, dict) and name in env:
+            return True
+    return False
+
+
 def _exec_authorised() -> bool:
     """Execution is permitted if the human set CST_ALLOW_EXEC, or the consent marker exists."""
     if _truthy(os.environ.get("CST_ALLOW_EXEC")):
-        return True
+        if _declared_in_settings_env("CST_ALLOW_EXEC"):
+            sys.stderr.write(
+                "Ignoring CST_ALLOW_EXEC: it is declared in this project's .claude/settings.json "
+                "`env` block, which is a file the model can write - so it is not the human-only "
+                "launch-environment grant this gate accepts. Set it in the launch environment, "
+                "or have the USER create .claude/.exec-consent.\n"
+            )
+        else:
+            return True
     root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
     return os.path.isfile(os.path.join(root, ".claude", ".exec-consent"))
 
@@ -138,8 +175,65 @@ _EXEC_PATTERNS = [
     # (`shellcheck run-guard.sh install.sh` was blocked as if it were `sh install.sh`).
     r"(?<![\w.-])(?:bash|sh|zsh|dash|ksh)\s+(?:-c\b|\S+\.(?:sh|bash)\b)",
     rf"\b{_PY}(?:\s+-\S+)*\s+\S*\.py\b",  # run a .py FILE, flags ok: `py -3 f.py` (rec 14a)
+    # STDIN-FED EXECUTION (2026-09-12 audit, H-10). The interpreter patterns above only ever
+    # recognised `-c`, a trailing bare `-`, and a `.py` filename, so every form that feeds the
+    # code in through stdin ran unblocked: `python3 <<'EOF' ... EOF`, `python3 < evil.py`, and
+    # `cat evil.py | python3`. All three execute exactly the code under review, which is the
+    # one thing this gate exists to stop.
+    rf"\b{_PY}\s+(?:\S+\s+)*<<-?",  # heredoc into an interpreter
+    r"(?<![\w.-])(?:bash|sh|zsh|dash|ksh)\s+(?:\S+\s+)*<<-?",  # heredoc into a shell
+    rf"\b{_PY}\s+(?:-\S+\s+)*<\s*\S",  # python < file
+    r"(?<![\w.-])(?:bash|sh|zsh|dash|ksh)\s+(?:-\S+\s+)*<\s*\S",  # sh < file
+    # A pipe is a SEGMENT boundary, so `cat evil.py | python3` reaches this check as the bare
+    # segment `python3` - an interpreter with no script and no flags reads its program from
+    # stdin. `python --version` / `python -V` keep working: they carry a flag, and this
+    # alternative requires the segment to be the bare token.
+    rf"^{_PY}\s*$",
+    r"^(?:bash|sh|zsh|dash|ksh|node|ruby|perl)\s*$",
 ]
 _EXEC_RE = re.compile("|".join(_EXEC_PATTERNS), re.IGNORECASE)
+
+# Wrapper commands that change nothing about WHAT runs, only how (2026-09-12 audit, H-10).
+# Five of the patterns above are anchored with `^(?:\w+=\S+\s+)*` - which permits a VAR=value
+# prefix and nothing else - so `sudo pytest`, `nice -n 10 pytest`, `timeout 60 pytest`,
+# `env pytest`, `command pytest` and `nohup pytest &` all ran unblocked. Stripping the wrapper
+# chain before re-testing restores the anchor's intent without unanchoring the patterns, which
+# is what made `make` and `pytest` match prose in the first place (ADR-002's recurring
+# false-positive class). `xargs` and `stdbuf` are deliberately NOT here: xargs rewrites the
+# argument list rather than just prefixing it, so stripping it would judge a command that is
+# not the one that runs.
+_WRAPPER_PREFIX_RE = re.compile(
+    r"^(?:"
+    r"sudo(?:\s+-\S+)*"
+    r"|env"
+    r"|command"
+    r"|exec"
+    r"|nohup"
+    r"|nice(?:\s+-n\s+\S+)?"
+    r"|timeout(?:\s+-\S+)*\s+\S+"
+    r"|\w+=\S+"
+    r")\s+",
+    re.IGNORECASE,
+)
+
+
+def _strip_wrappers(segment: str) -> str:
+    """Peel leading wrapper tokens so the anchored _EXEC_PATTERNS see the real command.
+
+    Bounded iteration: a pathological `sudo sudo sudo ...` line must not spin here."""
+    out = segment
+    for _ in range(8):
+        stripped = _WRAPPER_PREFIX_RE.sub("", out, count=1)
+        if stripped == out:
+            break
+        out = stripped
+    return out
+
+
+def _executes(segment: str) -> bool:
+    """Does this segment execute code, as written OR once its wrappers are peeled off?"""
+    return bool(_EXEC_RE.search(segment) or _EXEC_RE.search(_strip_wrappers(segment)))
+
 
 # Subset of _EXEC_PATTERNS covering "ad hoc inline diagnostic" shapes specifically
 # (`python -c "..."`, `python -`, `node -e`, `ruby -e`, `perl -e`, `php -r`) - checked
@@ -194,6 +288,77 @@ _TEAM_SCRIPT_NAMES = (
     # run a tool whose whole job is answering a question about the plugin itself.
     r"|launch_terminal|tier_probe|audit_screens)\.py"
 )
+
+# NEVER consent-free, checked BEFORE the allow-list (2026-09-12 audit, H-2 and H-4).
+#
+# H-2: `scripts/staged_hooks/*` is deliberately left writable so the model can stage guard
+# fixes; the apply-*.sh scripts are what copy a staged file over the LIVE guard, and promotion
+# is a HUMAN act (ADR-002 rec 5). `bash scripts/apply-all-staged.sh` was matched by _TEAM_ALLOW's
+# `bash scripts/` branch and resolved inside the plugin's own scripts dir, so the whole chain
+# - edit the staged guard, run the apply script, every guard replaced - ran with no consent
+# prompt and no human in the loop. The only control was a prose note in user memory. This makes
+# it mechanical.
+_APPLY_SCRIPT_RE = re.compile(r"(?:^|[\s/\\])apply-[A-Za-z0-9._-]*\.sh(?![\w.-])", re.IGNORECASE)
+
+# H-4: scripts the plugin ships that must never run consent-free from a model turn, even
+# though they sit in the plugin's own scripts directory. `guard_daemon` binds the socket the
+# other guards route their decisions through; `headless_run`, `launch_terminal`,
+# `virt_team_launcher`, `launcher_app`, `launcher_textual` and `launcher_tiers` spawn further
+# Claude sessions or terminals; `installer_app` rewrites harness config; `eval_engage` drives
+# whole engagements; `release_gate` runs the release pipeline. None is a front-door script a
+# skill invokes on the user's behalf mid-turn, so none needs the consent-free allowance, and
+# every one of them is a way to reach further execution without ever naming it.
+_MODULE_DENY = frozenset(
+    {
+        "guard_daemon",
+        "guard_daemon_client",
+        "headless_run",
+        "launch_terminal",
+        "installer_app",
+        "eval_engage",
+        "virt_team_launcher",
+        "launcher_app",
+        "launcher_textual",
+        "launcher_tiers",
+        "release_gate",
+    }
+)
+_MODULE_FORM_RE = re.compile(r"-m\s+scripts\.([A-Za-z_][A-Za-z0-9_]*)")
+_SCRIPT_PATH_RE = re.compile(rf"scripts{_SEP}([A-Za-z_][A-Za-z0-9_]*)\.py(?![\w.-])")
+
+# A path the shell has not expanded yet: `$VAR`, `${VAR}` (POSIX) or `%VAR%` (CMD). These are
+# the only forms _resolves_into_plugin_scripts cannot resolve, and therefore the only ones the
+# basename whitelist still covers - see its docstring.
+_UNEXPANDED_VAR_RE = re.compile(r"\$\{?\w|%[A-Za-z_][A-Za-z0-9_]*%")
+
+
+def _denied_outright(seg: str) -> str | None:
+    """The reason this segment is refused before the allow-list even runs, or None.
+
+    Only ever fires on a segment that would otherwise RUN the named file - either because
+    the allow-list would have waved it through, or because it matches an execution shape.
+    Without that condition this denied reading and static analysis too (`ruff check
+    scripts/guard_daemon.py`, `cat scripts/apply-all-staged.sh`), which is the prose/argument
+    false-positive class ADR-002 has already fixed four times in this family.
+    """
+    if not (_TEAM_ALLOW.match(seg) or _executes(seg)):
+        return None
+    if _APPLY_SCRIPT_RE.search(seg):
+        return (
+            "an apply-*.sh script, which installs a model-edited staged hook over a LIVE "
+            "guard. Promoting a staged guard is a HUMAN act (ADR-002 rec 5) - ask the user "
+            "to run it"
+        )
+    # Both spellings of the same script: `-m scripts.guard_daemon` and `scripts/guard_daemon.py`.
+    for match in (_MODULE_FORM_RE.search(seg), _SCRIPT_PATH_RE.search(seg)):
+        if match and match.group(1) in _MODULE_DENY:
+            return (
+                f"scripts.{match.group(1)}, which is shipped tooling but not a front-door "
+                "script: it spawns sessions, rewrites harness config, or serves the guards "
+                "themselves, so it is never consent-free from a model turn"
+            )
+    return None
+
 
 # 0.32 (ADR-009): the COMPANY tool allowlist - literal command PREFIXES the human curates in
 # CST_COMPANY_ALLOW ('|'-separated), set in the launch environment or the settings `env`
@@ -375,6 +540,21 @@ def _block(cmd: str, segment: str | None = None) -> None:
     sys.exit(2)
 
 
+def _block_denied(reason: str, segment: str) -> None:
+    """Refusal for the never-consent-free set - deliberately NOT the consent message.
+
+    Telling the model "the USER can grant consent" would be wrong here: consent does not
+    open these, and the earlier version of this gate taught (correctly, for inline `-c`) that
+    a block message which implies a consent question sends the session to ask for one."""
+    sys.stderr.write(
+        f"Blocked (code-execution gate, CLAUDE.md §7): this command runs {reason}.\n"
+        "This is NOT a consent question - the execution-consent marker does not open it, and "
+        "asking the user to create one will not help.\n"
+        f"Offending segment: {segment[:200]}\n"
+    )
+    sys.exit(2)
+
+
 def _stamp_candidates(root):
     """Every place the acting-session stamp may live, newest layout first.
 
@@ -385,6 +565,43 @@ def _stamp_candidates(root):
         os.path.join(root, "VSIT", "engagements", _STAMP_NAME),
         os.path.join(root, "artifacts", _STAMP_NAME),
     )
+
+
+# How many stamped sessions a single stamp file may arm (2026-09-12 audit, H-13). The stamp
+# used to hold ONE session id, so a second /engage in the same project silently disarmed the
+# first session mid-engagement, and a resume after compaction disarmed itself. It now carries a
+# list; the cap keeps an abandoned session from arming the gate forever, and keeps the file's
+# size bounded. Newest entries win - the writer appends, so the tail is the live set.
+_MAX_STAMPED_SESSIONS = 8
+
+
+def _stamped_session_ids(stamp_path) -> tuple:
+    """Every session id this stamp file arms, across both formats.
+
+    Legacy: {"session": "<id>"} - one session, still honoured so a stamp written before the
+    format change keeps working. Current: {"session_id": "<latest>", "sessions": [{"id": ...,
+    "stamped_at": ...}, ...]}. Anything unreadable or unparseable yields no ids, which is the
+    dormant direction for this reader (the ARMED-on-no-session-id decision is made by the
+    caller, not here)."""
+    try:
+        with open(stamp_path, encoding="utf-8") as handle:
+            data = json.loads(handle.read())
+    except Exception:  # noqa: BLE001 - absent/unreadable/unparseable: arms nothing
+        return ()
+    if not isinstance(data, dict):
+        return ()
+    ids = []
+    for key in ("session", "session_id"):
+        value = data.get(key)
+        if isinstance(value, str) and value:
+            ids.append(value)
+    sessions = data.get("sessions")
+    if isinstance(sessions, list):
+        for entry in sessions[-_MAX_STAMPED_SESSIONS:]:
+            value = entry.get("id") if isinstance(entry, dict) else entry
+            if isinstance(value, str) and value:
+                ids.append(value)
+    return tuple(ids)
 
 
 def _team_invoked_this_session(payload) -> bool:
@@ -417,11 +634,7 @@ def _team_invoked_this_session(payload) -> bool:
     # package being importable. Checking both costs one stat on a file that usually is not
     # there.
     for stamp_path in _stamp_candidates(root):
-        try:
-            stamp = json.loads(open(stamp_path, encoding="utf-8").read()).get("session")
-        except Exception:
-            continue
-        if stamp == sid:
+        if sid in _stamped_session_ids(stamp_path):
             return True
     return False  # no stamp anywhere = the team was never invoked here - dormant
 
@@ -454,6 +667,21 @@ def _resolves_into_plugin_scripts(seg: str) -> bool:
     Residual, stated rather than hidden: a lexical guard cannot resolve `-m` lookups through
     sys.path, so the module form falls back to "does the plugin actually ship that script".
     This narrows a wide hole, it does not close it. ADR-002 covers the general residual.
+
+    2026-09-12 audit (H-3), the ordering inverted. The basename whitelist was checked FIRST
+    and `continue`d on a hit, so LOCATION was never enforced for any whitelisted name. The
+    model holds an unrestricted Write tool: `Write /tmp/scripts/ingest.py` followed by
+    `python /tmp/scripts/ingest.py` was arbitrary, consent-free code execution. The
+    docstring conceded "a hostile file named render_html.py in a scripts/ dir would pass" as
+    an external-attacker residual, but the model is the party this gate constrains and it can
+    create the file itself.
+
+    The whitelist still exists for the one case it was added for and the only case that
+    genuinely cannot be resolved: a path carrying an UNEXPANDED shell/CMD variable
+    (`"$CLAUDE_SKILL_DIR/../../../scripts/render_html.py"`,
+    `"%CLAUDE_PLUGIN_ROOT%\\scripts\\render_html.py"`). A path with nothing to expand IS
+    resolvable, so it is resolved, and it must land inside the plugin's own scripts
+    directory whatever it is called.
     """
     try:
         here = os.path.dirname(os.path.abspath(__file__))
@@ -463,28 +691,29 @@ def _resolves_into_plugin_scripts(seg: str) -> bool:
 
     root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
     saw_path = False
-    for match in re.finditer(r"(?:^|\s)([^\s\"']*scripts[/\\][^\s\"']+)", seg):
+    # The opening delimiter accepts a quote as well as whitespace (2026-09-12, H-3): a QUOTED
+    # path never matched this pattern at all, so `python3 "/tmp/scripts/render_html.py"` -
+    # which _TEAM_ALLOW's quoted branch accepts on its basename - reached this function, found
+    # no path to judge, and was allowed. The quoted form is the bundled-plugin form; it has to
+    # be judged by the same rule as the unquoted one.
+    for match in re.finditer(r"(?:^|[\s\"'])([^\s\"']*scripts[/\\][^\s\"']+)", seg):
         saw_path = True
         referenced = match.group(1)
-        # WHITELISTED BASENAME FIRST, and this ordering is the whole correctness of the
-        # function. The bundled-plugin form is
-        #     python3 "$CLAUDE_SKILL_DIR/../../../scripts/render_html.py" ...
-        # which carries an UNEXPANDED shell variable, so it cannot be resolved by anyone,
-        # let alone by a lexical guard. That is exactly why the basename whitelist exists
-        # (see the module docstring: "invoked by absolute path from a foreign project,
-        # basename-whitelisted"). My first version resolved before checking the name and
-        # refused all three bundled cases, breaking /engage from a foreign project - caught
-        # by tests/test_guards.py, which was right and I was wrong.
         # Split on BOTH separators, never os.path.basename: this guard runs on Linux too,
         # where basename does not treat a backslash as a separator, so a Windows command
         # (`py C:\plugin\scripts\check_artifacts.py`) came back whole and matched nothing.
         # The rest of this file is careful about `[/\\]` everywhere for the same reason.
         leaf = re.split(r"[/\\]", referenced)[-1]
-        if re.fullmatch(_TEAM_SCRIPT_NAMES, leaf):
-            continue
-        # Not one of ours by name: then it must be one of ours by LOCATION, which is what
-        # closes the hole this function was added for. A client repo's scripts/deploy.py
-        # satisfies neither.
+        if _UNEXPANDED_VAR_RE.search(referenced):
+            # Nothing can resolve this - not this guard, not a reader. The basename is the
+            # only discriminator there is, so it is the one that applies, exactly as before.
+            if re.fullmatch(_TEAM_SCRIPT_NAMES, leaf):
+                continue
+            return False
+        # Fully literal: resolvable, therefore resolved. A relative `scripts/x.py` resolves
+        # against the invocation's project, which in plugin mode is the CLIENT repo, so it
+        # lands outside the plugin and is refused; the same command inside the plugin's own
+        # repo resolves inside and is allowed.
         try:
             resolved = os.path.realpath(os.path.join(root, referenced))
         except Exception:  # noqa: BLE001
@@ -495,8 +724,9 @@ def _resolves_into_plugin_scripts(seg: str) -> bool:
         return True
 
     # `-m scripts.<name>` carries no path to resolve, so judge it by whether the plugin
-    # actually ships that script.
-    module = re.search(r"-m\s+scripts\.([A-Za-z_][A-Za-z0-9_]*)", seg)
+    # actually ships that script. The deny set (_MODULE_DENY) is applied earlier, in
+    # _denied_outright, so it cannot be reached through this allowance either.
+    module = _MODULE_FORM_RE.search(seg)
     if module:
         return os.path.isfile(os.path.join(plugin_scripts, module.group(1) + ".py"))
     return True
@@ -515,22 +745,29 @@ def main() -> None:
     if not _team_invoked_this_session(payload):
         sys.exit(0)
 
-    # Execution authorised (human-created consent marker, or human env-var override).
-    if _exec_authorised():
-        sys.exit(0)
-
     cmd = (payload.get("tool_input", {}) or {}).get("command", "") or ""
     if not cmd:
+        sys.exit(0)
+
+    # The never-consent-free set is checked BEFORE the authorisation shortcut, deliberately.
+    # Execution consent authorises running the code UNDER REVIEW in a sandbox; it was never a
+    # grant to replace the guards or to spawn further sessions, and an execution-authorised
+    # engaged session must not also be able to rewrite the gate that authorised it.
+    for seg in _segments(cmd):
+        reason = _denied_outright(seg)
+        if reason:
+            _block_denied(reason, seg)
+
+    # Execution authorised (human-created consent marker, or human env-var override).
+    if _exec_authorised():
         sys.exit(0)
 
     # Evaluate each segment independently: allow the team's own tooling, block anything that
     # executes code. A blocked segment anywhere in the command blocks the whole command.
     for seg in _segments(cmd):
-        if (_TEAM_ALLOW.match(seg) and _resolves_into_plugin_scripts(seg)) or _company_allowed(
-            seg
-        ):
+        if (_TEAM_ALLOW.match(seg) and _resolves_into_plugin_scripts(seg)) or _company_allowed(seg):
             continue
-        if _EXEC_RE.search(seg):
+        if _executes(seg):
             _block(cmd, seg)
 
     sys.exit(0)

@@ -144,6 +144,49 @@ def _block_size(path: str, count: int) -> None:
     sys.exit(2)
 
 
+# Shell shapes that WRITE a file, and where the target sits in each (2026-09-12, H-14).
+# Lexical, like every other Bash check in this guard family - ADR-002's irreducible residual
+# applies here too, and is why the Write/Edit channel remains the strong control. Read-only
+# work (cat, grep, ls, python -m scripts.x) matches nothing here and is untouched.
+_BASH_WRITE_PATTERNS = (
+    re.compile(r">>?\s*([^\s;&|<>]+)"),  # redirect, truncating or appending
+    re.compile(r"(?:^|[;&|\s])tee\s+(?:-\S+\s+)*([^\s;&|]+)"),
+    re.compile(r"(?:^|[;&|\s])(?:cp|mv|install|ln)\s+(?:-\S+\s+)*\S+\s+([^\s;&|]+)"),
+    re.compile(r"(?:^|[;&|\s])sed\s+-i\S*\s+(?:-\S+\s+)*\S+\s+([^\s;&|]+)"),
+    re.compile(r"(?:^|[;&|\s])(?:touch|truncate|dd\s+of=)\s*(?:-\S+\s+)*([^\s;&|]+)"),
+    re.compile(r"""open\(\s*['"]([^'"]+)['"]\s*,\s*['"][wa]"""),  # python -c open(...,'w')
+)
+
+
+def _bash_write_target_outside_pack(command: str) -> str:
+    """The first write target in *command* that is not this agent's own pack path, or "".
+
+    Fail-closed for the four scoped agents: an unparseable or unrecognised write target is
+    reported rather than waved through, because a grant scoped to one file has to refuse what
+    it cannot prove is that file."""
+    if not command:
+        return ""
+    for pattern in _BASH_WRITE_PATTERNS:
+        for match in pattern.finditer(command):
+            target = match.group(1).strip("\"'")
+            if not target or target in ("/dev/null", "/dev/stderr", "/dev/stdout"):
+                continue
+            if not _pack_path_ok(target):
+                return target
+    return ""
+
+
+def _block_bash_scope(agent_type: str, target: str) -> None:
+    sys.stderr.write(
+        f"Blocked (findings-pack write scope via Bash, agent={agent_type}): this agent may "
+        "write exactly one thing - its own findings-pack JSONL at "
+        "artifacts/<slug>/data/findings-*.jsonl (or the VSIT/engagements equivalent) - and "
+        f"this command writes to {target!r}. Use the Write/Edit tool on the pack path; "
+        "everything else stays with the orchestrator or a build agent.\n"
+    )
+    sys.exit(2)
+
+
 def _large_context_split_enabled() -> bool:
     root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
     try:
@@ -207,9 +250,18 @@ def _pack_path_ok(path: str) -> bool:
         artifacts/../data/findings-x.jsonl            traversal out of the root
         artifacts/../../../etc/artifacts/data/f.jsonl traversal, then back in
 
-    So: reject any `..` segment outright, and require the resolved path to sit inside the
-    project. A grant scoped to one file is worth nothing if the path to it can leave and
-    come back.
+    So: reject any `..` segment outright. A grant scoped to one file is worth nothing if the
+    path to it can leave and come back.
+
+    NOT ALSO containment inside CLAUDE_PROJECT_DIR, deliberately. An absolute path to the
+    pack is a supported form and is pinned by tests
+    (test_scoped_agents_can_edit_an_absolute_findings_pack_path, and the Windows
+    `C:\\project\\artifacts\\...` pair), and this hook cannot know which project such a path
+    belongs to - the agent may legitimately be working outside cwd. A containment check here
+    therefore broke a documented contract while adding nothing that the `..` rule does not
+    already cover: without `..`, a path cannot climb out of wherever it names. (That
+    paragraph sat BELOW the return until 2026-09-12, where it read as a suppressed branch -
+    audit H-31.)
     """
     if not _ALLOWED_PATH_RE.search(path):
         return False
@@ -217,14 +269,6 @@ def _pack_path_ok(path: str) -> bool:
     # `artifacts/../data/findings-x.jsonl` and `artifacts/../../../etc/artifacts/data/
     # findings-x.jsonl` both matched the shape while pointing somewhere else entirely.
     return not any(part == ".." for part in re.split(r"[/\\]", path))
-
-    # NOT ALSO containment inside CLAUDE_PROJECT_DIR, deliberately. An absolute path to the
-    # pack is a supported form and is pinned by tests
-    # (test_scoped_agents_can_edit_an_absolute_findings_pack_path, and the Windows
-    # `C:\project\artifacts\...` pair), and this hook cannot know which project such a path
-    # belongs to - the agent may legitimately be working outside cwd. A containment check
-    # here therefore broke a documented contract while adding nothing that the `..` rule
-    # does not already cover: without `..`, a path cannot climb out of wherever it names.
 
 
 def main() -> int:
@@ -234,12 +278,26 @@ def main() -> int:
         return 0  # malformed payload - fail open, matches every other guard's policy
 
     tool_name = payload.get("tool_name")
+    tool_input = payload.get("tool_input") or {}
+    agent_type = payload.get("agent_type") or ""
+
+    if tool_name == "Bash":
+        # 2026-09-12 audit (H-14 / W-7). The scoping was Write/Edit-only while all four
+        # scoped agents hold Bash, so `cat > /anywhere`, `tee`, `cp`, `mv` and `sed -i` were
+        # completely unscoped - CLAUDE.md §6 calls this grant "mechanically enforced" and
+        # says "neither grant can widen in practice"; the shell channel widened it to the
+        # whole filesystem. Lexical and fail-CLOSED, for these four agent_types only: no
+        # other caller is affected by anything below.
+        if agent_type in _SCOPED_AGENTS:
+            offending = _bash_write_target_outside_pack(tool_input.get("command") or "")
+            if offending:
+                _block_bash_scope(agent_type, offending)
+        return 0
+
     if tool_name not in ("Write", "Edit"):
         return 0
 
-    tool_input = payload.get("tool_input") or {}
     path = tool_input.get("file_path") or ""
-    agent_type = payload.get("agent_type") or ""
 
     # Scoping half: only the four named reviewer agents are restricted to their own pack
     # path - applies to both Write and Edit, the same narrow grant extended to a second tool.
@@ -250,7 +308,10 @@ def main() -> int:
     # module docstring for why Edit no longer needs a blanket exemption). Any call to a
     # findings-pack-shaped path - scoped agent OR the orchestrator's own - once the project
     # has opted into large_context_review_split.
-    if _ALLOWED_PATH_RE.search(path) and _large_context_split_enabled():
+    # _pack_path_ok, not the raw shape regex (2026-09-12 audit, H-31): the two halves of this
+    # guard disagreed about what counts as a pack path, so a traversal path was refused by
+    # the scoping half and still measured by the size half. One definition, used twice.
+    if _pack_path_ok(path) and _large_context_split_enabled():
         count = _new_finding_count(tool_name, tool_input)
         if count is not None and count > _MAX_FINDINGS_PER_WRITE:
             _block_size(path, count)

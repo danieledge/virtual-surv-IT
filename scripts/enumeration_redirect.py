@@ -47,6 +47,52 @@ _ALLOW_RE = re.compile(
 )
 
 
+_STAMP_NAME = ".team-session.json"
+_MAX_STAMPED_SESSIONS = 8
+
+
+def _stamp_candidates(root):
+    """Every place the acting-session stamp may live, newest layout first.
+
+    2026-09-12 audit (H-22). On 2026-09-11 both safety guards were fixed to read the stamp
+    from BOTH layouts, with a comment recording what the single-path read had cost ("in every
+    project created since then the stamp was never found, this returned False, and the gate
+    was OFF"). The same fix was not applied here, so in any VSIT-layout project - the default
+    since PREFER_NEW_LAYOUT became true on 2026-08-28 - this rule was permanently silent: a
+    cost control reporting healthy and doing nothing. Copied verbatim from
+    guard-code-execution.py rather than imported, for the reason given there: a hook must not
+    depend on the scripts package being importable.
+    """
+    return (
+        os.path.join(root, "VSIT", "engagements", _STAMP_NAME),
+        os.path.join(root, "artifacts", _STAMP_NAME),
+    )
+
+
+def _stamped_session_ids(stamp_path) -> tuple:
+    """Every session id this stamp arms - legacy {"session": id} and the current
+    {"session_id": ..., "sessions": [...]} alike (2026-09-12, H-13)."""
+    try:
+        with open(stamp_path, encoding="utf-8") as handle:
+            data = json.loads(handle.read())
+    except Exception:  # noqa: BLE001 - absent/unreadable: arms nothing
+        return ()
+    if not isinstance(data, dict):
+        return ()
+    ids = []
+    for key in ("session", "session_id"):
+        value = data.get(key)
+        if isinstance(value, str) and value:
+            ids.append(value)
+    sessions = data.get("sessions")
+    if isinstance(sessions, list):
+        for entry in sessions[-_MAX_STAMPED_SESSIONS:]:
+            value = entry.get("id") if isinstance(entry, dict) else entry
+            if isinstance(value, str) and value:
+                ids.append(value)
+    return tuple(ids)
+
+
 def _team_invoked_this_session(payload) -> bool:
     """Advisory polarity: arm only on a POSITIVE stamp match; anything unknowable
     (no session id, no stamp) stays silent - a dormant or plain-Claude session must
@@ -56,13 +102,7 @@ def _team_invoked_this_session(payload) -> bool:
     if not sid:
         return False
     root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
-    try:
-        stamp = json.loads(
-            open(os.path.join(root, "artifacts", ".team-session.json"), encoding="utf-8").read()
-        ).get("session")
-    except Exception:
-        return False
-    return stamp == sid
+    return any(sid in _stamped_session_ids(path) for path in _stamp_candidates(root))
 
 
 def main() -> int:

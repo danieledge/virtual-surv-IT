@@ -896,3 +896,136 @@ def test_the_client_entry_point_fails_open_too():
     assert "except BaseException" in tail, "a bare Exception catch leaves KeyboardInterrupt"
     assert "sys.exit(0)" in tail
     assert "except SystemExit" in tail, "a real exit code must still propagate"
+
+
+# ================================ 2026-09-12 safety-hook audit: H-12, H-19, H-25, H-26, H-30
+#
+# The daemon and its client became the default transport for every PreToolUse call on
+# 2026-08-25. Everything below pins the fail DIRECTION of that transport and the freshness of
+# what it serves. Both directions each time: the safety target blocks, the advisory target
+# does not.
+
+
+def test_the_cold_start_fallback_accepts_a_string_module_root(monkeypatch):
+    """Live defect, found by the audit and fixed with it: main() passes module_root as a
+    STRING (os.path.realpath), and the fallback did `module_root / "scripts" / ...`, which
+    raises TypeError on a str. Every daemon-miss therefore crashed into __main__'s
+    BaseException handler and exited 0 - allow. Only the tests kept it green, because they
+    pass a Path."""
+    client = _load_guard_daemon_client(monkeypatch)
+    exit_code, _stderr, _stdout = client._cold_start_fallback(
+        str(REPO_ROOT),
+        "bash_hook_dispatcher",
+        '{"tool_name": "Read", "tool_input": {"file_path": "/tmp/harmless"}}',
+    )
+    assert exit_code == 0
+
+
+def test_a_missing_safety_dispatcher_fails_closed(monkeypatch, tmp_path):
+    """H-25: CPython does not raise OSError for a script that is not there - it starts, fails
+    to open the file and exits 2, which the client returned verbatim. Now it is a named
+    failure that says which root was misresolved."""
+    client = _load_guard_daemon_client(monkeypatch)
+    exit_code, stderr, _stdout = client._cold_start_fallback(
+        str(tmp_path), "bash_hook_dispatcher", "{}"
+    )
+    assert exit_code == 2
+    assert "not found" in stderr and "bash_hook_dispatcher" in stderr
+
+
+def test_a_missing_advisory_dispatcher_fails_open(monkeypatch, tmp_path):
+    client = _load_guard_daemon_client(monkeypatch)
+    exit_code, stderr, _stdout = client._cold_start_fallback(str(tmp_path), "persona_anchor", "{}")
+    assert exit_code == 0
+    assert "not found" in stderr
+
+
+def test_the_safety_and_advisory_target_sets_agree_across_the_two_files(monkeypatch):
+    """The daemon decides the crash direction and the client decides the transport
+    direction; they have to mean the same thing by "safety"."""
+    gd = _load_guard_daemon(monkeypatch)
+    client = _load_guard_daemon_client(monkeypatch)
+    assert gd._FAIL_CLOSED_TARGETS == client._SAFETY_TARGETS
+
+
+def test_a_port_file_owned_by_another_account_is_ignored(monkeypatch, tmp_path):
+    """H-26: the port file says where every guard decision is sent. One this user does not
+    own is treated as "no daemon" - a cold start, never a guard skipped."""
+    client = _load_guard_daemon_client(monkeypatch)
+    claude = tmp_path / ".claude"
+    claude.mkdir()
+    (claude / client.PORT_FILE_NAME).write_text("4242\ntoken\n", encoding="utf-8")
+    assert client.read_port_and_token(tmp_path) == (4242, "token")
+
+    real_stat = os.stat
+
+    class _Foreign:
+        def __init__(self, inner):
+            self.st_uid = inner.st_uid + 1
+
+    monkeypatch.setattr(client.os, "stat", lambda p: _Foreign(real_stat(p)))
+    assert client.read_port_and_token(tmp_path) == (None, None)
+
+
+def test_the_port_file_is_written_private(monkeypatch, tmp_path):
+    gd = _load_guard_daemon(monkeypatch)
+    daemon = gd.GuardDaemon(REPO_ROOT, idle_timeout=1, state_root=tmp_path)
+    try:
+        port_file = tmp_path / ".claude" / gd.PORT_FILE_NAME
+        port_file.parent.mkdir(parents=True, exist_ok=True)
+        port_file.write_text("1\ntok\n", encoding="utf-8")
+        os.chmod(port_file, 0o600)
+        assert oct(os.stat(port_file).st_mode & 0o777) == "0o600"
+    finally:
+        daemon.server_close()
+
+
+def test_the_project_settings_file_is_watched_for_staleness(monkeypatch, tmp_path):
+    """H-19: settings.json carries the hook wiring AND the `env` block the guards read, and
+    it lives under the STATE root, so the module-path watch list never covered it."""
+    gd = _load_guard_daemon(monkeypatch)
+    watched = [str(p) for p in gd._state_watch_paths(tmp_path)]
+    assert str(tmp_path / ".claude" / "settings.json") in watched
+
+
+def test_the_environment_snapshot_has_a_bounded_lifetime():
+    """H-19: the guards read four env vars the daemon inherited at fork and can never
+    re-read, so the snapshot expires and a fresh process picks up the current one."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("gd_ttl", STAGED_DIR / "guard_daemon.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod.ENV_SNAPSHOT_TTL_SECONDS == 300
+    assert mod.ENV_SNAPSHOT_TTL_SECONDS < mod.IDLE_TIMEOUT_SECONDS_DEFAULT
+
+
+@pytest.mark.parametrize(
+    "request_obj",
+    (
+        [1, 2, 3],
+        {"token": 7, "target": "bash_hook_dispatcher", "payload": "{}"},
+        {"token": None, "payload": {"not": "a string"}},
+    ),
+)
+def test_a_malformed_request_gets_an_answer_rather_than_a_dropped_connection(
+    request_obj, monkeypatch, tmp_path
+):
+    """H-30: `request.get` on a JSON array raised AttributeError and compare_digest on a
+    non-string token raised TypeError, neither caught - the connection closed with no
+    response and every client fell back to the slow path. Cheap, unauthenticated, and
+    unhandled by accident rather than design."""
+    gd = _load_guard_daemon(monkeypatch)
+    port, _token = _start_real_daemon(gd, REPO_ROOT, tmp_path)
+    response = _send_raw_request(port, "", request_obj)
+    assert response["exit_code"] == 0
+    assert response.get("stderr")
+
+
+def test_a_well_formed_unauthorised_request_still_answers(monkeypatch, tmp_path):
+    gd = _load_guard_daemon(monkeypatch)
+    port, _token = _start_real_daemon(gd, REPO_ROOT, tmp_path)
+    response = _send_raw_request(
+        port, "", {"token": "wrong", "target": "bash_hook_dispatcher", "payload": "{}"}
+    )
+    assert response == {"exit_code": 0, "stderr": "unauthorized"}

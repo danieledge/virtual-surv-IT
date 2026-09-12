@@ -244,8 +244,23 @@ if [ -n "$_daemon_target" ]; then
 		_use_daemon=0
 	fi
 	_prefs="$_project_root/.claude/team-preferences.json"
+	# 2026-09-12 audit (H-32): team-preferences.json is model-writable and this key chooses
+	# which path the guards take. Only the OFF direction is gated - turning the daemon off
+	# costs performance, never a check, but a file this process cannot attribute to the user
+	# should not be the thing that changes guard routing. `-O` (owned by the effective user)
+	# is a bash/ksh/zsh test operator that dash does not have, so it is probed first: if the
+	# operator is unavailable the preference is honoured exactly as before, which is the
+	# brief's own instruction for the unavailable case. `-h` (symlink) is POSIX.
+	_prefs_trusted=1
 	if [ -f "$_prefs" ]; then
-		if _json_has "$_prefs" guard_daemon false; then
+		if [ -h "$_prefs" ]; then
+			_prefs_trusted=0
+		elif { [ -O "$_prefs" ] || [ ! -O "$_prefs" ]; } 2>/dev/null; then
+			[ -O "$_prefs" ] 2>/dev/null || _prefs_trusted=0
+		fi
+	fi
+	if [ -f "$_prefs" ]; then
+		if [ "$_prefs_trusted" = 1 ] && _json_has "$_prefs" guard_daemon false; then
 			_use_daemon=0
 		elif _json_has "$_prefs" guard_daemon true; then
 			_use_daemon=1
@@ -348,8 +363,15 @@ if [ ! -f "$CACHE" ]; then
 		CACHE="$_project_root/.claude/.guard-interpreter"
 	fi
 fi
-LOCK_MAX_AGE_SECONDS=10  # generous upper bound for one interpreter start + guard check;
-# older means the holder is gone, not genuinely still working.
+# 2026-09-12 audit (H-20). This was 10 seconds, four lines below this file's OWN recorded
+# measurement that cold starts on a corp-AV-scanned Windows box run "2-9s normally, 25-90s
+# under fan-out contention" - so a genuinely working holder was declared abandoned, its lock
+# directory removed, and its own EXIT trap then deleted whichever OTHER process's lock
+# directory existed by then. Age is now the BACKSTOP, not the primary signal: the holder
+# writes its pid into the stamp and a lock is only reclaimed when that pid is gone, or when
+# the lock is older than this (for a stamp with no pid - an older holder, or a stamp write
+# that half-succeeded).
+LOCK_MAX_AGE_SECONDS=120
 
 # LOCK_WAIT_BUDGET_MS must exceed real interpreter cold-start time on THIS host, or a
 # waiting caller gives up and races ahead unlocked before the current holder could
@@ -412,7 +434,6 @@ fi
 LOCK_WAIT_BUDGET_MS=$(( _measured_ms * 4 ))
 [ "$LOCK_WAIT_BUDGET_MS" -ge 1500 ] 2>/dev/null || LOCK_WAIT_BUDGET_MS=1500
 [ "$LOCK_WAIT_BUDGET_MS" -le 20000 ] 2>/dev/null || LOCK_WAIT_BUDGET_MS=20000
-LOCK_POLL_MS=25
 
 # Ensure the PARENT exists once, up front - mkdir "$LOCK_DIR" below deliberately has no -p
 # (an existing target must make it fail, that failure IS the "someone else holds it" signal
@@ -421,11 +442,28 @@ LOCK_POLL_MS=25
 # before falling through to fail-open, rather than succeeding immediately as it should.
 mkdir -p "$(dirname "$LOCK_DIR")" 2>/dev/null
 
+# How long a poll REALLY takes (2026-09-12 audit, H-20). `_elapsed_ms` was incremented by a
+# constant LOCK_POLL_MS regardless of what the sleep actually cost, and the fallback `sleep 1`
+# - taken whenever fractional sleep is unsupported, as on some BSD/busybox `sleep` - still
+# counted as 25ms. Exhausting a 1500ms budget therefore took 60 REAL seconds, on every
+# contended tool call.
+#
+# Probed LAZILY, inside the loop, at the first poll - not here. An unconditional probe costs a
+# real 25ms sleep on every invocation, contended or not, and this launcher runs on every tool
+# call: measured, that alone pushed a 5-way fan-out past its own wait budget and broke the
+# serialization the lock exists for (tests/test_run_guard_lock.py::
+# test_concurrent_calls_are_actually_serialized, caught before this shipped). A caller that
+# reaches the first poll was about to sleep anyway, so there the probe is free.
+LOCK_POLL_MS=25
+_lock_sleep=""
+
 _lock_acquired=0
 _elapsed_ms=0
 while [ "$_elapsed_ms" -lt "$LOCK_WAIT_BUDGET_MS" ]; do
 	if mkdir "$LOCK_DIR" 2>/dev/null; then
-		if date +%s >"$LOCK_STAMP" 2>/dev/null; then
+		# The pid goes in alongside the timestamp so a waiter can tell a working holder
+		# from an abandoned lock directly, instead of guessing from an age threshold.
+		if { date +%s; echo "$$"; } >"$LOCK_STAMP" 2>/dev/null; then
 			_lock_acquired=1
 		else
 			# Stamp write failed even though mkdir succeeded (2026-08-11 corp report: seen
@@ -446,16 +484,80 @@ while [ "$_elapsed_ms" -lt "$LOCK_WAIT_BUDGET_MS" ]; do
 		break
 	fi
 	if [ -f "$LOCK_STAMP" ]; then
-		_stamp=$(cat "$LOCK_STAMP" 2>/dev/null)
+		_stamp=""
+		_holder=""
+		_line=""
+		while IFS= read -r _line || [ -n "$_line" ]; do
+			if [ -z "$_stamp" ]; then _stamp="$_line"; else _holder="$_line"; fi
+		done <"$LOCK_STAMP" 2>/dev/null
 		_now=$(date +%s 2>/dev/null)
-		if [ -n "$_stamp" ] && [ -n "$_now" ] && [ "$((_now - _stamp))" -gt "$LOCK_MAX_AGE_SECONDS" ] 2>/dev/null; then
+		_reclaim=0
+		if [ -n "$_holder" ]; then
+			# A live holder is never reclaimed, however long it has been working - the
+			# whole point of the 2026-09-12 fix. `kill -0` is a shell builtin: no fork,
+			# and it only reports whether the process exists. A pid we cannot signal
+			# (another user's) counts as alive, which is the safe direction.
+			if ! kill -0 "$_holder" 2>/dev/null; then
+				_reclaim=1
+			fi
+		elif [ -n "$_stamp" ] && [ -n "$_now" ] &&
+			[ "$((_now - _stamp))" -gt "$LOCK_MAX_AGE_SECONDS" ] 2>/dev/null; then
+			# No pid in the stamp (an older holder, or a half-written stamp): fall back to
+			# the age backstop.
+			_reclaim=1
+		fi
+		if [ "$_reclaim" = 1 ]; then
+			# RE-READ before removing. The reclaim tears down a directory another process
+			# may have created in the microseconds since the read above - the holder's own
+			# EXIT trap removes its lock, the next caller immediately creates a fresh one,
+			# and a reclaimer acting on the OLD read then deletes that caller's live lock
+			# and runs alongside it. The audit named this shape for the age-based reclaim
+			# ("its own trap then deletes whichever OTHER process's lock dir exists by
+			# then"); making the dead-pid check fast enough to actually fire turned it from
+			# theoretical into reproducible - measured, 1-2 of 5 fan-out calls overlapping.
+			# A lock recreated by someone else carries THEIR pid, so requiring the stamp to
+			# still name the same dead holder is what distinguishes the two.
+			_stamp2=""
+			_holder2=""
+			_line=""
+			while IFS= read -r _line || [ -n "$_line" ]; do
+				if [ -z "$_stamp2" ]; then _stamp2="$_line"; else _holder2="$_line"; fi
+			done <"$LOCK_STAMP" 2>/dev/null
+			if [ "$_holder2" != "$_holder" ] || [ "$_stamp2" != "$_stamp" ]; then
+				_elapsed_ms=$((_elapsed_ms + LOCK_POLL_MS))
+				continue  # someone else owns it now - poll again, do not tear it down
+			fi
 			rm -rf "$LOCK_DIR" 2>/dev/null
+			# Counted against the budget too (H-20): the reclaim path used to `continue`
+			# without advancing, so a lock being re-created as fast as it was removed
+			# looped unbounded.
+			_elapsed_ms=$((_elapsed_ms + LOCK_POLL_MS))
 			continue
 		fi
 	fi
-	sleep 0.025 2>/dev/null || sleep 1
+	if [ -z "$_lock_sleep" ]; then
+		# First poll: probe fractional-sleep support by USING it. The probe's own sleep is
+		# this poll's sleep, so it costs nothing extra.
+		if sleep 0.025 2>/dev/null; then
+			LOCK_POLL_MS=25
+			_lock_sleep="sleep 0.025"
+		else
+			LOCK_POLL_MS=1000
+			_lock_sleep="sleep 1"
+		fi
+	else
+		$_lock_sleep 2>/dev/null || true
+	fi
 	_elapsed_ms=$((_elapsed_ms + LOCK_POLL_MS))
 done
+if [ "$_lock_acquired" != 1 ] && [ "$_elapsed_ms" -ge "$LOCK_WAIT_BUDGET_MS" ]; then
+	# Visible, on stderr (this script's stdout belongs to the guard it wraps). Failing open
+	# here is deliberate and long-standing - a stuck serialization mechanism must not brick
+	# every tool call - but it was silent, so a session paying it had no way to know.
+	echo "run-guard.sh: note: waited ${LOCK_WAIT_BUDGET_MS}ms for the guard lock and" \
+		"proceeded without serialization for this call (performance only; the guard" \
+		"itself still runs)" >&2
+fi
 if [ "$_lock_acquired" = 1 ]; then
 	# Covers the interpreter (or crash/kill) exiting abnormally; SIGKILL still can't be
 	# trapped by design (POSIX), which is exactly why the stale-lock reclaim above exists as
@@ -493,7 +595,13 @@ else
 fi
 for interpreter in $order; do
 	if command -v "$interpreter" >/dev/null 2>&1; then
-		if "$interpreter" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1; then
+		# 3.10, matching pyproject.toml's requires-python (2026-09-12 audit, H-28). This
+		# accepted 3.9 on the grounds that the guard FILES are 3.9-safe, which they are -
+		# but guard_daemon.py imports the whole `scripts` package into the daemon and
+		# nothing pins those modules to 3.9. On a 3.9-only host the mismatch surfaces as
+		# "the daemon won't start" plus a permanent cold-start penalty on every call,
+		# rather than as an error anyone can act on.
+		if "$interpreter" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' >/dev/null 2>&1; then
 			mkdir -p "$(dirname "$CACHE")" 2>/dev/null
 			# F6 (2026-08-26 perf audit): cache the RESOLVED PATH, not the bare name.
 			# The fast path re-runs `command -v "$_fastcached"` on every single call, and

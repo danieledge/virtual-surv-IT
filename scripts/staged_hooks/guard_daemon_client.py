@@ -46,6 +46,27 @@ import time
 _CONNECT_TIMEOUT = 0.5
 _RESPONSE_TIMEOUT = 20.0
 
+# Which targets carry SAFETY decisions, and therefore which way this transport fails when it
+# cannot produce a real answer (2026-09-12 audit, H-12 / H-25).
+#
+# The daemon has been on by default since 2026-08-25, so this client is now the transport for
+# every PreToolUse call - and its __main__ swallowed BaseException and exited 0, while
+# _cold_start_fallback returned 0 on any OSError or timeout. Every guard's carefully-argued
+# fail-CLOSED policy ("failing closed (blocked)", written into each guard's own __main__) sat
+# downstream of a transport that failed open. A stdin decode error, a MemoryError, an
+# unexpected response shape: the tool call proceeded with nothing checking it and no trace.
+#
+# The split is by CONSEQUENCE, not by convenience. bash_hook_dispatcher carries the raw-data
+# wall, the execution gate, the consent-write gate and the findings-pack scope - if it cannot
+# run, the safe answer is "blocked", and the user sees why on stderr. The rest inject context
+# or nudge; a failure there costs the nudge and must never block a tool call.
+_SAFETY_TARGETS = frozenset({"bash_hook_dispatcher"})
+
+
+def _fail_code(target: str) -> int:
+    return 2 if target in _SAFETY_TARGETS else 0
+
+
 # H3 (2026-08-14 perf audit): a daemon that can NEVER actually start (e.g.
 # CREATE_BREAKAWAY_FROM_JOB denied on a locked-down Windows sandbox, or one of the six
 # daemon target modules failing to import inside guard_daemon.py's constructor) used to
@@ -116,6 +137,16 @@ def read_port_and_token(state_root):
     F2 (2026-08-26 perf audit): os.path, not pathlib. Accepts str or Path either way."""
     port_file = os.path.join(str(state_root), ".claude", PORT_FILE_NAME)
     try:
+        # OWNERSHIP (2026-09-12 audit, H-26). This file says where every guard decision is
+        # sent; anything that can replace it redirects them to a server of its choosing,
+        # which can answer `exit_code: 0` for everything. The daemon writes it 0600 now, and
+        # this refuses to follow one that another account owns - "not ours" is treated as
+        # "no daemon", which costs a cold start and never costs a guard. getuid is POSIX
+        # only; on Windows the check is skipped, which is no worse than before.
+        if hasattr(os, "getuid"):
+            stat = os.stat(port_file)
+            if stat.st_uid != os.getuid():
+                return None, None
         with open(port_file, encoding="utf-8") as handle:
             lines = handle.read().splitlines()
         return int(lines[0].strip()), lines[1].strip()
@@ -283,12 +314,31 @@ def _maybe_start_daemon(module_root, state_root) -> None:
 
 
 def _cold_start_fallback(module_root, target: str, payload_text: str):
-    """Exactly today's path - a fresh subprocess against the real target script.
-    Fails open on any launch problem, same posture as run-guard.sh's own
-    no-interpreter-found case: a broken fallback must not brick the tool call."""
+    """A fresh subprocess against the real target script.
+
+    Fail direction is per-target now (2026-09-12 audit, H-12 / H-25) - see _SAFETY_TARGETS.
+    The MISSING-file check is new and is the H-25 half: CPython does not raise OSError for a
+    script that is not there, it starts, fails to open the file and exits 2. The client
+    returned that verbatim and the harness read 2 as BLOCK, so a partial install or a
+    misresolved plugin root blocked every tool call in the session behind a bare "can't open
+    file" on stderr. bash_hook_dispatcher.py already checks `path.is_file()` for each guard it
+    loads, for the same reason; only this fallback did not.
+    """
     import subprocess  # nosec B404 - deferred; see the note above
 
-    dispatcher = module_root / "scripts" / f"{target}.py"
+    dispatcher = os.path.join(str(module_root), "scripts", f"{target}.py")
+    if not os.path.isfile(dispatcher):
+        return (
+            _fail_code(target),
+            f"guard target {target} not found at {dispatcher} - the module root is probably "
+            "misresolved (CLAUDE_PLUGIN_ROOT vs CLAUDE_PROJECT_DIR). "
+            + (
+                "Failing closed (blocked): this target carries the safety guards.\n"
+                if target in _SAFETY_TARGETS
+                else "Failing open: this target is advisory.\n"
+            ),
+            "",
+        )
     try:
         proc = subprocess.run(  # nosec B603 - fixed argv, shell=False
             [sys.executable, str(dispatcher)],
@@ -299,7 +349,7 @@ def _cold_start_fallback(module_root, target: str, payload_text: str):
         )
         return proc.returncode, proc.stderr, proc.stdout
     except (OSError, subprocess.TimeoutExpired) as exc:
-        return 0, f"cold-start fallback failed: {exc}", ""
+        return _fail_code(target), f"cold-start fallback failed: {exc}", ""
 
 
 def main() -> int:
@@ -332,15 +382,23 @@ if __name__ == "__main__":
     except SystemExit:
         raise
     except BaseException:
-        # FAIL OPEN (2026-08-27, live report: "sometimes get a UserPromptSubmit hook error
-        # failed with non-blocking status code", at a new engagement open). This was the
-        # one entry point in the chain without a fail-open wrapper: every hook it carries
-        # has `except Exception: sys.exit(0)` in its own __main__, but an uncaught raise in
-        # the CLIENT exited 1, and Claude Code reports a non-zero hook exit as an error the
-        # user sees. The client is transport - it decides nothing - so a failure here must
-        # cost the injected context and never surface as a failed hook.
+        # FAIL DIRECTION BY TARGET (2026-09-12 audit, H-12). This was an unconditional
+        # `sys.exit(0)`, added 2026-08-27 after a live report ("sometimes get a
+        # UserPromptSubmit hook error failed with non-blocking status code") and justified
+        # as "the client is transport - it decides nothing". True of the DECISION and false
+        # of the OUTCOME: with the daemon on by default this is the transport for every
+        # PreToolUse call, so exiting 0 here allowed the tool call, silently, with no trace,
+        # for any failure at all - a stdin decode error, a MemoryError, an unexpected
+        # response shape. The 2026-08-27 report was about the ADVISORY hooks, and they keep
+        # exactly the behaviour that fixed it.
         #
         # BaseException deliberately: a KeyboardInterrupt or a socket-driven exception that
         # is not an Exception subclass would otherwise escape and produce the same message.
         # SystemExit is re-raised first so a real exit code still propagates.
-        sys.exit(0)
+        _target = sys.argv[3] if len(sys.argv) > 3 else "bash_hook_dispatcher"
+        if _target in _SAFETY_TARGETS:
+            sys.stderr.write(
+                "guard transport failed before it could evaluate this call; failing closed "
+                "(blocked). See docs/adr/ADR-014-persistent-guard-daemon.md.\n"
+            )
+        sys.exit(_fail_code(_target))

@@ -21,6 +21,8 @@ import pytest
 _ROOT = Path(__file__).resolve().parents[1]
 _RAW_GUARD = _ROOT / ".claude" / "hooks" / "guard-raw-data.py"
 _EXEC_GUARD = _ROOT / ".claude" / "hooks" / "guard-code-execution.py"
+_STAGED_RAW_GUARD = _ROOT / "scripts" / "staged_hooks" / "guard-raw-data.py"
+_STAGED_EXEC_GUARD = _ROOT / "scripts" / "staged_hooks" / "guard-code-execution.py"
 
 BLOCK = 2
 ALLOW = 0
@@ -105,11 +107,17 @@ def test_raw_guard_allows_synthetic_read():
     assert code == ALLOW
 
 
-def test_raw_guard_ignores_out_of_scope_tool():
+def test_raw_guard_blocks_a_write_into_raw():
+    """Reversed by the 2026-09-12 audit (H-23), so this drives the STAGED guard until the
+    human applies it. Writes were out of scope on the basis that settings.json's deny list
+    covered them; the deny list has three `Edit(...)` entries for data/raw and no `Write(...)`
+    entry at all, so nothing did."""
     code = _run(
-        _RAW_GUARD, {"tool_name": "Write", "tool_input": {"file_path": "data/raw/x"}}, _raw_env()
+        _STAGED_RAW_GUARD,
+        {"tool_name": "Write", "tool_input": {"file_path": "data/raw/x"}},
+        _raw_env(),
     )
-    assert code == ALLOW
+    assert code == BLOCK
 
 
 def test_raw_guard_allows_malformed_payload():
@@ -134,6 +142,23 @@ def no_consent(tmp_path) -> dict:
     return {"CLAUDE_PROJECT_DIR": str(tmp_path)}
 
 
+def _plugin_project(guard: Path, tmp_path: Path, script_names: tuple) -> Path:
+    """A throwaway repo-as-project install: the guard at .claude/hooks/, its own scripts/.
+
+    The exec guard computes the plugin's scripts directory from its OWN location, so a
+    location-based allowance can only be exercised against a copy of the guard that sits in
+    a plugin layout. Returns the project root (no .exec-consent, so the gate stays armed).
+    """
+    hooks = tmp_path / ".claude" / "hooks"
+    hooks.mkdir(parents=True)
+    (hooks / guard.name).write_text(guard.read_text(encoding="utf-8"), encoding="utf-8")
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    for name in script_names:
+        (scripts / f"{name}.py").write_text("", encoding="utf-8")
+    return tmp_path
+
+
 def _bash(cmd: str) -> dict:
     return {"tool_name": "Bash", "tool_input": {"command": cmd}}
 
@@ -154,20 +179,22 @@ def test_exec_guard_allows_team_scripts(no_consent):
     assert _run(_EXEC_GUARD, _bash("python -m scripts.ingest data/raw"), no_consent) == ALLOW
 
 
-def test_exec_guard_allows_convert_file_without_consent(no_consent):
+@pytest.mark.parametrize("guard", (_EXEC_GUARD, _STAGED_EXEC_GUARD), ids=("live", "staged"))
+def test_exec_guard_allows_convert_file_without_consent(guard, tmp_path):
     # The file-conversion front door is team tooling (deps vendored), not code under review,
     # so converting a spreadsheet must never require the .exec-consent marker. Both documented
     # invocation forms are on _TEAM_ALLOW. (CLAUDE.md §7; house-rules "Execution safety".)
-    assert (
-        _run(_EXEC_GUARD, _bash("python -m scripts.convert_file report.xlsx"), no_consent) == ALLOW
-    )
-    assert (
-        _run(_EXEC_GUARD, _bash("python scripts/convert_file.py report.xlsx"), no_consent) == ALLOW
-    )
-    assert (
-        _run(_EXEC_GUARD, _bash("python -m scripts.render_html artifacts/x.md"), no_consent)
-        == ALLOW
-    )
+    #
+    # Run against a throwaway PLUGIN, not a throwaway project dir (2026-09-12, H-3): the path
+    # form is now judged by where it resolves, so `scripts/convert_file.py` has to resolve
+    # into the scripts/ directory of the plugin the guard itself lives in - which is what
+    # repo-as-project actually looks like, and what the old tmp-project-dir fixture never was.
+    project = _plugin_project(guard, tmp_path, ("convert_file", "render_html"))
+    env = {"CLAUDE_PROJECT_DIR": str(project)}
+    copy = project / ".claude" / "hooks" / guard.name
+    assert _run(copy, _bash("python -m scripts.convert_file report.xlsx"), env) == ALLOW
+    assert _run(copy, _bash("python scripts/convert_file.py report.xlsx"), env) == ALLOW
+    assert _run(copy, _bash("python -m scripts.render_html artifacts/x.md"), env) == ALLOW
 
 
 def test_exec_guard_allows_static_analysers(no_consent):
@@ -239,19 +266,18 @@ def test_exec_guard_allows_benign_chain(no_consent):
 # --- 0.4 guard update: plugin-path team scripts + false-positive fixes ----------
 
 
-def test_exec_guard_allows_bundled_scripts_by_path(no_consent):
-    # Plugin mode: the team's own scripts invoked by absolute/skill-relative path must run,
-    # so /engage works from a foreign project (basename-whitelisted).
+@pytest.mark.parametrize("guard", (_EXEC_GUARD, _STAGED_EXEC_GUARD), ids=("live", "staged"))
+def test_exec_guard_allows_bundled_scripts_by_path(guard, no_consent):
+    # Plugin mode: the team's own scripts invoked by skill-relative path must run, so /engage
+    # works from a foreign project. The path carries an UNEXPANDED variable, which nothing can
+    # resolve, so the basename whitelist is what allows it - and after 2026-09-12's H-3 fix
+    # that is the only case the whitelist still covers.
     assert (
         _run(
-            _EXEC_GUARD,
+            guard,
             _bash('python3 "$CLAUDE_SKILL_DIR/../../../scripts/render_html.py" artifacts/x.md'),
             no_consent,
         )
-        == ALLOW
-    )
-    assert (
-        _run(_EXEC_GUARD, _bash("python3 /opt/plugin/scripts/check_artifacts.py"), no_consent)
         == ALLOW
     )
 
@@ -287,18 +313,22 @@ def test_exec_guard_allows_make_as_prose_not_command(no_consent):
 # --- 0.4.1: Windows paths + the `py` launcher -----------------------------------
 
 
-def test_exec_guard_allows_bundled_scripts_windows_paths(no_consent):
-    # Windows commands carry backslash paths; the slash-only allow-list blocked them.
+@pytest.mark.parametrize("guard", (_EXEC_GUARD, _STAGED_EXEC_GUARD), ids=("live", "staged"))
+def test_exec_guard_allows_bundled_scripts_windows_paths(guard, no_consent):
+    # Windows commands carry backslash paths; the slash-only allow-list blocked them. The
+    # bundled Windows shape carries %CLAUDE_PLUGIN_ROOT%, unresolvable like its POSIX
+    # sibling - the form H-3 (2026-09-12) deliberately left on the basename whitelist.
     assert (
         _run(
-            _EXEC_GUARD,
-            _bash('python "C:\\plugin\\scripts\\render_html.py" out.md'),
+            guard,
+            _bash('python "%CLAUDE_PLUGIN_ROOT%\\scripts\\render_html.py" out.md'),
             no_consent,
         )
         == ALLOW
     )
     assert (
-        _run(_EXEC_GUARD, _bash("py C:\\plugin\\scripts\\check_artifacts.py"), no_consent) == ALLOW
+        _run(guard, _bash("py %CLAUDE_PLUGIN_ROOT%\\scripts\\check_artifacts.py"), no_consent)
+        == ALLOW
     )
 
 
