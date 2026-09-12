@@ -26,9 +26,7 @@ def test_demo_does_not_install_an_org_extensions_contract(monkeypatch, capsys, t
     import install_helper as ih
 
     called = []
-    monkeypatch.setattr(
-        ih, "run_install_extensions", lambda *a, **k: called.append(a) or 0
-    )
+    monkeypatch.setattr(ih, "run_install_extensions", lambda *a, **k: called.append(a) or 0)
 
     contract = tmp_path / "team-extensions.md"
     contract.write_text("# Team extensions\n", encoding="utf-8")
@@ -88,8 +86,6 @@ def test_the_project_env_var_is_restored_afterwards(monkeypatch, tmp_path):
     assert ih.os.environ.get("CLAUDE_PROJECT_DIR") is None
 
 
-
-
 # NOT UNIT-TESTED HERE, deliberately: `_run_go` in install_helper.py.
 #
 # Two behaviours were fixed in it on 2026-09-10 - it now honours the launcher's exit 97
@@ -124,9 +120,7 @@ def test_bashrc_is_not_edited_when_the_probe_could_not_run_bash(monkeypatch, cap
         lambda bash_path: ("ERROR", "failed to launch /bin/bash: [Errno 2]"),
     )
     calls = []
-    monkeypatch.setattr(
-        ih, "run_fix_bashrc", lambda *a, **k: calls.append(1) or 0
-    )
+    monkeypatch.setattr(ih, "run_fix_bashrc", lambda *a, **k: calls.append(1) or 0)
 
     inst = ih.Installer(_surface_args(ih), ih.Style(False), ih.marks(), subset="full")
     inst.fixbashrc_step()
@@ -213,7 +207,6 @@ def test_the_tools_own_config_is_reset_rather_than_blocking_an_update():
 def test_settings_backups_are_ignored_so_they_cannot_dirty_a_clone():
     """Each settings write drops a dated settings.json.bak-<date> beside its target. None
     of those shapes were ignored, so every configure run also left untracked files."""
-    import subprocess
 
     for candidate in (
         ".claude/settings.json.bak",
@@ -230,7 +223,6 @@ def test_settings_backups_are_ignored_so_they_cannot_dirty_a_clone():
 
 def test_no_backup_file_is_tracked_in_the_repo():
     """A .bak is a backup by definition and never belongs in the history."""
-    import subprocess
 
     tracked = subprocess.run(
         ["git", "ls-files"], cwd=str(REPO_ROOT), capture_output=True, text=True
@@ -306,8 +298,13 @@ def test_the_database_goes_where_the_scanner_itself_looks(monkeypatch, tmp_path)
     monkeypatch.setenv("OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY", str(tmp_path / "explicit"))
     assert ih.osv_db_dir() == tmp_path / "explicit"
 
+    # osv_db_dir() reads a different fallback var per platform (LOCALAPPDATA on
+    # win32, XDG_CACHE_HOME elsewhere) - set whichever one the code under test
+    # will actually read, or this assertion is really "does Windows CI happen to
+    # have a tmp_path-shaped LOCALAPPDATA", which it never does.
     monkeypatch.delenv("OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY", raising=False)
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    cache_var = "LOCALAPPDATA" if sys.platform == "win32" else "XDG_CACHE_HOME"
+    monkeypatch.setenv(cache_var, str(tmp_path / "cache"))
     assert ih.osv_db_dir() == tmp_path / "cache"
 
 
@@ -415,9 +412,9 @@ def test_a_jira_engagement_is_told_to_read_the_comment_thread():
 
     repo = Path(__file__).resolve().parents[1]
     skill = (repo / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8")
-    ref = (
-        repo / ".claude" / "skills" / "engage" / "references" / "integrations.md"
-    ).read_text(encoding="utf-8")
+    ref = (repo / ".claude" / "skills" / "engage" / "references" / "integrations.md").read_text(
+        encoding="utf-8"
+    )
 
     assert "comment thread" in skill
     assert "READ THE COMMENTS" in ref
@@ -432,9 +429,9 @@ def test_a_comment_is_not_a_consent_grant():
     from pathlib import Path
 
     repo = Path(__file__).resolve().parents[1]
-    ref = (
-        repo / ".claude" / "skills" / "engage" / "references" / "integrations.md"
-    ).read_text(encoding="utf-8")
+    ref = (repo / ".claude" / "skills" / "engage" / "references" / "integrations.md").read_text(
+        encoding="utf-8"
+    )
 
     assert "Comments included" in ref
     assert "not a consent grant" in ref

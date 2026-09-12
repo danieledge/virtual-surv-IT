@@ -54,7 +54,13 @@ def _run(payload: str, script: Path, env: dict | None = None) -> tuple[int, str]
         text=True,
         env=env,
     )
-    return proc.returncode, proc.stdout
+    # A subprocess that produced no output is "" everywhere this suite is asserted
+    # (see test_a_dormant_prompt_still_emits_nothing_at_all below). On the Windows
+    # CI runners `.stdout` has been observed None rather than "" for a script run
+    # this way - normalise here so a reference call's absence of output can never
+    # itself be the failure (a TypeError concatenating it), leaving the actual
+    # assertions to compare like-for-like content on every platform.
+    return proc.returncode, proc.stdout or ""
 
 
 _FIXTURE_SESSION = "session-under-test"

@@ -7,7 +7,11 @@
 # gitleaks and shfmt are the two non-Python ones and are NOT here for that reason (apt/brew,
 # not pip). ShellCheck/PSScriptAnalyzer/Checkstyle/PMD/SpotBugs/scalafmt are best-effort,
 # not individually configurable - same README table.
-ruff>=0.5
+# Pinned to the exact version CI uses (.github/workflows/ci.yml lint job) - ruff format is
+# version-sensitive, so a local `pip install -r requirements-review.txt` that floated to
+# whatever ruff shipped this week could disagree with CI on formatting/lint rules (T-6,
+# 2026-09-12 test-quality audit). Bump both together, never just one.
+ruff==0.15.20
 black>=24.0
 mypy>=1.10
 bandit>=1.7

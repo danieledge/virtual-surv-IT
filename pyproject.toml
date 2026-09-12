@@ -31,6 +31,13 @@ force-exclude = true
 # Same reasoning as ruff's extend-exclude above - bandit does not respect .gitignore, so a
 # tracked vendor/ dir (or an on-disk .venv/) gets swept unless explicitly excluded here.
 exclude_dirs = ["vendor", ".venv", "evals/runs"]
+# 2026-09-12 audit. The launcher and installer spawn Claude, terminals and git by design, with
+# argument lists and shell=False, so bandit's "you imported subprocess / you ran a process /
+# the executable is not an absolute path" notices (B404, B603, B607) are the tool describing
+# the product, not a finding. They are skipped here so the gate keeps failing on what is worth
+# reading. B110/B112 (swallowed exceptions) stay ON: every remaining site carries a `# nosec`
+# with the reason it is safe to swallow, which is the review the audit asked for.
+skips = ["B404", "B603", "B607"]
 
 [tool.mypy]
 # Same reasoning again - mypy does not respect .gitignore either.

@@ -61,6 +61,10 @@ def main() -> int:
     for name in ("stderr", "stdout"):
         stream = getattr(sys, name, None)
         try:
+            if stream is None:
+                # A stream that isn't there can't answer isatty() either - same "no" as
+                # the caught exception below, just spelled so mypy can see it too.
+                raise AttributeError(f"sys.{name} is None")
             size = os.get_terminal_size(stream.fileno())
             _line(f"os.get_terminal_size({name})", f"{size.columns}x{size.lines}")
         except Exception as exc:  # noqa: BLE001

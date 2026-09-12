@@ -6,6 +6,15 @@ on:
     # substantial direct pushes - eleven landed on 2026-08-18 with no CI behind them.
     branches: [main, dev]
   pull_request:
+  # T-7 (2026-09-12 test-quality audit): evals spend real tokens and are partly
+  # non-deterministic (LLM judge) - never a merge gate, human-triggered only. See the
+  # `eval` job below, which runs ONLY on this trigger, never on push/PR.
+  workflow_dispatch:
+    inputs:
+      case:
+        description: "evals/cases/<id> to run live (default: the cheapest /engage-light case)"
+        required: false
+        default: process-light-engagement
 
 # Least-privilege token for every job (2026-08-19 audit): nothing here writes to the repo.
 permissions:
@@ -30,6 +39,7 @@ jobs:
             python: "3.10"
           - os: ubuntu-latest
             python: "3.12"
+            coverage: true
           # Windows leg: the guards + launcher have Windows-specific paths (py launcher,
           # backslash separators); several past regressions were Windows-only.
           - os: windows-latest
@@ -40,16 +50,41 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: pip install -r requirements-dev.txt
-      - run: pytest
+      # Coverage measurement (T-9, 2026-09-12 test-quality audit): the ubuntu py3.12 leg
+      # only, so the same numbers aren't uploaded three times over. No threshold gate yet -
+      # this turns "which modules are referenced by a test file" (a static, this-audit-style
+      # grep) into "which lines actually executed", nothing more.
+      - name: pytest
+        if: ${{ !matrix.coverage }}
+        run: pytest
+      - name: pytest (with coverage)
+        if: ${{ matrix.coverage }}
+        run: >
+          pytest
+          --cov=scripts --cov=.claude/hooks
+          --cov-report=xml --cov-report=term-missing:skip-covered
+      - name: Upload coverage report
+        if: ${{ matrix.coverage && !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 (SHA-pinned)
+        with:
+          name: coverage-xml
+          path: coverage.xml
       - name: Validate masking (safety + detection fidelity)
+        if: ${{ !cancelled() }}
         run: python -m scripts.validate_masking
       - name: Validate plugin manifest (declared agents/skills resolve)
+        if: ${{ !cancelled() }}
         run: python -m scripts.validate_manifest
       # Also enforced via pytest, but run explicitly so a broken reference reports itself
       # by name instead of surfacing as an assertion buried in the test output.
       - name: Validate internal references (docs/skills/agents cite paths that exist)
+        if: ${{ !cancelled() }}
         run: python -m scripts.validate_references
+      # 2026-09-12: the validation steps and the smoke each report independently. Before this,
+      # a red reference check skipped the smoke on every dev run for two weeks, so the
+      # installer's status was simply unknown.
       - name: Install helper demo smoke (full flow, dry run, both OSes)
+        if: ${{ !cancelled() }}
         shell: bash
         run: python install_helper.py --demo < /dev/null
 
@@ -64,15 +99,50 @@ jobs:
           python-version: "3.12"
       - name: Install analysers
         # Pinned so a new analyser release can't red an untouched repo (ruff format is version-sensitive).
-        run: pip install "ruff==0.15.20" "bandit>=1.7,<2"
+        run: pip install "ruff==0.15.20" "bandit>=1.7,<2" "mypy>=1.10"
       - name: ruff (lint)
-        run: ruff check scripts/ .claude/hooks/ rules/ tests/
+        run: ruff check scripts/ .claude/hooks/ rules/ tests/ install_helper.py
       - name: ruff (format check)
-        run: ruff format --check scripts/ .claude/hooks/ rules/ tests/
+        run: ruff format --check scripts/ .claude/hooks/ rules/ tests/ install_helper.py
       - name: bandit (security)
-        run: bandit -r scripts/ .claude/hooks/ -q
+        run: bandit -c pyproject.toml -r scripts/ .claude/hooks/ install_helper.py -q
       - name: shellcheck (Bash)
         run: shellcheck scripts/*.sh scripts/git-hooks/pre-commit scripts/git-hooks/pre-push .claude/hooks/run-guard.sh
+      # T-5 (2026-09-12 test-quality audit): mypy was configured (pyproject.toml
+      # [tool.mypy]) and listed in requirements-review.txt, but never actually run in CI -
+      # a gate implied by config that did not exist. Rather than switch it on repo-wide
+      # (most modules fail today; see docs/internal for the per-module count from the audit
+      # that added this), it runs on exactly the modules that currently pass, named
+      # explicitly, so the gate is real and green rather than silently skipping failures.
+      # Bringing in a new module: run it locally first
+      # (.venv/bin/python -m mypy --ignore-missing-imports <file>), fix or don't add it yet.
+      - name: mypy (currently-clean modules only)
+        run: >
+          mypy --ignore-missing-imports
+          scripts/brand_banner.py
+          scripts/dlp_guard.py
+          scripts/document_input_redirect.py
+          scripts/engage_probe.py
+          scripts/enumeration_redirect.py
+          scripts/findings_pack_io.py
+          scripts/find_plugin_root.py
+          scripts/fsutil.py
+          scripts/headless_run.py
+          scripts/installer_app.py
+          scripts/launcher_app.py
+          scripts/map_fingerprint.py
+          scripts/module_form_redirect.py
+          scripts/post_edit_lint.py
+          scripts/prompt_hook_dispatcher.py
+          scripts/questions.py
+          scripts/render_evidence_room.py
+          scripts/subagent_return_budget.py
+          scripts/tier_probe.py
+          scripts/tui_chrome.py
+          scripts/validate_references.py
+          scripts/vsit_paths.py
+          .claude/hooks/guard-findings-pack-write.py
+          .claude/hooks/guard-raw-data.py
 
   secret-scan:
     name: Secret scan
@@ -168,3 +238,63 @@ jobs:
             exit 1
           fi
           echo "OK - no raw data files tracked."
+
+  eval:
+    name: Live eval (manual, costs tokens)
+    # T-7: only ever runs from the manual `workflow_dispatch` trigger above - never on
+    # push/PR, so it can never become a merge gate by accident. One named case, one
+    # budget cap, skip-judge to keep it small (a single deterministic scoring pass, not
+    # also an LLM-judge call) - this is a smoke run, not the full eval suite.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (SHA-pinned, 2026-08-19 audit)
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5 (SHA-pinned)
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4 (SHA-pinned)
+        with:
+          node-version: "20"
+      # eval_engage.py drives the Agent SDK, which needs the Claude Code CLI itself on
+      # PATH (requirements-dev.txt's own comment on claude-agent-sdk) - not vendored,
+      # installed here only, only when this job actually runs.
+      - name: Install the Claude Code CLI (Agent SDK driver)
+        run: npm install -g @anthropic-ai/claude-code
+      - run: pip install -r requirements-dev.txt
+      - name: Run one named eval case
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          EVAL_CASE: ${{ github.event.inputs.case }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            # Never a hard failure: a repo without the secret configured (e.g. a fork)
+            # must be able to see this job exists without it silently spending tokens
+            # it has no key for, and without turning a missing optional secret into red CI.
+            echo "::warning::ANTHROPIC_API_KEY is not set - live eval skipped."
+            echo "Add it under Settings > Secrets and variables > Actions to enable this job."
+            exit 0
+          fi
+          python -m scripts.eval_engage --case "${EVAL_CASE:-process-light-engagement}" \
+            --max-budget 5 --max-turns 40 --skip-judge
+
+  dashboard-ui:
+    name: dashboard-ui (build + test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: dashboard-ui
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (SHA-pinned, 2026-08-19 audit)
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4 (SHA-pinned)
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: dashboard-ui/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - name: lint
+        run: npm run lint --if-present
+      - run: npm run build

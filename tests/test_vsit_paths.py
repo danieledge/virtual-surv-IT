@@ -188,15 +188,32 @@ def test_the_plan_lists_only_what_is_ours(tmp_path):
     assert "settings.json" not in sources, "the harness's own file is not ours"
 
 
+def _apply_plan(plan):
+    """Perform a relocation plan the way the real migration would.
+
+    `_relocation_plan` snapshots which sources exist at call time, and on a
+    case-insensitive filesystem (Windows, and macOS by default) two of its
+    candidates - `docs/codebase-map.md` and `docs/CODEBASE-MAP.md` - both
+    resolve to the SAME on-disk file and so can both appear, sharing one
+    destination. The first move takes the real file; the second's source is
+    then already gone. Skipping a source that has vanished is correct
+    everywhere: on a case-sensitive filesystem it never happens, and on a
+    case-insensitive one it means an earlier entry already relocated the
+    thing this entry was also pointing at."""
+    import shutil
+
+    for src, dst, _ in plan:
+        if not src.exists():
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(dst))
+
+
 def test_the_plan_is_empty_once_migrated(tmp_path):
     """Idempotent: running it twice must be safe, and a half-migrated project completed
     rather than confused."""
     project = _legacy_project(tmp_path)
-    import shutil
-
-    for src, dst, _ in ih._relocation_plan(project):
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(src), str(dst))
+    _apply_plan(ih._relocation_plan(project))
     assert ih._relocation_plan(project) == []
 
 
@@ -204,11 +221,7 @@ def test_the_resolver_follows_the_move(tmp_path):
     """The point of the whole exercise: after relocating, everything resolves to VSIT/ and
     the engagement pack is still found."""
     project = _legacy_project(tmp_path)
-    import shutil
-
-    for src, dst, _ in ih._relocation_plan(project):
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(src), str(dst))
+    _apply_plan(ih._relocation_plan(project))
     assert vp.engagements_dir(project) == project / "VSIT" / "engagements"
     assert vp.map_file(project) == project / "VSIT" / "shared" / "map.md"
     assert vp.config_dir(project) == project / "VSIT" / "config"

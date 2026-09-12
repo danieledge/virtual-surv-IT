@@ -56,6 +56,11 @@ _PROMPT_HOOKS = (
 def _load(name: str, path: Path) -> ModuleType | None:
     try:
         spec = importlib.util.spec_from_file_location(name, path)
+        if spec is None or spec.loader is None:
+            # A path that exists but that importlib can't build a spec/loader for is the
+            # same "no context this time" as any other load failure - fall through to the
+            # except below's return None rather than raising a slightly different way.
+            raise ImportError(f"no loader for {path}")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module

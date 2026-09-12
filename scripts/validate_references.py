@@ -172,6 +172,31 @@ _KNOWN_ABSENT = {
     "docs/internal/prompt-inventory-baseline-2026-08.md": (
         "local-only planning doc (gitignored 2026-08-18, owner decision)"
     ),
+    # 2026-09-12 audit: CI had been red on dev since 2026-08-30 because these six resolve on
+    # the dev box (the files exist on disk) and nowhere else. Each is absent from a clone by
+    # decision, not by accident, so they are recorded here instead of being un-cited.
+    "docs/adr/ADR-002-safety-hook-threat-model.md": (
+        "docs/adr/ is gitignored (2026-08-13 owner decision); cited by CLAUDE.md and the "
+        "security-audit skill as the threat-model authority, present on the dev box only"
+    ),
+    "docs/adr/ADR-005-persona-reanchoring-hook.md": (
+        "docs/adr/ is gitignored (2026-08-13 owner decision); present on the dev box only"
+    ),
+    "../../adr/ADR-014-persistent-guard-daemon.md": (
+        "docs/adr/ is gitignored (2026-08-13 owner decision); relative cite from the "
+        "adr-014 spike README, present on the dev box only"
+    ),
+    "docs/internal/research-review-2026-09-02.md": (
+        "local-only internal review (gitignored 2026-09-02, owner decision)"
+    ),
+    "windows-test-vm-access.md": (
+        "homelab access notes (gitignored 2026-08-15, owner decision); cited from "
+        "docs/internal/README.md by design"
+    ),
+    "dashboard-ui/dist/index.html": (
+        "build output of `npm run build` in dashboard-ui/, never tracked; the dashboard "
+        "skill names it as the file the build produces"
+    ),
 }
 
 _SCAN_ROOTS = ("docs", ".claude", "evals")
@@ -187,6 +212,9 @@ _SKIP_PARTS = (
     "/node_modules/",
     "/__pycache__/",
     "/demos/transcripts/",
+    # Local-only audit workspaces (gitignored): the per-lane findings quote paths from the
+    # code under review and from hypotheticals, and are a record, not the prompt surface.
+    "/independent-audit-",
 )
 
 
@@ -271,7 +299,10 @@ def find_orphans(root: Path = REPO_ROOT) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         try:
-            stream.reconfigure(encoding="utf-8", errors="replace")
+            # reconfigure() is real on the TextIOWrapper CPython normally hands back, but
+            # not on every object sys.stdout/stderr can statically be (a redirected stream
+            # under a test runner, e.g.) - the AttributeError below is the actual guard.
+            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
         except (AttributeError, ValueError, OSError):
             pass
     ap = argparse.ArgumentParser(description="Check the framework's internal references resolve.")
