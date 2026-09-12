@@ -39,6 +39,13 @@ from pathlib import Path
 # an antivirus in the path, short enough that a menu repaint never visibly stalls.
 _TIMEOUT = 5
 
+# How the one captured subprocess here decodes its output (2026-09-12 audit, L-9). NEVER a
+# bare text=True: that decodes with the CONSOLE code page on Windows, and cp1252 has
+# undefined bytes (0x81, 0x8d, ...), so git output carrying one raises UnicodeDecodeError
+# inside subprocess's own reader thread. install_helper.run_cmd was fixed for exactly that
+# after a live corporate report; this call and nine in the launcher were not.
+_DECODE = {"encoding": "utf-8", "errors": "replace"}
+
 BLOCKS = "blocks"
 WARNS = "warns"
 
@@ -137,7 +144,7 @@ def _run(args: list, cwd: Path) -> tuple[int, str]:
             args,
             cwd=str(cwd),
             capture_output=True,
-            text=True,
+            **_DECODE,
             timeout=_TIMEOUT,
             check=False,
         )

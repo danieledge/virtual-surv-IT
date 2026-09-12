@@ -18,6 +18,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parent.parent
 for _p in (REPO / "vendor", REPO, REPO / "scripts"):
     if str(_p) not in sys.path:
@@ -167,7 +169,7 @@ def test_menu_renders_at_both_widths():
     # content wrapped at the left margin, and the wrapped remnants read as a second,
     # mangled copy of the screen ("IO is mangled", 2026-08-30).
 
-    from launcher_tiers import MenuApp, TierApp
+    from launcher_tiers import TierApp
 
     check("width is applied at mount", "_apply_width" in inspect.getsource(MenuApp.on_mount), True)
     check(
@@ -188,7 +190,6 @@ def test_cancel_is_not_a_fallback():
     sentinel for Esc sent it to the next tier, which drew the OLD menu on top of the
     one just dismissed - reported as "when I quit it shows the old interface".
     """
-    import launcher_app
     from launcher_tiers import MenuApp
 
     async def run():
@@ -216,6 +217,11 @@ def test_cancel_is_not_a_fallback():
     )
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="openpty/fcntl/termios are POSIX; Windows has no way to fake a terminal size "
+    "from inside the process, so this measures what it can measure nowhere else",
+)
 def test_it_measures_the_real_terminal():
     """The size must come from the tty, not from a piped stdout or a stale COLUMNS.
 
@@ -349,17 +355,31 @@ def test_the_composer_matches_launcher_app():
     # override. Two bugs came from that: quit-on-q ended the composer instead of typing
     # a q, and quit-on-Esc closed the settings screen when Esc meant "cancel the edit".
     # Every screen handles its own exits, so there must be no bindings anywhere.
-    from launcher_tiers import MenuApp, RequestApp, SettingsApp, TierApp
+    from launcher_tiers import MenuApp, SettingsApp, TierApp
 
     for cls in (TierApp, MenuApp, RequestApp, SettingsApp):
         check(f"{cls.__name__} declares no bindings", list(cls.BINDINGS), [])
 
-    # And it must be reached BEFORE the prompt_toolkit composer.
+    # And it must be reached BEFORE the prompt_toolkit composer. _new_decision used to
+    # hand-roll that fall-through, which is how it ended up as one of the two copies
+    # missing the APPS_RUN fix (2026-09-12, L-6); it goes through the one dispatcher now,
+    # so the assertion is that it does, and that the dispatcher's order is Textual first.
     src = (REPO / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
-    i_textual = src.find("from launcher_textual import request_screen as request_textual")
-    i_ptk = src.find("from launcher_app import request_screen")
-    check("the Textual composer is wired in", i_textual > 0, True)
-    check("it runs before the prompt_toolkit one", i_textual < i_ptk, True)
+    check(
+        "the composer goes through the one dispatcher",
+        '_tiered_screen("request_screen"' in src,
+        True,
+    )
+    check(
+        "no hand-rolled fall-through is left beside it",
+        "from launcher_textual import request_screen as request_textual" in src,
+        False,
+    )
+    check(
+        "the dispatcher tries Textual first",
+        'for module_name in ("launcher_textual", "launcher_app"):' in src,
+        True,
+    )
 
 
 def _scratch_project():
@@ -606,15 +626,31 @@ def test_the_installer_chooser_matches_installer_app():
 
     asyncio.run(run())
 
-    # And it must be tried BEFORE the prompt_toolkit picker, which is before the
-    # numbered menu.
+    # And it must be tried BEFORE the prompt_toolkit picker, which is before the numbered
+    # menu. _submenu_screen used to hand-roll that fall-through and was one of the two
+    # copies missing the APPS_RUN fix (2026-09-12, L-6), so the assertion is now that it
+    # goes through the one dispatcher and that the dispatcher's order is Textual first.
     src = (REPO / "install_helper.py").read_text(encoding="utf-8")
     check(
-        "both tiers are tried in order",
-        'for _tier in ("launcher_textual", "installer_app")' in src,
+        "the submenu goes through the one dispatcher",
+        '_tiered_installer_screen(\n        "chooser_screen",' in src,
         True,
     )
-    check('"" is a real answer and stops the fall-through', "if picked is not None:" in src, True)
+    check(
+        "no hand-rolled fall-through is left beside it",
+        'for _tier in ("launcher_textual", "installer_app")' in src,
+        False,
+    )
+    check(
+        "the dispatcher tries both tiers in order",
+        'for module_name in ("launcher_textual", "installer_app"):' in src,
+        True,
+    )
+    check(
+        '"" is a real answer and stops the fall-through',
+        "if answer is not None:" in src,
+        True,
+    )
 
 
 def test_a_broken_tier_costs_nothing():
@@ -934,10 +970,49 @@ def test_once_a_screen_has_drawn_no_older_tier_may_open():
         pass
     check("running a screen increments it", launcher_textual.APPS_RUN, before + 1)
 
-    # Both of the launcher's dispatchers must consult it.
-    for name in ("_tiered_screen", "_config_editor"):
-        body = inspect.getsource(getattr(virt_team_launcher, name))
-        assert "APPS_RUN" in body, f"{name} still falls through after a screen has drawn"
+    # ONE dispatcher consults it, and every caller reaches it (2026-09-12, L-6). The
+    # settings editor used to carry its own copy of the loop - the fourth of four - and
+    # asks for the `drew` half of the answer instead now, which is the only reason it had
+    # one. The behavioural half of this is exercised below and in
+    # tests/test_launcher_plain_tier.py.
+    body = inspect.getsource(virt_team_launcher._tiered_screen_result)
+    assert "APPS_RUN" in body, "the dispatcher still falls through after a screen has drawn"
+    assert "before" in body and "after" in body, "it must compare, not just mention"
+    editor = inspect.getsource(virt_team_launcher._config_editor)
+    assert "_tiered_screen_result(" in editor, "the settings editor must use the dispatcher"
+    code = [ln for ln in editor.split("\n") if not ln.strip().startswith("#")]
+    assert "APPS_RUN" not in "\n".join(code), "and must not have grown its own copy again"
+
+
+def test_the_dispatcher_tells_a_cancel_from_a_tier_that_never_drew(monkeypatch):
+    """The behavioural half. Both answer None; one means "the human backed out" and one
+    means "try the tier below", and conflating them dumped someone into the numbered editor
+    they had just cancelled out of (live report, 2026-08-20)."""
+    import sys as _sys
+
+    import virt_team_launcher
+
+    class _Drew:
+        APPS_RUN = 0
+
+        @staticmethod
+        def settings_screen(*_a, **_k):
+            _Drew.APPS_RUN += 1
+            return None
+
+    class _NeverDrew:
+        APPS_RUN = 0
+
+        @staticmethod
+        def settings_screen(*_a, **_k):
+            return None
+
+    monkeypatch.setitem(_sys.modules, "launcher_textual", _Drew)
+    monkeypatch.setitem(_sys.modules, "launcher_app", _NeverDrew)
+    assert virt_team_launcher._tiered_screen_result("settings_screen", Path(".")) == (None, True)
+
+    monkeypatch.setitem(_sys.modules, "launcher_textual", _NeverDrew)
+    assert virt_team_launcher._tiered_screen_result("settings_screen", Path(".")) == (None, False)
 
 
 def test_the_installer_dispatcher_stops_falling_through_too():

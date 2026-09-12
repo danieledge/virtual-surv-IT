@@ -201,13 +201,13 @@ def term_columns(default: int = 80) -> int:
         declared = int(os.environ.get("COLUMNS", "") or 0)
         if declared > 0:
             return declared
-    except Exception:
+    except Exception:  # nosec B110 - COLUMNS env var probe; falls through to the terminal-size probes below
         pass
     for stream in (sys.stderr, sys.stdout):
         try:
             if stream is not None and stream.isatty():
                 return os.get_terminal_size(stream.fileno()).columns
-        except Exception:
+        except Exception:  # nosec B112 - a stream that cannot answer terminal size is a no; try the next stream
             continue
     try:
         return shutil.get_terminal_size((default, 24)).columns
@@ -230,6 +230,68 @@ def pane_width(default: int = 30) -> int:
     if columns < NARROW_COLUMNS:
         return max(20, columns - 6)
     return default
+
+
+def default_output():
+    """The Output this chrome renders on when the caller did not supply one.
+
+    WHY IT IS NOT JUST create_output (2026-09-12, Windows CI). prompt_toolkit's
+    create_output only asks `isatty()` on the POSIX branch, where a non-tty stream
+    degrades to PlainTextOutput. On win32 it goes straight to Win32Output/Windows10_Output,
+    which ask the console for a screen buffer and raise NoConsoleScreenBufferError when the
+    stream is a pipe or a captured stream. Every screen in this file is wrapped in a
+    `return <could-not-draw sentinel>` handler, so that raise read as "this tier cannot
+    draw" and the whole full-screen tier fell through to the numbered prompts on any
+    Windows box whose stderr was redirected - including the CI runner, where four tests
+    that pass everywhere else failed with a plain-tier transcript.
+
+    So make the isatty test ours and apply it on both platforms, which is what the POSIX
+    branch already does. A real console is untouched: create_output still picks the Win32
+    or VT100 layer there.
+    """
+    from prompt_toolkit.output.defaults import create_output
+
+    stream = sys.stderr
+    try:
+        is_tty = bool(stream is not None and stream.isatty())
+    except Exception:  # noqa: BLE001 - a stream that cannot answer is a no
+        is_tty = False
+    if not is_tty:
+        from prompt_toolkit.output.plain_text import PlainTextOutput
+
+        return PlainTextOutput(stream if stream is not None else sys.stdout)
+    return create_output(stdout=stream)
+
+
+def hold_for_reader(stream=None, prompt: str = "       Press Enter to continue... ") -> None:
+    """Keep a printed message on screen until it has been read.
+
+    ONE helper (2026-09-12 audit, L-28). Two copies of this existed - the launcher's
+    `_hold_for_reader` and the installer's `pause_before_menu` - both added on 2026-09-11
+    for the same cause (a full-screen app repainting over a line that was on screen for a
+    frame), and they disagreed about which stream to test: the launcher required stdin AND
+    stderr, the installer stdin AND stdout. Neither file said why, and the two are NOT
+    interchangeable - `virt-surv go` runs inside `$(...)`, so its stdout is the alias
+    capture pipe and testing it would silence the pause on every real launch, while the
+    installer's stdout is the terminal it prints to. The stream to test is therefore the
+    caller's decision and is passed in; the rest of the behaviour is shared.
+
+    A read-receipt, not a question: silent when nobody is at the keyboard, and EOF or
+    Ctrl-C here carries on rather than aborting anything.
+    """
+    target = stream if stream is not None else sys.stderr
+    try:
+        if not sys.stdin.isatty() or not target.isatty():
+            return
+    except Exception:  # noqa: BLE001 - a stream that cannot answer is a no
+        return
+    try:
+        input(prompt)
+    except (EOFError, KeyboardInterrupt):
+        try:
+            print("", file=target)
+        except Exception:  # noqa: BLE001 - a pause must never cost the caller  # nosec B110 - a pause must never cost the caller
+            pass
 
 
 def _stacked_rows(body_fn, right_fn) -> list:
@@ -264,7 +326,6 @@ def screen(
     from prompt_toolkit.layout import HSplit, Layout, VSplit, Window
     from prompt_toolkit.layout.controls import FormattedTextControl
     from prompt_toolkit.layout.dimension import D
-    from prompt_toolkit.output.defaults import create_output
     from prompt_toolkit.widgets import Frame
 
     body = Window(FormattedTextControl(body_fn), wrap_lines=False)
@@ -349,7 +410,7 @@ def screen(
         # off the screen. Turning it on again means wiring click-to-select first
         # (independent TUI review, 2026-08-31).
         mouse_support=False,
-        output=output or create_output(stdout=sys.stderr),
+        output=output or default_output(),
         # Only the live monitor passes this; every other screen redraws on a keypress, and
         # a timer on those would burn CPU redrawing something that cannot have changed.
         refresh_interval=refresh_interval,

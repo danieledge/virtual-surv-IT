@@ -117,7 +117,7 @@ def _true_terminal_size():
                 stream.fileno()
                 tty = stream
                 break
-        except Exception:  # noqa: BLE001 — a stream that cannot answer is a no
+        except Exception:  # noqa: BLE001 — a stream that cannot answer is a no  # nosec B112 - a stream that cannot answer isatty/fileno is a no; try the next stream
             continue
     saved_stdout = sys.__stdout__
     saved_env = {k: os.environ[k] for k in ("COLUMNS", "LINES") if k in os.environ}
@@ -180,7 +180,7 @@ def _report_outside_loop(where: str, exc: BaseException) -> None:
         import virt_team_launcher as _vtl
 
         _vtl._report_crash(where, exc)
-    except Exception:  # noqa: BLE001 - reporting must never re-raise
+    except Exception:  # noqa: BLE001 - reporting must never re-raise  # nosec B110 - the crash reporter must never itself raise past the caller
         pass
 
 
@@ -198,7 +198,7 @@ def _crashed(app, where: str):
         import virt_team_launcher as _vtl
 
         _vtl._report_crash(where, exc)
-    except Exception:  # noqa: BLE001 - reporting must never re-raise
+    except Exception:  # noqa: BLE001 - reporting must never re-raise  # nosec B110 - the crash reporter must never itself raise past the caller
         pass
     return exc
 
@@ -241,7 +241,7 @@ def _actions(project_dir: Path, mod, shown: list, jira_on: bool) -> list:
     try:
         if mod._running_slug(project_dir):
             out.append((("watch",), label("launch", "watch the engagement running"), "t"))
-    except Exception:  # noqa: BLE001 — a missing option must not cost the menu
+    except Exception:  # noqa: BLE001 — a missing option must not cost the menu  # nosec B110 - a missing menu option must not cost the menu
         pass
     out.append(
         (
@@ -320,8 +320,11 @@ def settings_screen(project_dir: Path, mod, output=None):
         app = widgets.SettingsApp(project_dir, mod)
         with _true_terminal_size():
             app.run()
-    except Exception:  # noqa: BLE001 — any failure degrades
+    except Exception as exc:  # noqa: BLE001 - any failure degrades, and SAYS so
+        _report_outside_loop("the settings editor (textual)", exc)
         return None
+    if _crashed(app, "the settings editor (textual)") is not None:
+        return None  # crashed: a half-built answer must never read as a choice
     if not getattr(app, "ran", False):
         return None
     return bool(getattr(app, "changed", False))
@@ -362,8 +365,11 @@ def chooser_screen(options, ih, *, title: str, actions=None, repo=None, output=N
         app = widgets.ChooserApp(Path(repo) if repo else Path.cwd(), rows, title, marker_kind)
         with _true_terminal_size():
             app.run()
-    except Exception:  # noqa: BLE001 — any failure degrades
+    except Exception as exc:  # noqa: BLE001 - any failure degrades, and SAYS so
+        _report_outside_loop("the chooser screen (textual)", exc)
         return None
+    if _crashed(app, "the chooser screen (textual)") is not None:
+        return None  # crashed: a half-built answer must never read as a choice
     if not getattr(app, "ran", False):
         return None
     return getattr(app, "picked", "")
@@ -402,8 +408,11 @@ def setup_screen(project_dir: Path, mod, output=None):
         app = widgets.SetupApp(project_dir, rows, SETUP_CANCEL)
         with _true_terminal_size():
             app.run()
-    except Exception:  # noqa: BLE001 — any failure degrades
+    except Exception as exc:  # noqa: BLE001 - any failure degrades, and SAYS so
+        _report_outside_loop("the first-time setup screen (textual)", exc)
         return None
+    if _crashed(app, "the first-time setup screen (textual)") is not None:
+        return None  # crashed: a half-built answer must never read as a choice
     if not getattr(app, "ran", False):
         return None
     return getattr(app, "picked", SETUP_CANCEL)
@@ -429,8 +438,11 @@ def archive_screen(project_dir: Path, mod, engagement_state, menu: dict, output=
         app = widgets.ArchiveApp(project_dir, views, len(open_rows))
         with _true_terminal_size():
             app.run()
-    except Exception:  # noqa: BLE001 — any failure degrades
+    except Exception as exc:  # noqa: BLE001 - any failure degrades, and SAYS so
+        _report_outside_loop("the archive screen (textual)", exc)
         return None
+    if _crashed(app, "the archive screen (textual)") is not None:
+        return None  # crashed: a half-built answer must never read as a choice
     if not getattr(app, "ran", False):
         return None
     index = getattr(app, "picked", None)
@@ -471,8 +483,11 @@ def finished_screen(project_dir: Path, mod, engagement_state, output=None):
         )
         with _true_terminal_size():
             app.run()
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - any failure degrades, and SAYS so
+        _report_outside_loop("the done-and-archived browser (textual)", exc)
         return None
+    if _crashed(app, "the done-and-archived browser (textual)") is not None:
+        return None  # crashed: a half-built answer must never read as a choice
     if not getattr(app, "ran", False):
         return None
     return getattr(app, "picked", "")
@@ -494,15 +509,18 @@ def artifacts_screen(project_dir: Path, mod, slug: str, output=None):
         app = widgets.ArtifactsApp(project_dir, labels, f"Artifacts  ·  {slug}")
         with _true_terminal_size():
             app.run()
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - any failure degrades, and SAYS so
+        _report_outside_loop("the artifacts screen (textual)", exc)
         return None
+    if _crashed(app, "the artifacts screen (textual)") is not None:
+        return None  # crashed: a half-built answer must never read as a choice
     if not getattr(app, "ran", False):
         return None
     index = getattr(app, "picked", None)
     if index is not None and 0 <= index < len(items):
         try:
             mod._open_path(items[index][1])
-        except Exception:  # noqa: BLE001 - failing to open is not a crash
+        except Exception:  # noqa: BLE001 - failing to open is not a crash  # nosec B110 - failing to open a path externally is not a crash
             pass
     return True
 
@@ -519,8 +537,11 @@ def slug_picker_screen(project_dir: Path, mod, shown: list, output=None):
         app = widgets.SlugPickerApp(project_dir, views, "Which engagement?")
         with _true_terminal_size():
             app.run()
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - any failure degrades, and SAYS so
+        _report_outside_loop("the engagement picker (textual)", exc)
         return ""
+    if _crashed(app, "the engagement picker (textual)") is not None:
+        return ""  # crashed: a half-built answer must never read as a choice
     if not getattr(app, "ran", False):
         return ""
     index = getattr(app, "picked", None)
@@ -566,7 +587,7 @@ def browse_screen(start_dir: Path, mod, output=None):
         try:
             for child, is_project in _dir_entries(directory, mod):
                 rows.append((child.name, "dir", (child, is_project)))
-        except Exception:  # noqa: BLE001 - an unreadable directory is still browsable
+        except Exception:  # noqa: BLE001 - an unreadable directory is still browsable  # nosec B110 - an unreadable directory is still browsable; skip it
             pass
         return rows
 
@@ -574,8 +595,11 @@ def browse_screen(start_dir: Path, mod, output=None):
         app = widgets.BrowseApp(start_dir, here, rows_for, recents)
         with _true_terminal_size():
             app.run()
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - any failure degrades, and SAYS so
+        _report_outside_loop("the project explorer (textual)", exc)
         return None
+    if _crashed(app, "the project explorer (textual)") is not None:
+        return None  # crashed: a half-built answer must never read as a choice
     if not getattr(app, "ran", False):
         return None
     picked = getattr(app, "picked", None)
@@ -678,8 +702,11 @@ def jira_screen(project_dir: Path, mod, output=None):
         app = widgets.JiraApp(project_dir, auto_offered, key_of)
         with _true_terminal_size():
             app.run()
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - any failure degrades, and SAYS so
+        _report_outside_loop("the ticket prompt (textual)", exc)
         return None
+    if _crashed(app, "the ticket prompt (textual)") is not None:
+        return None  # crashed: a half-built answer must never read as a choice
     if not getattr(app, "ran", False):
         return None
     value = getattr(app, "value", None)
@@ -708,8 +735,11 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
         )
         with _true_terminal_size():
             app.run()
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - any failure degrades, and SAYS so
+        _report_outside_loop("the run monitor (textual)", exc)
         return None
+    if _crashed(app, "the run monitor (textual)") is not None:
+        return None  # crashed: a half-built answer must never read as a choice
     if not getattr(app, "ran", False):
         return None
     return MONITOR_CLOSED
@@ -775,8 +805,11 @@ def update_decision_screen(ih, repo=None, output=None):
         )
         with _true_terminal_size():
             app.run()
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - any failure degrades, and SAYS so
+        _report_outside_loop("the update decision screen (textual)", exc)
         return None
+    if _crashed(app, "the update decision screen (textual)") is not None:
+        return None  # crashed: a half-built answer must never read as a choice
     if not getattr(app, "ran", False):
         return None
     return getattr(app, "picked", "cancel")
@@ -822,7 +855,8 @@ def progress_screen(titles, run_fn, ih, *, title, repo=None, output=None):
         app = widgets.ProgressApp(repo or Path.cwd(), state, title)
         with _true_terminal_size():
             app.run()
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - any failure degrades, and SAYS so
+        _report_outside_loop("the progress screen (textual)", exc)
         return None
     # NOT a bare timeout. `state.done` is set in the worker's own finally, so once it is
     # observed the thread is on its way out and joining is bounded; before that, a 1-second
@@ -853,8 +887,11 @@ def grid_screen(rows_fn, apply_fn, help_fn, ih, *, title, repo=None, output=None
         app = widgets.GridApp(repo or Path.cwd(), rows_fn, apply_fn, help_fn, title)
         with _true_terminal_size():
             app.run()
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - any failure degrades, and SAYS so
+        _report_outside_loop("the grid editor (textual)", exc)
         return None
+    if _crashed(app, "the grid editor (textual)") is not None:
+        return None  # crashed: a half-built answer must never read as a choice
     if not getattr(app, "ran", False):
         return None
     return bool(getattr(app, "changed", False))
@@ -925,8 +962,11 @@ def decision_screen(options, facts, detail, ih, *, title, repo=None, output=None
         )
         with _true_terminal_size():
             app.run()
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - any failure degrades, and SAYS so
+        _report_outside_loop("the decision screen (textual)", exc)
         return None
+    if _crashed(app, "the decision screen (textual)") is not None:
+        return None  # crashed: a half-built answer must never read as a choice
     if not getattr(app, "ran", False):
         return None
     return getattr(app, "picked", "")

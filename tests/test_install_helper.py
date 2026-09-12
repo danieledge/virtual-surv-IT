@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path, PureWindowsPath
@@ -277,7 +278,18 @@ def test_non_tty_disables_colour():
 
 
 def test_tty_without_no_color_enables_colour():
-    assert supports_color(stream=_Tty(), env={}) is True
+    """A tty with nothing suppressing colour gets colour - on POSIX.
+
+    Windows is a different answer on purpose and the assertion has to say so (2026-09-12,
+    Windows CI). A Windows console can be a tty and still render ANSI literally: legacy
+    conhost printed raw escape codes over the whole menu on exactly the boxes this targets,
+    so supports_color asks for a VT marker there as well. Asserting the POSIX answer
+    unconditionally failed the Windows leg against correct behaviour."""
+    if os.name == "nt":
+        assert supports_color(stream=_Tty(), env={}) is False
+        assert supports_color(stream=_Tty(), env={"WT_SESSION": "1"}) is True
+    else:
+        assert supports_color(stream=_Tty(), env={}) is True
 
 
 def test_dumb_terminal_disables_colour():
@@ -3160,10 +3172,24 @@ def test_node_launch_for_walks_up_from_package_bin(monkeypatch, tmp_path):
     assert ih.node_launch_for(str(exe)) == ["node.exe", str(pkg / "cli.js")]
 
 
+def _no_real_node(monkeypatch, ih):
+    """Cut off every way _find_node can reach a node.exe that is actually on this machine.
+
+    `shutil.which` is only the FIRST of three lookups: _find_node then tries
+    %ProgramFiles%\\nodejs\\node.exe and a fresh registry PATH read, both of which hit on a
+    GitHub Windows runner where node really is installed. Two tests below assert "no node
+    here" and passed only because the POSIX runners had nowhere else to look (2026-09-12,
+    Windows CI)."""
+    for var in ("ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setattr(ih, "_windows_registry_path_dirs", lambda: [])
+
+
 def test_node_launch_for_none_without_node_or_package(monkeypatch, tmp_path):
     import install_helper as ih
 
     npm, pkg, shim = _npm_layout(tmp_path)
+    _no_real_node(monkeypatch, ih)
     monkeypatch.setattr(ih.shutil, "which", lambda n: None)  # node missing
     assert ih.node_launch_for(str(shim)) is None
     lone = tmp_path / "claude.cmd"  # shim with no package next to it
@@ -3180,6 +3206,7 @@ def test_command_argv_claude_prefers_node_over_cmd_shim(monkeypatch, tmp_path):
     def which(n):
         return {"claude": str(shim), "node": "/usr/bin/node"}.get(n)
 
+    _no_real_node(monkeypatch, ih)
     monkeypatch.setattr(ih.shutil, "which", which)
     assert ih.command_argv("claude") == ["/usr/bin/node", str(pkg / "cli.js")]
     # a non-claude .cmd (no node available) still routes through cmd /c
@@ -7667,6 +7694,11 @@ def test_run_hook_latency_diagnostic_missing_launcher_skips_guard_sections(
     _stub_interpreters(monkeypatch, ih, winner="python3")
     monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0))
     monkeypatch.setattr(ih.shutil, "which", lambda name: None)  # no sh, no powershell
+    # PIN the repo root to tmp_path. _resolve_repo_root rejects tmp_path (it is not a
+    # repo) and falls through to installer.json and then to __file__'s parent - which IS
+    # this repo, run-guard.sh and all - so on a runner with no installer.json the
+    # diagnostic measured the real launcher instead of SKIPping (2026-09-12, Windows CI).
+    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: tmp_path)
     rc = ih.run_hook_latency_diagnostic(ih.Style(False), ih.marks(), repo_hint=str(tmp_path))
     out = capsys.readouterr().out
     assert rc == 0  # SKIP is not a failure

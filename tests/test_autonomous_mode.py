@@ -1151,9 +1151,13 @@ def _none(*a, **k):
     return None
 
 
-def test_a_preflight_that_cannot_draw_tells_the_user_before_downgrading(tmp_path, monkeypatch, capsys):
+def test_a_preflight_that_cannot_draw_tells_the_user_before_downgrading(
+    tmp_path, monkeypatch, capsys
+):
     mod = _load("virt_team_launcher")
-    decision, out = _decision_without_a_preflight(monkeypatch, capsys, _project(tmp_path), mod, boom=False)
+    decision, out = _decision_without_a_preflight(
+        monkeypatch, capsys, _project(tmp_path), mod, boom=False
+    )
     assert decision == ""  # still falls back - an unattended run must not start by default
     assert "UNATTENDED" in out and "ATTENDED" in out
     # Never "could not draw": a screen that drew, was filled in and then failed on the way
@@ -1164,7 +1168,9 @@ def test_a_preflight_that_cannot_draw_tells_the_user_before_downgrading(tmp_path
 
 def test_a_preflight_that_crashes_also_tells_the_user(tmp_path, monkeypatch, capsys):
     mod = _load("virt_team_launcher")
-    decision, out = _decision_without_a_preflight(monkeypatch, capsys, _project(tmp_path), mod, boom=True)
+    decision, out = _decision_without_a_preflight(
+        monkeypatch, capsys, _project(tmp_path), mod, boom=True
+    )
     assert decision == ""
     assert "crashed" in out and "ATTENDED" in out
 

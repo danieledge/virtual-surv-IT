@@ -195,27 +195,40 @@ def _windows_shell() -> str:
     return ""
 
 
+def _posix_path(cwd: Path) -> str:
+    """A directory as the POSIX tools below expect to read it.
+
+    Every consumer in _posix_argv is a POSIX program - tmux, an X terminal emulator, an
+    `sh -c cd`. `str(Path("/tmp/proj"))` renders backslashes when the interpreter is a
+    Windows one (`\\tmp\\proj`), which none of them can open, and which is how the tmux
+    argv test failed on the Windows CI leg on 2026-09-11. as_posix() is identical on a real
+    POSIX box and correct on the other one, so it is simply the right spelling here.
+    """
+    return Path(cwd).as_posix()
+
+
 def _posix_argv(terminal: str, command: list[str], cwd: Path) -> list[str]:
     exe = _which(terminal) or terminal
+    where = _posix_path(cwd)
     if terminal == "tmux":
         # A new WINDOW in the caller's own session, not a new session: the point is that it
         # appears alongside what they are already looking at, one Ctrl-B n away. -c sets the
         # working directory; the command follows as separate arguments, which tmux runs
         # directly rather than through a shell - so nothing here needs quoting.
-        return [exe, "new-window", "-c", str(cwd), "--"] + command
+        return [exe, "new-window", "-c", where, "--"] + command
     # gnome-terminal and its relatives take `--` before the command; the others use -e.
     if terminal in ("gnome-terminal", "mate-terminal"):
-        return [exe, f"--working-directory={cwd}", "--"] + command
+        return [exe, f"--working-directory={where}", "--"] + command
     if terminal == "xfce4-terminal":
-        return [exe, f"--working-directory={cwd}", "-x"] + command
+        return [exe, f"--working-directory={where}", "-x"] + command
     if terminal == "konsole":
-        return [exe, "--workdir", str(cwd), "-e"] + command
+        return [exe, "--workdir", where, "-e"] + command
     if terminal in ("kitty", "alacritty"):
         flag = "--directory" if terminal == "kitty" else "--working-directory"
-        return [exe, flag, str(cwd)] + (["-e"] if terminal == "alacritty" else []) + command
+        return [exe, flag, where] + (["-e"] if terminal == "alacritty" else []) + command
     # x-terminal-emulator and xterm: no portable working-directory flag, so cd in a shell.
     joined = " ".join(_quote(part) for part in command)
-    return [exe, "-e", "sh", "-c", f"cd {_quote(str(cwd))} && {joined}"]
+    return [exe, "-e", "sh", "-c", f"cd {_quote(where)} && {joined}"]
 
 
 def _resolvable(program: str, terminal: str = "") -> bool:
@@ -345,7 +358,61 @@ def _windows_argv(terminal: str, command: list[str], cwd: Path) -> list[str]:
         return [exe, "-d", str(cwd)] + command
     if terminal in ("pwsh.exe", "powershell.exe"):
         return _shell_argv(terminal, command, cwd)
-    return [exe, "/c", "start", "", "/D", str(cwd)] + command
+    # cmd.exe, the tier reached on the most locked-down box of all - no Windows Terminal and
+    # no PowerShell. It used to concatenate the argv raw after `start`, so subprocess joined
+    # the list with list2cmdline and cmd RE-PARSED the tail under its own rules: `&`, `^`,
+    # `|` and `%VAR%` in a decision string were cmd syntax rather than text. The two tiers
+    # above it each got explicit escaping work after a live failure (_wt_escape, _ps_quote,
+    # the `&` call operator); this one got none (2026-09-12 audit, L-19).
+    #
+    # `start "" /D <dir> <command...>` is kept - it is what opens a SECOND window rather than
+    # taking this one - and the command itself now travels through the same _shell_argv the
+    # other tiers use, so the metacharacters are quoted by the thing that knows how.
+    return [exe, "/c", "start", "", "/D", str(cwd)] + _cmd_escape(
+        _shell_argv("cmd.exe", command, cwd, set_cwd=False)
+    )
+
+
+# The CARET FIRST, or the escapes introduced by every later pass would themselves be
+# escaped by it - the same ordering rule _applescript_quote states for backslashes.
+_CMD_METACHARACTERS = "^&|<>()"
+
+
+def _cmd_escape(argv: list[str]) -> list[str]:
+    """Caret-escape cmd.exe's own metacharacters in an argv it will RE-PARSE.
+
+    `cmd /c start "" /D <dir> <argv...>` is one command line, not an argv: cmd reads the
+    tail again after subprocess has joined it, and `&`, `|`, `<`, `>`, `^`, `(` and `)`
+    are syntax at that point rather than characters. A caret is cmd's escape for all of
+    them. `%` is deliberately NOT escaped - the caret does not suppress variable expansion
+    (only a doubled `%%` does, and only in a batch file), and doubling it here would put a
+    literal second `%` into anything that is not a variable reference. Nothing this
+    launcher builds carries `%VAR%` today; the audit note stands as the reason a future
+    caller must not start.
+    """
+    out = []
+    for part in argv:
+        for ch in _CMD_METACHARACTERS:
+            part = part.replace(ch, "^" + ch)
+        out.append(part)
+    return out
+
+
+def _applescript_quote(text: str) -> str:
+    """Escape text for embedding inside an AppleScript DOUBLE-quoted string literal.
+
+    The macOS window path builds `tell application "Terminal" to do script "cd ... && ..."`
+    by interpolation, and the only quoting it applied was POSIX single-quoting for the
+    shell INSIDE that literal. A `"` or `\\` anywhere in the directory or the command
+    therefore ended the AppleScript literal early - at best a confusing osascript error, at
+    worst arbitrary AppleScript after the injected quote (2026-09-12 audit, L-18). The
+    sibling _ps_quote docstring reasons about exactly this hazard for PowerShell; the same
+    reasoning had never been applied one layer up.
+
+    Backslash first, then the quote, or the escape introduced by the second pass would be
+    escaped again by the first.
+    """
+    return str(text).replace("\\", "\\\\").replace('"', '\\"')
 
 
 def _ps_quote(text: str) -> str:
@@ -382,7 +449,12 @@ def open_in_new_window(command: list[str], cwd: Path) -> bool:
             return True
         if sys.platform == "darwin":
             joined = " ".join(_quote(part) for part in command)
-            script = f'tell application "Terminal" to do script "cd {_quote(str(cwd))} && {joined}"'
+            # TWO layers, escaped in the right order: the shell line is POSIX-quoted, then
+            # the whole thing is escaped for the AppleScript string literal it is pasted
+            # into. Interpolating the shell line raw is what let a quote in a path or a
+            # command end the literal early (L-18).
+            inner = _applescript_quote(f"cd {_quote(_posix_path(cwd))} && {joined}")
+            script = f'tell application "Terminal" to do script "{inner}"'
             argv = ["osascript", "-e", script, "-e", 'tell application "Terminal" to activate']
         elif sys.platform == "win32":
             argv = _windows_argv(terminal, command, cwd)

@@ -69,7 +69,7 @@ def _ensure_plain_traceback() -> None:
         import rich.traceback  # noqa: F401
 
         return
-    except Exception:  # noqa: BLE001 - any import failure, not just the pygments one
+    except Exception:  # noqa: BLE001 - any import failure, not just the pygments one  # nosec B110 - any import failure, not just the pygments one, falls through to the plain traceback formatter below
         pass
 
     import traceback as _tb
@@ -96,7 +96,7 @@ def _ensure_plain_traceback() -> None:
         import rich
 
         rich.traceback = shim
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # nosec B110 - best-effort monkeypatch of rich.traceback; absence just means the plain formatter is used
         pass
 
 
@@ -116,7 +116,65 @@ HINT = "#6b7280"
 TRACK = "#2a2a31"
 MOUTH = "#3d3d47"
 
-EIGHTHS = " ▏▎▍▌▋▊▉█"
+# ── glyphs, chosen ONCE from what this console can encode ─────────────────────
+#
+# The repo's own constraint is that STRUCTURE stays pure ASCII: corporate consoles decode
+# the launcher's own stream as cp1252, where box-drawing and block glyphs arrive as
+# mojibake - the probe's lesson, and the reason tui_chrome swapped its pane divider for two
+# spaces after a live report. virt_team_launcher._can_encode, install_helper.marks()/
+# box_chars() and tui_chrome.glyphs() all test the stream before emitting a non-ASCII
+# character. This file tested it exactly twice, for "✎⛔" and "✓", and emitted the mark, the
+# bars, the rules, the radio buttons and every footer arrow unguarded (2026-09-12 audit,
+# L-23).
+#
+# One table, resolved at import, the way tui_chrome.glyphs does it - so a new screen cannot
+# forget to ask, and a cp1252 console gets a plain-but-correct drawing rather than a
+# scattering of question marks that reads as a rendering fault.
+
+
+def _console_can_encode(text: str) -> bool:
+    """Can the console this tier draws on render `text`?
+
+    stderr first: that is the stream both full-screen tiers require to be a tty, and
+    _true_terminal_size points Textual's own measurement at it. __stdout__ is the fallback
+    for a caller whose stdout is the terminal. An unknown encoding answers yes - the ASCII
+    fallbacks are for a console that provably cannot, not for one that cannot say."""
+    for stream in (sys.stderr, sys.__stdout__, sys.stdout):
+        encoding = getattr(stream, "encoding", None)
+        if not encoding:
+            continue
+        try:
+            text.encode(encoding)
+        except (UnicodeEncodeError, LookupError):
+            return False
+        return True
+    return True
+
+
+RICH_GLYPHS = _console_can_encode("█░▏╭─┴╮│╰╯●○↑↓←·•✓")
+
+_BLOCK = "█" if RICH_GLYPHS else "#"
+_SHADE = "░" if RICH_GLYPHS else "-"
+# Index 0-8. Without the eighth-blocks a partial cell simply stays empty: a bar that is
+# accurate to the cell is better than one that invents a character to be wrong with.
+EIGHTHS = " ▏▎▍▌▋▊▉█" if RICH_GLYPHS else "        #"
+_HLINE = "─" if RICH_GLYPHS else "-"
+_VLINE = "│" if RICH_GLYPHS else "|"
+_TOP_LEFT = "╭" if RICH_GLYPHS else "+"
+_TOP_RIGHT = "╮" if RICH_GLYPHS else "+"
+_BOTTOM_LEFT = "╰" if RICH_GLYPHS else "+"
+_BOTTOM_RIGHT = "╯" if RICH_GLYPHS else "+"
+_TEE = "┴" if RICH_GLYPHS else "+"
+_LEFT_BRACKET = "┤" if RICH_GLYPHS else "|"
+_RIGHT_BRACKET = "├" if RICH_GLYPHS else "|"
+_ON = "●" if RICH_GLYPHS else "*"
+_OFF = "○" if RICH_GLYPHS else "o"
+_UPDOWN = "↑↓" if RICH_GLYPHS else "up/dn"
+_LEFT_ARROW = "←" if RICH_GLYPHS else "<-"
+_DOT = "·" if RICH_GLYPHS else "-"
+_BULLET = "•" if RICH_GLYPHS else "*"
+_TICK = "✓" if RICH_GLYPHS else "x"
+
 
 # Below this, two panes cannot both hold their content: the detail pane is dropped and
 # its text moves to the footer. Phones and split panes land here - launcher_app already
@@ -179,13 +237,13 @@ def bar(pct: float, width: int, fill: str = ACCENT, track: str = TRACK) -> Text:
     full, rem = divmod(units, 8)
     t = Text()
     if full:
-        t.append("█" * full, style=fill)
+        t.append(_BLOCK * full, style=fill)
     if full < width:
         if rem:
             t.append(EIGHTHS[rem], style=fill)
-            t.append("░" * (width - full - 1), style=track)
+            t.append(_SHADE * (width - full - 1), style=track)
         else:
-            t.append("░" * (width - full), style=track)
+            t.append(_SHADE * (width - full), style=track)
     return t
 
 
@@ -209,18 +267,18 @@ class Brand(Static):
         if width:
             rule = max(4, min(cap, width - 2 * pad - self.MARK_COLS))
         t = Text()
-        t.append("       ○\n", style=DIM)
-        t.append("   ╭───┴───╮   ", style=DIM)
+        t.append(f"       {_OFF}\n", style=DIM)
+        t.append(f"   {_TOP_LEFT}{_HLINE * 3}{_TEE}{_HLINE * 3}{_TOP_RIGHT}   ", style=DIM)
         # The product is VIRT-SURV-IT; "virt-surv" is only the command you type
         # (owner, 2026-08-31). The mark is the name, not the alias.
         t.append("VIRT-SURV-IT\n", style=f"bold {ACCENT}")
-        t.append("  ─┤ ", style=DIM)
-        t.append("●", style=f"bold {eye}")
+        t.append(f"  {_HLINE}{_LEFT_BRACKET} ", style=DIM)
+        t.append(_ON, style=f"bold {eye}")
         t.append("   ", style=DIM)
-        t.append("●", style=f"bold {eye}")
-        t.append(" ├─   ", style=DIM)
-        t.append("─" * rule + "\n", style=TRACK)
-        t.append("   │ ", style=DIM)
+        t.append(_ON, style=f"bold {eye}")
+        t.append(f" {_RIGHT_BRACKET}{_HLINE}   ", style=DIM)
+        t.append(_HLINE * rule + "\n", style=TRACK)
+        t.append(f"   {_VLINE} ", style=DIM)
         # A MOUTH, not a meter, unless something is actually running. head() calls this
         # with pct=0.0 on every non-progress screen, so sixteen screens showed a five-cell
         # empty track that reads as "something is at zero" (independent TUI review,
@@ -229,10 +287,10 @@ class Brand(Static):
         if pct > 0.0:
             t.append_text(bar(pct, 5, track=MOUTH))
         else:
-            t.append("\u2500" * 5, style=MOUTH)
-        t.append(" │   ", style=DIM)
+            t.append(_HLINE * 5, style=MOUTH)
+        t.append(f" {_VLINE}   ", style=DIM)
         t.append(subtitle + "\n", style=DIM)
-        t.append("   ╰───────╯", style=DIM)
+        t.append(f"   {_BOTTOM_LEFT}{_HLINE * 7}{_BOTTOM_RIGHT}", style=DIM)
         self.update(t)
 
 
@@ -313,7 +371,7 @@ class TierApp(App):
         # so setting it on the app node matched nothing.
         try:
             self.screen.set_class(narrow, "-narrow")
-        except Exception:  # noqa: BLE001 — cosmetic only
+        except Exception:  # noqa: BLE001 — cosmetic only  # nosec B110 - cosmetic CSS class toggle only
             pass
 
     def on_resize(self, event) -> None:
@@ -355,7 +413,7 @@ class TierApp(App):
             panel.can_focus = False
             self.query_one("#side").border_title = side_title
             self.set_focus(None)
-        except Exception:  # noqa: BLE001 — cosmetic
+        except Exception:  # noqa: BLE001 — cosmetic  # nosec B110 - cosmetic panel focus/title update only
             pass
 
     def scroll_row(self, line: int) -> None:
@@ -376,7 +434,7 @@ class TierApp(App):
                 panel.scroll_to(y=line, animate=False)
             elif line >= top + height:
                 panel.scroll_to(y=line - height + 1, animate=False)
-        except Exception:  # noqa: BLE001 — scrolling is cosmetic
+        except Exception:  # noqa: BLE001 — scrolling is cosmetic  # nosec B110 - scrolling is cosmetic
             pass
 
     def folder(self) -> str:
@@ -393,7 +451,7 @@ class TierApp(App):
 
     def foot(self, pairs, note: str = "", warn: bool = False) -> None:
         d = Text("  ")
-        d.append("│ ", style=TRACK)
+        d.append(_VLINE + " ", style=TRACK)
         d.append(note or "", style=GOLD if warn else HINT)
         self.query_one("#detail", Static).update(d)
         k = Text("  ")
@@ -447,11 +505,11 @@ class MenuApp(TierApp):
         # frame. Printed to stderr it was repainted over by this very draw, so the
         # keypress looked like it had done nothing (independent TUI review, 2026-08-31).
         notice = self.menu.get("notice") or ""
-        head = folder if self.narrow else f"{folder}  ·  engagements in this folder"
+        head = folder if self.narrow else f"{folder}  {_DOT}  engagements in this folder"
         if notice:
             # At phone width the notice WINS. It is the transient, surprising thing;
             # the folder name is on screen for the rest of the session either way.
-            head = notice if self.narrow else f"{head}   ·   {notice}"
+            head = notice if self.narrow else f"{head}   {_DOT}   {notice}"
         self.head(head)
 
         t = Text()
@@ -468,9 +526,9 @@ class MenuApp(TierApp):
                     t,
                     ("eng", i),
                     v.get("title") or "?",
-                    mark=v.get("mark") or "•",
+                    mark=v.get("mark") or _BULLET,
                     warn=v.get("mark_style") == "warn",
-                    tag="← most recent" if v.get("recommended") else "",
+                    tag=f"{_LEFT_ARROW} most recent" if v.get("recommended") else "",
                 )
         else:
             # Which FOLDER, because "no open engagements" alone reads as a statement
@@ -521,7 +579,7 @@ class MenuApp(TierApp):
 
         self.foot(
             (
-                ("↑↓", "move"),
+                (_UPDOWN, "move"),
                 ("enter", "choose"),
                 ("?", "close" if getattr(self, "showing_help", False) else "what marks mean"),
                 ("esc/q", "back to terminal"),
@@ -659,7 +717,7 @@ class RequestApp(TierApp):
 
     def paint(self) -> None:
         folder = self.folder()
-        self.head(folder if self.narrow else f"{folder}  ·  a new engagement")
+        self.head(folder if self.narrow else f"{folder}  {_DOT}  a new engagement")
 
         width = self.panel_width()
         t = Text()
@@ -683,7 +741,7 @@ class RequestApp(TierApp):
 
         if self.auto_offered:
             t.append("\n")
-            t.append("  " + ("●" if self.auto else "○") + " ", style=GOLD if self.auto else DIM)
+            t.append("  " + (_ON if self.auto else _OFF) + " ", style=GOLD if self.auto else DIM)
             t.append("Ctrl-T  run unattended", style=GOLD if self.auto else DIM)
             # Kept SHORT: this row already spends 26 columns on the label, and the full
             # explanation lives in the pane beside it, which has the room for it.
@@ -891,7 +949,7 @@ class SettingsApp(TierApp):
     def paint(self) -> None:
         folder = self.folder()
         name = self.project.resolve().name
-        self.head(name if self.narrow else f"{folder}  ·  project settings")
+        self.head(name if self.narrow else f"{folder}  {_DOT}  project settings")
 
         # Padding is CAPPED, not simply the longest label: one long label used to set
         # the column for every row and push the value hard against the divider, so the
@@ -916,16 +974,16 @@ class SettingsApp(TierApp):
             shown = label if len(label) <= width else label[: max(1, width - 1)] + "…"
             t.append(f"{shown.ljust(width + 1)} ", style=f"bold {TEXT}" if sel else TEXT)
             if sel and self.editing is not None:
-                t.append(f"{self.editing}█\n", style=ACCENT)
+                t.append(f"{self.editing}{_BLOCK}\n", style=ACCENT)
                 continue
             # A DOT MEANS ON OR OFF AND NOTHING ELSE. Some rows carry a tri-state value
             # ("auto", "close-only"), and showing the OFF glyph beside one said the
             # setting was off when it was not - the same confusion this file's cp1252
             # note records for an earlier glyph choice.
             if _is_binary(value):
-                t.append("● " if on else "○ ", style=OK if on else DIM)
+                t.append(f"{_ON} " if on else f"{_OFF} ", style=OK if on else DIM)
             else:
-                t.append("· ", style=HINT)
+                t.append(f"{_DOT} ", style=HINT)
             # Only the HEAD of the value. The qualifier after a double space
             # ("  (machine default)") is longer than the column has room for and was
             # clipped mid-word; the pane beside it shows the value in full.
@@ -939,7 +997,7 @@ class SettingsApp(TierApp):
             keys = (("type", "the key"), ("enter", "save"), ("esc", "cancel"))
             note = "editing the Jira project key"
         elif self.narrow:
-            keys = (("↑↓", "move"), ("enter", "toggle"), ("esc/q", "back"))
+            keys = ((_UPDOWN, "move"), ("enter", "toggle"), ("esc/q", "back"))
             note = name
         else:
             # "e" IS SHOWN ONLY WHERE IT WORKS. The handler is gated to the Jira row, so
@@ -947,7 +1005,7 @@ class SettingsApp(TierApp):
             # which this file's own RequestApp comment calls the worst answer a keypress
             # can give (independent TUI review, 2026-08-31).
             keys = (
-                ("↑↓", "move"),
+                (_UPDOWN, "move"),
                 ("enter", "toggle"),
                 *((("e", "edit key"),) if self._is_jira_row() else ()),
                 ("d", "defaults"),
@@ -1042,7 +1100,7 @@ class SettingsApp(TierApp):
             try:
                 if self._is_jira_row() and self.mod._jira_needs_key(self.project):
                     self._start_editing()
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001  # nosec B110 - the Jira toggle above already applied; this only offers the follow-up key prompt, which the user can still open later with [e]
                 pass
         elif key == "d":
             self._apply("d")
@@ -1099,7 +1157,7 @@ class ChooserApp(TierApp):
 
     def paint(self) -> None:
         folder = self.folder()
-        self.head(self.title_text if self.narrow else f"{folder}  ·  {self.title_text}")
+        self.head(self.title_text if self.narrow else f"{folder}  {_DOT}  {self.title_text}")
 
         width = min(max((len(lbl) for _k, lbl, _b, _w in self.rows), default=0), 34)
         t = Text()
@@ -1143,11 +1201,11 @@ class ChooserApp(TierApp):
         if "writes" in kinds:
             legend = f"{self.mark_writes} writes outside this project"
         if "deletes" in kinds:
-            legend += f"{' · ' if legend else ''}{self.mark_deletes} deletes"
+            legend += f"{f' {_DOT} ' if legend else ''}{self.mark_deletes} deletes"
         keys = (
-            (("↑↓", "move"), ("enter", "choose"), ("esc/q", "back"))
+            ((_UPDOWN, "move"), ("enter", "choose"), ("esc/q", "back"))
             if self.narrow
-            else (("↑↓", "move"), ("enter", "choose"), ("esc/q", "back"))
+            else ((_UPDOWN, "move"), ("enter", "choose"), ("esc/q", "back"))
         )
         self.foot(keys, legend)
 
@@ -1211,7 +1269,7 @@ class SetupApp(TierApp):
 
     def paint(self) -> None:
         folder = self.folder()
-        self.head(folder if self.narrow else f"{folder}  ·  Set up this project")
+        self.head(folder if self.narrow else f"{folder}  {_DOT}  Set up this project")
 
         t = Text()
         t.append("  First-time setup\n\n", style=f"bold {GOLD}")
@@ -1254,7 +1312,7 @@ class SetupApp(TierApp):
             body.append(f"  {line}\n", style=DIM)
         self.query_one("#side-body", Static).update(body)
 
-        self.foot((("↑↓", "move"), ("enter", "choose"), ("esc/q", "back to the shell")))
+        self.foot(((_UPDOWN, "move"), ("enter", "choose"), ("esc/q", "back to the shell")))
 
     def on_key(self, event) -> None:
         key = event.key
@@ -1307,7 +1365,7 @@ class ListApp(TierApp):
         raise NotImplementedError
 
     def footer_keys(self):
-        return (("↑↓", "move"), ("enter", "choose"), ("esc/q", "back"))
+        return ((_UPDOWN, "move"), ("enter", "choose"), ("esc/q", "back"))
 
     def choose(self, index: int) -> None:
         """Enter on `index`. Set self.picked; the app exits straight after."""
@@ -1325,7 +1383,7 @@ class ListApp(TierApp):
 
     def paint(self) -> None:
         folder = self.folder()
-        self.head(self.title_text if self.narrow else f"{folder}  ·  {self.title_text}")
+        self.head(self.title_text if self.narrow else f"{folder}  {_DOT}  {self.title_text}")
 
         body = Text()
         for i, row in enumerate(self.rows):
@@ -1404,8 +1462,7 @@ class ArchiveApp(ListApp):
         if row is None:
             if getattr(self, "_confirm_all", False):
                 t.append(
-                    f"press enter again to archive ALL {self.open_count} - "
-                    "there is no undo here\n",
+                    f"press enter again to archive ALL {self.open_count} - there is no undo here\n",
                     style="bold red",
                 )
             else:
@@ -1435,7 +1492,7 @@ class ArchiveApp(ListApp):
         return t
 
     def footer_keys(self):
-        return (("↑↓", "move"), ("enter", "archive"), ("esc/q", "back"))
+        return ((_UPDOWN, "move"), ("enter", "archive"), ("esc/q", "back"))
 
 
 class FinishedApp(ListApp):
@@ -1451,9 +1508,7 @@ class FinishedApp(ListApp):
     passed in, so this file keeps knowing only how to draw.
     """
 
-    def __init__(
-        self, project, views: list, slugs: list, sign_off, signed, unarchive=None
-    ) -> None:
+    def __init__(self, project, views: list, slugs: list, sign_off, signed, unarchive=None) -> None:
         super().__init__(project, views, "Done & archived")
         self.slugs = list(slugs)
         self._sign_off = sign_off
@@ -1498,7 +1553,7 @@ class FinishedApp(ListApp):
 
     def footer_keys(self):
         return (
-            ("↑↓", "move"),
+            (_UPDOWN, "move"),
             ("enter", "open"),
             ("s", "sign off"),
             ("u", "unarchive"),
@@ -1592,7 +1647,7 @@ class ArtifactsApp(ListApp):
         return t
 
     def footer_keys(self):
-        return (("↑↓", "move"), ("enter", "open"), ("esc/q", "back"))
+        return ((_UPDOWN, "move"), ("enter", "open"), ("esc/q", "back"))
 
 
 class SlugPickerApp(ListApp):
@@ -1640,7 +1695,7 @@ class BrowseApp(TierApp):
         self.recents = list(recents)
         # Probed, not assumed - the same question ChooserApp asks before its own markers,
         # because a corporate console decoding cp1252 cannot render a tick.
-        self.mark_project = "✓" if ChooserApp._can_encode("✓") else "*"
+        self.mark_project = _TICK
         self.filter = ""  # "" means not filtering at all, which is not the same as ""
         self.filtering = False
         self.all_rows = self._rows_for(self.here)
@@ -1728,7 +1783,7 @@ class BrowseApp(TierApp):
         else:
             self.foot(
                 (
-                    ("↑↓", "move"),
+                    (_UPDOWN, "move"),
                     ("/", "filter"),
                     ("enter", "open"),
                     ("bksp", "up"),
@@ -1848,16 +1903,16 @@ class PreflightApp(TierApp):
         self.paint()
 
     def paint(self) -> None:
-        self.head("Auto mode" if self.narrow else f"{self.folder()}  ·  Auto mode")
+        self.head("Auto mode" if self.narrow else f"{self.folder()}  {_DOT}  Auto mode")
         t = Text()
         for i, (key, kind, label, _hint) in enumerate(self.rows):
             sel = self.cursor == i
             t.append("  ▸ " if sel else "    ", style=ACCENT if sel else HINT)
             if kind == "toggle":
                 on = bool(self.state[key])
-                t.append("✓ " if on else "· ", style=OK if on else DIM)
+                t.append(f"{_TICK} " if on else f"{_DOT} ", style=OK if on else DIM)
             else:
-                t.append("• ", style=KEY)
+                t.append(f"{_BULLET} ", style=KEY)
             t.append(f"{label}", style=f"bold {TEXT}" if sel else TEXT)
             if kind != "toggle":
                 t.append(f"   {self._value_of(key)}", style=GOLD)
@@ -1874,7 +1929,7 @@ class PreflightApp(TierApp):
         self.query_one("#side-body", Static).update(side)
         self.foot(
             (
-                ("↑↓", "move"),
+                (_UPDOWN, "move"),
                 ("space/enter", "change"),
                 ("^d/F2", "START"),
                 ("esc/q", "cancel"),
@@ -1943,7 +1998,7 @@ class JiraApp(TierApp):
 
     def paint(self) -> None:
         folder = self.folder()
-        self.head(folder if self.narrow else f"{folder}  ·  from a Jira ticket")
+        self.head(folder if self.narrow else f"{folder}  {_DOT}  from a Jira ticket")
 
         t = Text()
         t.append("  Which ticket?\n\n", style=f"bold {HINT}")
@@ -1960,7 +2015,7 @@ class JiraApp(TierApp):
 
         if self.auto_offered:
             t.append("\n")
-            t.append("  " + ("●" if self.auto else "○") + " ", style=GOLD if self.auto else DIM)
+            t.append("  " + (_ON if self.auto else _OFF) + " ", style=GOLD if self.auto else DIM)
             t.append("Ctrl-T  run unattended", style=GOLD if self.auto else DIM)
             t.append("  (confirm next)\n" if self.auto else "  (off - it asks)\n", style=DIM)
         self.query_one("#rows", Static).update(t)
@@ -2071,7 +2126,7 @@ class MonitorApp(TierApp):
             snap = self._read() or {}
         except Exception:  # noqa: BLE001 - a failed read is a state, not a crash
             snap = {}
-        self.head(self.slug if self.narrow else f"{self.folder()}  ·  watching {self.slug}")
+        self.head(self.slug if self.narrow else f"{self.folder()}  {_DOT}  watching {self.slug}")
 
         t = Text()
         # ONE model, shared with the prompt_toolkit tier (2026-09-10). This used to read
@@ -2164,7 +2219,7 @@ class DecisionApp(TierApp):
         self.paint()
 
     def paint(self) -> None:
-        self.head(self.title_text if self.narrow else f"{self.folder()}  ·  {self.title_text}")
+        self.head(self.title_text if self.narrow else f"{self.folder()}  {_DOT}  {self.title_text}")
         t = Text()
         t.append(self._facts())
         t.append("\n")
@@ -2176,7 +2231,7 @@ class DecisionApp(TierApp):
 
         width = 26 if not self.narrow else max(20, self.panel_width() - 4)
         self.query_one("#side-body", Static).update(self._detail(width))
-        self.foot((("↑↓", "move"), ("enter", "choose"), ("esc/q", "cancel")))
+        self.foot(((_UPDOWN, "move"), ("enter", "choose"), ("esc/q", "cancel")))
 
     def on_key(self, event) -> None:
         key = event.key
@@ -2229,11 +2284,11 @@ class ProgressApp(TierApp):
         self.set_interval(self._refresh, self.paint)
 
     def paint(self) -> None:
-        self.head(self.title_text if self.narrow else f"{self.folder()}  ·  {self.title_text}")
+        self.head(self.title_text if self.narrow else f"{self.folder()}  {_DOT}  {self.title_text}")
         marks = {
-            "pending": ("·", DIM),
+            "pending": (_DOT, DIM),
             "running": ("▸", ACCENT),
-            "ok": ("✓", OK),
+            "ok": (_TICK, OK),
             "skip": ("~", GOLD),
             "fail": ("✗", GOLD),
         }
@@ -2303,7 +2358,7 @@ class GridApp(TierApp):
         self.paint()
 
     def paint(self) -> None:
-        self.head(self.title_text if self.narrow else f"{self.folder()}  ·  {self.title_text}")
+        self.head(self.title_text if self.narrow else f"{self.folder()}  {_DOT}  {self.title_text}")
         width = min(max((len(r[1]) for r in self.rows), default=0), 28)
         t = Text()
         for i, (group, label, value, on, _key) in enumerate(self.rows):
@@ -2312,7 +2367,7 @@ class GridApp(TierApp):
             sel = self.cursor == i
             t.append("  ▸ " if sel else "    ", style=ACCENT if sel else HINT)
             t.append(f"{label.ljust(width + 1)} ", style=f"bold {TEXT}" if sel else TEXT)
-            t.append(f"{'✓' if on else '·'} {value}\n", style=OK if on else DIM)
+            t.append(f"{_TICK if on else _DOT} {value}\n", style=OK if on else DIM)
         self.query_one("#rows", Static).update(t)
 
         w = 26 if not self.narrow else max(20, self.panel_width() - 4)
@@ -2331,7 +2386,7 @@ class GridApp(TierApp):
                 for line in wrap(note, w):
                     body.append(f"  {line}\n", style=OK)
         self.query_one("#side-body", Static).update(body)
-        self.foot((("↑↓", "move"), ("enter", "change"), ("esc/q", "done")))
+        self.foot(((_UPDOWN, "move"), ("enter", "change"), ("esc/q", "done")))
 
     def on_key(self, event) -> None:
         key = event.key

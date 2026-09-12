@@ -305,6 +305,21 @@ def audit():
     return rows
 
 
+# Every tier this report compares, and every entry point on them that a dispatcher may
+# call. `launcher_app` was missing (2026-09-12 audit, L-21): it is the tier with the most
+# screens, the one that ships as the fallback everywhere, and the one both of that audit's
+# High findings lived in - and the report said "no tier disagreements" while `help_screen`
+# existed there with no Textual equivalent. The name filter was `endswith("_screen")`,
+# which excluded `run_app` - the most-used entry point on two of the three tiers, and the
+# one whose two implementations most need to agree.
+_TIER_MODULES = ("launcher_textual", "launcher_app", "installer_app")
+_TIER_ENTRY_POINTS = ("run_app", "render_question")
+
+
+def _is_tier_entry_point(attr: str) -> bool:
+    return attr.endswith("_screen") or attr in _TIER_ENTRY_POINTS
+
+
 def tier_report():
     """Which screens each tier can draw, and where they disagree.
 
@@ -317,20 +332,27 @@ def tier_report():
     import install_helper as ih
 
     out = {}
-    for name in ("launcher_textual", "installer_app"):
+    for name in _TIER_MODULES:
         module = ih._import_from_scripts(name)
         if module is None:
             out[name] = None
             continue
-        out[name] = {
-            # Parameter NAMES, not the rendered signature. The dispatcher calls both tiers
-            # with the same keyword arguments, so a differing type annotation is not a
-            # disagreement - and comparing the rendered form reported one that was not
-            # there (`repo: Path | None = None` against `repo=None`).
-            attr: list(inspect.signature(getattr(module, attr)).parameters)
-            for attr in dir(module)
-            if attr.endswith("_screen") and callable(getattr(module, attr))
-        }
+        entries = {}
+        for attr in dir(module):
+            if not _is_tier_entry_point(attr):
+                continue
+            value = getattr(module, attr, None)
+            if not callable(value):
+                continue
+            try:
+                # Parameter NAMES, not the rendered signature. The dispatcher calls both
+                # tiers with the same keyword arguments, so a differing type annotation is
+                # not a disagreement - and comparing the rendered form reported one that
+                # was not there (`repo: Path | None = None` against `repo=None`).
+                entries[attr] = list(inspect.signature(value).parameters)
+            except (TypeError, ValueError):
+                continue  # a builtin or a C callable has no introspectable signature
+        out[name] = entries
     return out
 
 
@@ -355,18 +377,22 @@ def main(argv=None):
 
     print("\n  SCREENS BY TIER")
     tiers = tier_report()
-    textual = tiers.get("launcher_textual") or {}
-    installer = tiers.get("installer_app") or {}
-    for name in sorted(set(textual) | set(installer)):
-        in_t, in_i = name in textual, name in installer
+    present = {name: (tiers.get(name) or {}) for name in _TIER_MODULES}
+    labels = {"launcher_textual": "textual", "launcher_app": "ptk", "installer_app": "installer"}
+    every = sorted(set().union(*(set(v) for v in present.values())) if present else set())
+    for name in every:
+        has = {mod: name in rows for mod, rows in present.items()}
         note = ""
-        if in_t and in_i and textual[name] != installer[name]:
+        # Signatures are compared only between the two LAUNCHER tiers: those two are the
+        # pair _tiered_screen calls with identical arguments. The installer's tier is
+        # called by its own dispatcher with its own arguments, so a difference there is a
+        # different question and was never a finding.
+        pair = ("launcher_textual", "launcher_app")
+        if all(has[m] for m in pair) and present[pair[0]][name] != present[pair[1]][name]:
             note = "  <- SIGNATURES DIFFER"
-            problems.append(f"{name}: tiers disagree on arguments")
-        print(
-            f"  {name:<26} textual={'yes' if in_t else ' - '} "
-            f"installer={'yes' if in_i else ' - '}{note}"
-        )
+            problems.append(f"{name}: the launcher tiers disagree on arguments")
+        cells = " ".join(f"{labels[mod]}={'yes' if has[mod] else ' - '}" for mod in _TIER_MODULES)
+        print(f"  {name:<26} {cells}{note}")
 
     print("\n  SUMMARY")
     print(

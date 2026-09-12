@@ -24,7 +24,11 @@ logic, but every command prints as a dimmed "would run:" line instead of executi
 no file is written. Read-only probes (PATH lookups, directory checks) stay real.
 
 Design constraints:
-- stdlib only, Python 3.9+ - the helper must run before any pip install has happened.
+- stdlib only, Python 3.10+ - the helper must run before any pip install has happened.
+  3.10 is the project's declared floor (pyproject requires-python) and the bottom of
+  the CI matrix. It said 3.9 until 2026-09-12 (audit L-31), which nothing tested and
+  nothing enforced: a claim about a version no leg of CI runs rots silently, and
+  promising support this file cannot demonstrate is worse than promising less.
 - Human-run from a terminal. It shells out to the `claude` CLI (`claude plugin ...`),
   which is the scriptable twin of the interactive `/plugin` commands; it never writes
   secrets and never runs the repo's apply-*.sh scripts (those are deliberate separate
@@ -68,6 +72,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
 import copy
 import os
@@ -143,7 +148,7 @@ def _team_roots(home=None, repo_hint=None) -> tuple:
         clone = _resolve_repo_root(repo_hint)
         if clone:
             roots.append(Path(clone).resolve())
-    except Exception:
+    except Exception:  # a best-effort step whose failure must not cost the run  # nosec B110
         pass
     try:
         for candidate in _registry_install_paths(home or Path.home()):
@@ -154,7 +159,7 @@ def _team_roots(home=None, repo_hint=None) -> tuple:
                 continue
             if resolved.resolve() not in roots:
                 roots.append(resolved.resolve())
-    except Exception:
+    except Exception:  # a best-effort step whose failure must not cost the run  # nosec B110
         pass
     return tuple(roots)
 
@@ -484,7 +489,7 @@ def _installed_cache_note() -> str:
                     "load the INSTALLED copy; option 1 (full run) updates it"
                 )
             return ""
-    except Exception:
+    except Exception:  # a best-effort step whose failure must not cost the run  # nosec B110
         pass
     return ""
 
@@ -813,10 +818,89 @@ def _atomic_write_text(path: Path, text: str) -> None:
     (run_permissions/_run_env_upsert/statusline_step/_write_model_to_settings_file) so an
     interrupted write (Ctrl-C, crash, disk full) never leaves the target truncated or
     corrupt (found in review, 2026-08-13 - each of those previously wrote straight to the
-    target path)."""
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
+    target path).
+
+    THE STAGING NAME IS UNIQUE PER PROCESS (2026-09-12 audit, L-30). It was a fixed
+    `<name>.tmp` sibling, while save_config twenty lines above already used a pid-suffixed
+    one for exactly this reason: two installer processes configuring the same project - a
+    menu session plus a `virt-surv configure` in another terminal - interleaved writes to
+    the SAME settings.json.tmp and produced a settings.json holding one process's content
+    with the other's tail. The target's mode is carried onto the replacement too, since
+    os.replace keeps the temp file's permissions and the ambient umask is not necessarily
+    what the file had."""
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        try:
+            os.chmod(tmp, path.stat().st_mode & 0o7777)
+        except OSError:
+            pass  # no existing file, or a filesystem with no modes - the default will do
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
+
+
+# How many dated settings.json backups to keep per project. Nothing ever pruned them, so a
+# project configured repeatedly accumulated one copy of its full settings.json - env block
+# included - per write, forever. .gitignore:148 records what that cost: "a clone went dirty
+# from files the USER never wrote and the next update refused to run" (2026-09-12 audit,
+# L-20). Five is enough to undo a bad afternoon and few enough to notice.
+_SETTINGS_BACKUPS_KEPT = 5
+
+
+def _backup_settings(target: Path) -> "Optional[Path]":
+    """Copy `target` aside under a dated name, prune old copies, return the backup path.
+
+    ONE implementation (L-20). The same seven lines were pasted at three settings writers,
+    each finding a free `settings.json.bak-YYYY-MM-DD[.N]` and copying the file, and none of
+    them pruned or carried the source file's mode - so the copy of a file holding an `env`
+    block was written under the ambient umask, which can be more permissive than the
+    original.
+
+    Returns None when there was nothing to back up. Never raises: a backup that cannot be
+    taken is reported by the caller, and is not a reason to refuse the write it protects -
+    the write itself is atomic."""
+    if not target.is_file():
+        return None
+    today = datetime.now().strftime("%Y-%m-%d")
+    backup = target.with_name(f"{target.name}.bak-{today}")
+    n = 1
+    while backup.exists():
+        n += 1
+        backup = target.with_name(f"{target.name}.bak-{today}.{n}")
+    try:
+        # copy2 rather than read_text/write_text: it carries the source file's MODE, which
+        # is the half of this that the copy-pasted versions never did.
+        shutil.copy2(target, backup)
+    except OSError:
+        return None
+    _prune_settings_backups(target)
+    return backup
+
+
+def _prune_settings_backups(target: Path) -> None:
+    """Keep the newest _SETTINGS_BACKUPS_KEPT copies of `target` and delete the rest.
+
+    Sorted by modification time rather than by the date in the name: the `.N` suffixes do
+    not sort in write order past nine, and mtime is what a person means by "the newest".
+    Silent and best-effort - failing to tidy is never worth failing a write over."""
+    try:
+        existing = sorted(
+            (p for p in target.parent.glob(f"{target.name}.bak-*") if p.is_file()),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+    except OSError:
+        return
+    for stale in existing[_SETTINGS_BACKUPS_KEPT:]:
+        try:
+            stale.unlink()
+        except OSError:
+            continue
 
 
 def _write_json_backup(path: Path, data: dict) -> None:
@@ -1135,7 +1219,7 @@ def find_working_claude(probe) -> tuple:
         try:
             if probe(command_argv("claude", resolved=path)):
                 return (path, how)
-        except Exception:
+        except Exception:  # a candidate that cannot be probed is not a candidate  # nosec B112
             continue
     return (None, "")
 
@@ -1617,7 +1701,13 @@ def app_tier_available() -> bool:
     """Whether a full-screen screen can actually run here.
 
     Asked by BOTH the banner (to decide whether to print) and the menus (to decide which
-    tier to draw), so the two cannot disagree and leave a run with no banner at all."""
+    tier to draw), so the two cannot disagree and leave a run with no banner at all.
+
+    EITHER TIER COUNTS (2026-09-12 audit, L-22). It used to probe installer_app and
+    prompt_toolkit alone, while _submenu_screen and _tiered_installer_screen try
+    launcher_textual FIRST. On a machine where Textual imports and prompt_toolkit does not,
+    this said False, the banner printed, and a Textual alternate screen then covered it -
+    the precise artefact the gate exists to prevent, produced by the gate."""
     if os.environ.get("VIRT_SURV_NO_APP"):
         return False
     if not os.environ.get("VIRT_SURV_FORCE_PTK"):
@@ -1626,6 +1716,23 @@ def app_tier_available() -> bool:
                 return False
         except Exception:
             return False
+    return _textual_tier_available() or _ptk_tier_available()
+
+
+def _textual_tier_available() -> bool:
+    """Can the Textual tier draw? Asked through the adapter's own gate, never re-derived -
+    a second copy of "is Textual usable" is how two answers to one question start."""
+    module = _import_from_scripts("launcher_textual")
+    if module is None:
+        return False
+    try:
+        return bool(module.available())
+    except Exception:
+        return False
+
+
+def _ptk_tier_available() -> bool:
+    """Can the prompt_toolkit tier draw?"""
     module = _import_from_scripts("installer_app")
     if module is None:
         return False
@@ -1706,29 +1813,24 @@ def _submenu_screen(style: Style, title: str, options: tuple, actions: dict):
     the same box that most needs the installer to work."""
     if os.environ.get("VIRT_SURV_NO_APP"):
         return None  # documented escape hatch, and what the numbered-tier tests use
-    # Textual first, prompt_toolkit underneath, numbered menu below that. None from a
-    # tier means "it could not draw", so each falls through to the next; "" is a real
-    # answer (Esc/back) and stops here.
-    for _tier in ("launcher_textual", "installer_app"):
-        try:
-            module = _import_from_scripts(_tier)
-            if module is None:
-                continue
-            picked = module.chooser_screen(
-                options,
-                _this_module(),
-                title=title,
-                # The caller's OWN table, never guessed: the same key means different
-                # things in different menus, and guessing showed the wrong consequence
-                # for the most prominent option on the most-seen screen (2026-08-28).
-                actions=actions,
-                repo=_repo_hint(),
-            )
-            if picked is not None:
-                return picked
-        except Exception:
-            continue
-    return None
+    # THE ONE DISPATCHER (2026-09-12 audit, L-6). This used to hand-roll its own two-tier
+    # loop, and it was one of the two copies that never received the APPS_RUN fix - on the
+    # dispatcher behind EVERY installer menu and submenu. A Textual chooser that ran and
+    # returned None reads as "I could not draw" to a loop that only checks the value, so
+    # the prompt_toolkit chooser was drawn on top of the screen the human had just
+    # dismissed. _tiered_installer_screen already knows the difference, and now this is
+    # simply a call to it.
+    return _tiered_installer_screen(
+        "chooser_screen",
+        options,
+        _this_module(),
+        title=title,
+        # The caller's OWN table, never guessed: the same key means different things in
+        # different menus, and guessing showed the wrong consequence for the most
+        # prominent option on the most-seen screen (2026-08-28).
+        actions=actions,
+        repo=_repo_hint(),
+    )
 
 
 # Subsets that may run inside a progress screen, and the title each one wears there.
@@ -1772,7 +1874,11 @@ def run_subset_in_app(args, style: Style, subset: str, title: str) -> "Optional[
     output is the deliverable, meant to be read and scrolled back through, and a bounded
     pane would hide the very thing someone opened them for.
     """
-    if _import_from_scripts("installer_app") is None:
+    # EITHER tier, not installer_app alone (2026-09-12 audit, L-22). The dispatcher this
+    # hands off to tries launcher_textual FIRST, so probing only the prompt_toolkit module
+    # made a box with Textual and no prompt_toolkit skip a progress screen its own
+    # dispatcher would have found.
+    if not (_textual_tier_available() or _import_from_scripts("installer_app") is not None):
         return None
     try:
         probe = Installer(args, style, marks(), subset=subset)
@@ -1814,8 +1920,9 @@ def run_update_in_app(args, style: Style) -> "Optional[int]":
     assume_yes is set for the run itself, which is honest here precisely because the
     questions it would have asked have already been put to the human on the screen above.
     """
-    installer_app = _import_from_scripts("installer_app")
-    if installer_app is None:
+    # Same as run_subset_in_app: either tier can draw this, and only the dispatcher below
+    # decides which (L-22).
+    if not (_textual_tier_available() or _import_from_scripts("installer_app") is not None):
         return None
     probe = Installer(args, style, marks(), subset="update")
     try:
@@ -1846,6 +1953,26 @@ def run_update_in_app(args, style: Style) -> "Optional[int]":
     )
 
 
+def _report_tier_crash(where: str, exc: BaseException) -> None:
+    """Record a screen failure the installer would otherwise swallow. Never raises.
+
+    Routed through the launcher's crash log rather than a second one: there is one machine
+    and one person reading it, and two logs is how half of a fault goes missing. Falls back
+    to a line on stderr when scripts/ is not importable, which is the single-downloaded-file
+    case this file is built to survive."""
+    try:
+        launcher = _import_from_scripts("virt_team_launcher")
+        if launcher is not None:
+            launcher._report_crash(where, exc)
+            return
+    except Exception:  # noqa: BLE001 - reporting must never re-raise  # nosec B110
+        pass
+    try:
+        print(f"    virt-surv hit an internal error in {where} ({exc.__class__.__name__})")
+    except Exception:  # noqa: BLE001  # nosec B110
+        pass
+
+
 def _tiered_installer_screen(name: str, *args, **kwargs):
     """Call `name` on the best tier that can draw it: Textual, then prompt_toolkit.
 
@@ -1862,8 +1989,13 @@ def _tiered_installer_screen(name: str, *args, **kwargs):
         before = getattr(module, "APPS_RUN", None)
         try:
             answer = screen(*args, **kwargs)
-        except Exception:
-            continue  # a tier that raises is a tier that cannot draw
+        except Exception as exc:
+            # A tier that raises is a tier that cannot draw, and degrading is right. Doing
+            # it in total silence was not (2026-09-12 audit, L-8): a failure in the
+            # dispatcher itself dropped the human onto the numbered menu with nothing
+            # written anywhere to say a screen had fallen over.
+            _report_tier_crash(f"the {module_name} tier drawing {name}", exc)
+            continue
         if answer is not None:
             return answer
         # It drew and still said None: there is nothing below a screen that ran, and
@@ -1903,7 +2035,9 @@ def _real_clone() -> Optional[str]:
         return _REPO_HINT
     argv = sys.argv[1:]
     for index, token in enumerate(argv):
-        if token == "--repo" and index + 1 < len(argv):
+        # B105 below is a false positive: "--repo" is a command-line flag name, never a
+        # credential.
+        if token == "--repo" and index + 1 < len(argv):  # nosec B105
             return argv[index + 1]
         if token.startswith("--repo="):
             return token.split("=", 1)[1]
@@ -1938,7 +2072,7 @@ def _import_from_scripts(name: str):
         resolved = _resolve_repo_root(_real_clone())
         if resolved:
             roots.append(resolved / "scripts")
-    except Exception:
+    except Exception:  # a best-effort step whose failure must not cost the run  # nosec B110
         pass  # config unreadable - the __file__ candidates below still cover a dev run
     here = Path(__file__).resolve().parent
     roots += [here / "scripts", here, here.parent / "scripts"]
@@ -2032,11 +2166,24 @@ def pause_before_menu(style: Style) -> None:
 
     Silent when nobody is at the keyboard (piped stdin, CI, a closed terminal) so scripted
     runs never block, and a Ctrl-C or EOF here just returns to the menu - this is a
-    read-receipt, not a question."""
+    read-receipt, not a question.
+
+    ONE implementation (2026-09-12 audit, L-28), shared with the launcher's own pause via
+    tui_chrome.hold_for_reader. The two differed in which stream they tested and neither
+    said why: STDOUT is right HERE, because that is where this installer prints and it is
+    the terminal; the launcher tests stderr, because `virt-surv go` runs inside `$(...)`
+    and its stdout is the alias capture pipe. That is the whole difference, so it is the
+    only thing passed in. Falls back to the inline pause when scripts/ is not importable,
+    which is the single-downloaded-file case this file is built to survive."""
+    prompt = style.dim("  Press Enter to return to the menu... ")
+    chrome = _import_from_scripts("tui_chrome")
+    if chrome is not None and hasattr(chrome, "hold_for_reader"):
+        chrome.hold_for_reader(sys.stdout, prompt)
+        return
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         return
     try:
-        input(style.dim("  Press Enter to return to the menu... "))
+        input(prompt)
     except (EOFError, KeyboardInterrupt):
         print("")
 
@@ -2827,7 +2974,7 @@ class Installer:
                 resolved = Path(candidate).expanduser().resolve()
                 if repo == resolved or resolved in repo.parents:
                     return True
-        except Exception:
+        except Exception:  # a best-effort step whose failure must not cost the run  # nosec B110
             pass
         if any(part == "plugins" for part in repo.parts) and any(
             part in (".claude", "claude") for part in repo.parts
@@ -3505,11 +3652,7 @@ class Installer:
             # Restore them. Telling the user to run `git stash pop` themselves is homework
             # for changes that, in the common case, the TOOL made - and a stash nobody
             # pops is how work gets lost three updates later.
-            proc = (
-                run_cmd(["git", "-C", str(self.repo), "stash", "pop"])
-                if self.repo
-                else None
-            )
+            proc = run_cmd(["git", "-C", str(self.repo), "stash", "pop"]) if self.repo else None
             if proc is not None and proc.returncode == 0:
                 self.say(s.dim("  Your local changes are back."))
                 self.stashed = False
@@ -3736,14 +3879,7 @@ class Installer:
             self.say(self.style.dim(f"    would write statusLine into {target} (backup first)"))
             self.step_ok("Status line", "demo - nothing written")
             return
-        if target.is_file():
-            today = datetime.now().strftime("%Y-%m-%d")
-            backup = target.with_name(f"settings.json.bak-{today}")
-            n = 1
-            while backup.exists():
-                n += 1
-                backup = target.with_name(f"settings.json.bak-{today}.{n}")
-            backup.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
+        _backup_settings(target)
         target.parent.mkdir(parents=True, exist_ok=True)
         _atomic_write_text(target, json.dumps(settings, indent=2) + "\n")
         self.step_ok("Status line", f"wired in {target} (restart to see it)")
@@ -4871,14 +5007,8 @@ def run_permissions(project_dir: Path, style: Style, mark_map: dict) -> int:
         print(f"{ok} {target}: all {total} recommended entries already present")
         warn_if_untrusted(project, style, mark_map)
         return 0
-    if target.is_file():
-        today = datetime.now().strftime("%Y-%m-%d")
-        backup = target.with_name(f"settings.json.bak-{today}")
-        n = 1
-        while backup.exists():
-            n += 1
-            backup = target.with_name(f"settings.json.bak-{today}.{n}")
-        backup.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
+    backup = _backup_settings(target)
+    if backup is not None:
         print(f"{ok} backed up existing settings to {backup.name}")
     target.parent.mkdir(parents=True, exist_ok=True)
     _atomic_write_text(target, json.dumps(settings, indent=2) + "\n")
@@ -4929,14 +5059,8 @@ def _run_env_upsert(
     if not added and not updated:
         print(f"{ok} {target}: all {len(entries)} {label} env vars already set correctly")
         return 0
-    if target.is_file():
-        today = datetime.now().strftime("%Y-%m-%d")
-        backup = target.with_name(f"settings.json.bak-{today}")
-        n = 1
-        while backup.exists():
-            n += 1
-            backup = target.with_name(f"settings.json.bak-{today}.{n}")
-        backup.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
+    backup = _backup_settings(target)
+    if backup is not None:
         print(f"{ok} backed up existing settings to {backup.name}")
     target.parent.mkdir(parents=True, exist_ok=True)
     _atomic_write_text(target, json.dumps(settings, indent=2) + "\n")
@@ -6346,7 +6470,7 @@ def run_archive_engagements(target: Path, style: Style, mark_map: dict, demo: bo
         print(f"{fail} scripts/engagement_state.py not found next to this clone")
         return 1
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
             [sys.executable, str(script), "archive", "--all-closed"],
             cwd=project,
             capture_output=True,
@@ -6380,7 +6504,7 @@ def run_list_engagements(target: Path, style: Style, mark_map: dict) -> int:
         print(f"{fail} scripts/engagement_state.py not found next to this clone")
         return 1
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
             [sys.executable, str(script), "list"],
             cwd=project,
             capture_output=True,
@@ -6457,7 +6581,9 @@ _ALIAS_MARKER = "virt-surv"
 # v6 (2026-08-19): the shell fast path matches 'engage' as well as 'go' - `virt-surv
 # engage` now LAUNCHES (it used to be project setup, which read as the opposite of
 # /engage in-session). heal_stale_aliases rewrites v5 definitions at the next launch.
-_ALIAS_VERSION = 7
+# v8 (2026-09-12, audit L-33): the POSIX wrapper turns pathname expansion off around the
+# one deliberately-unquoted expansion of the configured launch command.
+_ALIAS_VERSION = 8
 _ALIAS_STAMP = f"# {_ALIAS_MARKER}-alias-v{_ALIAS_VERSION}"
 
 # Any version's stamp - the removal marker for _strip_stamped_definitions.
@@ -6498,7 +6624,8 @@ def _alias_line_for(rc_path: Path, interpreter: str, launcher_path, script_path)
         )
     return (
         f"{_ALIAS_MARKER}() {{ "
-        f'if [ "$1" = "go" ] || [ "$1" = "engage" ]; then shift; local __vt_c __vt_d __vt_f __vt_r; '
+        f'if [ "$1" = "go" ] || [ "$1" = "engage" ]; then shift; '
+        f"local __vt_c __vt_d __vt_f __vt_r __vt_n; "
         f'__vt_c="$("{interpreter}" "{launcher_path}" --launch-command)"; '
         f'[ -n "$__vt_c" ] || __vt_c=claude; '
         f'__vt_f="$(mktemp 2>/dev/null || echo "${{TMPDIR:-/tmp}}/virt-surv-cd.$$")"; '
@@ -6506,7 +6633,17 @@ def _alias_line_for(rc_path: Path, interpreter: str, launcher_path, script_path)
         f"__vt_r=$?; "
         f'if [ -s "$__vt_f" ]; then cd "$(cat "$__vt_f")" || true; fi; '
         f'rm -f "$__vt_f"; '
+        # $__vt_c is UNQUOTED on purpose - a multi-word launch command ("cc --resume") has
+        # to split into words, which is what the PowerShell twin does explicitly with an
+        # array. What it must NOT do is PATHNAME-expand: a launch command containing *, ?
+        # or [ was globbed against the current directory, and the value comes from
+        # installer.json, so it is only as trustworthy as that file (2026-09-12 audit,
+        # L-33). `set -f` for the length of that one expansion turns globbing off and
+        # leaves word-splitting alone; the previous state is read out of $- first, because
+        # a user who had already set -f must get it back.
+        f"case $- in *f*) __vt_n=1;; *) __vt_n=0;; esac; set -f; "
         f'if [ "$__vt_r" -ne 97 ]; then $__vt_c ${{__vt_d:+"$__vt_d"}} "$@"; fi; '
+        f'[ "$__vt_n" = 1 ] || set +f; '
         f'else "{interpreter}" "{script_path}" "$@"; fi; }} {_ALIAS_STAMP}'
     )
 
@@ -6628,7 +6765,7 @@ def _powershell_profile_candidates() -> list:
         found = shutil.which(exe)
         if found:
             try:
-                proc = subprocess.run(
+                proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
                     [found, "-NoProfile", "-NonInteractive", "-Command", "Write-Output $PROFILE"],
                     capture_output=True,
                     encoding="utf-8",
@@ -6709,7 +6846,7 @@ def _verify_alias_line(label: str, rc_path: Path, line: str, marker: str = _ALIA
         # a perfectly correct alias line - must be enabled explicitly first.
         cmd = [bash, "-c", f"shopt -s expand_aliases\n{line}\ntype {marker} >/dev/null"]
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
             cmd, capture_output=True, encoding="utf-8", errors="replace", timeout=10
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
@@ -8064,7 +8201,7 @@ def _check_interpreters(order: list) -> tuple:
             rows.append((name, "SKIP", "not on PATH"))
             continue
         try:
-            proc = subprocess.run(
+            proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
                 [name, "-c", "import sys; print(sys.version.split()[0])"],
                 capture_output=True,
                 encoding="utf-8",
@@ -8115,7 +8252,7 @@ def _check_shell_startup_time(bash_path: Optional[str]) -> tuple:
         return ("SKIP", "no ~/.bashrc - nothing to time")
     start = time.monotonic()
     try:
-        subprocess.run(
+        subprocess.run(  # fixed argv, shell=False  # nosec B603
             [bash_path, "-c", "source ~/.bashrc"],
             capture_output=True,
             timeout=20,
@@ -8158,7 +8295,7 @@ def _check_encoding_roundtrip(interpreter: str) -> tuple:
         return ("SKIP", "no working interpreter found")
     marker = "🎩 test ✓"
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
             [interpreter, "-c", f"print({marker!r})"],
             capture_output=True,
             timeout=10,
@@ -8235,7 +8372,7 @@ def _check_repo_py_syntax(interpreter: str, repo_root: Path) -> list:
         "print(json.dumps(bad))\n"
     )
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
             [interpreter, "-c", checker, *[str(t) for t in targets]],
             capture_output=True,
             encoding="utf-8",
@@ -8345,7 +8482,7 @@ def _check_guard_hooks(interpreter: str, repo_root: Path, tmpdir: Path) -> list:
     rows = []
     for label, payload in payloads:
         try:
-            proc = subprocess.run(
+            proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
                 [interpreter, str(dispatcher)],
                 input=json.dumps(payload),
                 capture_output=True,
@@ -8385,7 +8522,7 @@ def _check_guard_hooks(interpreter: str, repo_root: Path, tmpdir: Path) -> list:
             },
         }
         try:
-            proc = subprocess.run(
+            proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
                 [interpreter, str(locked_menu)],
                 input=json.dumps(payload),
                 capture_output=True,
@@ -8610,7 +8747,7 @@ def _measure_repeated(argv_fn, n: int, timeout: float = 20.0) -> list:
         argv, kwargs = argv_fn()
         start = time.monotonic()
         try:
-            subprocess.run(argv, capture_output=True, timeout=timeout, **kwargs)
+            subprocess.run(argv, capture_output=True, timeout=timeout, **kwargs)  # nosec B603
             samples.append(time.monotonic() - start)
         except (OSError, subprocess.TimeoutExpired):
             samples.append(None)
@@ -8658,7 +8795,7 @@ def _measure_concurrent(argv_fn, n: int, timeout: float = 30.0) -> tuple:
         argv, kwargs = argv_fn()
         start = time.monotonic()
         try:
-            subprocess.run(argv, capture_output=True, timeout=timeout, **kwargs)
+            subprocess.run(argv, capture_output=True, timeout=timeout, **kwargs)  # nosec B603
             return time.monotonic() - start
         except (OSError, subprocess.TimeoutExpired):
             return None
@@ -8944,16 +9081,24 @@ def sync_org_extensions(force: bool = False, quiet: bool = True) -> tuple:
 
     # Validate BEFORE overwriting a working contract. A source that has been emptied or
     # mangled must not silently replace one that works.
+    probe = None
     try:
-        import tempfile
-
         with tempfile.NamedTemporaryFile("wb", suffix=".md", delete=False) as fh:
             fh.write(fetched)
             probe = Path(fh.name)
         sections, _problems = _parse_extensions(probe)
-        probe.unlink(missing_ok=True)
     except Exception:
         sections = None
+    finally:
+        # A `finally`, because the unlink used to sit INSIDE the try, after the call that
+        # can fail - so a malformed fetched contract, which is the entire case this
+        # validation exists for, left its temp file behind on every sync attempt
+        # (2026-09-12 audit, L-29).
+        if probe is not None:
+            try:
+                probe.unlink()
+            except OSError:
+                pass
     if not sections:
         return ("failed", "fetched contract has no recognised section - keeping the current one")
 
@@ -9119,7 +9264,7 @@ def _pick_project(style: Style, title: str, prompt: str):
             if path.is_dir() and str(path) not in seen:
                 seen.add(str(path))
                 options.append((str(path), path.name or str(path), f"recently used - {path}"))
-    except Exception:
+    except Exception:  # a best-effort step whose failure must not cost the run  # nosec B110
         pass
     options.append(("", "somewhere else", "type the path instead"))
 
@@ -9525,7 +9670,8 @@ def _edit_org_extensions(target: Path, style: Style, mark_map: dict) -> int:
             print(style.yellow(f"  {warn} could not create it: {exc}"))
             return 1
     try:
-        subprocess.call([*editor.split(), str(target)])  # noqa: S603 - user's own $EDITOR
+        # The user's own $EDITOR, argv-split here and never handed to a shell.
+        subprocess.call([*editor.split(), str(target)])  # noqa: S603  # nosec B603
     except Exception as exc:
         print(style.yellow(f"  {warn} editor failed: {exc}"))
         return 1
@@ -9807,7 +9953,7 @@ def run_daemon_start_diagnostic(
         port_file = state_root / ".claude" / ".guard-daemon-port"
         proc = None
         try:
-            proc = subprocess.Popen(  # nosec B603 - fixed argv, shell=False
+            proc = subprocess.Popen(  # fixed argv, shell=False  # nosec B603
                 [
                     sys.executable,
                     str(daemon_py),
@@ -9891,7 +10037,7 @@ def run_daemon_start_diagnostic(
             kwargs["start_new_session"] = True
         spawn_error = None
         try:
-            subprocess.Popen(  # nosec B603 - fixed argv, shell=False; mirrors
+            subprocess.Popen(  # fixed argv, shell=False; mirrors  # nosec B603
                 # scripts/guard_daemon_client.py's own _start_daemon_detached exactly,
                 # WITHOUT its exception-swallowing, so a spawn failure surfaces here.
                 [
@@ -10009,7 +10155,10 @@ def _selftest_engagement_probe(repo_root: Path, interpreter: str):
             yield ("bandit (planted issue)", "SKIP", "bandit not installed", None)
         else:
             try:
-                proc = subprocess.run(
+                # B607 is the point rather than a defect: the partial name is the one the
+                # user has on PATH, which is the thing being measured. B603 is the usual
+                # fixed argv, shell=False.
+                proc = subprocess.run(  # nosec B603 B607
                     ["bandit", "-q", str(target)],
                     capture_output=True,
                     encoding="utf-8",
@@ -10054,7 +10203,7 @@ def _selftest_engagement_probe(repo_root: Path, interpreter: str):
 
         def run_step(label, argv, extra_check=None):
             try:
-                proc = subprocess.run(
+                proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
                     argv,
                     cwd=project,
                     capture_output=True,
@@ -10504,6 +10653,13 @@ def _relocate_if_running_inside_target_repo(
         if not args.repo:
             # Preserve "I was found inside this clone" - the copy no longer lives there.
             child_argv += ["--repo", str(repo_dir)]
+        # TIDY UP AFTER THE CHILD (2026-09-12 audit, L-11). Nothing removed this directory:
+        # not the parent, which exits on the line below, and not the child, which does not
+        # know the path. Every interactive run from inside a clone left another ~537 KB
+        # copy of this file behind. The parent outlives the child (subprocess.run waits),
+        # so it is the one that can clean up - registered with atexit so the removal also
+        # happens if the run is interrupted.
+        atexit.register(shutil.rmtree, str(tmp_dir), True)
         proc = subprocess.run(  # fixed argv (sys.executable + our own tmp copy), shell=False  # nosec B603
             [sys.executable, str(tmp_copy), *child_argv]
         )
@@ -10647,6 +10803,23 @@ def _run_launcher_settings(target: Path, style: Style):
         return None
 
 
+def _launch_failed(style: Style, argv: list, exc: BaseException) -> int:
+    """Say a launch that had already been announced did not happen, and what to type.
+
+    The same words the "not a real executable" branch above already uses, because it is the
+    same situation from the user's side: the command they asked for did not start, and the
+    useful thing to hand them is the line to run themselves. Returns 0 - nothing was
+    launched, but nothing failed that they did wrong either, and a nonzero code here would
+    make a menu that printed advice look like a menu that broke."""
+    print(
+        style.yellow(
+            f"  could not start '{argv[0]}' ({exc.__class__.__name__}) - type this yourself:"
+        )
+    )
+    print(f"    {' '.join(argv)}")
+    return 0
+
+
 def _run_go(target: Path, style: Style, mark_map: dict, hat: str, demo: bool = False) -> int:
     """'virt-surv go': the single unified launch command (2026-08-15 user request -
     "only one alias, separate parameter to launch" - a separate virt-team alias existed
@@ -10686,7 +10859,7 @@ def _run_go(target: Path, style: Style, mark_map: dict, hat: str, demo: bool = F
         )
         if interpreter:
             try:
-                proc = subprocess.run(
+                proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
                     [interpreter, str(launcher)],
                     cwd=resolved_target,
                     stdout=subprocess.PIPE,
@@ -10734,10 +10907,25 @@ def _run_go(target: Path, style: Style, mark_map: dict, hat: str, demo: bool = F
         return 0
     print(style.dim(f"  Launching: {' '.join(argv)}"))
     if sys.platform == "win32":
-        proc = subprocess.run([resolved_cmd] + argv[1:], cwd=resolved_target)
+        try:
+            proc = subprocess.run([resolved_cmd] + argv[1:], cwd=resolved_target)  # nosec B603
+        except OSError as exc:
+            return _launch_failed(style, argv, exc)
         return proc.returncode
-    os.chdir(resolved_target)
-    os.execvp(resolved_cmd, argv)  # replaces this process; never returns on success
+    try:
+        os.chdir(resolved_target)
+        # Replaces this process; never returns on success. Starting a process without a
+        # shell is the POINT here (B606) - resolved_cmd came from shutil.which and the argv
+        # is built above, so there is no shell left to re-parse anything.
+        os.execvp(resolved_cmd, argv)  # nosec B606
+    except OSError as exc:
+        # BETWEEN the which() above and this line the binary can be removed, lose its
+        # executable bit, or turn out to be a dangling npm shim - the exact scenario
+        # cli_unusable_reason and find_working_claude exist to handle elsewhere in this
+        # file. Unguarded, it was an OSError traceback out of a menu command that had
+        # already printed "Launching:" (2026-09-12 audit, L-34).
+        return _launch_failed(style, argv, exc)
+    return 0  # unreachable on success: execvp has replaced this process
 
 
 def _dispatch_folder_subcommand(argv: list) -> Optional[int]:
@@ -11127,21 +11315,27 @@ def _main(argv=None) -> int:
                         menu_rc = max(menu_rc, run_extensions_editor(style, marks()) or 0)
                     did_anything = did_anything or not args.demo
                 elif action == "osvdb":
-                    menu_rc = max(
-                        menu_rc, run_osv_db_download(style, marks(), demo=args.demo) or 0
-                    )
+                    menu_rc = max(menu_rc, run_osv_db_download(style, marks(), demo=args.demo) or 0)
                     did_anything = did_anything or not args.demo
                 elif action == "reprobe":
                     if args.demo:
-                        print(style.dim("    would re-probe the analysers and rewrite the "
-                                        "tool cache (demo - nothing written)"))
+                        print(
+                            style.dim(
+                                "    would re-probe the analysers and rewrite the "
+                                "tool cache (demo - nothing written)"
+                            )
+                        )
                     else:
                         menu_rc = max(menu_rc, run_tool_reprobe(style, marks()) or 0)
                     did_anything = did_anything or not args.demo
                 elif action == "relocate":
                     if args.demo:
-                        print(style.dim("    would relocate this project's files to VSIT/ "
-                                        "(demo - nothing moved)"))
+                        print(
+                            style.dim(
+                                "    would relocate this project's files to VSIT/ "
+                                "(demo - nothing moved)"
+                            )
+                        )
                     else:
                         menu_rc = max(menu_rc, run_relocate_to_vsit(style, marks()) or 0)
                     did_anything = did_anything or not args.demo

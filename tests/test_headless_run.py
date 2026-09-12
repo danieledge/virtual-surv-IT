@@ -333,14 +333,23 @@ def _project(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _fake_claude(tmp_path: Path, lines: list, sleep: float = 0.0) -> Path:
-    """A script that behaves like `claude -p --output-format stream-json` enough to supervise."""
+def _fake_claude(tmp_path: Path, lines: list, sleep: float = 0.0, linger: float = 0.0) -> Path:
+    """A script that behaves like `claude -p --output-format stream-json` enough to supervise.
+
+    `linger` keeps the process ALIVE after its last line. It matters because status() asks
+    the operating system whether the pid is still there, and the two platforms answer
+    differently for a process nobody has reaped: on POSIX the child is a zombie and
+    os.kill(pid, 0) succeeds, on Windows OpenProcess reports it exited. A test that wants
+    "a run that is still going" has to arrange one rather than rely on a zombie (2026-09-12,
+    Windows CI)."""
     body = [
         "import sys, time, json",
         f"time.sleep({sleep})",
     ]
     for line in lines:
         body.append(f"print({json.dumps(json.dumps(line))}, flush=True)")
+    if linger:
+        body.append(f"time.sleep({linger})")
     path = tmp_path / "fake_claude.py"
     path.write_text("\n".join(body) + "\n", encoding="utf-8")
     return path
@@ -428,7 +437,9 @@ def test_a_silent_run_is_eventually_reported_as_gone(tmp_path, monkeypatch):
     """Killed, or the machine slept: no result and nothing written for a long time."""
     hr = _load()
     project = _project(tmp_path)
-    _fake_argv(hr, monkeypatch, _fake_claude(tmp_path, [_init()]))
+    # It must still be RUNNING for the first assertion - a process that has already exited
+    # is correctly reported as gone, which is the other test.
+    _fake_argv(hr, monkeypatch, _fake_claude(tmp_path, [_init()], linger=30))
     record = hr.start(project, "x")
     import time as _t
 
@@ -438,6 +449,8 @@ def test_a_silent_run_is_eventually_reported_as_gone(tmp_path, monkeypatch):
     state = hr.status(record)
     assert state["live"] is False
     assert "gone" in state["outcome"]
+    # The stand-in is still sleeping; do not leave it behind for the rest of the run.
+    hr.stop(record, hard=True)
 
 
 def test_runs_are_listed_newest_first_and_filtered_by_engagement(tmp_path, monkeypatch):
@@ -534,9 +547,8 @@ def test_a_headless_run_uses_the_session_id_chosen_before_it_started(tmp_path, m
     assert seen["slug"] == "alpha"
 
 
-def test_only_the_enforced_cap_becomes_a_budget_flag(tmp_path, monkeypatch):
-    """An advisory ceiling must NOT be passed as --max-budget-usd: that would silently turn
-    a threshold into a wall, which is the opposite of what the human chose."""
+def _headless_harness(tmp_path, monkeypatch):
+    """A launcher wired to a stub headless_run, returning (launcher, project, seen)."""
     hr = _load()
     launcher = _launcher()
     project = _project(tmp_path)
@@ -545,9 +557,51 @@ def test_only_the_enforced_cap_becomes_a_budget_flag(tmp_path, monkeypatch):
     monkeypatch.setattr(launcher, "_watch_after_launch", lambda p, s: None)
     monkeypatch.setattr(hr, "start", lambda *a, **k: seen.update(k) or {"session_id": "s"})
     monkeypatch.setitem(sys.modules, "headless_run", hr)
+    return launcher, project, seen
+
+
+def test_an_advisory_ceiling_never_becomes_the_enforced_cap(tmp_path, monkeypatch):
+    """An advisory ceiling must NOT be passed as --max-budget-usd: that would silently turn
+    a threshold into a wall, which is the opposite of what the human chose.
+
+    The project's own default is what fills the gap instead (headless_max_budget_usd)."""
+    launcher, project, seen = _headless_harness(tmp_path, monkeypatch)
+    (tmp_path / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"headless_max_budget_usd": 12}), encoding="utf-8"
+    )
     advisory = _pending(tmp_path, on_budget="continue", hard_cap_usd=None)
-    launcher._start_headless(project, "/engage --new --auto", advisory)
+    assert launcher._start_headless(project, "/engage --new --auto", advisory) is True
+    assert seen["budget_usd"] == 12.0, "the project default, not the advisory ceiling"
+
+
+def test_an_uncapped_headless_run_is_refused_rather_than_started(tmp_path, monkeypatch, capsys):
+    """W-17. --max-budget-usd is the only layer that can actually stop an unattended run;
+    everything above it is a run agreeing to behave. It was passed only when the human
+    happened to choose "stop" at a nonzero ceiling, so every other pre-flight combination
+    armed a run with nobody watching and no ceiling at all.
+
+    Refusing falls back to an ATTENDED session, which has the thing a cap substitutes for:
+    a human in it."""
+    launcher, project, seen = _headless_harness(tmp_path, monkeypatch)
+    monkeypatch.setattr(launcher.sys, "argv", ["virt_team_launcher.py"])
+    advisory = _pending(tmp_path, on_budget="continue", hard_cap_usd=None)
+    assert launcher._start_headless(project, "/engage --new --auto", advisory) is False
+    assert seen == {}, "nothing may be started without a ceiling"
+    err = capsys.readouterr().err
+    assert "no spend cap" in err
+    assert "headless_max_budget_usd" in err and "--no-budget-cap" in err
+
+
+def test_no_budget_cap_starts_it_uncapped_and_says_so(tmp_path, monkeypatch, capsys):
+    """The escape hatch is a flag on the run, not a stored setting: "start it uncapped" is a
+    decision about one run, and a preference that quietly meant it would be the same silent
+    uncapping W-17 exists to stop."""
+    launcher, project, seen = _headless_harness(tmp_path, monkeypatch)
+    monkeypatch.setattr(launcher.sys, "argv", ["virt_team_launcher.py", "--no-budget-cap"])
+    advisory = _pending(tmp_path, on_budget="continue", hard_cap_usd=None)
+    assert launcher._start_headless(project, "/engage --new --auto", advisory) is True
     assert seen["budget_usd"] is None
+    assert "UNCAPPED" in capsys.readouterr().err
 
 
 def test_a_headless_start_that_fails_falls_back_rather_than_losing_the_run(

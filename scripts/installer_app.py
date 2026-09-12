@@ -95,7 +95,7 @@ class InstallerHost:
     def _can_encode(self, text: str) -> bool:
         try:
             return self._ih._can_encode(text, sys.stderr)
-        except Exception:
+        except Exception:  # nosec B110 - probing terminal-encoding capability; falls through to the plain-encode check below
             pass
         try:
             text.encode(sys.stderr.encoding or "utf-8")
@@ -113,7 +113,7 @@ class InstallerHost:
         try:
             if self._repo is not None:
                 return self._ih.installed_version(self._repo) or ""
-        except Exception:
+        except Exception:  # nosec B110 - best-effort installed-version lookup for display; blank version is a valid, visible state
             pass
         return ""
 
@@ -744,7 +744,7 @@ def _update_facts(ih, repo=None):
         headlines = [h for h in (preview.get("headlines") or []) if h][:6]
         proc = ih.run_cmd(["git", "-C", str(clone), "status", "--porcelain"], timeout=10)
         dirty = bool((proc.stdout or "").strip()) if proc and proc.returncode == 0 else False
-    except Exception:
+    except Exception:  # nosec B110 - best-effort preview of local/remote/dirty status; a failed probe just leaves the preview blank
         pass
     return local, remote, headlines, dirty
 

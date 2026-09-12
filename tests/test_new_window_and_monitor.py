@@ -780,7 +780,10 @@ def test_wt_runs_the_command_through_a_shell_not_as_a_bare_process(monkeypatch):
     monkeypatch.setattr(lt, "_invoking_shell", lambda: "pwsh.exe")
     argv = lt._windows_argv("wt.exe", ["claude", "/engage --new"], Path("C:/proj"))
     assert argv[0].endswith("wt.exe")
-    assert "-d" in argv and "C:/proj" in argv, "the window still opens in the project"
+    # `-d` takes a NATIVE Windows path, so the expected spelling is whatever this
+    # interpreter renders - "C:/proj" on the POSIX CI leg, "C:\\proj" on the Windows one.
+    # Asserting the POSIX form literally is what failed the Windows leg on 2026-09-11.
+    assert "-d" in argv and str(Path("C:/proj")) in argv, "the window still opens in the project"
     joined = " ".join(argv)
     assert "pwsh.exe" in joined, "a shell must sit between wt and the command"
     assert "-Command" in argv, "the shell must be told to RUN something"

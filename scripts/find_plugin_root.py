@@ -34,6 +34,7 @@ import argparse
 import json
 import os
 import re
+import sys
 from pathlib import Path
 
 _TEAM_NAME = "compliance-surveillance-team"
@@ -159,6 +160,212 @@ def _from_installer_config(home: Path) -> str:
     return ""
 
 
+# Where this project's recorded identity lives: beside the go-written probe cache, in the
+# project's own .claude/. Same directory, same lifetime, same thing to delete if it goes
+# wrong.
+_IDENTITY_FILE = "project-identity.json"
+# How long a machine-level breadcrumb is worth warning about. Switching projects the next
+# morning is ordinary; switching mid-session is the incident. Four hours is long enough to
+# cover a working session and short enough that yesterday's project says nothing.
+_FLIP_WINDOW_SECONDS = 4 * 60 * 60
+
+
+def _git_fact(cwd: Path, args: list) -> str:
+    """One short git answer about `cwd`, or "". Never raises and never blocks: this runs on
+    the /engage step-0 path, where a slow answer costs the open."""
+    import subprocess  # local: this module is also exec'd as a source string by the skill
+
+    try:
+        done = subprocess.run(  # fixed argv, shell=False  # nosec B603
+            ["git", "-C", str(cwd), *args],
+            capture_output=True,
+            # encoding+errors, never bare text=True: cp1252 consoles have undefined bytes
+            # and git output carrying one raises inside subprocess's reader thread.
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            stdin=subprocess.DEVNULL,
+        )
+    except Exception:  # noqa: BLE001 - an identity fact is never worth a failure
+        return ""
+    return (done.stdout or "").strip() if done.returncode == 0 else ""
+
+
+def project_identity(cwd: Path, mode: str = "") -> dict:
+    """What this working directory IS: its path, its git remote, its git top-level.
+
+    Path alone is not an identity - a checkout gets moved and renamed - and a remote alone
+    is not either, since two clones of one repo are two projects. Recording all three lets
+    a later run say which of them changed."""
+    resolved = str(Path(cwd).resolve())
+    return {
+        "path": resolved,
+        "remote": _git_fact(cwd, ["config", "--get", "remote.origin.url"]),
+        "toplevel": _git_fact(cwd, ["rev-parse", "--show-toplevel"]),
+        "mode": mode,
+        "recorded_at": _now(),
+    }
+
+
+def _now() -> str:
+    import datetime
+
+    return datetime.datetime.now().isoformat(timespec="seconds")
+
+
+def _identity_path(cwd: Path) -> Path:
+    return Path(cwd) / ".claude" / _IDENTITY_FILE
+
+
+def _atomic_json(path: Path, data: dict) -> None:
+    """Write `data` to `path` so a reader sees the old file or the new one, never a mix.
+
+    Prefers scripts/fsutil, which is the repo's one atomic writer. It falls back to an
+    inline temp-and-replace for the reason stated at the top of this file and nowhere else
+    in the repo: this module is invoked INLINE, as a source string handed to `python -c`,
+    so there is no __file__ to hang a sibling import off and no scripts/ on sys.path. A
+    breadcrumb that cannot be written in the one mode it exists to protect would be no
+    breadcrumb at all."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        import fsutil
+
+        fsutil.atomic_write_json(path, data)
+        return
+    except Exception:  # noqa: BLE001 - inline invocation has no sibling imports  # nosec B110 - a breadcrumb write is never worth failing the caller over; the atomic-write fallback below still runs
+        pass
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+def _same_place(recorded: str, current: str) -> bool:
+    """Path comparison that survives Windows. normcase folds case and separators, which is
+    the difference between C:/Proj and c:\\proj being the same directory and looking like
+    two."""
+    return os.path.normcase(str(recorded)) == os.path.normcase(str(current))
+
+
+def identity_warning(cwd: Path, mode: str) -> str:
+    """Why the recorded identity for this directory no longer matches it, or "".
+
+    WHY ANY OF THIS (2026-09-12 audit, W-21). Repo-vs-plugin mode was decided from a single
+    `is_file()` test against Path.cwd() at invocation time, with the documented mitigation
+    being a prose instruction - "never prepend cd" - and a named live incident (#19,
+    2026-08-17) proving the instruction is not enough. A `cd` mid-session silently flips a
+    plugin-mode session into repo-as-project, and every later answer is quietly about a
+    different project.
+
+    This does not override the detection - the cwd is still the truth, and a resolver that
+    argued with reality would be worse than one that is occasionally surprised. It records
+    what was resolved the first time and SAYS SO when the answer changes."""
+    recorded = _read_identity(_identity_path(cwd))
+    if not recorded:
+        return ""
+    current = project_identity(cwd, mode)
+    if not _same_place(recorded.get("path", ""), current["path"]):
+        return (
+            f"this project was first resolved at {recorded.get('path')} and is now at "
+            f"{current['path']} - if that was a move, delete .claude/{_IDENTITY_FILE}"
+        )
+    for key, label in (("remote", "git remote"), ("toplevel", "git top-level")):
+        was, now = recorded.get(key) or "", current[key] or ""
+        if was and now and was != now:
+            return f"this project's {label} changed from {was} to {now}"
+    if recorded.get("mode") and mode and recorded["mode"] != mode:
+        return (
+            f"this project resolved as {recorded['mode']} before and as {mode} now - "
+            "a cd away from the project root does exactly this"
+        )
+    return ""
+
+
+def _read_identity(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def remember_identity(cwd: Path, mode: str) -> None:
+    """Record this project's identity at its FIRST resolution, and never again.
+
+    First resolution only, because the point is to compare against what was true when the
+    session started - a record rewritten on every call can never disagree with anything.
+    Best-effort: a project whose .claude/ is not writable simply gets no check."""
+    path = _identity_path(cwd)
+    if path.is_file():
+        return
+    try:
+        _atomic_json(path, project_identity(cwd, mode))
+    except Exception:  # noqa: BLE001 - a breadcrumb is never worth a failure  # nosec B110 - a breadcrumb is never worth a failure
+        pass
+
+
+def _machine_config_path(home: Path) -> Path:
+    base = os.environ.get("XDG_CONFIG_HOME")
+    return (Path(base) if base else home / ".config") / "virt-surv-it" / "installer.json"
+
+
+def mode_flip_warning(home: Path, cwd: Path, mode: str) -> str:
+    """Why the LAST resolution on this machine disagrees with this one, or "".
+
+    The project-level record above cannot see incident #19 at all: a `cd` lands in a
+    different directory, which has its own (or no) record. This breadcrumb is machine-level
+    and short-lived on purpose - it fires when the previous resolution, within the last few
+    hours, was a different directory in a different mode, which is what "a prior cd flipped
+    the session" looks like from here and is not what switching projects tomorrow looks
+    like."""
+    config = _machine_config_path(home)
+    previous = _read_identity(config).get("last_resolution")
+    _remember_resolution(config, cwd, mode)
+    if not isinstance(previous, dict):
+        return ""
+    if _same_place(previous.get("path", ""), str(Path(cwd).resolve())):
+        return ""
+    if not previous.get("mode") or previous["mode"] == mode:
+        return ""
+    try:
+        import datetime
+
+        age = datetime.datetime.now() - datetime.datetime.fromisoformat(
+            str(previous.get("recorded_at"))
+        )
+    except (TypeError, ValueError):
+        return ""
+    if age.total_seconds() > _FLIP_WINDOW_SECONDS:
+        return ""
+    return (
+        f"the previous resolution on this machine was {previous['mode']} in "
+        f"{previous.get('path')} - if you changed directory mid-session, this answer is "
+        "about a different project"
+    )
+
+
+def _remember_resolution(config: Path, cwd: Path, mode: str) -> None:
+    """Overwrite the machine-level breadcrumb. Unlike the project record this IS rewritten
+    every time: it answers "what did the last call resolve", which only the last call
+    knows."""
+    try:
+        data = _read_identity(config)
+        data["last_resolution"] = {
+            "path": str(Path(cwd).resolve()),
+            "mode": mode,
+            "recorded_at": _now(),
+        }
+        _atomic_json(config, data)
+    except Exception:  # noqa: BLE001 - a breadcrumb is never worth a failure  # nosec B110 - a breadcrumb is never worth a failure
+        pass
+
+
 def find_plugin_root(home: Path, cwd: Path) -> str:
     """Empty string means repo-as-project (the cwd IS the team repo).
 
@@ -176,6 +383,19 @@ def find_plugin_root(home: Path, cwd: Path) -> str:
     return _from_registry(home) or _from_filesystem_search(home) or _from_installer_config(home)
 
 
+def resolve(home: Path, cwd: Path) -> tuple:
+    """(plugin_root, warnings) - the resolution plus anything worth saying about it.
+
+    The entry point `main` uses. find_plugin_root stays exactly what it was, a pure
+    function of home and cwd, because every existing caller and test depends on that;
+    the identity bookkeeping lives here, on top of it, where it can be skipped."""
+    root = find_plugin_root(home, cwd)
+    mode = "plugin" if root else "repo-as-project"
+    warnings = [w for w in (identity_warning(cwd, mode), mode_flip_warning(home, cwd, mode)) if w]
+    remember_identity(cwd, mode)
+    return root, warnings
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--home", default="")
@@ -184,11 +404,15 @@ def main() -> int:
 
     home = Path(args.home) if args.home else Path.home()
     cwd = Path(args.cwd).resolve()
-    print(f"PLUGIN_ROOT={find_plugin_root(home, cwd)}")
+    root, warnings = resolve(home, cwd)
+    # STDOUT CARRIES THE ANSWER AND NOTHING ELSE - the skill reads this line with a shell
+    # capture, so a warning on stdout would be consumed as part of the path. Warnings go to
+    # stderr, where the human can see them and the capture cannot.
+    for warning in warnings:
+        print(f"virt-surv: {warning}", file=sys.stderr)
+    print(f"PLUGIN_ROOT={root}")
     return 0
 
 
 if __name__ == "__main__":
-    import sys
-
     sys.exit(main())

@@ -103,7 +103,7 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
     try:
         if mod._running_slug(project_dir):
             actions.append((("watch",), f"{g['launch']}watch the engagement running", "t"))
-    except Exception:
+    except Exception:  # nosec B110 - a missing menu option must never cost the menu
         pass  # a missing option must never cost the menu
     actions.append(
         (
@@ -256,18 +256,17 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
             kb.add(str(i + 1))(lambda event, _i=i: _exit(event, ("resume", _i)))
 
     frame_title = ui_text(mod, f"Virtual Surv-IT  ·  {_bits(project_dir, mod)}")
-    try:
-        screen(
-            mod,
-            title=frame_title,
-            body_fn=_left,
-            right_fn=_right,
-            footer_fn=_footer,
-            key_bindings=kb,
-            output=output,
-            project_dir=project_dir,
-        )
-    except Exception:
+    if not _draw(
+        mod,
+        "the engagement menu (prompt_toolkit)",
+        title=frame_title,
+        body_fn=_left,
+        right_fn=_right,
+        footer_fn=_footer,
+        key_bindings=kb,
+        output=output,
+        project_dir=project_dir,
+    ):
         return APP_FALLBACK
     return result["v"]
 
@@ -283,7 +282,13 @@ def settings_screen(project_dir: Path, mod, output=None):
     Returns True/False when the screen RAN (changed anything or not), and **None when it
     could not run at all** - the caller falls back to the numbered editor only on None.
     Conflating the two was a live bug (2026-08-20): Esc with nothing changed returned
-    False, so cancelling the app screen dumped the user into the old numbered editor."""
+    False, so cancelling the app screen dumped the user into the old numbered editor.
+
+    A CRASH IS ALSO None (2026-09-12 audit, L-3). It used to return the partial `changed`
+    flag from its exception handler - the same value the success path returns - so a
+    screen that fell over halfway through a settings edit was indistinguishable from a
+    human finishing one, and the session recorded the project as configured. The Textual
+    adapter has always got this right; this is the asymmetry _crashed() exists to remove."""
     try:
         p = mod._ptk_ui()
         if not p:
@@ -508,19 +513,18 @@ def settings_screen(project_dir: Path, mod, output=None):
             return
         event.app.exit()
 
-    try:
-        screen(
-            mod,
-            title=ui_text(mod, f"{g['settings']}Settings  ·  {project_dir.resolve().name}"),
-            body_fn=_body,
-            right_fn=_right,
-            footer_fn=_footer,
-            key_bindings=kb,
-            output=output,
-            project_dir=project_dir,
-        )
-    except Exception:
-        return changed[0]
+    if not _draw(
+        mod,
+        "the settings editor (prompt_toolkit)",
+        title=ui_text(mod, f"{g['settings']}Settings  ·  {project_dir.resolve().name}"),
+        body_fn=_body,
+        right_fn=_right,
+        footer_fn=_footer,
+        key_bindings=kb,
+        output=output,
+        project_dir=project_dir,
+    ):
+        return None
     return changed[0]
 
 
@@ -607,7 +611,7 @@ def archive_screen(project_dir: Path, mod, engagement_state, menu: dict, output=
         try:
             mod._archive_perform(engagement_state, targets)
             done[0] = True
-        except Exception:
+        except Exception:  # nosec B110 - a crash in this TUI key handler must not crash the event loop; exiting with done unset falls through to the numbered-tier archive menu, which reports per-slug outcomes itself
             pass
         event.app.exit()
 
@@ -617,18 +621,17 @@ def archive_screen(project_dir: Path, mod, engagement_state, menu: dict, output=
     def _esc(event):
         event.app.exit()
 
-    try:
-        screen(
-            mod,
-            title=ui_text(mod, f"{g['archive']}Archive  ·  {project_dir.resolve().name}"),
-            body_fn=_body,
-            right_fn=_right,
-            footer_fn=_footer,
-            key_bindings=kb,
-            output=output,
-            project_dir=project_dir,
-        )
-    except Exception:
+    if not _draw(
+        mod,
+        "the archive screen (prompt_toolkit)",
+        title=ui_text(mod, f"{g['archive']}Archive  ·  {project_dir.resolve().name}"),
+        body_fn=_body,
+        right_fn=_right,
+        footer_fn=_footer,
+        key_bindings=kb,
+        output=output,
+        project_dir=project_dir,
+    ):
         return done[0]
     return done[0]
 
@@ -789,18 +792,17 @@ def finished_screen(project_dir: Path, mod, engagement_state, output=None):
         chosen[0] = ""
         event.app.exit()
 
-    try:
-        screen(
-            mod,
-            title=ui_text(mod, f"{g['browse']}Done & archived  ·  {project_dir.resolve().name}"),
-            body_fn=_body,
-            right_fn=_right,
-            footer_fn=_footer,
-            key_bindings=kb,
-            output=output,
-            project_dir=project_dir,
-        )
-    except Exception:
+    if not _draw(
+        mod,
+        "the done-and-archived browser (prompt_toolkit)",
+        title=ui_text(mod, f"{g['browse']}Done & archived  ·  {project_dir.resolve().name}"),
+        body_fn=_body,
+        right_fn=_right,
+        footer_fn=_footer,
+        key_bindings=kb,
+        output=output,
+        project_dir=project_dir,
+    ):
         return None
     return chosen[0]
 
@@ -962,18 +964,17 @@ def jira_screen(project_dir: Path, mod, output=None):
         result["v"] = JIRA_CANCELLED
         event.app.exit()
 
-    try:
-        screen(
-            mod,
-            title=ui_text(mod, f"{g['jira']}From a Jira ticket  ·  {project_dir.resolve().name}"),
-            body_fn=_body,
-            right_fn=_right,
-            footer_fn=_footer,
-            key_bindings=kb,
-            output=output,
-            project_dir=project_dir,
-        )
-    except Exception:
+    if not _draw(
+        mod,
+        "the ticket prompt (prompt_toolkit)",
+        title=ui_text(mod, f"{g['jira']}From a Jira ticket  ·  {project_dir.resolve().name}"),
+        body_fn=_body,
+        right_fn=_right,
+        footer_fn=_footer,
+        key_bindings=kb,
+        output=output,
+        project_dir=project_dir,
+    ):
         return None
     # A ref alone stays a plain string (every existing caller keeps working); an unattended
     # pick returns (ref, True), so a caller cannot start one without noticing that it did.
@@ -1177,18 +1178,17 @@ def browse_screen(start_dir: Path, mod, output=None):
         result["v"] = BROWSE_CANCELLED
         event.app.exit()
 
-    try:
-        screen(
-            mod,
-            title=f"{g['engagements']}Open a project",
-            body_fn=_body,
-            right_fn=_right,
-            footer_fn=_footer,
-            key_bindings=kb,
-            output=output,
-            project_dir=here[0],
-        )
-    except Exception:
+    if not _draw(
+        mod,
+        "the project explorer (prompt_toolkit)",
+        title=f"{g['engagements']}Open a project",
+        body_fn=_body,
+        right_fn=_right,
+        footer_fn=_footer,
+        key_bindings=kb,
+        output=output,
+        project_dir=here[0],
+    ):
         return None
     return result["v"]
 
@@ -1295,18 +1295,17 @@ def setup_screen(project_dir: Path, mod, output=None):
         result["v"] = SETUP_CANCEL
         event.app.exit()
 
-    try:
-        screen(
-            mod,
-            title=f"{g['settings']}Set up this project",
-            body_fn=_body,
-            right_fn=_right,
-            footer_fn=_footer,
-            key_bindings=kb,
-            output=output,
-            project_dir=project_dir,
-        )
-    except Exception:
+    if not _draw(
+        mod,
+        "the first-time setup screen (prompt_toolkit)",
+        title=f"{g['settings']}Set up this project",
+        body_fn=_body,
+        right_fn=_right,
+        footer_fn=_footer,
+        key_bindings=kb,
+        output=output,
+        project_dir=project_dir,
+    ):
         return None
     return result["v"]
 
@@ -1381,18 +1380,17 @@ def artifacts_screen(project_dir: Path, mod, slug: str, output=None):
     def _esc(event):
         event.app.exit()
 
-    try:
-        screen(
-            mod,
-            title=f"{g['archive']}Artifacts",
-            body_fn=_body,
-            right_fn=_right,
-            footer_fn=_footer,
-            key_bindings=kb,
-            output=output,
-            project_dir=project_dir,
-        )
-    except Exception:
+    if not _draw(
+        mod,
+        "the artifacts screen (prompt_toolkit)",
+        title=f"{g['archive']}Artifacts",
+        body_fn=_body,
+        right_fn=_right,
+        footer_fn=_footer,
+        key_bindings=kb,
+        output=output,
+        project_dir=project_dir,
+    ):
         return None
     return True
 
@@ -1473,18 +1471,17 @@ def help_screen(project_dir: Path, mod, output=None):
     def _any(event):
         event.app.exit()
 
-    try:
-        screen(
-            mod,
-            title="Help",
-            body_fn=_body,
-            right_fn=_right,
-            footer_fn=_footer,
-            key_bindings=kb,
-            output=output,
-            project_dir=project_dir,
-        )
-    except Exception:
+    if not _draw(
+        mod,
+        "the help screen (prompt_toolkit)",
+        title="Help",
+        body_fn=_body,
+        right_fn=_right,
+        footer_fn=_footer,
+        key_bindings=kb,
+        output=output,
+        project_dir=project_dir,
+    ):
         return None
     return True
 
@@ -1544,22 +1541,36 @@ def slug_picker_screen(project_dir: Path, mod, shown: list, output=None):
     def _esc(event):
         event.app.exit()
 
-    try:
-        screen(
-            mod,
-            title=f"{g['engagements']}Choose an engagement",
-            body_fn=_body,
-            footer_fn=_footer,
-            key_bindings=kb,
-            output=output,
-            project_dir=project_dir,
-        )
-    except Exception:
+    if not _draw(
+        mod,
+        "the engagement picker (prompt_toolkit)",
+        title=f"{g['engagements']}Choose an engagement",
+        body_fn=_body,
+        footer_fn=_footer,
+        key_bindings=kb,
+        output=output,
+        project_dir=project_dir,
+    ):
         return ""
     return result["v"]
 
 
 AUTO_CANCELLED = "__auto_cancelled__"
+
+
+class _preflight_where:  # noqa: N801 - it is used as a value, not constructed as a class
+    """The pre-flight's crash label, resolved when it is printed rather than when it is
+    built. `drew` is a one-element list the screen's own body sets on first render, so the
+    label can only be correct if it is read afterwards - and _draw reads it only on the
+    crash path."""
+
+    def __init__(self, drew):
+        self._drew = drew
+
+    def __str__(self) -> str:
+        return "the unattended pre-flight (prompt_toolkit, %s)" % (
+            "after drawing" if self._drew[0] else "no draw"
+        )
 
 
 # One source for the keys, named once and rendered in both places. The body and the footer
@@ -1685,15 +1696,40 @@ def _preflight_model() -> dict:
     }
 
 
-def _report_screen_crash(mod, where: str, exc: BaseException) -> None:
+def _report_screen_crash(mod, where: "str | _preflight_where", exc: BaseException) -> None:
     """Record a screen failure this tier would otherwise swallow. Never raises.
 
     `mod` is the host launcher module, which owns the crash log. Reporting must not be the
     thing that breaks a degrade, so every failure here is dropped."""
     try:
         mod._report_crash(where, exc)
-    except Exception:  # noqa: BLE001 - reporting must never re-raise
+    except Exception:  # noqa: BLE001 - reporting must never re-raise  # nosec B110 - the crash reporter must never itself raise past the caller
         pass
+
+
+def _draw(mod, where: "str | _preflight_where", **kwargs) -> bool:
+    """Draw one framed screen. True when it ran; False when it crashed, AND SAID SO.
+
+    THE ONE WAY A SCREEN IN THIS FILE MAY FAIL (2026-09-12 audit, L-2). Thirteen screens
+    each wrote their own `try: screen(...) except Exception: return <sentinel>`, and the
+    "make the degrade speak" fix of 2026-09-11 reached exactly one of them - the unattended
+    pre-flight, because that is where the report came from. The other twelve still wrote
+    nothing to the crash log and printed nothing, so a screen that fell over looked
+    identical to a console that simply cannot draw: the caller degraded to the numbered
+    tier, which is correct, and the human had no way to find out why. The Textual tier had
+    already been routed through _report_outside_loop/_crashed at six sites, so the two
+    renderers disagreed about whether a crash was even observable.
+
+    Degrading is kept exactly as it was - a screen must never be the reason a launch fails.
+    The caller still returns its own could-not-draw sentinel; it just cannot do it silently
+    any more, because the sentinel is now on the other side of this function.
+    """
+    try:
+        screen(mod, **kwargs)
+    except Exception as exc:
+        _report_screen_crash(mod, where, exc)
+        return False
+    return True
 
 
 def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
@@ -1735,8 +1771,15 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
     # returned a silent None, which the caller reads as "could not draw" and answers by
     # starting an ORDINARY run. _body is called on every render, so the first call is the
     # screen appearing. See the report of 2026-09-11, where exactly this happened on a
-    # PLUGIN install - which ships prompt_toolkit and no Textual, so this is the renderer
-    # that was actually drawing that gate.
+    # PLUGIN install.
+    #
+    # THAT REPORT'S DIAGNOSIS WAS WRONG ABOUT WHY (2026-09-12 audit, L-32). It said a
+    # plugin install "ships prompt_toolkit and no Textual, so this is the renderer that was
+    # actually drawing that gate" - and the repo ships BOTH (git ls-files vendor/textual:
+    # 264 files, vendor/prompt_toolkit: 146, neither gitignored). That claim was
+    # load-bearing: it is why the crash-reporting fix landed on this tier alone, and L-2
+    # found the other twelve screens here still swallowing crashes a year-quarter later.
+    # Both tiers ship; a fix belongs in both.
     drew = [False]
 
     def _body():
@@ -1840,24 +1883,21 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
     def _esc(event):
         event.app.exit()
 
-    try:
-        screen(
-            mod,
-            title=f"{g['jira']}Auto mode - authorise this run",
-            body_fn=_body,
-            right_fn=_right,
-            footer_fn=_footer,
-            key_bindings=kb,
-            output=output,
-            project_dir=project_dir,
-        )
-    except Exception as exc:
-        _report_screen_crash(
-            mod,
-            "the unattended pre-flight (prompt_toolkit, %s)"
-            % ("after drawing" if drew[0] else "no draw"),
-            exc,
-        )
+    # The same helper every other screen here uses. The `where` is built AFTER the call so
+    # it can say whether the screen had drawn - which is the difference between "this
+    # console cannot run it" and "the human filled it in and it fell over on the way out",
+    # and the reason this screen grew a drew[] flag in the first place.
+    if not _draw(
+        mod,
+        _preflight_where(drew),
+        title=f"{g['jira']}Auto mode - authorise this run",
+        body_fn=_body,
+        right_fn=_right,
+        footer_fn=_footer,
+        key_bindings=kb,
+        output=output,
+        project_dir=project_dir,
+    ):
         return None
     if not state["confirmed"]:
         return AUTO_CANCELLED
@@ -2039,18 +2079,17 @@ def request_screen(project_dir: Path, mod, output=None):
         result["v"] = REQUEST_BACK
         event.app.exit()
 
-    try:
-        screen(
-            mod,
-            title=f"{g['new']}New engagement",
-            body_fn=_body,
-            right_fn=_right,
-            footer_fn=_footer,
-            key_bindings=kb,
-            output=output,
-            project_dir=project_dir,
-        )
-    except Exception:
+    if not _draw(
+        mod,
+        "the request composer (prompt_toolkit)",
+        title=f"{g['new']}New engagement",
+        body_fn=_body,
+        right_fn=_right,
+        footer_fn=_footer,
+        key_bindings=kb,
+        output=output,
+        project_dir=project_dir,
+    ):
         return None
     return result["v"]
 
@@ -2355,18 +2394,17 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
     def _close(event):
         event.app.exit()
 
-    try:
-        screen(
-            mod,
-            title=f"{g['new']}Unattended - {slug}",
-            body_fn=_body,
-            right_fn=_right,
-            footer_fn=_footer,
-            key_bindings=kb,
-            output=output,
-            project_dir=project_dir,
-            refresh_interval=_MONITOR_REFRESH,
-        )
-    except Exception:
+    if not _draw(
+        mod,
+        "the run monitor (prompt_toolkit)",
+        title=f"{g['new']}Unattended - {slug}",
+        body_fn=_body,
+        right_fn=_right,
+        footer_fn=_footer,
+        key_bindings=kb,
+        output=output,
+        project_dir=project_dir,
+        refresh_interval=_MONITOR_REFRESH,
+    ):
         return None
     return result["v"]

@@ -241,10 +241,15 @@ def test_archive_screen_states_the_open_pack_consequence(ptk):
 
 
 def test_every_screen_shares_one_shell():
-    """menu, settings and archive all render through screen() - three hand-rolled
-    layouts would drift exactly as the two menu tiers did."""
+    """Every screen renders through the shared shell - hand-rolled layouts would drift
+    exactly as the two menu tiers did.
+
+    The shell is now reached through `_draw`, the one wrapper that reports a crash instead
+    of swallowing it (2026-09-12, L-2), so that is what the count looks for. `screen(` may
+    appear only inside `_draw` itself."""
     source = (REPO_ROOT / "scripts" / "launcher_app.py").read_text(encoding="utf-8")
-    assert source.count("        screen(") >= 3, "a screen is not using the shared shell"
+    assert source.count("    if not _draw(") >= 3, "a screen is not using the shared shell"
+    assert source.count("        screen(mod, **kwargs)") == 1, "screen() is called elsewhere"
 
 
 def test_glyphs_degrade_on_a_cp1252_console(monkeypatch):

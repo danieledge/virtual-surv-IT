@@ -1030,14 +1030,24 @@ def test_pt_failure_falls_back_to_numbered_menu(tmp_path, monkeypatch, capsys):
 
 
 def test_rich_ui_loads_from_vendor_tree():
-    """The go TUI uses vendored rich CORE only (2026-08-17): Console/Table/Panel/Rule
-    need neither pygments nor markdown-it, so those are deliberately NOT vendored. This
-    pins both halves: rich imports from vendor/, and the heavy deps stayed out."""
+    """The go TUI uses vendored rich CORE only (2026-08-17): Console/Table/Panel/Rule need
+    neither pygments nor markdown-it.
+
+    Pinned as a BEHAVIOUR rather than as an inventory of vendor/ (2026-09-12). The original
+    form asserted those two packages were absent from the tree, which stopped being the
+    right question once the Textual tier arrived - Textual pulls rich's full dependency set
+    in, so their presence says nothing about whether this launcher's own rich path needs
+    them. What still matters, and what actually broke things when it changed, is that
+    `_rich_ui()` resolves without dragging either into the process."""
+    import sys as _sys
+
     mod = _load()
+    for heavy in ("pygments", "markdown_it"):
+        _sys.modules.pop(heavy, None)
     assert mod._rich_ui() is not None, "vendor/rich missing or rich core grew a hard dep"
     assert (REPO_ROOT / "vendor" / "rich").is_dir()
-    assert not (REPO_ROOT / "vendor" / "pygments").exists()
-    assert not (REPO_ROOT / "vendor" / "markdown_it").exists()
+    for heavy in ("pygments", "markdown_it"):
+        assert heavy not in _sys.modules, f"the go TUI pulled {heavy} in - rich core only"
 
 
 def test_banner_and_defaults_render_without_rich(tmp_path, monkeypatch, capsys):
@@ -1654,6 +1664,12 @@ def test_progress_done_wipes_the_line(monkeypatch):
             return None
 
     monkeypatch.setattr(mod.sys, "stderr", _Tty)
+    # DRIVE THE ESCAPE BRANCH EXPLICITLY. _color_enabled() is the gate on whether escapes
+    # are emitted at all, and on Windows it answers False unless the console advertises VT
+    # (WT_SESSION/TERM/ANSICON) - so asserting the escape form unconditionally failed the
+    # Windows CI leg against correct behaviour (2026-09-12). Both branches are asserted
+    # here instead, on every platform.
+    monkeypatch.setattr(mod, "_color_enabled", lambda: True)
     mod._progress("a rather long status label that must be fully erased...")
     mod._progress_done()
     # Erase-to-end-of-line, not a run of spaces. Padding only covers the columns it
@@ -1661,6 +1677,17 @@ def test_progress_done_wipes_the_line(monkeypatch):
     # probe's own message ended up spliced onto the progress line (2026-08-28).
     assert written[-1] == "\r\x1b[K"
     assert all(line.endswith("\x1b[K") for line in written)
+
+    # And the fallback for a console that renders escapes literally: padding wide enough
+    # to cover the label, then a carriage return. It cannot clear a LONGER line already on
+    # screen, which is the documented limitation, but it must still clear its own.
+    written.clear()
+    monkeypatch.setattr(mod, "_color_enabled", lambda: False)
+    mod._progress("a rather long status label that must be fully erased...")
+    mod._progress_done()
+    assert "\x1b" not in "".join(written), "no escapes on a console that cannot read them"
+    assert written[-1].startswith("\r") and written[-1].endswith("\r")
+    assert len(written[-1].strip("\r")) >= mod._PROGRESS_WIDTH
 
 
 def test_the_slow_steps_all_announce_themselves():

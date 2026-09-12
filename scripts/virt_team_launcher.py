@@ -56,6 +56,19 @@ import sys
 from pathlib import Path
 
 
+# How every captured subprocess here decodes its output (2026-09-12 audit, L-9).
+#
+# NEVER a bare text=True. That decodes with the CONSOLE code page on Windows, and cp1252
+# has undefined bytes (0x81, 0x8d, 0x8f, 0x90, 0x9d) - so git output carrying one raises
+# UnicodeDecodeError inside subprocess's own reader thread, which surfaces as a bare
+# "Exception in Thread-N" with nothing pointing at git. install_helper.run_cmd was fixed
+# for exactly that after a live corporate report; the nine capture-output calls in this
+# file and the one in preflight.py were not, so on the same boxes the branch, dirty-tree,
+# upstream and version facts silently came back empty instead. Most of them sit inside an
+# `except Exception: pass`, which is why it degraded quietly rather than failing.
+_DECODE = {"encoding": "utf-8", "errors": "replace"}
+
+
 def _vsit_paths():
     """The layout resolver (VSIT migration), imported lazily.
 
@@ -81,6 +94,20 @@ def _scripts_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
+def _fsutil():
+    """The shared atomic-write helpers, imported lazily.
+
+    Lazy for the same reason _vsit_paths is: this file can run standalone from a bare
+    clone where scripts/ is not yet on sys.path, and an import error at module level would
+    cost the launch rather than one write. Every state file this module owns goes through
+    it (2026-09-12 audit, L-15/L-16): .auto-pending.json arms an unattended run and the
+    machine config carries repo_path, and both were written in place, so an interrupted
+    write left a truncated file where a whole one was expected."""
+    import fsutil
+
+    return fsutil
+
+
 def _ensure_sibling_imports() -> None:
     """Put scripts/ on sys.path so the six `import engage_probe`-style sibling imports
     resolve however this file was entered. Running it as a path (`python
@@ -104,6 +131,30 @@ def _installer_config_path() -> Path:
     base = os.environ.get("XDG_CONFIG_HOME")
     root = Path(base) if base else Path.home() / ".config"
     return root / "virt-surv-it" / "installer.json"
+
+
+def _read_machine_config() -> dict:
+    """The shared machine config (~/.config/virt-surv-it/installer.json), or {}.
+
+    utf-8-sig because install_helper writes it and its own load_config reads it that way -
+    two readers of one file disagreeing about a BOM is how `recent_projects` silently reset
+    (2026-09-12 audit, L-16). Never raises: an unreadable machine config is advisory."""
+    try:
+        cfg = json.loads(_installer_config_path().read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return {}
+    return cfg if isinstance(cfg, dict) else {}
+
+
+def _write_machine_config(cfg: dict) -> None:
+    """Replace the shared machine config atomically.
+
+    install_helper.save_config has always been a temp file plus os.replace; this module did
+    a plain write_text on the SAME file from two places, so a crash or a full disk mid-write
+    truncated it - and the key most likely to be lost is repo_path, which is what
+    _import_from_scripts needs to find scripts/ at all (2026-09-12 audit, L-16). Raises
+    OSError to the caller, every one of which treats a failed config write as advisory."""
+    _fsutil().atomic_write_json(_installer_config_path(), cfg)
 
 
 def _crash_log_path() -> Path:
@@ -135,7 +186,7 @@ def _report_crash(where: str, exc: BaseException | None = None) -> None:
     detail = ""
     try:
         detail = _tb.format_exc()
-    except Exception:  # noqa: BLE001 - reporting must never re-raise
+    except Exception:  # noqa: BLE001 - reporting must never re-raise  # nosec B110 - reporting must never re-raise
         pass
     # str(exc) is NOT safe: an exception can carry a __str__ that raises, and reporting
     # that becomes the crash is the one failure this whole function exists to prevent.
@@ -160,14 +211,16 @@ def _report_crash(where: str, exc: BaseException | None = None) -> None:
         path = None
     try:
         ink = _Ink()
-        print(ink.warn(f"    virt-surv hit an internal error in {where} ({label})"), file=sys.stderr)
+        print(
+            ink.warn(f"    virt-surv hit an internal error in {where} ({label})"), file=sys.stderr
+        )
         if path is not None:
             print(ink.dim(f"    full details: {path}"), file=sys.stderr)
         else:
             print(ink.dim("    (could not write the crash log)"), file=sys.stderr)
         if not os.environ.get("VIRT_SURV_DEBUG"):
             print(ink.dim("    VIRT_SURV_DEBUG=1 re-raises instead of degrading"), file=sys.stderr)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # nosec B110 - reporting must never re-raise
         pass
     if os.environ.get("VIRT_SURV_DEBUG") and exc is not None:
         raise exc
@@ -191,7 +244,10 @@ def _configured_launch_command() -> str:
 
 
 # Pinned to install_helper._ALIAS_VERSION by a sync test - bump both together.
-_EXPECTED_ALIAS_VERSION = 7  # v7: cd handshake for the project explorer + Esc exits
+# v8: the POSIX wrapper no longer glob-expands the configured launch command (L-33).
+# v7 brought the cd handshake for the project explorer and the Esc exit code, which is the
+# behaviour _warn_if_abort_will_be_ignored still describes.
+_EXPECTED_ALIAS_VERSION = 8
 # Exit code that means "the human backed out - do NOT launch" (2026-08-20 user report:
 # "when exiting the tui it launches claude code, it shouldn't"). Esc used to be folded
 # into the same empty decision as 'just launch', so backing out of the menu still
@@ -213,12 +269,7 @@ def _heal_stale_alias_once(force: bool = False) -> None:
     that. Best-effort throughout: any failure must never cost the launch."""
     try:
         cfg_path = _installer_config_path()
-        try:
-            cfg = json.loads(cfg_path.read_text(encoding="utf-8-sig"))
-            if not isinstance(cfg, dict):
-                cfg = {}
-        except (OSError, ValueError):
-            cfg = {}
+        cfg = _read_machine_config()
         if not force and cfg.get("alias_heal_checked") == _EXPECTED_ALIAS_VERSION:
             return
         import contextlib
@@ -234,9 +285,7 @@ def _heal_stale_alias_once(force: bool = False) -> None:
         cfg["alias_heal_checked"] = ih._ALIAS_VERSION
         try:
             cfg_path.parent.mkdir(parents=True, exist_ok=True)
-            cfg_path.write_text(
-                json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-            )
+            _write_machine_config(cfg)
         except OSError:
             pass
         if healed:
@@ -257,8 +306,12 @@ def _heal_stale_alias_once(force: bool = False) -> None:
                 "is fixed.",
                 file=sys.stderr,
             )
-    except Exception:
-        pass  # never cost the launch
+    except Exception as exc:
+        # Degrade, never break the launch - but SAY SO (2026-09-12 audit, L-24). This
+        # executes the whole 11k-line installer module to reach one function, so any
+        # import-time failure in that file landed here and was dropped, leaving the alias
+        # permanently stale with no signal at all and no way for anyone to find out why.
+        _report_crash("the stale-alias self-heal", exc)
 
 
 def _alias_installed_anywhere() -> bool:
@@ -278,7 +331,7 @@ def _alias_installed_anywhere() -> bool:
         documents = home / "Documents"
         for sub in ("WindowsPowerShell", "PowerShell"):
             candidates.append(documents / sub / "Microsoft.PowerShell_profile.ps1")
-    except Exception:
+    except Exception:  # nosec B110 - best-effort candidate list for a shell profile path; a missing path is just skipped
         pass
     for path in candidates:
         try:
@@ -380,7 +433,7 @@ def _warn_if_abort_will_be_ignored() -> None:
         return  # no wrapper at all: a direct run, nothing to warn about
     try:
         _heal_stale_alias_once(force=True)
-    except Exception:
+    except Exception:  # nosec B110 - cosmetic tier - never let the heal cost the abort message
         pass  # cosmetic tier - never let the heal cost the abort message
     ink = _Ink()
     print("", file=sys.stderr)
@@ -430,7 +483,7 @@ def _refresh_tool_cache(project_dir: Path) -> None:
         plugin_root_arg = find_plugin_root(Path.home(), project_dir)
         root, _display, root_is_trusted = engage_probe.resolve_root(plugin_root_arg, project_dir)
         engage_probe.run_tool_probe(root, project_dir, root_is_trusted)
-    except Exception:
+    except Exception:  # nosec B110 - advisory tool probe; a failure here must never block the launch path it is warming
         pass
 
 
@@ -1152,7 +1205,7 @@ def _run_settings_editor(project_dir: Path) -> None:
         # complaint was about).
         try:
             _print_project_defaults(project_dir)
-        except Exception:
+        except Exception:  # nosec B110 - best-effort defaults print; the earlier message already conveyed the outcome
             pass
 
 
@@ -1178,18 +1231,14 @@ def _config_editor(project_dir: Path) -> None:
     # None = the screen could not run at all; False = it ran and nothing changed.
     # Only the former falls through - treating Esc as "unavailable" once dumped the
     # user into the numbered editor after cancelling (live report, 2026-08-20).
-    for _tier in ("launcher_textual", "launcher_app"):
-        try:
-            _module = __import__(_tier, fromlist=["settings_screen"])
-            _before = getattr(_module, "APPS_RUN", None)
-            if _module.settings_screen(project_dir, _this_module()) is not None:
-                return
-            # Same rule as _tiered_screen: a tier that DREW has nothing below it.
-            _after = getattr(_module, "APPS_RUN", None)
-            if _before is not None and _after is not None and _after != _before:
-                return
-        except Exception:
-            continue  # any app failure degrades to the next tier down
+    # THE ONE DISPATCHER (2026-09-12 audit, L-6). This was the fourth hand-written copy of
+    # the tier fall-through. It had the APPS_RUN fix, unlike two of the others, which is
+    # exactly the problem: four copies means the next fix lands on one of them. The `drew`
+    # half of the answer is what this caller needs and what _tiered_screen_result exists
+    # to give it - a tier that DREW has nothing below it, cancel included.
+    _answer, _drew = _tiered_screen_result("settings_screen", project_dir, _this_module())
+    if _drew:
+        return
     err = sys.stderr
     ink = _Ink()
     while True:
@@ -1503,7 +1552,7 @@ def _resume_decision(project_dir: Path) -> str:
             for step in (_remember_project, _prewarm_guard_interpreter, _write_probe_cache):
                 try:
                     step(project_dir)  # the new project deserves the same warm start
-                except Exception:
+                except Exception:  # nosec B110 - warm-start steps are all individually best-effort; a failure here costs only the warm start
                     pass
             continue
         if decision != "__again__":
@@ -1575,19 +1624,18 @@ def _remember_project(project_dir: Path) -> None:
     except Exception:
         return
     path = _installer_config_path()
-    try:
-        cfg = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(cfg, dict):
-            cfg = {}
-    except Exception:
-        cfg = {}
+    # utf-8-sig, matching install_helper.load_config and _heal_stale_alias_once. Plain utf-8
+    # here made a BOM'd config parse as garbage, so `recent_projects` silently reset on
+    # every go while the other two readers of the SAME file were perfectly happy with it
+    # (2026-09-12 audit, L-16).
+    cfg = _read_machine_config()
     existing = [e for e in (cfg.get("recent_projects") or []) if isinstance(e, str)]
     cfg["recent_projects"] = [resolved] + [e for e in existing if e != resolved][
         : _RECENT_LIMIT - 1
     ]
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        _write_machine_config(cfg)
     except OSError:
         pass
 
@@ -1652,7 +1700,7 @@ def _pick_engagement_slug(project_dir: Path, shown: list) -> str:
         picked = _tiered_screen("slug_picker_screen", project_dir, _this_module(), shown)
         if picked:
             return picked
-    except Exception:
+    except Exception:  # nosec B110 - screen picker best-effort; falls back to the first row already computed below
         pass
     return _row_resume_token(shown[0]) if shown else ""
 
@@ -1816,9 +1864,7 @@ def _jira_decision(project_dir: Path) -> str:
     # param and its url entered so there is somethibg soecific fsiling sbout the --auto and
     # the write out of the cobfig". Both symptoms, one cause - this path never asks.
     if _auto_offered(project_dir):
-        print(
-            ink.bold("    Run this unattended (nobody watching)? [y/N]: "), end="", file=err
-        )
+        print(ink.bold("    Run this unattended (nobody watching)? [y/N]: "), end="", file=err)
         try:
             wants_auto = input().strip().lower() in ("y", "yes")
         except (EOFError, KeyboardInterrupt):
@@ -1887,8 +1933,22 @@ def grant_execution_consent(project_dir: Path, slug: str, hours: int = _AUTO_CON
         is why only this process does it.
       * SCOPE - one engagement, named in the sidecar.
 
+    ORDER MATTERS, AND IT IS THE SIDECAR FIRST (2026-09-12 audit, L-1). It used to write the
+    marker and then the sidecar, both inside one try. A failed sidecar write - a read-only
+    directory, a quota, an antivirus hold, all ordinary on the corporate Windows boxes this
+    targets - returned (False, reason), the caller printed "the run continues WITHOUT
+    execution", and the marker it had already written stayed on disk. The guard hook tests
+    for the marker's EXISTENCE and nothing else, so the gate was open for the whole
+    unattended run while the human was told it was shut, with no provenance, no expiry and
+    no scope: all three of the properties above are carried by the file that failed.
+
+    So: sidecar first, marker second, and on ANY failure the marker is removed before
+    returning. The marker's ABSENCE is the truth the caller reports, which is the only
+    ordering where a half-written grant cannot authorise anything.
+
     Returns (True, "") or (False, reason)."""
     marker = _consent_marker_path(project_dir)
+    side = _auto_provenance_path(project_dir)
     import datetime
 
     now = datetime.datetime.now()
@@ -1902,22 +1962,29 @@ def grant_execution_consent(project_dir: Path, slug: str, hours: int = _AUTO_CON
     )
     try:
         marker.parent.mkdir(parents=True, exist_ok=True)
-        marker.write_text(body, encoding="utf-8")
-        _auto_provenance_path(project_dir).write_text(
-            json.dumps(
-                {
-                    "granted_by": "human keypress, virt-surv auto-mode pre-flight",
-                    "granted_at": now.isoformat(timespec="seconds"),
-                    "expires_at": expires.isoformat(timespec="seconds"),
-                    "engagement": slug,
-                    "host": os.environ.get("COMPUTERNAME") or os.environ.get("HOSTNAME") or "",
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
+        _fsutil().atomic_write_json(
+            side,
+            {
+                "granted_by": "human keypress, virt-surv auto-mode pre-flight",
+                "granted_at": now.isoformat(timespec="seconds"),
+                "expires_at": expires.isoformat(timespec="seconds"),
+                "engagement": slug,
+                "host": os.environ.get("COMPUTERNAME") or os.environ.get("HOSTNAME") or "",
+            },
         )
-    except OSError as exc:
+    except Exception as exc:  # noqa: BLE001 - a gate that fails to open must report, not raise
+        return False, f"could not record the consent provenance ({exc.__class__.__name__})"
+    try:
+        _fsutil().atomic_write_text(marker, body)
+    except Exception as exc:  # noqa: BLE001 - same: the caller expects (False, reason)
+        # The gate never opened, so leave nothing behind that says otherwise: a sidecar with
+        # no marker is harmless, but a stale one beside a LATER hand-made marker would make
+        # this launcher think the human's own grant was its to expire.
+        for path in (side, marker):
+            try:
+                _fsutil().unlink_quietly(path)
+            except Exception:  # noqa: BLE001 - closing a gate must never raise either  # nosec B110 - closing a gate must never raise either; the real failure is already returned to the caller above
+                pass
         return False, f"could not write the consent gate ({exc.__class__.__name__})"
     return True, ""
 
@@ -1967,18 +2034,116 @@ def _expire_stale_auto_consent(project_dir: Path) -> bool:
     return True
 
 
+# How old a HAND-MADE execution-consent marker may get before the launcher says so.
+# Fourteen days, because CLAUDE.md §7 describes consent as asked "once at intake" for one
+# engagement: a marker still open a fortnight later has outlived every engagement it could
+# plausibly belong to. The marker in this very checkout was found open since 2026-07-06 -
+# over two months of standing authorisation nobody had granted twice (2026-09-12 audit,
+# H-6/G-4). Warn, never remove: a marker the human made is theirs.
+_HANDMADE_CONSENT_STALE_DAYS = 14
+
+
+def stale_handmade_consent(project_dir: Path) -> int:
+    """Age in whole days of a hand-made, unexpiring consent marker, or 0.
+
+    "Hand-made" means exactly what _expire_stale_auto_consent means by it: the body does not
+    carry this launcher's grant signature. Those markers have no sidecar, so no expiry, so
+    nothing ever closes them - which is the finding. Returns 0 for anything this launcher
+    granted (that has its own expiry path), for a young marker, and for any file it cannot
+    read: an unreadable marker is not evidence of anything."""
+    marker = _consent_marker_path(project_dir)
+    try:
+        if not marker.is_file():
+            return 0
+        body = marker.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return 0
+    if _GRANT_SIGNATURE in body:
+        return 0  # ours - _expire_stale_auto_consent owns its lifetime
+    if _auto_provenance_path(project_dir).is_file():
+        return 0  # a sidecar means an expiry, which is the other path's job
+    try:
+        import datetime
+
+        age = datetime.datetime.now() - datetime.datetime.fromtimestamp(marker.stat().st_mtime)
+    except (OSError, OverflowError, ValueError):
+        return 0
+    days = age.days
+    return days if days >= _HANDMADE_CONSENT_STALE_DAYS else 0
+
+
+def report_stale_handmade_consent(project_dir: Path) -> bool:
+    """Say loudly that a hand-made execution gate has been open for a long time, and OFFER
+    to close it. True when it was removed.
+
+    Printed on the launcher's own pre-flight, before any tier draws, so every tier sees it -
+    the numbered one included, which is the tier the locked-down boxes actually get. It is
+    an offer and never an action: deleting someone else's marker silently would be the same
+    class of surprise as leaving it open, in the other direction. A non-interactive run
+    (a pipe, CI, `go < /dev/null`) prints the warning and removes nothing."""
+    days = stale_handmade_consent(project_dir)
+    if not days:
+        return False
+    ink, err = _Ink(), sys.stderr
+    marker = _consent_marker_path(project_dir)
+    print("", file=err)
+    print(ink.warn(f"  !  CODE EXECUTION HAS BEEN AUTHORISED HERE FOR {days} DAYS"), file=err)
+    print(ink.dim(f"     {marker}"), file=err)
+    print(
+        ink.dim("     This marker was not made by the launcher, so it carries no expiry and"),
+        file=err,
+    )
+    print(
+        ink.dim("     no engagement - every session in this project may run the code under"),
+        file=err,
+    )
+    print(ink.dim("     review until it is deleted."), file=err)
+    try:
+        if not (sys.stdin.isatty() and err.isatty()):
+            print(ink.dim("     Delete it to close the gate."), file=err)
+            return False
+    except Exception:  # noqa: BLE001 - a stream that cannot answer is a no
+        return False
+    print(ink.bold("     Close it now? [y/N]: "), end="", file=err)
+    try:
+        answer = input().strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print("", file=err)
+        return False
+    if answer not in ("y", "yes"):
+        print(ink.dim("     left open - delete the file when you are done with it"), file=err)
+        return False
+    if _fsutil().unlink_quietly(marker):
+        print(ink.good("     closed - the gate is shut"), file=err)
+        return True
+    print(ink.warn("     could not remove it - delete the file by hand"), file=err)
+    return False
+
+
 def _hold_for_reader() -> None:
     """Keep a message on screen until it has been read, before a full-screen app covers it.
 
     The menu and every other screen here are full-screen apps: they take the terminal and
     repaint it, so a line printed on the way back to one is on screen for a frame. The same
-    fault was found across the installer's menus on 2026-09-11 and fixed the same way. This
-    is a read-receipt, not a question - silent when nobody is at the keyboard, and a Ctrl-C
-    or EOF here just carries on rather than aborting the launcher."""
+    fault was found across the installer's menus on 2026-09-11 and fixed the same way.
+
+    ONE implementation now (2026-09-12 audit, L-28): tui_chrome.hold_for_reader, shared with
+    the installer's pause. The stream to test is passed in because the two callers genuinely
+    differ and neither had recorded why - `virt-surv go` runs inside `$(...)`, so ITS stdout
+    is the alias capture pipe and is never a tty; STDERR is the stream this launcher actually
+    draws on, so stderr is the one to ask. A bare clone with no tui_chrome falls back to the
+    old inline pause rather than losing the read-receipt."""
+    try:
+        import tui_chrome
+
+        tui_chrome.hold_for_reader(sys.stderr, "       Press Enter to go back to the menu... ")
+        return
+    except Exception:  # noqa: BLE001 - a pause must never cost the launch  # nosec B110 - a pause must never cost the launch
+        pass
     try:
         if not sys.stdin.isatty() or not sys.stderr.isatty():
             return
-    except Exception:
+    except Exception:  # noqa: BLE001
         return
     try:
         input("       Press Enter to go back to the menu... ")
@@ -2080,13 +2245,30 @@ def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> s
             # will carry. That is the correlation problem solved by construction rather than
             # matched afterwards by date or by whichever transcript was touched last.
             session_id = headless_run.new_session_id()
-        except Exception:
+        except Exception as exc:
+            # NOT silent (2026-09-12 audit, L-13). An empty id here means the pack and the
+            # transcript can only be matched up afterwards by date, which is exactly the
+            # correlation this generates the id to avoid - and the audit trail is the whole
+            # reason the unattended flow exists.
+            _report_crash("generating the headless session id", exc)
+            print(
+                ink.warn(
+                    "    no session id - the pack and the transcript will have to be "
+                    "correlated by hand"
+                ),
+                file=err,
+            )
             session_id = ""
     try:
         handoff = project_dir / ".claude" / ".auto-pending.json"
         handoff.parent.mkdir(parents=True, exist_ok=True)
-        handoff.write_text(
-            json.dumps(
+        # ATOMIC (2026-09-12 audit, L-15). This file ARMS the unattended run: an interrupted
+        # in-place write leaves truncated JSON, engagement_state cannot consume it, `auto`
+        # stays unset and every AUTO-* DoD gate skips - which is the 2026-08-21 C1 failure
+        # this file was introduced to prevent, reintroduced by how it was written.
+        _fsutil().atomic_write_json(
+            handoff,
+            (
                 {
                     "ref": ref,
                     "slug": slug,
@@ -2105,11 +2287,8 @@ def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> s
                     # it never does normally. A missing answer is not the same as a chosen
                     # one, so the fallback stays the cautious rung.
                     "on_budget": answers.get("on_budget") or "park",
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
+                }
+            ),
         )
     except OSError:
         print(
@@ -2166,14 +2345,14 @@ def _signer_name() -> str:
         proc = subprocess.run(
             ["git", "config", "user.name"],
             capture_output=True,
-            text=True,
+            **_DECODE,
             timeout=5,
             stdin=subprocess.DEVNULL,
         )
         name = (proc.stdout or "").strip()
         if name:
             return name
-    except Exception:
+    except Exception:  # nosec B110 - identity lookup has a fallback chain below; this branch failing just moves to the next
         pass
     name = os.environ.get("USER") or os.environ.get("USERNAME")
     if name:
@@ -2193,13 +2372,66 @@ def _signer_name() -> str:
         return ""
 
 
+# The file `engagement_state sign-off` now requires before it will sign anything (wave 2).
+# Named here rather than imported so a launcher running beside an older engagement_state
+# still writes it harmlessly, and a newer one still finds it.
+_HUMAN_SIGN_OFF_MARKER = ".human-sign-off"
+
+
+def _human_sign_off_marker(project_dir: Path, slug: str) -> Path:
+    return _pack_dir(project_dir, slug) / _HUMAN_SIGN_OFF_MARKER
+
+
+def _write_human_sign_off_marker(project_dir: Path, slug: str, who: str) -> bool:
+    """Record that a HUMAN at this keyboard asked for this sign-off. True if it landed.
+
+    THE SAME REASONING AS grant_execution_consent, and it is worth stating rather than
+    implying. `engagement_state sign-off` refuses without this file, precisely so a session
+    cannot sign off its own work - which is the thing the Definition-of-Done gate exists to
+    prevent. The launcher is allowed to write it for one reason only: it is a separate
+    process that runs BEFORE any session exists, and this function is reachable only from a
+    confirmed keypress on the done-and-archived screen (both tiers ask twice, and the
+    second press is what calls this). The session still cannot create it.
+
+    Written BEFORE the command runs, because the command is what reads it. Removed again if
+    the command refuses - see _record_sign_off.
+
+    A marker that is ALREADY there is left exactly as it is and reported as not-ours: it
+    may be one a person created by hand, and a file this function did not write is not a
+    file it may later delete."""
+    marker = _human_sign_off_marker(project_dir, slug)
+    try:
+        if marker.is_file():
+            return False
+    except OSError:
+        return False
+    body = (
+        f"Human sign-off requested at the virt-surv launcher for engagement '{slug}'.\n"
+        f"by: {who}\n"
+        f"at: {_now_iso()}\n"
+        f"host: {os.environ.get('COMPUTERNAME') or os.environ.get('HOSTNAME') or ''}\n"
+        "Written by a keypress in the launcher, never by a session.\n"
+    )
+    try:
+        _fsutil().atomic_write_text(marker, body)
+    except Exception:  # noqa: BLE001 - the command's own refusal is the message that matters
+        return False
+    return True
+
+
 def _record_sign_off(project_dir: Path, slug: str) -> str:
     """Append a human sign-off to a finished pack. Returns a short note for the screen.
 
     This is the answer to "what if I want to reopen it" for the commonest case: the work
     is delivered, a person just has not put their name to it - which every unattended run
     produces by design. Appending a signature leaves the as-found record intact; reopening
-    the pack would not (the QA evidence rules say exactly this about retro-editing)."""
+    the pack would not (the QA evidence rules say exactly this about retro-editing).
+
+    ORDER (wave 2 contract, W-2): the human marker is written FIRST, because
+    `engagement_state sign-off` refuses without it and prints a touch command instead - and
+    telling the person who just pressed the key to go and type a shell command would make
+    the gate look broken rather than protective. Only a confirmed keypress reaches here, so
+    writing it is the same legitimate second channel the execution-consent gate uses."""
     if not slug:
         return "nothing selected"
     who = _signer_name()
@@ -2207,6 +2439,7 @@ def _record_sign_off(project_dir: Path, slug: str) -> str:
         return "no signer identity - set git config user.name"
     import subprocess
 
+    marker_written = _write_human_sign_off_marker(project_dir, slug, who)
     try:
         proc = subprocess.run(
             [
@@ -2220,7 +2453,7 @@ def _record_sign_off(project_dir: Path, slug: str) -> str:
                 who,
             ],
             capture_output=True,
-            text=True,
+            **_DECODE,
             timeout=30,
             cwd=str(_scripts_dir().parent),
             # DEVNULL, never inherited: a child that keeps the parent's stdin open blocks
@@ -2230,10 +2463,29 @@ def _record_sign_off(project_dir: Path, slug: str) -> str:
             stdin=subprocess.DEVNULL,
         )
     except Exception as exc:
+        _discard_human_sign_off_marker(project_dir, slug, marker_written)
         return f"could not sign off ({exc.__class__.__name__})"
     if proc.returncode != 0:
+        # NOTHING WAS SIGNED, so nothing may be left claiming a human asked for it. A
+        # marker outliving a refused sign-off would sit in the pack authorising the next
+        # attempt - including one nobody pressed a key for.
+        _discard_human_sign_off_marker(project_dir, slug, marker_written)
         return (proc.stderr or "sign-off failed").strip().splitlines()[-1][:60]
     return f"signed off by {who}"
+
+
+def _discard_human_sign_off_marker(project_dir: Path, slug: str, written: bool) -> None:
+    """Remove a marker this call wrote, after the sign-off it authorised did not happen.
+
+    `written` guards the case where the file was already there - a marker someone created
+    by hand, or one left by an earlier attempt, is theirs and is not this function's to
+    delete. Never raises: closing a gate must not be able to fail the caller."""
+    if not written:
+        return
+    try:
+        _fsutil().unlink_quietly(_human_sign_off_marker(project_dir, slug))
+    except Exception:  # noqa: BLE001 - tidy-up, never the thing that fails  # nosec B110 - tidy-up, never the thing that fails
+        pass
 
 
 def _supersede_command(project_dir: Path, slug: str) -> str:
@@ -2346,6 +2598,61 @@ def _new_command(project_dir: Path, request: str = "", auto: bool = False) -> st
     return command
 
 
+def _new_decision_plain(project_dir: Path) -> str:
+    """The [n] flow for the numbered tier: type the request, then offer an unattended run.
+
+    THE SAME GAP [j] HAD (2026-09-12 audit, L-7). The plain tier returned a bare `--new`
+    and said nothing, so a human on a console where no full-screen tier can draw - the
+    locked-down corporate box this whole subsystem exists for - never saw the request
+    composer and was never offered an unattended run. Nothing told them either was missing.
+    The [j] path was given a plain-text prompt and a [y/N] on 2026-09-11 for exactly this
+    reason; [n], in the same function, was left as it was.
+
+    The old justification for not doing it - "on a pipe-driven input, a hang" - was about
+    opening a prompt_toolkit composer from a tier that exists because prompt_toolkit cannot
+    draw. This asks with input(), like every other line here, and returns the plain `--new`
+    the moment stdin is not a tty.
+
+    The unattended GATE is deliberately not rendered in plain text: _auto_run_decision draws
+    the pre-flight, which has no plain rendering by design because it is the whole safety
+    story of an unattended run. If it cannot draw, that function says so and this falls back
+    to an attended run - stated, never silent."""
+    ink, err = _Ink(), sys.stderr
+    try:
+        interactive = sys.stdin.isatty()
+    except Exception:  # noqa: BLE001 - a stream that cannot answer is a no
+        interactive = False
+    if not interactive:
+        print(ink.dim("    -> starting new"), file=err)
+        return _new_command(project_dir)
+    print(
+        ink.dim("    What would you like the team to do? (Enter to decide in the session)"),
+        file=err,
+    )
+    print(ink.bold("    Request: "), end="", file=err)
+    try:
+        request = input().strip()
+    except (EOFError, KeyboardInterrupt):
+        return "__again__"
+    if _auto_offered(project_dir):
+        print(ink.bold("    Run this unattended (nobody watching)? [y/N]: "), end="", file=err)
+        try:
+            wants_auto = input().strip().lower() in ("y", "yes")
+        except (EOFError, KeyboardInterrupt):
+            wants_auto = False
+        if wants_auto:
+            decision = _auto_run_decision(project_dir, request, request_text=request)
+            if decision == "__again__":
+                return "__again__"
+            if decision:
+                return decision
+    if request:
+        print(ink.dim("    -> starting new with your request"), file=err)
+    else:
+        print(ink.dim("    -> starting new"), file=err)
+    return _new_command(project_dir, request)
+
+
 def _new_decision(project_dir: Path, engagement_state=None, menu=None, shown=None) -> str:
     """Collect the request for a new engagement, and optionally start it unattended.
 
@@ -2370,22 +2677,16 @@ def _new_decision(project_dir: Path, engagement_state=None, menu=None, shown=Non
     except Exception:
         REQUEST_SKIPPED = "__request_skipped__"
         REQUEST_BACK = "__request_back__"
-    answer = None
+    # ONE dispatcher (2026-09-12 audit, L-6). This used to be a hand-rolled two-tier
+    # fall-through, and it was one of the two copies that never received the APPS_RUN fix:
+    # a Textual composer that RAN and returned None - which is what "I could not draw"
+    # looks like from outside - caused the prompt_toolkit composer to be drawn on top of
+    # the screen the human had just dismissed. _tiered_screen already knows the difference.
     try:
-        # Textual first, prompt_toolkit underneath. None from either means "that tier
-        # could not draw", so the fall-through is the same one the menu uses.
-        from launcher_textual import request_screen as request_textual
-
-        answer = request_textual(project_dir, _this_module())
-    except Exception:
+        answer = _tiered_screen("request_screen", project_dir, _this_module())
+    except Exception as exc:
+        _report_crash("the request composer", exc)
         answer = None
-    if answer is None:
-        try:
-            from launcher_app import request_screen
-
-            answer = request_screen(project_dir, _this_module())
-        except Exception:
-            answer = None
     if answer == REQUEST_BACK:
         return "__again__"  # they left the composer: redraw the menu, launch nothing
     if answer is None or answer == REQUEST_SKIPPED:
@@ -2414,7 +2715,13 @@ def _auto_armed(project_dir: Path) -> bool:
         import engage_probe
 
         return bool(engage_probe.resolve_preferences(project_dir).get("autonomous_default"))
-    except Exception:
+    except Exception as exc:
+        # Same reasoning as _auto_offered right below (2026-09-12 audit, W-14): "I could
+        # not tell" and "the project said no" are different answers that both came back as
+        # False here, with nothing said. Off is still the right default - arming stays
+        # opt-in - but a human whose project asked for a pre-armed toggle and did not get
+        # one now has somewhere to look.
+        _report_crash("unattended arming check", exc)
         return False
 
 
@@ -2470,6 +2777,18 @@ def _tiered_screen(name: str, *args, **kwargs):
     Returns None when no tier could draw, which is what every caller already handles by
     falling back to its plain-text flow.
     """
+    return _tiered_screen_result(name, *args, **kwargs)[0]
+
+
+def _tiered_screen_result(name: str, *args, **kwargs):
+    """The same dispatch, returning (answer, drew).
+
+    `drew` is for the one caller that needs to tell "no tier could draw" from "a tier drew
+    and the human backed out" while the ANSWER for both is None - the settings editor,
+    where falling through on a cancel dumps someone into the numbered editor they had just
+    left (live report, 2026-08-20). It had its own hand-written copy of this loop for that
+    reason; it now asks the dispatcher instead (2026-09-12 audit, L-6).
+    """
     for module_name in ("launcher_textual", "launcher_app"):
         try:
             module = __import__(module_name)
@@ -2479,17 +2798,24 @@ def _tiered_screen(name: str, *args, **kwargs):
             before = getattr(module, "APPS_RUN", None)
             answer = screen(*args, **kwargs)
             if answer is not None:
-                return answer
+                return answer, True
             # IT DREW, AND STILL SAID NONE. Falling through here is what put the older
             # renderer on top of a screen the human had just finished with (owner report,
             # 2026-08-31). None means "could not draw"; a screen that ran cannot mean that,
             # so there is nothing below it to try.
             after = getattr(module, "APPS_RUN", None)
             if before is not None and after is not None and after != before:
-                return None
-        except Exception:
-            continue  # a tier that raises is a tier that cannot draw
-    return None
+                return None, True
+        except Exception as exc:
+            # A tier that raises is a tier that cannot draw - and that is still the right
+            # degrade. What was wrong was that it was SILENT (2026-09-12 audit, L-8):
+            # _auto_run_decision tells the human to "see the crash log above" when this
+            # returns None, and a failure in the dispatcher itself - a bad getattr, an
+            # import that half-succeeded - wrote nothing there at all. The only reason the
+            # message was ever truthful is that both adapters happen to report internally.
+            _report_crash(f"the {module_name} tier drawing {name}", exc)
+            continue
+    return None, False
 
 
 def _decision_from_pick(
@@ -2533,8 +2859,13 @@ def _decision_from_pick(
             if ref:
                 print(ink.dim(f"    -> starting new engagement from {ref}"), file=sys.stderr)
                 return _jira_command(project_dir, ref)
-        except Exception:
-            pass  # any app failure degrades to the plain prompt below
+        except Exception as exc:
+            # Degrades to the plain prompt below, which is right - but it used to do it
+            # without a word (2026-09-12 audit, W-14). A failure anywhere in the ticket
+            # flow, including inside _auto_run_decision, dropped the human onto a bare
+            # input() prompt with no explanation for why the screen they had just been
+            # using was gone.
+            _report_crash("the ticket flow", exc)
         try:
             return _jira_decision(project_dir)
         except Exception:
@@ -2583,7 +2914,7 @@ def _decision_from_pick(
             except Exception:
                 try:
                     _artifacts_plain(project_dir, slug)
-                except Exception:
+                except Exception:  # nosec B110 - last-resort fallback display; if even the fallback cannot render, there is nothing further to show
                     pass
         return "__again__"
     if pick[0] == "open":
@@ -2602,7 +2933,7 @@ def _decision_from_pick(
         # so the app-or-numbered decision is made once instead of once per call site.
         try:
             _run_settings_editor(project_dir)
-        except Exception:
+        except Exception:  # nosec B110 - cosmetic tier
             pass  # cosmetic tier
         return "__again__"
     if pick[0] == "archive":
@@ -2617,7 +2948,7 @@ def _decision_from_pick(
         except Exception:
             try:
                 _archive_menu(project_dir, engagement_state, menu)
-            except Exception:
+            except Exception:  # nosec B110 - both archive UI tiers failed to render; falls back to the main menu, same as Esc
                 pass
         return "__again__"
     if pick[0] == "finished":
@@ -2633,7 +2964,7 @@ def _decision_from_pick(
             try:
                 token = _finished_menu(project_dir, engagement_state)
             except Exception:
-                token = ""
+                token = ""  # nosec B105 - not a credential: an engagement resume token/slug string, blank on failure
         if token:
             print(ink.dim(f"    -> reviewing {token}"), file=sys.stderr)
             if isinstance(token, tuple) and token and token[0] == "supersede":
@@ -2643,15 +2974,18 @@ def _decision_from_pick(
         return "__again__"
     engage_cmd = _engage_command(project_dir)
     if pick[0] == "new":
-        # The request screen belongs to the APP tier only. The picker and numbered tiers are
-        # the fallbacks for consoles that cannot run a full-screen app, so opening one from
-        # them is both wrong in principle and, on a pipe-driven input, a hang: prompt_toolkit
-        # blocks forever waiting for keys that will never arrive (found 2026-08-25 by a
-        # performance review, after three of my own test runs sat stuck for hours).
+        # The request SCREEN belongs to the app tiers only. Opening one from the numbered
+        # tier - which exists because no full-screen app can draw here - is both wrong in
+        # principle and, on a pipe-driven input, a hang: prompt_toolkit blocks forever
+        # waiting for keys that will never arrive (found 2026-08-25 by a performance
+        # review, after three of my own test runs sat stuck for hours).
+        #
+        # The QUESTIONS are not tier-specific, though, and answering them with input() is
+        # what the plain tier does with everything else. So both tiers now collect a request
+        # and both offer an unattended run; only the rendering differs (L-7).
         if rich:
             return _new_decision(project_dir, engagement_state, menu, shown)
-        print(ink.dim("    -> starting new"), file=sys.stderr)
-        return _new_command(project_dir)
+        return _new_decision_plain(project_dir)
     slug = _row_resume_token(shown[pick[1]])
     if slug:
         print(ink.dim(f"    -> resuming {slug}"), file=sys.stderr)
@@ -2837,7 +3171,7 @@ def _menu_round(
     if choice.lower() == "c":
         try:
             _run_settings_editor(project_dir)
-        except Exception:
+        except Exception:  # nosec B110 - cosmetic tier
             pass  # cosmetic tier
         return "__again__"
     if choice.lower() == "m" and hidden:
@@ -2853,7 +3187,7 @@ def _menu_round(
     if choice.lower() == "a":
         try:
             _archive_menu(project_dir, engagement_state, menu)
-        except Exception:
+        except Exception:  # nosec B110 - both archive UI tiers failed to render; falls back to the main menu, same as Esc
             pass
         return "__again__"
     if choice.lower() == "b":
@@ -2865,7 +3199,10 @@ def _menu_round(
     engage_cmd = _engage_command(project_dir)
     shown = capped  # numbered picks refer to what was PRINTED
     if choice.lower() == "n":
-        return f"{engage_cmd} --new"
+        # Through _decision_from_pick like every other key, rather than returning `--new`
+        # from here. This branch used to bypass the mapping entirely, which is how it ended
+        # up as the one option on this tier that asked nothing (2026-09-12 audit, L-7).
+        return _decision_from_pick(("new",), project_dir, engagement_state, menu, shown)
     try:
         idx = int(choice)
     except ValueError:
@@ -3031,6 +3368,40 @@ _PTK_CACHE = None
 _PT_FAILED = object()
 
 _WIN_CONOUT_BOUND = None
+# The handle this process had before the rebind, and the CONOUT$ handle we opened. Kept so
+# the rebind can be UNDONE (2026-09-12 audit, L-17): it used to be permanent for the life
+# of the process and the CONOUT$ handle was never closed, so every child spawned afterwards
+# - the git and claude probes, the windowed launch, the interactive installer re-run -
+# inherited the console through STARTUPINFO instead of the alias capture pipe.
+_WIN_CONOUT_PREVIOUS = None
+_WIN_CONOUT_HANDLE = None
+
+
+def _win_release_conout() -> None:
+    """Put STD_OUTPUT_HANDLE back and close the CONOUT$ handle we opened.
+
+    Called before spawning anything (a child must inherit the handles its parent was
+    started with, not the ones prompt_toolkit needed) and at exit. Clears the cache, so the
+    next tier that needs the console simply binds again - the bind is cheap and the point
+    is that it does not outlive the screen that asked for it. Never raises."""
+    global _WIN_CONOUT_BOUND, _WIN_CONOUT_PREVIOUS, _WIN_CONOUT_HANDLE
+    if not _WIN_CONOUT_BOUND:
+        _WIN_CONOUT_BOUND = None
+        return
+    try:
+        import ctypes
+
+        k32 = ctypes.windll.kernel32
+        k32.SetStdHandle.argtypes = [ctypes.c_ulong, ctypes.c_void_p]
+        if _WIN_CONOUT_PREVIOUS is not None:
+            k32.SetStdHandle(0xFFFFFFF5, ctypes.c_void_p(_WIN_CONOUT_PREVIOUS))
+        if _WIN_CONOUT_HANDLE is not None:
+            k32.CloseHandle(ctypes.c_void_p(_WIN_CONOUT_HANDLE))
+    except Exception:  # noqa: BLE001 - a failed restore must never cost the launch  # nosec B110 - a failed restore must never cost the launch
+        pass
+    _WIN_CONOUT_BOUND = None
+    _WIN_CONOUT_PREVIOUS = None
+    _WIN_CONOUT_HANDLE = None
 
 
 def _win_bind_conout() -> bool:
@@ -3044,15 +3415,20 @@ def _win_bind_conout() -> bool:
     decision print still reaches the shell's capture; only fresh GetStdHandle callers
     (pt) see the console. Returns False when there is no console to bind (then the
     numbered tier takes over)."""
-    global _WIN_CONOUT_BOUND
+    global _WIN_CONOUT_BOUND, _WIN_CONOUT_PREVIOUS, _WIN_CONOUT_HANDLE
     if _WIN_CONOUT_BOUND is not None:
         return _WIN_CONOUT_BOUND
     try:
+        import atexit
         import ctypes
 
         k32 = ctypes.windll.kernel32
         k32.CreateFileW.restype = ctypes.c_void_p
+        k32.GetStdHandle.restype = ctypes.c_void_p
         k32.SetStdHandle.argtypes = [ctypes.c_ulong, ctypes.c_void_p]
+        # 0xFFFFFFF5 == (DWORD) STD_OUTPUT_HANDLE (-11). Read BEFORE the rebind, because
+        # there is no other way to get it back afterwards.
+        previous = k32.GetStdHandle(0xFFFFFFF5)
         # GENERIC_READ|GENERIC_WRITE, share read|write, OPEN_EXISTING
         handle = ctypes.c_void_p(
             k32.CreateFileW("CONOUT$", 0xC0000000, 0x3, None, 0x3, 0, None)
@@ -3061,8 +3437,14 @@ def _win_bind_conout() -> bool:
         if not handle or handle == invalid:
             _WIN_CONOUT_BOUND = False
         else:
-            # 0xFFFFFFF5 == (DWORD) STD_OUTPUT_HANDLE (-11)
             _WIN_CONOUT_BOUND = bool(k32.SetStdHandle(0xFFFFFFF5, handle))
+            if _WIN_CONOUT_BOUND:
+                _WIN_CONOUT_PREVIOUS = previous
+                _WIN_CONOUT_HANDLE = handle
+                # Belt and braces: every deliberate release below happens on a path that
+                # could itself be skipped by a crash, and a leaked console handle outlives
+                # the process that opened it.
+                atexit.register(_win_release_conout)
     except Exception:
         _WIN_CONOUT_BOUND = False
     return _WIN_CONOUT_BOUND
@@ -3311,7 +3693,7 @@ def _write_probe_cache(project_dir: Path) -> None:
             proc = subprocess.run(
                 ["git", "-C", str(project_dir), "rev-parse", "HEAD", "--abbrev-ref", "HEAD"],
                 capture_output=True,
-                text=True,
+                **_DECODE,
                 timeout=5,
                 **_quiet_kwargs(),
             )
@@ -3322,7 +3704,7 @@ def _write_probe_cache(project_dir: Path) -> None:
                 # the head half never invalidated anything (found 2026-08-20). The hook's
                 # _git_identity runs the identical command - keep the two in step.
                 git_head, git_branch = lines[0].strip(), lines[1].strip()
-        except Exception:
+        except Exception:  # nosec B110 - cache-invalidation identity probe; a failure here just means the cache recomputes
             pass
         try:
             existing = json.loads(out.read_text(encoding="utf-8"))
@@ -3339,7 +3721,7 @@ def _write_probe_cache(project_dir: Path) -> None:
             )
             if fresh:
                 return
-        except Exception:
+        except Exception:  # nosec B110 - freshness check only; a failure here just means the probe recomputes instead of reusing the cache
             pass
         from find_plugin_root import find_plugin_root
 
@@ -3369,7 +3751,7 @@ def _write_probe_cache(project_dir: Path) -> None:
         }
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(payload, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    except Exception:
+    except Exception:  # nosec B110 - cosmetic tier - the live probe is always the fallback
         pass  # cosmetic tier - the live probe is always the fallback
 
 
@@ -3397,7 +3779,7 @@ def _prewarm_guard_interpreter(project_dir: Path) -> None:
         else:
             cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(Path(sys.executable).as_posix() + "\n", encoding="utf-8")
-    except Exception:
+    except Exception:  # nosec B110 - cosmetic tier - the fallback heredoc still works without it
         pass  # cosmetic tier - the fallback heredoc still works without it
 
 
@@ -3522,7 +3904,7 @@ def _suggestion_line(project_dir: Path, menu: dict) -> str:
             proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
                 ["git", "-C", str(project_dir), "status", "--porcelain"],
                 capture_output=True,
-                text=True,
+                **_DECODE,
                 timeout=3,
                 **_quiet_kwargs(),
             )
@@ -3554,7 +3936,7 @@ def _suggestion_line(project_dir: Path, menu: dict) -> str:
                     # No diff to read, so the offer is honestly weaker - say so rather
                     # than implying there is something to review.
                     return f"{untracked} untracked file(s) here - new work, not yet in git"
-        except Exception:
+        except Exception:  # nosec B110 - best-effort dirty/untracked preview; a failed probe just leaves the offer text blank
             pass
     return ""
 
@@ -3641,13 +4023,13 @@ def _git_branch(project_dir: Path) -> str:
         proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
             ["git", "-C", str(project_dir), "rev-parse", "--abbrev-ref", "HEAD"],
             capture_output=True,
-            text=True,
+            **_DECODE,
             timeout=3,
             **_quiet_kwargs(),
         )
         if proc.returncode == 0:
             return (proc.stdout or "").strip()
-    except Exception:
+    except Exception:  # nosec B110 - cosmetic branch-name probe for the header line; blank on failure
         pass
     return ""
 
@@ -3728,7 +4110,7 @@ def _progress(label: str) -> None:
         else:
             sys.stderr.write("\r  " + label.ljust(_PROGRESS_WIDTH)[:_PROGRESS_WIDTH])
         sys.stderr.flush()
-    except Exception:
+    except Exception:  # nosec B110 - cosmetic tier: a progress line must never cost a launch
         pass  # cosmetic tier: a progress line must never cost a launch
 
 
@@ -3742,7 +4124,7 @@ def _progress_done() -> None:
         else:
             sys.stderr.write("\r" + " " * (_PROGRESS_WIDTH + 2) + "\r")
         sys.stderr.flush()
-    except Exception:
+    except Exception:  # nosec B110 - cosmetic tier: a progress line must never cost a launch
         pass
 
 
@@ -3820,7 +4202,7 @@ def _installed_plugin_version() -> tuple:
         for name in ("installed_plugins.json", "config.json", "plugins.json"):
             try:
                 data = json.loads((base / name).read_text(encoding="utf-8-sig"))
-            except Exception:
+            except Exception:  # nosec B112 - a candidate manifest file is skipped, not fatal; the next candidate is tried
                 continue
             for p in _install_paths(data):
                 try:
@@ -3832,9 +4214,9 @@ def _installed_plugin_version() -> tuple:
                     ver = json.loads(text).get("version") or ""
                     if ver:
                         return ver, str(p)
-                except Exception:
+                except Exception:  # nosec B112 - a candidate manifest file is skipped, not fatal; the next candidate is tried
                     continue
-    except Exception:
+    except Exception:  # nosec B110 - all candidates exhausted; the caller's own fallback (blank version) is fine
         pass
     return "", ""
 
@@ -3863,7 +4245,7 @@ def _commits_behind_upstream(clone: Path) -> int:
         head = subprocess.run(  # fixed argv, shell=False  # nosec B603
             ["git", "-C", str(clone), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
             capture_output=True,
-            text=True,
+            **_DECODE,
             timeout=5,
             **_quiet_kwargs(),
         )
@@ -3875,7 +4257,7 @@ def _commits_behind_upstream(clone: Path) -> int:
         counted = subprocess.run(  # fixed argv, shell=False  # nosec B603
             ["git", "-C", str(clone), "rev-list", "--count", f"HEAD..{upstream}"],
             capture_output=True,
-            text=True,
+            **_DECODE,
             timeout=5,
             **_quiet_kwargs(),
         )
@@ -3932,7 +4314,7 @@ def _refresh_remote_refs_in_background(clone: Path) -> None:
         subprocess.Popen(  # fixed argv, shell=False  # nosec B603
             ["git", "-C", str(clone), "fetch", "--quiet"], **kwargs
         )
-    except Exception:
+    except Exception:  # nosec B110 - a refresh that will not start costs freshness, never the launch
         pass  # a refresh that will not start costs freshness, never the launch
 
 
@@ -4005,7 +4387,7 @@ def _offer_update_if_behind() -> None:
             print(
                 ink.warn("      update did not complete - run 'virt-surv' and pick [u]."), file=err
             )
-    except Exception:
+    except Exception:  # nosec B110 - an update offer must never cost a launch
         pass  # an update offer must never cost a launch
 
 
@@ -4055,7 +4437,7 @@ def _check_plugin_cache_lag(project_dir: Path) -> None:
             proc = subprocess.run(
                 [claude, "plugin", "update", "compliance-surveillance-team"],
                 capture_output=True,
-                text=True,
+                **_DECODE,
                 timeout=180,
                 **_quiet_kwargs(),
             )
@@ -4070,7 +4452,7 @@ def _check_plugin_cache_lag(project_dir: Path) -> None:
                 ),
                 file=err,
             )
-    except Exception:
+    except Exception:  # nosec B110 - cosmetic tier - never cost the launch
         pass  # cosmetic tier - never cost the launch
 
 
@@ -4414,7 +4796,7 @@ def _offer_first_time_setup(project_dir: Path):
         # how the launcher's tiers drifted apart the first time.
         try:
             _run_settings_editor(project_dir)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001  # nosec B110 - the project is already configured by this point; losing the chance to adjust defaults is not worth abandoning a completed setup
             # The project is already configured by this point, so a terminal that cannot
             # host the editor loses the chance to ADJUST the defaults, not the setup. There
             # is no failure here worth abandoning a completed setup for.
@@ -4443,7 +4825,7 @@ def _run_in_app(argv, project_dir: Path, title: str = "First-time setup", step: 
                 argv,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                text=True,
+                **_DECODE,
                 errors="replace",
                 # Nothing to type, and a pipe rather than the terminal means a subprocess
                 # that somehow DID ask gets EOF and gives up, instead of waiting forever
@@ -4578,13 +4960,77 @@ def _headless_allow_rules(allow_web: bool = False) -> tuple:
         # directory, which is outside the project. Without these it is refused its own
         # instructions - measured, not guessed.
         rules += tuple(install_helper.team_read_entries())
-    except Exception:
-        pass
+    except Exception as exc:
+        # Same failure mode as the import above (2026-08-26): swallowing this silently would
+        # leave the run refused its own reference reads with no explanation on screen.
+        print(
+            _Ink().warn(
+                f"    could not load the team read-permission entries ({exc.__class__.__name__}) - "
+                "the run may be refused some of its own reference reads"
+            ),
+            file=sys.stderr,
+        )
     if allow_web:
         # Only when the human said so at the pre-flight. A page fetched by an unattended run
         # is content nobody reviewed, and content is DATA - never instruction (CLAUDE.md §7).
         rules += ("WebSearch", "WebFetch")
     return rules
+
+
+# The project-level default ceiling for an unattended headless run, and the flag that says
+# "no ceiling, and I mean it". Both named once, because both appear in a message the human
+# is expected to act on.
+_BUDGET_PREFERENCE_KEY = "headless_max_budget_usd"
+_NO_BUDGET_CAP_FLAG = "--no-budget-cap"
+
+
+def _preference_budget_cap(project_dir: Path) -> float | None:
+    """`headless_max_budget_usd` from .claude/team-preferences.json, or None.
+
+    A project-level default, so a team that always wants a ceiling states it once rather
+    than relying on whoever is at the pre-flight picking the right pair of toggles. Read
+    directly rather than through engage_probe.resolve_preferences: this runs on the launch
+    path, the answer is one number, and a preference read must never be the reason an
+    authorised run does not start."""
+    try:
+        data = json.loads(
+            (project_dir / ".claude" / "team-preferences.json").read_text(encoding="utf-8-sig")
+        )
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    try:
+        value = float(data.get(_BUDGET_PREFERENCE_KEY))
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
+def _uncapped_run_allowed() -> bool:
+    """Did the human explicitly ask for an unattended run with NO ceiling?
+
+    A flag on this process, not a setting: "start it uncapped" is a decision about one run,
+    and a stored preference that quietly means it would be the same silent uncapping this
+    exists to stop."""
+    return _NO_BUDGET_CAP_FLAG in sys.argv[1:]
+
+
+def _headless_budget_cap(project_dir: Path, pending: dict) -> tuple:
+    """The enforced ceiling for a headless run and where it came from, or (None, "").
+
+    Order: what the human chose at the pre-flight, then the project's own default. Nothing
+    else - a cap invented by this function would be a number nobody agreed to."""
+    cap = pending.get("hard_cap_usd")
+    try:
+        if cap:
+            return float(cap), "chosen at the pre-flight"
+    except (TypeError, ValueError):
+        pass
+    fallback = _preference_budget_cap(project_dir)
+    if fallback:
+        return fallback, f"{_BUDGET_PREFERENCE_KEY} in team-preferences.json"
+    return None, ""
 
 
 def _start_headless(project_dir: Path, decision: str, pending: dict) -> bool:
@@ -4596,23 +5042,60 @@ def _start_headless(project_dir: Path, decision: str, pending: dict) -> bool:
     ink, err = _Ink(), sys.stderr
     try:
         import headless_run
-    except Exception:
+    except Exception as exc:
+        _report_crash("loading the headless runner", exc)
         print(ink.warn("    headless unavailable - opening a session instead"), file=err)
         return False
-    cap = pending.get("hard_cap_usd")
+    cap, source = _headless_budget_cap(project_dir, pending)
+    if cap is None:
+        if not _uncapped_run_allowed():
+            # REFUSE (2026-09-12 audit, W-17). --max-budget-usd is the only layer that can
+            # actually stop an unattended run; everything above it is a run agreeing to
+            # behave. It was passed only when the human happened to pick "stop" at a nonzero
+            # ceiling, so every other pre-flight combination armed a run with nobody watching
+            # and no ceiling at all. Falling back to an ATTENDED session is the safe answer:
+            # an attended run has a human in it, which is the thing a cap substitutes for.
+            print(ink.warn("    no spend cap for this unattended run - NOT starting it"), file=err)
+            print(
+                ink.dim(
+                    "    Set one at the pre-flight, or put "
+                    f'"{_BUDGET_PREFERENCE_KEY}": <dollars> in '
+                    ".claude/team-preferences.json,"
+                ),
+                file=err,
+            )
+            print(
+                ink.dim(f"    or pass {_NO_BUDGET_CAP_FLAG} to start it uncapped on purpose."),
+                file=err,
+            )
+            return False
+        print(
+            ink.warn(f"    starting UNCAPPED - {_NO_BUDGET_CAP_FLAG} was passed"),
+            file=err,
+        )
+    # Same reason as the windowed launch: the detached run must inherit the handles this
+    # process started with, not the console the menu borrowed (L-17).
+    _win_release_conout()
     try:
         allowed = _headless_allow_rules(bool(pending.get("allow_web")))
         record = headless_run.start(
             project_dir,
             decision,
             session_id=str(pending.get("session_id") or ""),
-            budget_usd=float(cap) if cap else None,
+            budget_usd=cap,
             slug=str(pending.get("slug") or ""),
             allowed_tools=allowed,
             model=_headless_model(project_dir),
             claude=(_configured_launch_command().split() or ["claude"])[0],
         )
-    except (OSError, ValueError) as exc:
+    except Exception as exc:
+        # Exception, not (OSError, ValueError) (2026-09-12 audit, L-14). headless_run.start
+        # builds argv, validates flags, opens log files and spawns with platform-specific
+        # creation flags; a TypeError or KeyError from a malformed .auto-pending.json used
+        # to escape this handler entirely, unwind through main() into the __main__ catch-all
+        # and exit 1 - at which point the shell wrapper started a PLAIN ATTENDED session.
+        # The docstring above names that as the worst outcome available here.
+        _report_crash("starting the headless run", exc)
         print(
             ink.warn(
                 f"    could not start headless ({exc.__class__.__name__}) - "
@@ -4623,7 +5106,7 @@ def _start_headless(project_dir: Path, decision: str, pending: dict) -> bool:
         return False
     print(ink.good(f"    -> headless run started, session {record['session_id'][:8]}"), file=err)
     if cap:
-        print(ink.warn(f"    hard cap ${cap} - the run STOPS there, enforced"), file=err)
+        print(ink.warn(f"    hard cap ${cap} ({source}) - the run STOPS there, enforced"), file=err)
     _watch_after_launch(project_dir, str(pending.get("slug") or ""))
     return True
 
@@ -4660,7 +5143,20 @@ def _launch_in_window(project_dir: Path, decision: str, slug: str = "") -> bool:
     ink, err = _Ink(), sys.stderr
     try:
         import launch_terminal
-    except Exception:
+    except Exception as exc:
+        # SAY SO (2026-09-12 audit, L-12). Every other `return False` here prints a line,
+        # because the docstring above rules out a silent no-op - and this one, a broken or
+        # shadowed launch_terminal, was the only path that produced exactly that: the
+        # session opened in place, and for an unattended run that takes the launcher and
+        # therefore the monitor with it.
+        _report_crash("loading the windowed-launch module", exc)
+        print(
+            ink.warn(
+                "    the windowed-launch module could not load - opening in this window "
+                "instead. Check with: python -m scripts.launch_terminal"
+            ),
+            file=err,
+        )
         return False
     terminal = launch_terminal.available()
     if not terminal:
@@ -4678,6 +5174,10 @@ def _launch_in_window(project_dir: Path, decision: str, slug: str = "") -> bool:
     # method as virt surv go does"). Anything else is a second way to start a session, and a
     # second way to get it wrong.
     command = _configured_launch_command().split() or ["claude"]
+    # Hand the child the std handles this process was STARTED with. On Windows the
+    # prompt_toolkit tier may have pointed STD_OUTPUT_HANDLE at the console, and a child
+    # spawned after that inherits the console rather than the alias capture pipe (L-17).
+    _win_release_conout()
     if not launch_terminal.open_in_new_window(command + [decision], project_dir):
         print(
             ink.warn(
@@ -4704,7 +5204,7 @@ def _watch_after_launch(project_dir: Path, slug: str) -> None:
         if slug:
             _tiered_screen("monitor_screen", project_dir, _this_module(), slug)
             return
-    except Exception:
+    except Exception:  # nosec B110 - tiered monitor screen best-effort; falls back to the legacy path below
         pass
     if slug:
         # Resolved, not assumed: `artifacts/<slug>/` is the LEGACY location, so on a
@@ -4743,10 +5243,24 @@ def main() -> int:
         import preflight as _pf
 
         _report = _pf.preflight(Path.cwd())
-        if not _report.ok("wrapper_current"):
-            print(_Ink().warn("    " + _report.result("wrapper_current").check.sentence),
-                  file=sys.stderr)
-    except Exception:  # noqa: BLE001 - advisory: never let it cost a launch
+        # EVERY check that is true before an action is chosen, not just one (2026-09-12
+        # audit, L-35). This module declares nine named checks with sentences written for a
+        # person, precisely so each tier stops inventing its own way of saying the same
+        # thing - and exactly one of them was ever read here, while the other eight were
+        # still answered ad hoc by the callers this table was written to replace.
+        #
+        # `claude_on_path` and `git` are the two that decide whether a launch can work at
+        # all, so they are reported first; `wrapper_current` keeps the place it earned.
+        # The project-shape checks stay out: main() explains those itself, in more detail
+        # and with the directory named.
+        _ink = _Ink()
+        for _name in ("wrapper_current", "claude_on_path", "git"):
+            try:
+                if not _report.ok(_name):
+                    print(_ink.warn("    " + _report.result(_name).check.sentence), file=sys.stderr)
+            except KeyError:
+                continue  # a check this build of preflight does not declare
+    except Exception:  # noqa: BLE001 - advisory: never let it cost a launch  # nosec B110 - advisory: never let it cost a launch
         pass
     # stdout is a PIPE under the shell wrapper, so on Windows it takes the ANSI code page
     # (cp1252 on the corporate box). A typed request carrying one character outside it -
@@ -4756,7 +5270,7 @@ def main() -> int:
     # raise; a mangled character in the request beats losing the whole request.
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    except Exception:  # noqa: BLE001 - older/odd streams may not support it
+    except Exception:  # noqa: BLE001 - older/odd streams may not support it  # nosec B110 - older/odd streams may not support reconfigure
         pass
     if "--launch-command" in sys.argv[1:]:
         # Alias v5 support channel: print ONLY the configured launch command on stdout
@@ -4768,7 +5282,10 @@ def main() -> int:
         # user request): the same banner + settings editor `go`'s [c] opens, then out -
         # no engagement menu, no launch, and nothing on stdout (a caller capturing this
         # process's stdout must never receive editor chatter as a launch decision).
-        args = [a for a in sys.argv[1:] if a != "--configure"]
+        # Flags out, paths left. `--configure` was the only one filtered, so any other
+        # switch on the same command line - `--no-budget-cap`, say - was taken as the
+        # directory to configure (2026-09-12).
+        args = [a for a in sys.argv[1:] if not a.startswith("-")]
         target = Path(args[0]).expanduser().resolve() if args else Path.cwd()
         try:
             os.chdir(target)  # the editor reads/writes relative to the project
@@ -4843,15 +5360,15 @@ def main() -> int:
         # actually draw; every other tier keeps the banner it has always had.
         if not _textual_available():
             _print_banner(project_dir)
-    except Exception:
+    except Exception:  # nosec B110 - cosmetic
         pass  # cosmetic
     try:
         _check_plugin_cache_lag(project_dir)
-    except Exception:
+    except Exception:  # nosec B110 - advisory plugin-cache-lag notice must never cost the launch
         pass
     try:
         _offer_update_if_behind()
-    except Exception:
+    except Exception:  # nosec B110 - cosmetic tier - never costs the launch
         pass  # cosmetic tier - never costs the launch
     try:
         added = _apply_new_recommended_defaults(project_dir)
@@ -4865,7 +5382,7 @@ def main() -> int:
                 + ink.dim("  ('virt-surv configure' to review)"),
                 file=sys.stderr,
             )
-    except Exception:
+    except Exception:  # nosec B110 - cosmetic - never costs the launch
         pass  # cosmetic - never costs the launch
     # NO defaults table here (owner decision, 2026-08-28: "at this point I think we
     # don't display any of it"). It ended "(press [c] to change)" at a moment when [c]
@@ -4879,32 +5396,38 @@ def main() -> int:
                 _Ink().dim("  a previous unattended run's execution gate expired - closed"),
                 file=sys.stderr,
             )
-    except Exception:
+        else:
+            # The OTHER kind of open gate: one the human made by hand, which carries no
+            # sidecar and therefore no expiry, so nothing above ever closes it. Printed
+            # here - before any tier draws - so the numbered tier sees it too, which is the
+            # tier the locked-down boxes actually get (2026-09-12 audit, H-6/G-4).
+            report_stale_handmade_consent(project_dir)
+    except Exception:  # nosec B110 - never let gate hygiene cost a launch
         pass  # never let gate hygiene cost a launch
     try:
         _progress("remembering this project...")
         _remember_project(project_dir)  # feeds the explorer's recent list
-    except Exception:
+    except Exception:  # nosec B110 - machine config is advisory - never costs a launch
         pass  # machine config is advisory - never costs a launch
     try:
         _progress("warming the guard interpreter...")
         _prewarm_guard_interpreter(project_dir)
-    except Exception:
+    except Exception:  # nosec B110 - warming the guard interpreter is advisory; a cold start next time is the only cost
         pass
     try:
         _progress("clearing any stale request...")
         _clear_request_handoff(project_dir)  # never carry a previous go's request forward
-    except Exception:
+    except Exception:  # nosec B110 - the call below already catches its own OSError internally; this only guards the progress line
         pass
     try:
         _progress("pre-computing the engagement probe...")
         _write_probe_cache(project_dir)
-    except Exception:
+    except Exception:  # nosec B110 - probe-cache write is advisory; recompute is always the fallback
         pass
     try:
         _progress("checking installed tools...")
         _refresh_tool_cache(project_dir)
-    except Exception:
+    except Exception:  # nosec B110 - belt-and-braces, same as _refresh_tool_cache's own internal try/except
         pass  # belt-and-braces, same as _refresh_tool_cache's own internal try/except -
         # a failure here must cost only the cache refresh, never the resume decision below.
     _progress_done()
@@ -4921,7 +5444,7 @@ def main() -> int:
         # open unexplained (2026-08-25 report).
         try:
             _warn_if_abort_will_be_ignored()
-        except Exception:
+        except Exception:  # nosec B110 - the exit code is the contract; the explanation is best-effort
             pass  # the exit code is the contract; the explanation is best-effort
         return _ABORT_EXIT_CODE
     # The session opens in its OWN window - attended or unattended - so the launcher
@@ -4982,16 +5505,85 @@ def main() -> int:
     return 0
 
 
+def disarm_unattended(project_dir: Path) -> bool:
+    """Take back everything an armed-but-not-started unattended run was given. True if
+    anything was there to take back.
+
+    Closing a gate never needs consent, which is why this is allowed to delete the marker
+    while nothing may create it (ADR-002). Called only on the crash path: the pre-flight
+    writes .auto-pending.json and may open the execution gate BEFORE the run starts, so a
+    crash between those two moments leaves a project holding an open gate and an armed
+    handoff for a run that never began - and the next ordinary session inherits both."""
+    removed = False
+    fs = None
+    try:
+        fs = _fsutil()
+    except Exception:  # noqa: BLE001 - a bare clone still has to be able to disarm
+        fs = None
+    for path in (
+        project_dir / ".claude" / ".auto-pending.json",
+        _consent_marker_path(project_dir),
+        _auto_provenance_path(project_dir),
+    ):
+        try:
+            if not path.is_file():
+                continue
+            if fs is not None:
+                removed = fs.unlink_quietly(path) or removed
+            else:
+                path.unlink()
+                removed = True
+        except OSError:
+            continue
+    return removed
+
+
+def _crash_exit_code(project_dir: Path) -> int:
+    """What a crash should exit with, given what the crash may have left armed.
+
+    THE WRAPPER LAUNCHES ON ANYTHING BUT 97. Exiting 1 from a crash therefore meant the
+    shell function started a plain ATTENDED session - with no decision string, and, for a
+    run that had already passed the pre-flight, with .auto-pending.json written and the
+    execution gate open. An attended session that inherits an unattended run's consent is
+    the worst combination this launcher can produce (2026-09-12 audit, L-4).
+
+    So: if anything was armed, disarm it and tell the wrapper to launch NOTHING. With
+    nothing armed, keep failing open - a crash in the menu must not cost someone a session
+    - but exit 1 rather than 0, because 0 said "this succeeded" and that was a lie."""
+    try:
+        if disarm_unattended(project_dir):
+            print(
+                _Ink().warn(
+                    "    an unattended run was armed and has been DISARMED - nothing started"
+                ),
+                file=sys.stderr,
+            )
+            return _ABORT_EXIT_CODE
+    except Exception:  # noqa: BLE001 - the exit code matters more than the tidy-up  # nosec B110 - the exit code matters more than the tidy-up
+        pass
+    return 1
+
+
 if __name__ == "__main__":
     # Heal from the REAL entry point only - never on module import (tests load and call
     # main() directly; the heal touching a developer's actual shell rc from inside a
     # test run is exactly the kind of side effect that split is for).
-    _heal_stale_alias_once()
+    try:
+        _heal_stale_alias_once()
+    except Exception as _heal_exc:  # noqa: BLE001 - VIRT_SURV_DEBUG re-raises from the report
+        _report_crash("the stale-alias self-heal", _heal_exc)
     try:
         sys.exit(main())
+    except KeyboardInterrupt:
+        # Ctrl-C MEANS LEAVE (2026-09-12 audit, L-5). Nine input() sites handled it and the
+        # process boundary did not, so an interrupt during any of the pre-launch probes -
+        # the probe cache, the tool inventory, the guard prewarm, the update check - exited
+        # 130, and 130 is not 97, so the wrapper started the session the human had just
+        # interrupted. install_helper.main() has always got this right; the two front doors
+        # disagreed on the same keystroke.
+        print("", file=sys.stderr)
+        print(_Ink().dim("    -> back to the terminal"), file=sys.stderr)
+        sys.exit(_ABORT_EXIT_CODE)
     except Exception as exc:
-        # Still fail open: the wrapper skips the launch ONLY on 97, so any other code
-        # still launches Claude. But exiting 0 said "this succeeded", which was a lie and
-        # made the crash invisible to any caller checking the status.
         _report_crash("startup", exc)
-        sys.exit(1)
+        sys.exit(_crash_exit_code(Path.cwd()))
