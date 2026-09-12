@@ -51,6 +51,12 @@ doors open identically.
 same no-turns-in-between target as step 0. If no gated question applies and classification is
 unambiguous, there is nothing to ask: banner, then straight to the work.
 
+**Where every `references/<file>` below lives.** In this skill's own folder:
+`.claude/skills/engage/references/<file>` under the repo root, and in plugin mode
+`$PLUGIN_ROOT/.claude/skills/engage/references/<file>` (the probe prints `PLUGIN_ROOT=`).
+Never `$PLUGIN_ROOT/references/<file>` and never relative to the working directory - a
+live `--auto` open on 2026-09-12 spent four failed Reads guessing before it found them.
+
 **0a. Safety gates - two verbatim disclaimers + the consent-intent question (CLAUDE.md §5 + §7).**
 When a target exists and code/data is involved, read `references/safety-gates.md` (this skill's
 folder) and follow it exactly: show the **execution-safety** and **data-safety** disclaimers as
