@@ -26,7 +26,7 @@ be introduced later; until then, opening a PR constitutes that agreement.
 A promotion is a release: the DoD requires prompt-touching changes to be **eval-gated**, and the
 gate is now mechanical, not a documented intention:
 
-1. On `dev`, run the **golden-slice `/run-evals`** (a representative ~10-15 of the 47 golden cases) in a
+1. On `dev`, run the **golden-slice `/run-evals`** (a representative ~10-15 of the 50 golden cases) in a
    Claude Code session on this repo.
 2. Record the result as **`evals/eval-baseline-<version>.md`** (date · cases run · pass/fail ·
    notes; `Scope: full` — or `Scope: deterministic-only` for a patch release with no prompt
@@ -83,15 +83,20 @@ pre-commit install                          # optional but recommended
 
 CI is GitHub Actions (`.github/workflows/ci.yml`), running on **GitHub-hosted runners**
 (`ubuntu-latest` + `windows-latest`) - fresh, ephemeral VMs per job, nothing self-hosted. It
-triggers on **every push to `main` and every pull request**, and runs **four jobs in parallel**
-(the test job fans out as a 3-leg matrix):
+triggers on **every push to `main` or `dev`, and every pull request** (`dev` is the integration
+line and takes direct pushes, so it is gated too, not just `main`), and runs **six jobs in
+parallel** on those triggers (the test job fans out as a 3-leg matrix). A seventh job, a live
+eval smoke run, exists only behind the manual `workflow_dispatch` trigger - it never runs on
+push/PR and can never become a merge gate:
 
 | Job | What it does |
 |---|---|
 | **Tests (detection logic)** | Runs on **three legs**: Python 3.10 on ubuntu (the lowest supported version), Python 3.12 on ubuntu, and Python 3.12 on windows-latest (the guards and launcher have Windows-specific paths). Each leg installs `requirements-dev.txt`, runs the full `pytest` suite, then `scripts.validate_masking` and `scripts.validate_manifest`. The suite covers rules, masking, the renderer, all three safety guards (driven via their JSON protocol), hook-config sync, the per-case eval contract, and the DoD artifact checker. |
 | **Lint & static analysis** | `ruff check` + `ruff format --check` over `scripts/ .claude/hooks/ rules/ tests/` · `bandit` (Python security) · `shellcheck` (Bash + git hooks) |
 | **Secret scan** | gitleaks over the **full history** (`fetch-depth: 0`), not just the diff |
+| **No blocked terms committed** | scans for employer/personal-name/internal-host terms via `scripts/dlp_guard.py`, against a digest-only blocklist supplied as a secret (a fork PR cannot see the secret, so it warns rather than blocks there) |
 | **No raw data committed** | fails if any `*.csv` / `*.tsv` / `*.parquet` / `*.pcap` / `*.jsonl` / `*.xlsx` / `*.xls` is tracked (`CLAUDE.md` §5) |
+| **dashboard-ui (build + test)** | `npm ci` + `npm test` + `npm run lint` (if present) + `npm run build` inside `dashboard-ui/` |
 
 Watch runs on the repo's **Actions** tab, or `gh run list` / `gh run watch` from a terminal.
 

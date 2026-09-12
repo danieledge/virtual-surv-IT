@@ -30,9 +30,13 @@ front door (`scripts/convert_file.py`) and the terminal UI (`scripts/launcher_te
 | platformdirs | 4.11.5 | MIT | <https://github.com/tox-dev/platformdirs> | per-OS config/cache paths |
 | wcwidth | 0.8.2 | MIT | <https://github.com/jquast/wcwidth> | terminal column widths (prompt_toolkit dependency) |
 | typing_extensions | 4.16.0 | PSF-2.0 | <https://github.com/python/typing_extensions> | typing back-compat (textual dependency) |
+| pygments | 2.20.0 | BSD-2-Clause | <https://github.com/pygments/pygments> | syntax highlighting used unconditionally by textual's `Markdown`/`MarkdownViewer` widgets |
+| markdown-it-py | 4.2.0 | MIT | <https://github.com/executablebooks/markdown-it-py> | Markdown parsing for the same textual widgets |
+| mdurl | 0.1.2 | MIT | <https://github.com/executablebooks/mdurl> | markdown-it-py's own required dependency |
 
 The vendored code is unmodified. Update procedure and pinned-version rationale:
-`vendor/README.md`.
+`vendor/README.md`. One-row-per-package inventory with the reason each is vendored:
+`vendor/MANIFEST.md`.
 
 ---
 

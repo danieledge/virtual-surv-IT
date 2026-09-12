@@ -158,7 +158,7 @@ separate SecOps agent - folded into `code-reviewer` + `platform-engineer`).
 | Frontmatter complete (name·description·tools·model) | ✅ | All 13. |
 | `tools:` least-privilege; advisors hold no general Edit | ✅ | Verified - zero advisors hold an unscoped Edit. (6 hold `Bash` for analysers/diffs, execution-gated §7; 4 hold `Write` and `Edit`, both scoped to their own findings-pack path only, mechanically enforced by `guard-findings-pack-write.py` - "no general Edit, Write+Edit scoped", not strictly "read-only".) |
 | Description = clear when-to-use trigger | ✅ | Standardised "When the team is engaged, use for…"; overlaps removed. |
-| Model tiering (not all-one-tier; documented) | ✅ | §2 above; 4/11/1 split. |
+| Model tiering (not all-one-tier; documented) | ✅ | §2 above; 4/8/1 split (opus/sonnet/haiku), 13 total - checked against `.claude/agents/*.md` frontmatter by `tests/test_docs_consistency.py::test_agent_model_tiers_match_agent_design_table`. |
 | Reasonable agent count / no routing collisions | ✅ | §4; one historical overlap fixed. |
 | Orchestration: simplest pattern that fits | ✅ | Routing + orchestrator-workers via `/engage`; right-sizing doctrine. |
 | Non-overlapping delegation briefs | ✅ | PM gives objective · scope · inputs · output format (engage §5). |
@@ -170,6 +170,21 @@ separate SecOps agent - folded into `code-reviewer` + `platform-engineer`).
 *Maintenance: when you add/retier an agent, update §2 and the per-agent `model:` together;
 `tests/test_docs_consistency.py` checks each agent's `model:` against this table, so the test
 and this matrix are the guard against drift.*
+
+**Single source of truth, by fact.** The roster/tier/allow-list/hooks facts above are restated in
+prose in several places (CLAUDE.md, `docs/team-operating-guide.md`, `.claude-plugin/*.json`, this
+file); each restatement is a copy, not the record. The authoritative file for each fact, and what
+currently checks the copies against it:
+
+| Fact | Authoritative file | Checked by |
+|---|---|---|
+| Roster (who exists) | `.claude/agents/*.md` (one file per agent) | `tests/test_agent_count_references_match_filesystem` (README, `plugin.json` counts); no test yet diffs every prose *name* list against the directory listing - a drift in a name (not just a count) would not be caught. |
+| Model tiers | Each agent's own frontmatter `model:` field | `tests/test_docs_consistency.py::test_agent_model_tiers_match_agent_design_table` (this file's §2/§5 tables vs frontmatter). |
+| Execution-consent allow-list | `.claude/hooks/guard-code-execution.py`'s `_TEAM_SCRIPT_NAMES` | Not yet checked against CLAUDE.md §7's prose list - see the D-5/A-5 finding in the 2026-09-12 audit; `tests/test_guard_exec_team_allow.py` tests the guard's own behaviour but does not diff it against CLAUDE.md's enumerated names. |
+| Hook wiring (what fires, on what event) | `.claude/settings.json` (`hooks/hooks.json` is its plugin-mode mirror) | `tests/test_hooks_in_sync.py` (the two files agree with each other); no test diffs either against README's or CLAUDE.md's prose hook inventory. |
+
+Where a fact has no diffing test yet, treat the prose copies as advisory and the file in the left
+column as the tie-breaker on any disagreement.
 
 ## 6. Anthropic multi-agent standards - conformance
 
@@ -193,7 +208,7 @@ and this matrix are the guard against drift.*
 | Don't multi-agent when agents **share context / are tightly dependent** | 🟡 | We do multi-agent *coding* but via **chaining** (build → review), not parallel fan-out on interdependent code - the safe form of it. |
 | Humans in the loop; evals **early & small** | ✅ | Human sign-off (Definition of Done); PM returns at every gate; `tests/` is the small eval set. |
 | **External memory** for long horizons | ✅ | **Project-scoped:** project-specific memory lives in the working project's own `CLAUDE.md` (the plugin ships no project memory - it's installed across many projects); `docs/house-rules.md` holds only **general, cross-project** conventions. Subagent context isolation (CLAUDE.md §6). |
-| **LLM-as-judge** rubric for output quality | ✅ | Shipped: the `evals/` harness - 9 rubrics + 47 golden cases, a deterministic scorer (`scripts/eval_score.py`, unit-tested) plus an LLM-judge via `/run-evals`. Complements the reviewer + Definition-of-Done model. |
+| **LLM-as-judge** rubric for output quality | ✅ | Shipped: the `evals/` harness - 9 rubrics + 50 golden cases, a deterministic scorer (`scripts/eval_score.py`, unit-tested) plus an LLM-judge via `/run-evals`. Complements the reviewer + Definition-of-Done model. |
 | Subagent **self-assessment** (plan → evaluate → refine) | 🟡 | A team-wide *convention* (CLAUDE.md §6: agents self-verify and flag gaps), but a single line - not a structured plan→evaluate→refine loop in each prompt. We lean on **independent** verification (reviewer chains, `model-validator`) instead - arguably stronger, but a different lesson. |
 | **Production tracing** / end-state checkpoints | 🟡 | Interactive model: PM 🎩 attribution + a short status log + user gates, rather than autonomous tracing (which matters most for long-running headless agents). |
 | **Dozens-hundreds** of agents → orchestrate via a **script/Workflow** | 🟡 | Not at that scale - right-sizing keeps us at 2-5 agents per engagement. But the *mechanism* is adopted for a different reason: independent review-pass fan-outs default to the Workflow tool's deterministic `parallel()` (`parallel_dispatch_via_workflow`, `.claude/skills/.shared/workflow-dispatch.md`) because three live-tested prompt-only fixes could not make batched Task dispatch stick (0.33.47-0.33.49). |

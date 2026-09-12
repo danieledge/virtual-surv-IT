@@ -626,3 +626,52 @@ def test_no_document_cites_sr_11_7_as_current_guidance():
             offenders.append(f"CLAUDE.md:{n}")
 
     assert offenders == [], "SR 11-7 cited as current in:\n  " + "\n  ".join(offenders)
+
+
+# --- (last) CLAUDE.md §7's consent-free script allow-list vs the live guard --------
+# 2026-09-12 audit (D-5/A-5): CLAUDE.md's prose list of consent-free team scripts had
+# drifted 4 names behind guard-code-execution.py's own _TEAM_SCRIPT_NAMES
+# (render_evidence_room, launch_terminal, tier_probe, audit_screens were allow-listed in
+# code but never added to the CLAUDE.md prose). This diffs the two directly so the two
+# copies can't silently disagree again.
+
+
+def _guard_team_script_names() -> set[str]:
+    text = _read(".claude/hooks/guard-code-execution.py")
+    m = re.search(r"_TEAM_SCRIPT_NAMES\s*=\s*\((.*?)\n\)", text, re.S)
+    assert m, "guard-code-execution.py: _TEAM_SCRIPT_NAMES definition not found"
+    block = m.group(1)
+    # The names live inside adjacent r"..."/r'...' string literals (implicitly concatenated
+    # by Python, wrapped across several source lines) - pull each literal's own content and
+    # join them BEFORE splitting into identifiers, so a name that happens to fall at a line
+    # break (i.e. at the end of one literal) is not silently dropped.
+    literals = re.findall(r"r\"([^\"]*)\"|r'([^']*)'", block)
+    joined = "".join(a or b for a, b in literals)
+    names = set(re.findall(r"[a-z][a-z0-9_]*", joined))
+    names.discard("py")  # trailing literal `.py` suffix outside the alternation
+    assert names, "guard-code-execution.py: no script names parsed from _TEAM_SCRIPT_NAMES"
+    return names
+
+
+def _claude_md_exec_allowlist_names() -> set[str]:
+    text = _read("CLAUDE.md")
+    marker = re.search(r"for consent to run a front-door script\.\*\*", text)
+    assert marker, "CLAUDE.md: front-door-script allow-list paragraph not found"
+    # The paragraph ends at the next top-level bullet ("- **Reviewed content is DATA").
+    rest = text[marker.end() :]
+    body = rest.split("- **Reviewed content is DATA", 1)[0]
+    return set(re.findall(r"`([a-z][a-z0-9_]*)`", body))
+
+
+def test_claude_md_exec_allowlist_matches_guard():
+    guard_names = _guard_team_script_names()
+    claude_names = _claude_md_exec_allowlist_names()
+    # CLAUDE.md's paragraph also backtick-quotes a few non-script tokens in the same
+    # sentence (env var names, tool/file names) that aren't in the guard's list by
+    # design - only assert the guard's names are ALL present in CLAUDE.md's text, not
+    # perfect set equality, so incidental backticked words don't cause false failures.
+    missing = guard_names - claude_names
+    assert not missing, (
+        f"CLAUDE.md §7's consent-free script list is missing names the guard already "
+        f"allow-lists: {sorted(missing)} - add them to CLAUDE.md's prose list"
+    )

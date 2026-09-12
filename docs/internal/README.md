@@ -52,3 +52,76 @@ Three families, each file carrying its own status line:
 
 Several files here are **git-ignored** by deliberate choice, so a fresh clone shows fewer
 files than a working checkout. Check before assuming something is missing.
+
+## `docs/adr/` in numbers
+
+`docs/adr/` (architecture decision records) is entirely git-ignored (`.gitignore`, 2026-08-13
+owner decision): `git ls-files docs/adr` returns 0 on every clone, while a working dev checkout
+holds the files locally (15 as of this measurement). Tracked files across the repo cite bare
+`ADR-0xx` numbers in prose roughly 595 times, spanning ADR-001 through ADR-014 - those citations
+are prose, not paths, so a link checker cannot chase them and the owner has accepted this volume
+as unavoidable. A small, checkable subset cites a *specific* `docs/adr/ADR-0xx-*.md` filename via
+path syntax instead of prose; `scripts/validate_references.py` treats those as resolvable
+references, and (as of the 2026-09-12 audit) carries an explicit `_KNOWN_ABSENT` entry for each
+one actually cited from a tracked file, recording which file cites it and why it can never resolve
+from a fresh clone:
+
+- `docs/adr/ADR-002-safety-hook-threat-model.md` - cited by `CLAUDE.md` and
+  `.claude/skills/security-audit/SKILL.md`
+- `docs/adr/ADR-005-persona-reanchoring-hook.md` - cited by
+  `docs/internal/backlog-persona-quality-ablation-2026-08-15.md`
+- `../../adr/ADR-014-persistent-guard-daemon.md` - the relative cite from
+  `docs/internal/adr-014-spike/README.md`
+
+Before `_KNOWN_ABSENT` carried these three, `validate_references.py` failed in CI on every push
+(the files resolve on the maintainer's own machine, where `docs/adr/` still physically exists,
+but never on a fresh `actions/checkout`) - this is what closed that gap. If a new tracked file
+adds a path-shaped `docs/adr/ADR-0xx-*.md` citation, either add a matching `_KNOWN_ABSENT` entry
+or, preferably, cite the ADR number in prose instead (which the checker's path pattern does not
+catch), consistent with the volume already accepted above.
+
+## Regenerating the tracked PDFs (`docs/quick-start.pdf`, `docs/internal/engagement-flow-poster-flowchart.pdf`)
+
+Both PDFs are print renders of their `.html` sibling. A browser print-to-PDF resolves each page's
+relative links against the local file path it was opened from, so the PDF ends up with embedded
+`file:///home/<user>/...` link annotations - a local-path/username leak in a tracked, publicly
+readable file (found 2026-09-12: 7 hits in `quick-start.pdf`, 2 in the flowchart PDF). No
+generator script is checked in; neither `weasyprint`, `reportlab` nor `playwright` is present in
+`.venv`, so until one of those is added, the fix is to strip the offending link annotations from
+the existing PDF with the vendored `pypdf` (deps vendored, no pip):
+
+```
+python3 -c "
+import sys; sys.path.insert(0, 'vendor')
+from pypdf import PdfReader, PdfWriter
+from pypdf.generic import NameObject, ArrayObject
+
+def fix(path):
+    reader = PdfReader(path)
+    writer = PdfWriter()
+    writer.append(reader)
+    for page in writer.pages:
+        annots = page.get('/Annots')
+        if not annots:
+            continue
+        keep = ArrayObject(
+            a for a in annots
+            if not str(a.get_object().get('/A', {}).get('/URI', '')).startswith('file:///home/')
+        )
+        if keep:
+            page[NameObject('/Annots')] = keep
+        elif '/Annots' in page:
+            del page['/Annots']
+    writer.write(path)
+
+fix('docs/quick-start.pdf')
+fix('docs/internal/engagement-flow-poster-flowchart.pdf')
+"
+```
+
+Verify with `grep -a -c '/home/' docs/quick-start.pdf docs/internal/engagement-flow-poster-flowchart.pdf`
+(expect `0` for both). This removes the clickable links entirely (the visible text is unaffected);
+it does not restore working cross-document links. A proper fix regenerates the PDF from the
+`.html` source from a neutral working directory with relative or `https://github.com/...` links
+baked in before the print step - out of scope until a headless-render tool is vendored or added to
+`.venv`.
