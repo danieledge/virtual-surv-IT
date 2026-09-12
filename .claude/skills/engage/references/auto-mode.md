@@ -87,5 +87,21 @@ that may be hours away, and until then the grant is open to **every** session in
 project rather than just this engagement (2026-08-21 audit). Leave a gate open no longer
 than the work needed it.
 
+## The spend ceiling is a precondition, not a preference
+
+An unattended run is armed **only behind a hard ceiling**. The only layer that can stop a
+run nobody is watching is the CLI's `--max-budget-usd`, which the launcher passes only when
+the human chose a nonzero cap; the degrade rungs (park, light, continue-and-notify) are
+advisory pacing, not a wall, and saying otherwise is its own failure. So a pre-flight
+answered "no ceiling" is not a decision to record and honour: it is a missing number. Say
+plainly that you will not arm the run uncapped, take the number back to the human with the
+question tool (one question: the ceiling, with a suggested figure from your own estimate),
+and arm only once it exists. Never fall through to an uncapped run because the human did
+not want to choose one, and never invent a figure silently. The launcher enforces the same
+rule from its side (it refuses to start headless without a cap unless told
+`--no-budget-cap` in so many words); this is the same rule from yours. Found by the eval
+case `process-headless-budget` on 2026-09-12: Morgan armed the run and called "no ceiling"
+legitimate.
+
 Everything else - safety gates, guards, data handling, the disclaimers, the DoD - applies
 exactly as in an attended run. **Unattended changes who is asked, never what is required.**

@@ -197,7 +197,7 @@
     ".claude/skills/engage/references/auto-mode.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 1284
+      "baseline_tokens": 1568
     },
     ".claude/skills/engage/references/close-checklist.md": {
       "tier": "DEFERRED",

@@ -153,7 +153,9 @@ first prompt. When present, this is the answer - **do not ask the question at al
 - **`--auto` (rides with EITHER `--jira <key>` OR `--request-pending`) - UNATTENDED.**
   The human authorised this run at the launcher; **ask nothing at all** and **read
   `references/auto-mode.md` now** - it carries the assumption ledger, the park-don't-guess
-  rule and the always-PARTIAL close, and is the only place they are written. Unattended
+  rule, the always-PARTIAL close and the spend-ceiling precondition (an unattended run is
+  armed only behind a hard cap; "no ceiling" goes back to the human as a question, never
+  through to an uncapped run), and is the only place they are written. Unattended
   changes who is asked, never what is required.
   **Autonomy is source-agnostic** (2026-08-24): it was reachable only from a ticket at
   first, which was an accident of where it was built - the pre-flight, the ledger and the
