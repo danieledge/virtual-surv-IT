@@ -683,11 +683,10 @@ def _resolves_into_plugin_scripts(seg: str) -> bool:
     resolvable, so it is resolved, and it must land inside the plugin's own scripts
     directory whatever it is called.
     """
-    try:
-        here = os.path.dirname(os.path.abspath(__file__))
-        plugin_scripts = os.path.realpath(os.path.join(here, "..", "..", "scripts"))
-    except Exception:  # noqa: BLE001
+    plugin_script_dirs = _plugin_script_dirs()
+    if not plugin_script_dirs:
         return False  # cannot locate ourselves: do not hand out the allowance
+    plugin_scripts = next(iter(plugin_script_dirs))
 
     root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
     saw_path = False
@@ -718,7 +717,7 @@ def _resolves_into_plugin_scripts(seg: str) -> bool:
             resolved = os.path.realpath(os.path.join(root, referenced))
         except Exception:  # noqa: BLE001
             return False
-        if os.path.dirname(resolved) != plugin_scripts:
+        if _norm(os.path.dirname(resolved)) not in plugin_script_dirs:
             return False
     if saw_path:
         return True
@@ -730,6 +729,114 @@ def _resolves_into_plugin_scripts(seg: str) -> bool:
     if module:
         return os.path.isfile(os.path.join(plugin_scripts, module.group(1) + ".py"))
     return True
+
+
+def _norm(path: str) -> str:
+    """One spelling per directory: resolved, and case-folded where the filesystem is."""
+    try:
+        return os.path.normcase(os.path.realpath(path))
+    except Exception:  # noqa: BLE001
+        return os.path.normcase(path)
+
+
+def _plugin_script_dirs() -> list:
+    """Every `scripts/` directory that belongs to a genuine copy of THIS plugin on this
+    machine, the guard's own first.
+
+    WHY MORE THAN ONE (live report with a photo, corporate Windows laptop, 2026-09-12). The
+    first version of the location check compared the script's directory with exactly one
+    string: the scripts directory two levels above this file. A plugin install has at least
+    two legitimate copies - the marketplace clone the installer keeps and the cache copy
+    Claude Code makes under ~/.claude/plugins/cache - and the guard daemon, started by the
+    launcher, answers from one while the session invokes the team scripts by the path the
+    probe reports for the other. The engagement's very first command, `engagement_state.py
+    init`, was refused as untrusted code: the whole team locked out by its own gate.
+
+    A copy counts when its `.claude-plugin/plugin.json` names this plugin and it ships
+    `scripts/engage_probe.py` (the same test scripts/find_plugin_root.py applies; not
+    imported, because this guard runs standalone). Candidates: this file's own root, the
+    root Claude Code names in CLAUDE_PLUGIN_ROOT, every path the install registry records,
+    every plugin directory under the cache and marketplaces folders, and the installer's
+    recorded clone. Residual, stated: the registry files live in the user's home and are
+    model-writable like everything else there (ADR-002 rec 5's class); a copy of the plugin
+    is still a copy of the plugin, not the code under review.
+    """
+    found: list = []
+
+    def add(root, check_manifest: bool = True) -> None:
+        try:
+            root = os.path.realpath(str(root))
+            if check_manifest:
+                manifest = os.path.join(root, ".claude-plugin", "plugin.json")
+                with open(manifest, encoding="utf-8-sig") as fh:
+                    if _PLUGIN_NAME not in fh.read():
+                        return
+                if not os.path.isfile(os.path.join(root, "scripts", "engage_probe.py")):
+                    return
+            key = _norm(os.path.join(root, "scripts"))
+            if key not in found:
+                found.append(key)
+        except Exception:  # noqa: BLE001 - a candidate that cannot be read is not a copy
+            return
+
+    # The guard's own root is trusted by construction - the guard IS running from it - and
+    # is never verified: a test that copies this file into a bare project must keep the
+    # behaviour the file had before other roots were admitted.
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        add(os.path.join(here, "..", ".."), check_manifest=False)
+    except Exception:  # noqa: BLE001
+        pass
+    if os.environ.get("CLAUDE_PLUGIN_ROOT"):
+        add(os.environ["CLAUDE_PLUGIN_ROOT"])
+    home = os.path.expanduser("~")
+    plugins = os.path.join(home, ".claude", "plugins")
+
+    def strings(obj) -> list:
+        # Every string anywhere in the registry: the clone's path need not contain the
+        # plugin's name (the installer's default is ~/virtual-surv-IT), so the manifest
+        # check in add() is what decides, not the spelling of the path.
+        if isinstance(obj, str):
+            return [obj]
+        if isinstance(obj, dict):
+            return [s for v in obj.values() for s in strings(v)]
+        if isinstance(obj, list):
+            return [s for v in obj for s in strings(v)]
+        return []
+
+    for name in ("installed_plugins.json", "config.json", "plugins.json"):
+        try:
+            with open(os.path.join(plugins, name), encoding="utf-8-sig") as fh:
+                data = json.load(fh)
+        except Exception:  # noqa: BLE001
+            continue
+        for candidate in strings(data):
+            if os.sep in candidate or "/" in candidate:
+                add(candidate)
+    for base in (os.path.join(plugins, "cache"), os.path.join(plugins, "marketplaces")):
+        try:
+            for dirpath, dirnames, filenames in os.walk(base):
+                if dirpath.count(os.sep) - base.count(os.sep) > 3:
+                    dirnames[:] = []
+                    continue
+                if ".claude-plugin" in dirnames:
+                    add(dirpath)
+                    dirnames[:] = []
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        with open(
+            os.path.join(home, ".config", "virt-surv-it", "installer.json"), encoding="utf-8-sig"
+        ) as fh:
+            repo_path = json.load(fh).get("repo_path")
+        if repo_path:
+            add(repo_path)
+    except Exception:  # noqa: BLE001
+        pass
+    return found
+
+
+_PLUGIN_NAME = "compliance-surveillance-team"
 
 
 def main() -> None:

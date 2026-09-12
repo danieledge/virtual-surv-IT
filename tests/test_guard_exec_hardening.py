@@ -141,6 +141,77 @@ def test_a_whitelisted_basename_written_anywhere_is_not_team_tooling(tmp_path):
     assert _code(f'python "{fake}/render_html.py"', tmp_path) == BLOCK
 
 
+def _plugin_copy(root: Path) -> Path:
+    """A minimal second copy of this plugin: the manifest naming it, the probe the
+    location check looks for, and one team script to invoke."""
+    (root / ".claude-plugin").mkdir(parents=True)
+    (root / ".claude-plugin" / "plugin.json").write_text(
+        '{"name": "compliance-surveillance-team", "version": "0.0.0"}', encoding="utf-8"
+    )
+    (root / "scripts").mkdir()
+    (root / "scripts" / "engage_probe.py").write_text("", encoding="utf-8")
+    (root / "scripts" / "engagement_state.py").write_text("print('init')", encoding="utf-8")
+    return root
+
+
+def test_every_registered_copy_of_the_plugin_is_team_tooling(tmp_path):
+    """Live report with a photo, corporate Windows laptop, 2026-09-12: a plugin install has
+    two copies (the marketplace clone and Claude Code's cache copy), the daemon answered
+    from one and the session invoked engagement_state.py by the other's path, and the
+    engagement's very first command was refused as untrusted code. A copy in the cache
+    directory, one the registry names, one CLAUDE_PLUGIN_ROOT names, and one the installer
+    recorded as the clone all count; a directory that merely contains a scripts/ folder
+    still does not."""
+    home = tmp_path / "home"
+    project = tmp_path / "project"
+    project.mkdir()
+    env = {"HOME": str(home), "USERPROFILE": str(home)}
+
+    cache = _plugin_copy(
+        home / ".claude" / "plugins" / "cache" / "mk" / "compliance-surveillance-team" / "1.0.0"
+    )
+    assert (
+        _code(f'python "{cache}/scripts/engagement_state.py" init', project, env_extra=env) == ALLOW
+    )
+
+    registered = _plugin_copy(tmp_path / "elsewhere" / "team")
+    (home / ".claude" / "plugins").mkdir(parents=True, exist_ok=True)
+    (home / ".claude" / "plugins" / "installed_plugins.json").write_text(
+        json.dumps(
+            {"plugins": {"compliance-surveillance-team@mk": [{"installPath": str(registered)}]}}
+        ),
+        encoding="utf-8",
+    )
+    assert (
+        _code(f'python "{registered}/scripts/engagement_state.py" init', project, env_extra=env)
+        == ALLOW
+    )
+
+    named = _plugin_copy(tmp_path / "named")
+    assert (
+        _code(
+            f'python "{named}/scripts/engagement_state.py" init',
+            project,
+            env_extra={**env, "CLAUDE_PLUGIN_ROOT": str(named)},
+        )
+        == ALLOW
+    )
+
+    clone = _plugin_copy(tmp_path / "clone")
+    (home / ".config" / "virt-surv-it").mkdir(parents=True)
+    (home / ".config" / "virt-surv-it" / "installer.json").write_text(
+        json.dumps({"repo_path": str(clone)}), encoding="utf-8"
+    )
+    assert (
+        _code(f'python "{clone}/scripts/engagement_state.py" init', project, env_extra=env) == ALLOW
+    )
+
+    stray = tmp_path / "stray" / "scripts"
+    stray.mkdir(parents=True)
+    (stray / "engagement_state.py").write_text("print('x')", encoding="utf-8")
+    assert _code(f'python "{stray}/engagement_state.py" init', project, env_extra=env) == BLOCK
+
+
 def test_the_unresolvable_bundled_form_still_runs(tmp_path):
     """The one case the whitelist was added for, and now the only one it covers: a path
     carrying an unexpanded variable, which nothing can resolve."""
