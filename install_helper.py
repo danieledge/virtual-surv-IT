@@ -8234,7 +8234,7 @@ def probe_analyser_output(tmpdir: Path, runner=None, only=None):
                     name,
                     "ERROR",
                     f"exit {proc.returncode} scanning the probe directory (a throwaway, removed "
-                    f"after the check): {first_line[:150]}",
+                    f"after the check) - crashed or misconfigured: {first_line[:150]}",
                 )
             continue
         if proc.returncode != 0:
