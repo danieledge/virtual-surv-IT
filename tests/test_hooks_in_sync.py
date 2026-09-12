@@ -142,8 +142,13 @@ def test_consent_guard_covers_write_tools():
     pre = _pretooluse(REPO / "hooks" / "hooks.json")
     for entry in pre:
         if any("bash_hook_dispatcher.py" in h["command"] for h in entry["hooks"]):
+            # Since the 2026-09-12 audit (H-11) the dispatcher matcher is "*": every tool,
+            # so the raw-data guard's unknown-tool scan can fire for an MCP or future tool.
+            # A wildcard covers the five by definition; a list must still name each.
             for tool in ("Write", "Edit", "MultiEdit", "NotebookEdit", "Bash"):
-                assert tool in entry["matcher"], f"dispatcher matcher misses {tool}"
+                assert entry["matcher"] == "*" or tool in entry["matcher"], (
+                    f"dispatcher matcher misses {tool}"
+                )
             break
     else:
         raise AssertionError("consolidated dispatcher not found in hooks")

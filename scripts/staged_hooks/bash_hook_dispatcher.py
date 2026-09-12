@@ -201,6 +201,19 @@ def _raw_path_backstop(tool: str, tool_input: dict) -> str:
     return ""
 
 
+def _fail_closed(name: str, why: str, tool: str, payload: dict) -> int:
+    """A safety guard that cannot run blocks the call. If the call is a raw-path read the
+    backstop speaks first, so the model is told WHAT it hit rather than only that a guard
+    was absent (H-24: in plugin mode there is no permissions.deny behind a missing guard,
+    and the backstop is the only thing left that knows about the raw directory)."""
+    blocked = _raw_path_backstop(tool, payload.get("tool_input") or {})
+    if blocked:
+        sys.stderr.write(blocked)
+        return 2
+    sys.stderr.write(f"{name} {why}; failing closed (blocked).\n")
+    return 2
+
+
 def main() -> int:
     try:
         payload_text = sys.stdin.read()
@@ -222,11 +235,6 @@ def main() -> int:
     # Residual, stated: this cannot cover the case where no Python is found at all, because
     # then nothing in this file runs either. That one is a host-setup problem the installer
     # has to close.
-    blocked = _raw_path_backstop(tool, payload.get("tool_input") or {})
-    if blocked:
-        sys.stderr.write(blocked)
-        return 2
-
     for name, path, tools, fail_closed in _CHECKS:
         if tools is not None and tool not in tools:
             continue
@@ -245,18 +253,27 @@ def main() -> int:
             # same fail_closed policy as a load failure - both are "this guard cannot
             # run", and a guard that cannot run must not silently pass.
             if fail_closed:
-                sys.stderr.write(f"{name} guard file not found; failing closed (blocked).\n")
-                return 2
+                return _fail_closed(name, "guard file not found", tool, payload)
             continue
         module = _load(name, path)
         if module is None:
             if fail_closed:
-                sys.stderr.write(f"{name} failed to load; failing closed (blocked).\n")
-                return 2
+                return _fail_closed(name, "failed to load", tool, payload)
             continue
         code = _run_guard(module, name, payload_text, fail_closed)
         if code == 2:
             return 2
+
+    # The backstop runs AFTER the guards, not before (first live run of the 2026-09-12 apply
+    # pass): placed first it answered every raw-path Read itself, so the guard's own message
+    # - the one tests/test_bash_hook_dispatcher.py pins as "matches the real guard exactly" -
+    # never reached the model. A backstop is for the case where the guard did not block
+    # (failed to load in plugin mode, no permissions.deny behind it); on the normal path the
+    # guard speaks and this stays silent.
+    blocked = _raw_path_backstop(tool, payload.get("tool_input") or {})
+    if blocked:
+        sys.stderr.write(blocked)
+        return 2
     return 0
 
 

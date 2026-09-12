@@ -302,9 +302,13 @@ def test_every_applicable_check_sees_the_full_original_payload(monkeypatch):
     monkeypatch.setattr(bhd, "_load", fake_load)
     monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(json.dumps(payload)))
     assert bhd.main() == 0
-    # Two checks apply to a bare Write (guard_consent_writes, then guard_findings_pack_write,
-    # 2026-08-03) - each must see its own fresh, complete copy of the payload.
-    assert seen == [payload, payload]
+    # Every check whose tool-scope includes Write applies (consent_writes and
+    # findings_pack_write since 2026-08-03, raw_data since the 2026-09-12 audit blocked writes
+    # into the raw dir) - derived from the registry so a new Write-scoped check does not
+    # silently break this test. Each must see its own fresh, complete copy.
+    applicable = sum(1 for _n, _p, tools, _f in bhd._CHECKS if tools is None or "Write" in tools)
+    assert applicable >= 2
+    assert seen == [payload] * applicable
 
 
 def test_missing_safety_guard_file_fails_closed(monkeypatch, tmp_path, capsys):
@@ -441,6 +445,39 @@ def test_the_raw_path_backstop_blocks_a_read_without_the_guard_module(tmp_path):
         "tool_input": {"file_path": str(tmp_path / "data" / "raw" / "trades.csv")},
     }
     proc = _run_staged_install(tmp_path, payload)
+    assert proc.returncode == 2
+    # With the guard present the GUARD speaks (first live apply, 2026-09-12: the backstop
+    # ran first and hid the guard's message, which another test pins exactly). Either
+    # voice is a block that names the raw directory; the backstop's own voice is checked
+    # in the next test, where the guard really is absent.
+    assert "data/" + "raw" in proc.stderr
+
+
+def test_the_raw_path_backstop_speaks_when_the_guard_is_absent(tmp_path):
+    """H-24, the case the backstop exists for: the raw-data guard file is missing from the
+    install (plugin mode, no permissions.deny behind it). The dispatcher fails closed
+    either way; the backstop makes the message say what was hit."""
+    payload = {
+        "tool_name": "Read",
+        "tool_input": {"file_path": str(tmp_path / "data" / "raw" / "trades.csv")},
+    }
+    dispatcher, env = _staged_install(tmp_path)
+    (tmp_path / ".claude" / "hooks" / "guard-raw-data.py").unlink()
+    raw = tmp_path / "data" / "raw"
+    raw.mkdir(parents=True, exist_ok=True)
+    (raw / "trades.csv").write_text("account,amount\nACC1,100\n", encoding="utf-8")
+    import os
+
+    full_env = dict(os.environ)
+    full_env.update(env)
+    proc = subprocess.run(
+        [sys.executable, str(dispatcher)],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        env=full_env,
+        timeout=30,
+    )
     assert proc.returncode == 2
     assert "raw-data wall" in proc.stderr
 
