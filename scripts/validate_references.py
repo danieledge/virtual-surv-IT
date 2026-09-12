@@ -195,6 +195,9 @@ _KNOWN_ABSENT = {
     ),
     # Proposed by the 2026-09-12 audit's module-split plan (backlog item 7), not built.
     "scripts/alias_template.py": "proposed in docs/internal/backlog-2026-08-20.md item 7, not built",
+    "docs/internal/independent-audit-2026-09-12/report.html": (
+        "local-only audit workspace (gitignored 2026-09-12); backlog item 6 cites its page"
+    ),
     "installer_settings.py": "proposed in docs/internal/backlog-2026-08-20.md item 7, not built",
     "dashboard-ui/dist/index.html": (
         "build output of `npm run build` in dashboard-ui/, never tracked; the dashboard "

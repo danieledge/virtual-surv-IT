@@ -117,8 +117,11 @@ jobs:
       # Bringing in a new module: run it locally first
       # (.venv/bin/python -m mypy --ignore-missing-imports <file>), fix or don't add it yet.
       - name: mypy (currently-clean modules only)
+        # --follow-imports=silent: a listed module that imports an unlisted one (e.g.
+        # engagement_state.py, 17 errors today) must not fail on the import's errors -
+        # the list is the contract, and a module joins it when it is clean.
         run: >
-          mypy --ignore-missing-imports
+          mypy --ignore-missing-imports --follow-imports=silent
           scripts/brand_banner.py
           scripts/dlp_guard.py
           scripts/document_input_redirect.py
@@ -297,4 +300,7 @@ jobs:
       - run: npm test
       - name: lint
         run: npm run lint --if-present
+      # data/dashboard-data.json is generated and gitignored; App.tsx imports it statically,
+      # so the build needs it first (first run of this job, 2026-09-12).
+      - run: npm run data
       - run: npm run build

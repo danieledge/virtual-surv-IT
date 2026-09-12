@@ -5235,6 +5235,15 @@ def _consume_debug_flag(argv: list) -> list:
 
 def main() -> int:
     sys.argv = _consume_debug_flag(sys.argv)
+    if "--launch-command" in sys.argv[1:]:
+        # Alias v5 support channel: print ONLY the configured launch command on stdout
+        # (the shell function word-splits it), nothing else on either stream. Answered
+        # before the pre-flight below: on a box with no `claude` on PATH the advisory
+        # "cannot be found" line landed on stderr here (first green-CI attempt after the
+        # 2026-09-12 audit, runners ship no CLI), and the wrapper's own launch failure
+        # already says the same thing to the same person.
+        print(_configured_launch_command())
+        return 0
     # Preflight the things that are true before any action is chosen. The wrapper check
     # used to run ONLY on the Esc path, so someone whose shell holds a pre-v7 function
     # learned about it only if they happened to back out - while the same stale wrapper
@@ -5272,11 +5281,6 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except Exception:  # noqa: BLE001 - older/odd streams may not support it  # nosec B110 - older/odd streams may not support reconfigure
         pass
-    if "--launch-command" in sys.argv[1:]:
-        # Alias v5 support channel: print ONLY the configured launch command on stdout
-        # (the shell function word-splits it), nothing else on either stream.
-        print(_configured_launch_command())
-        return 0
     if "--configure" in sys.argv[1:]:
         # `virt-surv configure` on an already-configured project lands here (2026-08-19
         # user request): the same banner + settings editor `go`'s [c] opens, then out -
