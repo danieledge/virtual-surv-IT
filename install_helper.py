@@ -8098,6 +8098,10 @@ _TOOL_CHECK_CLEAN_PY = "def add(a: int, b: int) -> int:\n    return a + b\n"
 # tested 2026-08-04 against a real sqlfluff install before trusting this).
 _TOOL_CHECK_CLEAN_SQL = "SELECT\n    id,\n    name\nFROM users\nWHERE id = 1;\n"
 _TOOL_CHECK_CLEAN_SH = '#!/bin/sh\necho "hello"\n'
+# One pinned, tiny, long-stable dependency so the dependency scanner has a package source
+# to read (2026-09-12); findings on it, if the database ever grows one, are handled by the
+# scanner's own branch in probe_analyser_output, not treated as a broken tool.
+_TOOL_CHECK_SEED_LOCKFILE = "six==1.16.0\n"
 
 # The officially supported, on/off/auto-configurable review-tool set (_REVIEW_TOOLS below)
 # - every name here MUST also appear in _REVIEW_TOOLS, and vice versa, enforced by a test.
@@ -8157,6 +8161,13 @@ def probe_analyser_output(tmpdir: Path, runner=None, only=None):
     ):
         with open(targets[kind], "w", encoding="utf-8", newline="\n") as f:
             f.write(content)
+    # A lockfile for the dependency scanner (live report, 2026-09-12). osv-scanner reads
+    # package manifests, not source, so a directory holding only probe.py is "No package
+    # sources found": exit 128, which this probe reported as a crash. One pinned, tiny
+    # dependency gives it something to scan; findings on it are not a misconfiguration
+    # (see the osv-scanner branch below), an empty scan is.
+    with open(tmpdir / "requirements.txt", "w", encoding="utf-8", newline="\n") as f:
+        f.write(_TOOL_CHECK_SEED_LOCKFILE)
 
     for name, flags, target_kind, per_call_timeout in _TOOL_OUTPUT_CHECKS:
         if only is not None and name not in only:
@@ -8194,14 +8205,46 @@ def probe_analyser_output(tmpdir: Path, runner=None, only=None):
         # here is expected to exit 0 on a genuinely clean, well-formatted trivial file -
         # nonzero is always anomalous (a crash, a misconfiguration, a version mismatch,
         # or a false positive on our own fixture), never a legitimate "clean" result.
+        if name == "osv-scanner":
+            # Its exit codes carry meaning the generic rule below misreads: 1 is "findings
+            # on the seed lockfile" (the scanner working, offline), 128 is "no package
+            # sources found" (the probe's own fixture was not picked up), anything else is
+            # the scanner or its database (a missing offline database says so in the first
+            # line). The JSON it prints on findings is long by design, so the size
+            # heuristic does not apply either.
+            # Exit 1 is only "findings" when the JSON report is actually there; a crash
+            # with no report on stdout is a crash whatever the code.
+            reported = (proc.stdout or "").lstrip().startswith("{")
+            worked = proc.returncode == 0 or (proc.returncode == 1 and reported)
+            if worked and "\x1b[" in combined:
+                yield (name, "NOISY", "ANSI escape codes leaked through the flags")
+            elif worked:
+                yield (name, "OK", "scanned the seed lockfile offline (exit %d)" % proc.returncode)
+            elif proc.returncode == 128:
+                yield (
+                    name,
+                    "ERROR",
+                    "found no package sources in the probe directory - the seed lockfile "
+                    "was not recognised; report this with the scanner's version",
+                )
+            else:
+                detail = combined.strip()
+                first_line = detail.splitlines()[0] if detail else "(no output)"
+                yield (
+                    name,
+                    "ERROR",
+                    f"exit {proc.returncode} scanning the probe directory (a throwaway, removed "
+                    f"after the check): {first_line[:150]}",
+                )
+            continue
         if proc.returncode != 0:
             detail = combined.strip()
             first_line = detail.splitlines()[0] if detail else "(no output)"
             yield (
                 name,
                 "ERROR",
-                f"exit {proc.returncode} on a trivial clean file - crashed or "
-                f"misconfigured: {first_line[:150]}",
+                f"exit {proc.returncode} on a trivial clean file (in a throwaway directory, "
+                f"removed after the check) - crashed or misconfigured: {first_line[:150]}",
             )
         elif "\x1b[" in combined:
             yield (name, "NOISY", "ANSI escape codes leaked through the flags")
@@ -8210,6 +8253,103 @@ def probe_analyser_output(tmpdir: Path, runner=None, only=None):
             yield (name, "NOISY", f"{len(combined)} bytes on a trivial clean file: {preview!r}...")
         else:
             yield (name, "OK", "clean")
+
+
+_CODE_INTEL_PROBE = r"""
+import sys
+sys.path.insert(0, sys.argv[1])
+try:
+    import tree_sitter_language_pack  # noqa: F401
+except Exception as exc:
+    print("SKIP not installed (%s)" % exc.__class__.__name__)
+    raise SystemExit(0)
+try:
+    import repo_skeleton
+    available = repo_skeleton._ts_grammar_available("python")
+except Exception:
+    available = True  # older pack builds bundle every grammar; nothing to pre-warm
+if not available:
+    print("ERROR python grammar not pre-warmed - run the Code intelligence step")
+    raise SystemExit(0)
+from tree_sitter_language_pack import get_parser
+tree = get_parser("python").parse(b"def add(a, b):\n    return a + b\n")
+root = tree.root_node
+if root.has_error or root.child_count == 0:
+    print("ERROR the python grammar loaded but did not parse a trivial file")
+    raise SystemExit(0)
+print("OK tree-sitter parses a trivial file (python grammar cached, offline)")
+"""
+
+
+def probe_language_analysers(repo_root: Path):
+    """The wider, language-specific analyser set from scripts/check-review-tools.sh, each
+    reported as installed or not, with what it is for.
+
+    WHY (live report, 2026-09-12). The engagement banner told the user nine tools were
+    missing and that dependent findings would be inferred; the full check said nothing
+    about any of them, so there was no way to tell which mattered. None is required: each
+    is used only when the reviewed code has that language, and a missing one costs
+    measured findings in that language, never the review. Tree-sitter does not replace
+    them - it gives exact symbols and line ranges, it finds no bugs. Yields (name, status,
+    detail) with status OK or SKIP, never ERROR: absence is information, not a fault.
+    """
+    covered = {name for name, *_ in _TOOL_OUTPUT_CHECKS}
+    registry = repo_root / "scripts" / "check-review-tools.sh"
+    try:
+        text = registry.read_text(encoding="utf-8")
+    except OSError:
+        return
+    block = re.search(r"^TOOLS=\((.*?)^\)", text, re.S | re.M)
+    if not block:
+        return
+    for line in block.group(1).splitlines():
+        entry = line.strip().strip('"')
+        if not entry or entry.startswith("#") or "|" not in entry:
+            continue
+        name, purpose, hint = (entry.split("|", 2) + ["", ""])[:3]
+        if name in covered:
+            continue
+        if shutil.which(name):
+            yield (name, "OK", f"installed - {purpose}")
+        else:
+            yield (
+                name,
+                "SKIP",
+                f"not installed - {purpose}; needed only for that language ({hint})",
+            )
+
+
+def probe_code_intel(interpreter: str, repo_root: Path, runner=None, timeout: int = 25):
+    """Does code intelligence work here, offline? (live report, 2026-09-12: the full check
+    validated every analyser and never the tree-sitter tier the review lenses lean on for
+    exact symbols and line ranges.)
+
+    Returns (status, detail): SKIP when the packages are not installed, ERROR when they are
+    but the python grammar is not pre-warmed or does not parse, OK otherwise. Runs in a
+    subprocess so an import that hangs on a proxy fetch is a timeout here, never a hang.
+    """
+    if not interpreter:
+        return ("SKIP", "no interpreter to probe with")
+    runner = runner or subprocess.run
+    argv = [interpreter, "-c", _CODE_INTEL_PROBE, str(repo_root / "scripts")]
+    try:
+        proc = runner(
+            argv, capture_output=True, encoding="utf-8", errors="replace", timeout=timeout
+        )
+    except subprocess.TimeoutExpired:
+        return (
+            "ERROR",
+            f"timed out ({timeout}s) - a grammar fetch reaching the network; run the Code "
+            "intelligence step so every grammar is cached before a review needs it",
+        )
+    except OSError as exc:
+        return ("ERROR", f"failed to launch: {exc}")
+    line = ((proc.stdout or "").strip().splitlines() or [""])[0]
+    status, _, detail = line.partition(" ")
+    if status in ("OK", "SKIP", "ERROR") and detail:
+        return (status, detail)
+    tail = ((proc.stderr or "").strip().splitlines() or ["(no output)"])[-1]
+    return ("ERROR", f"exit {proc.returncode}: {tail[:150]}")
 
 
 def run_tool_check(style: Style, mark_map: dict) -> int:
@@ -8737,6 +8877,19 @@ def run_env_check(style: Style, mark_map: dict, repo_hint: Optional[str] = None)
     with tempfile.TemporaryDirectory(prefix="virt-surv-it-envcheck-") as tmp:
         for name, status, detail in probe_analyser_output(Path(tmp)):
             emit(name, status, detail)
+
+    print(style.dim("\n  Code intelligence (tree-sitter, offline - exact symbols in reviews):"))
+    status, detail = probe_code_intel(interpreter, repo_root)
+    emit("code intelligence", status, detail)
+
+    print(
+        style.dim(
+            "\n  Language analysers (optional - each used only when the reviewed code has that "
+            "language; a missing one means inferred findings there, not a broken review):"
+        )
+    )
+    for name, status, detail in probe_language_analysers(repo_root):
+        emit(name, status, detail)
 
     print(
         style.dim(

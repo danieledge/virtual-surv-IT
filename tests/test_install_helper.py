@@ -4195,6 +4195,10 @@ def test_probe_analyser_output_statuses(
 
     monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
     results = list(ih.probe_analyser_output(tmp_path, runner=runner))
+    if "bytes on a trivial clean file" in detail_substrings:
+        # The dependency scanner prints JSON by design and is judged by exit code (its
+        # own branch, 2026-09-12); the size heuristic applies to every other tool.
+        results = [r for r in results if r[0] != "osv-scanner"]
     assert all(status == expected_status for _, status, _ in results)
     for substr in detail_substrings:
         assert all(substr in detail for _, _, detail in results)
@@ -4841,6 +4845,8 @@ def test_run_env_check_aggregates_and_reports_issues(capsys, monkeypatch):
         ih, "_check_guard_hooks", lambda interp, root, tmp: [("Bash", "SKIP", "no interpreter")]
     )
     monkeypatch.setattr(ih, "probe_analyser_output", lambda tmp, runner=None: iter([]))
+    monkeypatch.setattr(ih, "probe_code_intel", lambda interp, root: ("SKIP", "no interpreter"))
+    monkeypatch.setattr(ih, "probe_language_analysers", lambda root: iter([]))
     rc = run_env_check(Style(False), marks())
     out = capsys.readouterr().out
     assert rc == 1
@@ -9572,6 +9578,80 @@ def test_the_database_download_scans_seed_manifests_not_an_empty_directory(
     assert seen["files"] == ["package-lock.json", "pom.xml", "requirements.txt"]
     assert "--download-offline-databases" in seen["flags"]
     assert "ready" in capsys.readouterr().out
+
+
+def test_the_scanner_probe_seeds_a_lockfile_and_reads_the_exit_codes(tmp_path):
+    """Live report, 2026-09-12: the full check scanned a directory holding only probe.py,
+    osv-scanner said "No package sources found" (exit 128) and the check called it a crash
+    naming a temp directory it had already deleted. A seed lockfile is written beside the
+    fixtures; 0 and 1 are the scanner working, 128 is the fixture not being picked up."""
+    import install_helper as ih
+
+    seen = {}
+
+    def fake_run(argv, **kw):
+        seen["files"] = sorted(p.name for p in ih.Path(kw["cwd"]).iterdir())
+        return ih.subprocess.CompletedProcess(argv, seen.pop("rc", 0), stdout="{}", stderr="")
+
+    fake_which = lambda name: "/usr/bin/osv-scanner" if name == "osv-scanner" else None  # noqa: E731
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(ih.shutil, "which", fake_which)
+        for rc, expected in ((0, "OK"), (1, "OK"), (128, "ERROR"), (127, "ERROR")):
+            seen["rc"] = rc
+            rows = list(ih.probe_analyser_output(tmp_path, runner=fake_run, only={"osv-scanner"}))
+            assert rows[0][1] == expected, (rc, rows)
+            assert "requirements.txt" in seen["files"]
+        assert "package sources" in rows[0][2] or "exit 127" in rows[0][2]
+
+
+def test_the_code_intelligence_probe_maps_the_three_outcomes(tmp_path):
+    """The full check validated every analyser and never the tree-sitter tier (live report,
+    2026-09-12). The probe runs in a subprocess and reports what the first line says."""
+    import install_helper as ih
+
+    def runner_for(stdout, rc=0):
+        def fake_run(argv, **kw):
+            assert argv[1] == "-c" and argv[-1].endswith("scripts")
+            return ih.subprocess.CompletedProcess(argv, rc, stdout=stdout, stderr="")
+
+        return fake_run
+
+    assert ih.probe_code_intel("python", tmp_path, runner=runner_for("OK parses fine\n")) == (
+        "OK",
+        "parses fine",
+    )
+    assert ih.probe_code_intel("python", tmp_path, runner=runner_for("SKIP not installed\n"))[
+        0
+    ] == ("SKIP")
+    assert (
+        ih.probe_code_intel(
+            "python", tmp_path, runner=runner_for("ERROR python grammar not pre-warmed\n")
+        )[0]
+        == "ERROR"
+    )
+    status, detail = ih.probe_code_intel("python", tmp_path, runner=runner_for("", rc=1))
+    assert status == "ERROR" and "exit 1" in detail
+
+
+def test_the_language_analyser_probe_reads_the_registry_and_never_errors(monkeypatch, tmp_path):
+    """The full check said nothing about the nine tools the banner called missing (live
+    report, 2026-09-12). They come from the shell probe's registry; the eight already
+    exercised for output cleanliness are left out; absence is SKIP with the purpose and
+    the install hint, never ERROR."""
+    import install_helper as ih
+
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "check-review-tools.sh").write_text(
+        'TOOLS=(\n  "ruff|Python lint|pip"\n  "tsc|TypeScript types|npm install -g typescript"\n'
+        '  "pmd|Java static analysis|via Maven"\n)\nrest=1\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ih.shutil, "which", lambda name: "/usr/bin/tsc" if name == "tsc" else None)
+    rows = list(ih.probe_language_analysers(tmp_path))
+    assert [r[0] for r in rows] == ["tsc", "pmd"]
+    assert rows[0][1] == "OK" and "TypeScript types" in rows[0][2]
+    assert rows[1][1] == "SKIP" and "via Maven" in rows[1][2] and "only" in rows[1][2]
+    assert list(ih.probe_language_analysers(tmp_path / "nowhere")) == []
 
 
 def test_the_database_presence_check_knows_the_2x_cache_layout(monkeypatch, tmp_path):
