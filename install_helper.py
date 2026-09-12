@@ -85,7 +85,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path, PureWindowsPath
-from typing import Optional
+from typing import Callable, NamedTuple, Optional
 
 REPO_URL = "https://github.com/danieledge/virtual-surv-IT.git"
 MARKETPLACE = "virtual-surv-it"
@@ -3202,32 +3202,47 @@ class Installer:
     CODE_INTEL_REQUIREMENTS = "requirements-review.txt"
     CODE_INTEL_PREFIXES = ("tree-sitter", "tree-sitter-language-pack")
 
-    def code_intel_specs(self) -> list:
-        """The pinned specs for the code-intelligence packages, from the requirements file.
+    def requirement_specs(self, names) -> list:
+        """The pinned specs for `names`, read from requirements-review.txt.
+
+        ONE reader, two callers (2026-09-12): the code-intelligence step and the
+        language-analyser step both pick a few named packages out of that file rather than
+        installing all of it, because the analysers in it are a separate decision the user
+        may already have taken. A second reader would be a second place for the pins to
+        drift out of.
 
         Falls back to bare names only if the file cannot be read - an install without the
         pin is worse than none, so this is logged rather than silent."""
-        path = self.repo / self.CODE_INTEL_REQUIREMENTS
+        wanted = list(names)
+        # self.repo is None until the clone is resolved. Every caller runs after that step,
+        # but a reader that CANNOT read is already a handled outcome here, so treat an
+        # unresolved clone as one rather than letting it raise inside an optional step.
+        path = (self.repo / self.CODE_INTEL_REQUIREMENTS) if self.repo else None
         specs = []
         try:
-            for raw in path.read_text(encoding="utf-8").splitlines():
-                line = raw.split("#", 1)[0].strip()
-                if not line:
-                    continue
-                name = line.split(">")[0].split("<")[0].split("=")[0].strip()
-                if name in self.CODE_INTEL_PREFIXES:
-                    specs.append(line)
+            lines = path.read_text(encoding="utf-8").splitlines() if path else []
         except OSError:
-            specs = []
-        if len(specs) != len(self.CODE_INTEL_PREFIXES):
+            lines = []
+        for raw in lines:
+            line = raw.split("#", 1)[0].strip()
+            if not line:
+                continue
+            name = line.split(">")[0].split("<")[0].split("=")[0].split("!")[0].strip()
+            if name in wanted:
+                specs.append(line)
+        if len(specs) != len(wanted):
             self.say(
                 self.style.dim(
                     f"    could not read pins from {self.CODE_INTEL_REQUIREMENTS} - "
                     "installing unpinned names"
                 )
             )
-            return list(self.CODE_INTEL_PREFIXES)
+            return wanted
         return specs
+
+    def code_intel_specs(self) -> list:
+        """The pinned specs for the code-intelligence packages, from the requirements file."""
+        return self.requirement_specs(self.CODE_INTEL_PREFIXES)
 
     def osv_scanner_step(self) -> None:
         """Install the dependency scanner itself, BEFORE the database that feeds it.
@@ -3270,6 +3285,116 @@ class Installer:
             # route. The reviews simply carry on without dependency findings, as they did
             # before this step existed.
             self.step_skip("osv-scanner", "not installed - dependency findings stay off")
+
+    # The language-specific analysers, split by HOW they install rather than by language.
+    # pip package -> the command it provides: ast-grep-cli is the PyPI build of ast-grep and
+    # installs as `ast-grep` (and `sg`), which is the name scripts/check-review-tools.sh
+    # probes for - installing the package under its own name and probing for the other is
+    # exactly the kind of mismatch that leaves a tool "missing" after a successful install.
+    LANGUAGE_ANALYSER_PIP = (("bashate", "bashate"), ("ast-grep-cli", "ast-grep"))
+    # Published releases, fetched by install_release_tool - see the table beside it.
+    LANGUAGE_ANALYSER_BINARIES = ("gitleaks", "shfmt", "shellcheck")
+
+    def language_analysers_step(self) -> None:
+        """Install every language analyser that has a no-privilege path, and hint the rest.
+
+        WHY (live report, 2026-09-12, the same photo that put the scanner step in). The full
+        check listed nine language-specific analysers as "not installed" and the engagement
+        banner told the user findings in those languages would be inferred rather than
+        measured. What it offered was a list of apt/brew/go/npm commands - on a machine with
+        no package manager, no Go toolchain and no admin rights, which is the machine this
+        team is aimed at. Three of them are ordinary release binaries and two are ordinary
+        wheels, so five of the nine were never a privilege problem at all: they were a
+        nobody-fetched-them problem.
+
+        WHAT IS DELIBERATELY LEFT ALONE. scalafmt, checkstyle, pmd, spotbugs and pwsh need a
+        JDK, coursier or PowerShell - a runtime, not a tool - and installing one of those on
+        someone's corporate machine is a decision, not a convenience. They stay hints, and
+        they only ever matter to a reviewer of that language.
+
+        SOFT, like the scanner and code intelligence. Every tool here is optional; the step
+        reports what happened per tool and never fails the install.
+        """
+        self.step_intro(
+            "The language-specific analysers. Each one is used only when the reviewed code "
+            "has that language, so a missing one costs measured findings there - the review "
+            "still runs, it just infers where it could have measured. I install the ones "
+            "that need no admin rights: bashate and ast-grep by pip, gitleaks, shfmt and "
+            f"shellcheck as release binaries into {release_bin_dir()}, and eslint and tsc "
+            "by npm when node is already here. scalafmt, checkstyle, pmd, spotbugs and pwsh "
+            "need a JDK, coursier or PowerShell, so those stay hints - they matter only if "
+            "you review that language."
+        )
+        self._language_analysers_by_pip()
+        for name in self.LANGUAGE_ANALYSER_BINARIES:
+            self._language_analyser_binary(name)
+        status, detail = install_npm_tools(self.style, self.marks, demo=self.demo)
+        if status == "ok":
+            self.step_ok("eslint, tsc", detail)
+        else:
+            # Not an error: node is a runtime this installer does not install, and a global
+            # npm install can be refused by permissions or a proxy. One line, then on.
+            self.step_skip("eslint, tsc", detail)
+        if not self.demo:
+            # A dry run writes nothing, and deleting the cached tool inventory is a write.
+            self._invalidate_tool_cache()
+
+    def _language_analysers_by_pip(self) -> None:
+        """bashate and ast-grep, one pip call, one outcome line each.
+
+        ONE pip call rather than one per package (and rather than a second `pip install -r`
+        of the whole file): the pins come from requirements-review.txt through the same
+        reader the code-intelligence step uses, so there is still exactly one place where
+        these versions are stated.
+        """
+        present = {binary: shutil.which(binary) for _pkg, binary in self.LANGUAGE_ANALYSER_PIP}
+        if self.demo:
+            for package, binary in self.LANGUAGE_ANALYSER_PIP:
+                self.step_ok(binary, f"would pip install {package} (demo)")
+            return
+        missing = [package for package, binary in self.LANGUAGE_ANALYSER_PIP if not present[binary]]
+        if not missing:
+            for _package, binary in self.LANGUAGE_ANALYSER_PIP:
+                self.step_ok(binary, f"already installed ({present[binary]})")
+            return
+        proc = run_cmd(
+            [sys.executable, "-m", "pip", "install", "--quiet", *self.requirement_specs(missing)],
+            timeout=600,
+        )
+        if proc.returncode != 0:
+            # The same two failures the code-intelligence step tells apart, for the same
+            # reason: "pip refused" and "no index reachable" mean different things to a
+            # reader, and neither is fatal here.
+            reason = "pip could not install them"
+            blob = ((proc.stderr or "") + (proc.stdout or "")).lower()
+            if "externally-managed" in blob or "pep 668" in blob:
+                reason = "this Python is externally managed (PEP 668)"
+            elif "network" in blob or "resolve" in blob or "timed out" in blob:
+                reason = "no package index reachable"
+        for package, binary in self.LANGUAGE_ANALYSER_PIP:
+            if present[binary]:
+                self.step_ok(binary, f"already installed ({present[binary]})")
+            elif proc.returncode == 0:
+                self.step_ok(binary, f"installed by pip ({package})")
+            else:
+                self.step_skip(binary, f"not installed - {reason}")
+
+    def _language_analyser_binary(self, name: str) -> None:
+        """One downloaded analyser, one outcome line. Never raises."""
+        spec = _RELEASE_TOOLS[name]
+        found = shutil.which(name)
+        if found:
+            self.step_ok(name, f"already installed ({found})")
+            return
+        path = install_release_tool(spec, self.style, self.marks, demo=self.demo)
+        if self.demo:
+            self.step_ok(name, "would download and install the release binary (demo)")
+        elif path:
+            self.step_ok(name, f"installed at {path}")
+        else:
+            # install_release_tool has already said why and named the manual route. Reviews
+            # carry on without this analyser, exactly as they did before the step existed.
+            self.step_skip(name, "not installed - findings in that language stay inferred")
 
     def vuln_db_step(self) -> None:
         """Top up the offline vulnerability database, in the flow rather than off a menu.
@@ -4876,6 +5001,10 @@ class Installer:
                 # the machine that reported this - so filling a database for a tool that is
                 # not there was the one order these two could not run in.
                 ("Dependency scanner", self.osv_scanner_step),
+                # And the language analysers with it (2026-09-12): the same run that keeps
+                # the scanner current is the one that picks up a tool the user did not have
+                # the last time round. Every one of them is a no-op once it is installed.
+                ("Language analysers", self.language_analysers_step),
                 ("Vulnerability database", self.vuln_db_step),
             ]
         if self.subset == "statusline":
@@ -4965,6 +5094,9 @@ class Installer:
             # exists (2026-09-12 live report - it skipped with "nothing to fill" while the
             # diagnostic reported "osv-scanner: not installed").
             ("Dependency scanner (optional)", self.osv_scanner_step),
+            # Straight after the scanner, because it is the same job done the same way: the
+            # tools a review needs, fetched rather than listed as commands to run by hand.
+            ("Language analysers (optional)", self.language_analysers_step),
             ("Vulnerability database (optional)", self.vuln_db_step),
             ("Claude Code marketplace", self.marketplace),
             (lambda: "Plugin " + ("update" if self.mode == "update" else "install"), self.plugin),
@@ -8292,6 +8424,11 @@ def probe_language_analysers(repo_root: Path):
     measured findings in that language, never the review. Tree-sitter does not replace
     them - it gives exact symbols and line ranges, it finds no bugs. Yields (name, status,
     detail) with status OK or SKIP, never ERROR: absence is information, not a fault.
+
+    The detail text is the registry's own install hint, which is why updating that file is
+    what changed these lines on 2026-09-12: bashate, ast-grep, shellcheck, eslint and tsc no
+    longer read as apt/brew/go/npm homework, because the installer's Language analysers step
+    now fetches them. The ones that still need a JDK, coursier or PowerShell still say so.
     """
     covered = {name for name, *_ in _TOOL_OUTPUT_CHECKS}
     registry = repo_root / "scripts" / "check-review-tools.sh"
@@ -9635,7 +9772,7 @@ def run_relocate_to_vsit(style: Style, mark_map: dict) -> int:
     return 0 if moved == len(plan) else 1
 
 
-# --- osv-scanner itself ----------------------------------------------------------------
+# --- the release binaries the installer fetches ------------------------------------------
 #
 # WHY THE INSTALLER FETCHES A BINARY (live report with a photo, corporate Windows laptop,
 # 2026-09-12). The full check showed every analyser clean and "osv-scanner: not installed",
@@ -9646,18 +9783,32 @@ def run_relocate_to_vsit(style: Style, mark_map: dict) -> int:
 # the gap looked like good news. Installing the database for a scanner that is not there
 # was never going to help.
 #
-# The official releases are single static binaries, so this is a download and a chmod. It
-# stays SOFT everywhere - no network, a refusing proxy, an unknown CPU are all normal, and
-# the run carries on exactly as it did before.
+# WHY IT IS ONE MECHANISM AND A TABLE (owner, 2026-09-12, on the same report: the full check
+# also listed every language analyser as "not installed"). gitleaks, shfmt and shellcheck
+# are the same shape as osv-scanner - a published release, one binary, no admin rights - and
+# they were left as apt/brew/go hints for as long as nobody noticed that the machines that
+# need them most have none of those three. Only the asset NAME differs per tool, so that is
+# the only per-tool part below: the download, the extraction, the verify, the PATH line and
+# the soft failure are shared, and a fix to any of them is a fix for all four.
+#
+# It stays SOFT everywhere - no network, a refusing proxy, an unknown CPU are all normal,
+# and the run carries on exactly as it did before.
+
+# Still its own name because the osv-scanner step's intro prints it: osv-scanner's assets
+# carry no version, so this "latest" redirect is a real download URL, not a landing page.
 _OSV_RELEASE_BASE = "https://github.com/google/osv-scanner/releases/latest/download/"
 
-# sys.platform -> the name Google builds under. Anything else has no asset, which is a
-# clean "cannot", not an error.
-_OSV_PLATFORMS = {"linux": "linux", "darwin": "darwin", "win32": "windows"}
+# For the three whose asset names DO carry the version, which therefore cannot be built
+# until the version is known. One small JSON read answers it.
+_GITHUB_LATEST_API = "https://api.github.com/repos/{repo}/releases/latest"
+
+# sys.platform -> the name these projects build under. Anything else has no asset, which is
+# a clean "cannot", not an error.
+_RELEASE_PLATFORMS = {"linux": "linux", "darwin": "darwin", "win32": "windows"}
 
 # platform.machine() answers differently per OS for the same silicon (x86_64 on Linux,
 # AMD64 on Windows), so the map is by what the machine SAYS, lowercased.
-_OSV_ARCHES = {
+_RELEASE_ARCHES = {
     "x86_64": "amd64",
     "amd64": "amd64",
     "x64": "amd64",
@@ -9666,30 +9817,116 @@ _OSV_ARCHES = {
 }
 
 
-def osv_asset_name(platform_name: Optional[str] = None, machine: Optional[str] = None) -> str:
-    """The release asset for this machine, or "" when there is no build for it.
+def _release_platform_arch(
+    platform_name: Optional[str] = None, machine: Optional[str] = None
+) -> tuple:
+    """(platform, architecture) in the generic names the asset builders below take, or
+    ("", "") when no project publishes for this machine.
 
     Both arguments are injectable because the interesting cases are the ones this developer
     machine is not: an ARM Mac, a Windows laptop, a CPU nobody publishes a binary for.
     """
     import platform as _platform  # stdlib, imported here to keep module import cheap
 
-    plat = _OSV_PLATFORMS.get((platform_name or sys.platform).lower())
+    raw = (platform_name or sys.platform).lower()
+    plat = _RELEASE_PLATFORMS.get(raw)
     if not plat:
         # sys.platform is "linux" on modern CPython but "linux2" on older ones, and some
         # BSDs report their own name while running Linux binaries. Prefix-match rather than
         # refuse on a string that plainly says Linux.
-        for key, value in _OSV_PLATFORMS.items():
-            if (platform_name or sys.platform).lower().startswith(key):
+        for key, value in _RELEASE_PLATFORMS.items():
+            if raw.startswith(key):
                 plat = value
                 break
-    arch = _OSV_ARCHES.get((machine if machine is not None else _platform.machine()).lower())
+    arch = _RELEASE_ARCHES.get((machine if machine is not None else _platform.machine()).lower())
     if not plat or not arch:
-        return ""
+        return ("", "")
+    return (plat, arch)
+
+
+def _osv_asset(plat: str, arch: str, version: str) -> str:
+    """osv-scanner_linux_amd64, osv-scanner_windows_amd64.exe - no version in the name,
+    which is what lets it use the /releases/latest/download/ redirect."""
     return f"osv-scanner_{plat}_{arch}" + (".exe" if plat == "windows" else "")
 
 
-def osv_bin_dir() -> Path:
+# gitleaks publishes x64 where everyone else says amd64, and ships the binary inside an
+# archive rather than bare.
+_GITLEAKS_ARCHES = {"amd64": "x64", "arm64": "arm64"}
+
+
+def _gitleaks_asset(plat: str, arch: str, version: str) -> str:
+    """gitleaks_8.28.0_linux_x64.tar.gz, gitleaks_8.28.0_windows_x64.zip."""
+    arch = _GITLEAKS_ARCHES.get(arch, "")
+    if not arch or not version:
+        return ""
+    return f"gitleaks_{version}_{plat}_{arch}." + ("zip" if plat == "windows" else "tar.gz")
+
+
+def _shfmt_asset(plat: str, arch: str, version: str) -> str:
+    """shfmt_v3.12.0_linux_amd64 - a bare binary, version in the name, no archive."""
+    if not version:
+        return ""
+    return f"shfmt_v{version}_{plat}_{arch}" + (".exe" if plat == "windows" else "")
+
+
+# shellcheck names the CPU the way uname does, and publishes exactly one Windows build (a
+# zip with no platform or architecture in its name at all).
+_SHELLCHECK_ARCHES = {"amd64": "x86_64", "arm64": "aarch64"}
+
+
+def _shellcheck_asset(plat: str, arch: str, version: str) -> str:
+    """shellcheck-v0.11.0.linux.x86_64.tar.xz, shellcheck-v0.11.0.zip on Windows."""
+    if not version:
+        return ""
+    if plat == "windows":
+        return f"shellcheck-v{version}.zip"
+    cpu = _SHELLCHECK_ARCHES.get(arch, "")
+    return f"shellcheck-v{version}.{plat}.{cpu}.tar.xz" if cpu else ""
+
+
+class ReleaseTool(NamedTuple):
+    """One tool the installer downloads.
+
+    name         the binary, the PATH name and the key in _RELEASE_TOOLS
+    repo         owner/name on github.com
+    asset        (platform, arch, version) -> the asset file name, "" when unpublished
+    versioned    does the asset name carry the version, so the latest one must be resolved
+                 from the API before the URL can be built?
+    version_argv what proves the downloaded file actually runs
+    """
+
+    name: str
+    repo: str
+    asset: Callable[[str, str, str], str]
+    versioned: bool = True
+    version_argv: tuple = ("--version",)
+
+
+_RELEASE_TOOLS = {
+    "osv-scanner": ReleaseTool("osv-scanner", "google/osv-scanner", _osv_asset, versioned=False),
+    # `gitleaks version`, not `gitleaks --version` (2026-09-12): it is a cobra CLI that
+    # defines a version SUBCOMMAND and no such flag, so --version would exit non-zero and a
+    # perfectly good download would be reported as a binary that will not run.
+    "gitleaks": ReleaseTool(
+        "gitleaks", "gitleaks/gitleaks", _gitleaks_asset, version_argv=("version",)
+    ),
+    "shfmt": ReleaseTool("shfmt", "mvdan/sh", _shfmt_asset),
+    "shellcheck": ReleaseTool("shellcheck", "koalaman/shellcheck", _shellcheck_asset),
+}
+
+
+def osv_asset_name(platform_name: Optional[str] = None, machine: Optional[str] = None) -> str:
+    """The osv-scanner release asset for this machine, or "" when there is no build for it.
+
+    A thin wrapper over the shared machinery, kept because the scanner's own step and the
+    database menu item both talk about "the asset" by this name.
+    """
+    plat, arch = _release_platform_arch(platform_name, machine)
+    return _osv_asset(plat, arch, "") if plat else ""
+
+
+def release_bin_dir() -> Path:
     """~/.local/bin, on every platform including Windows.
 
     NOT %APPDATA% and NOT Program Files. On the owner's corporate Windows boxes group
@@ -9701,10 +9938,19 @@ def osv_bin_dir() -> Path:
     return Path.home() / ".local" / "bin"
 
 
+def release_bin_path(name: str) -> Path:
+    """Where this installer puts the binary called `name`."""
+    return release_bin_dir() / (f"{name}.exe" if sys.platform == "win32" else name)
+
+
+def osv_bin_dir() -> Path:
+    """Kept as its own door: every osv-scanner caller reads better naming the scanner."""
+    return release_bin_dir()
+
+
 def osv_bin_path() -> Path:
-    """Where this installer puts the binary."""
-    name = "osv-scanner.exe" if sys.platform == "win32" else "osv-scanner"
-    return osv_bin_dir() / name
+    """Where this installer puts the scanner."""
+    return release_bin_path("osv-scanner")
 
 
 def _on_path(directory: Path) -> bool:
@@ -9788,7 +10034,7 @@ def ensure_dir_on_path(style: Style, directory: Path, demo: bool = False) -> lis
         stripped, _removed = _strip_stamped_definitions(existing, _PATH_STAMP_ANY_RE)
         try:
             rc_path.write_text(
-                stripped + f"\n# Added by install_helper.py (osv-scanner)\n{line}\n",
+                stripped + f"\n# Added by install_helper.py (downloaded tools)\n{line}\n",
                 encoding="utf-8",
             )
         except OSError as exc:
@@ -9801,20 +10047,134 @@ def ensure_dir_on_path(style: Style, directory: Path, demo: bool = False) -> lis
     return written
 
 
-def _osv_manual_route(style: Style, asset: str) -> None:
-    """What to do by hand. Named once so the four ways this can fail say the same thing."""
-    print(
-        style.dim(f"    Fetch it on a connected machine: {_OSV_RELEASE_BASE}{asset or '<asset>'}")
+def _release_page(spec: "ReleaseTool") -> str:
+    """The human page for a tool, used when there is no asset URL to name."""
+    return f"https://github.com/{spec.repo}/releases/latest"
+
+
+def _release_download_url(spec: "ReleaseTool", asset: str, version: str) -> str:
+    """The direct URL for one asset. Versioned projects tag their download paths; the
+    unversioned one uses github's /latest/download/ redirect."""
+    if not spec.versioned:
+        return f"https://github.com/{spec.repo}/releases/latest/download/{asset}"
+    return f"https://github.com/{spec.repo}/releases/download/v{version}/{asset}"
+
+
+def _release_manual_route(style: Style, spec: "ReleaseTool", url: str, target: Path) -> None:
+    """What to do by hand. Named once so every way this can fail says the same thing."""
+    print(style.dim(f"    Fetch it on a connected machine: {url or _release_page(spec)}"))
+    print(style.dim(f"    then put it at {target} (chmod 755 on macOS/Linux)."))
+
+
+def latest_release_version(repo: str, timeout: int = 30) -> str:
+    """The newest published version of `repo`, with no leading "v", or "" when it cannot be
+    resolved.
+
+    WHY THE API AT ALL. github's /releases/latest/download/<asset> only works when the
+    asset name is stable, and gitleaks, shfmt and shellcheck all stamp the version into the
+    file name - so the name cannot be built until the version is known. One JSON read
+    answers it, through the same default opener (and therefore the same HTTPS_PROXY) every
+    other fetch in this file uses.
+
+    NEVER RAISES. No network, a proxy that refuses, a rate-limited API and a body that is
+    not JSON are all the same normal answer here: "", which the caller turns into one dim
+    line and a manual route.
+    """
+    import urllib.request  # stdlib; honours HTTPS_PROXY through the default opener
+
+    request = urllib.request.Request(
+        _GITHUB_LATEST_API.format(repo=repo),
+        headers={"Accept": "application/vnd.github+json", "User-Agent": "virt-surv-installer"},
     )
-    print(style.dim(f"    then put it at {osv_bin_path()} (chmod 755 on macOS/Linux)."))
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec B310 - fixed https:// literal above
+            payload = json.loads(response.read().decode("utf-8", "replace"))
+    except Exception:  # noqa: BLE001 - every failure here is a normal state
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    return str(payload.get("tag_name") or payload.get("name") or "").strip().lstrip("vV")
 
 
-def install_osv_scanner(style: Style, mark_map: dict, demo: bool = False) -> Optional[Path]:
-    """Download the osv-scanner release binary into ~/.local/bin. Returns its path, or None.
+# The archive shapes the four tools ship in. A name that matches none of these is a bare
+# binary, which is the whole download.
+_ARCHIVE_SUFFIXES = (".tar.gz", ".tgz", ".tar.xz", ".zip")
 
-    ONE FUNCTION, EVERY DOOR. The install flow's step, the update flow's step and the
-    Advanced menu's database item all come through here, so "install the scanner" means the
-    same thing and reports the same way wherever it is asked for.
+
+def _archive_suffix(asset: str) -> str:
+    """ "" for a bare binary, otherwise the suffix that says how to open it."""
+    for suffix in _ARCHIVE_SUFFIXES:
+        if asset.lower().endswith(suffix):
+            return suffix
+    return ""
+
+
+def _pick_archive_member(entries: list, wanted: set):
+    """The one binary inside an archive, from (basename, member) pairs.
+
+    By NAME first - shellcheck's tarball carries its binary at shellcheck-v0.11.0/shellcheck
+    and gitleaks' carries a README beside it - and only then by "there is exactly one file
+    in here". Returns None rather than guessing: a wrong guess installs a LICENSE file
+    under the name of an analyser, which shutil.which would then happily find.
+    """
+    for base, member in entries:
+        if base in wanted:
+            return member
+    return entries[0][1] if len(entries) == 1 else None
+
+
+def _extract_release_binary(archive: Path, binary: str, target: Path, suffix: str = "") -> bool:
+    """Copy the one binary out of a downloaded archive into `target`. True when it found it.
+
+    `suffix` says how to open it, because the caller downloads into a temp file whose name
+    carries nothing: deriving the format from the file on disk would read every archive as
+    a gzip tar, and shellcheck ships .tar.xz while the Windows builds ship .zip.
+
+    NEVER extractall. The member name is matched, never used as a path, so a crafted
+    archive cannot write outside the destination (zip-slip / tar path traversal): the bytes
+    are streamed from the member straight into a file we named ourselves.
+    """
+    import tarfile  # stdlib, imported here to keep module import cheap
+    import zipfile
+
+    wanted = {binary.lower(), f"{binary.lower()}.exe"}
+    suffix = suffix or _archive_suffix(archive.name)
+    if suffix == ".zip":
+        with zipfile.ZipFile(archive) as zf:
+            entries = [
+                (m.filename.rsplit("/", 1)[-1].lower(), m) for m in zf.infolist() if not m.is_dir()
+            ]
+            member = _pick_archive_member(entries, wanted)
+            if member is None:
+                return False
+            with zf.open(member) as src, open(target, "wb") as out:
+                shutil.copyfileobj(src, out)
+        return True
+    # .tar.xz decompresses through the stdlib's lzma - no external tooling, which is the
+    # point on a machine that has no package manager to offer one.
+    mode = "r:xz" if suffix == ".tar.xz" else "r:gz"
+    with tarfile.open(archive, mode) as tf:
+        entries = [(m.name.rsplit("/", 1)[-1].lower(), m) for m in tf.getmembers() if m.isfile()]
+        member = _pick_archive_member(entries, wanted)
+        if member is None:
+            return False
+        src = tf.extractfile(member)
+        if src is None:
+            return False
+        with src, open(target, "wb") as out:
+            shutil.copyfileobj(src, out)
+    return True
+
+
+def install_release_tool(
+    spec: "ReleaseTool", style: Style, mark_map: dict, demo: bool = False
+) -> Optional[Path]:
+    """Download one release binary into ~/.local/bin. Returns its path, or None.
+
+    ONE FUNCTION, EVERY DOOR AND EVERY TOOL. The install flow's steps, the update flow's
+    steps and the Advanced menu's database item all come through here, so "install the
+    scanner" and "install shellcheck" mean the same thing and report the same way wherever
+    they are asked for.
 
     ASKS NOTHING (owner, 2026-09-12: "the user must not have to do anything by hand"). It is
     treated like every other tool the installer sets up: the caller's step_intro says what is
@@ -9823,58 +10183,90 @@ def install_osv_scanner(style: Style, mark_map: dict, demo: bool = False) -> Opt
     menu asks on a screen or not at all (test_no_menu_option_asks_only_at_a_prompt).
 
     FINISHES USABLE. A binary in a folder nothing searches is not an installed tool, so the
-    directory goes on PATH - this process first, so the database step that follows can see
-    it, then the shell profile for every future terminal.
+    directory goes on PATH - this process first, so the steps that follow can see it, then
+    the shell profile for every future terminal.
 
     SOFT BY CONTRACT. Every failure - no network, a proxy that refuses, an unknown CPU, a
-    read-only home - prints one line naming the manual route and returns None. It must
-    never fail an install: the scanner is optional, and the run is still worth having
-    without it.
+    read-only home, an archive with no binary in it - prints one line naming the manual
+    route and returns None. It must never fail an install: these tools are optional, and
+    the run is still worth having without them.
 
     urllib's default opener honours HTTPS_PROXY, which is the whole reason this is stdlib
     urllib rather than a hand-rolled socket: on the machines that need it most, the proxy is
     the only way out.
     """
     ok, warn = mark_map.get("ok") or "OK", mark_map.get("warn") or "!"
-    found = shutil.which("osv-scanner")
+    found = shutil.which(spec.name)
     if found:
-        print(f"{ok} osv-scanner already installed ({found})")
+        print(f"{ok} {spec.name} already installed ({found})")
         return Path(found)
-    if osv_bin_path().is_file():
+    target = release_bin_path(spec.name)
+    if target.is_file():
         # There, but invisible to every later `shutil.which`. Downloading a second copy over
         # the top would not fix that - the PATH is what is missing, so fix the PATH.
-        print(f"{ok} osv-scanner is already at {osv_bin_path()}")
-        ensure_dir_on_path(style, osv_bin_dir(), demo=demo)
-        return osv_bin_path()
-    asset = osv_asset_name()
+        print(f"{ok} {spec.name} is already at {target}")
+        ensure_dir_on_path(style, release_bin_dir(), demo=demo)
+        return target
+    plat, arch = _release_platform_arch()
+    if not plat:
+        import platform as _platform
+
+        print(style.dim(f"  {warn} no {spec.name} build for {sys.platform}/{_platform.machine()}"))
+        _release_manual_route(style, spec, "", target)
+        return None
+    if demo:
+        # The version is deliberately NOT resolved here: a dry run reaches the network for
+        # nothing at all, so the URL is shown in the shape it will take.
+        shape = _release_download_url(spec, spec.asset(plat, arch, "<latest>"), "<latest>")
+        print(style.dim(f"    would download {shape}"))
+        print(style.dim(f"    would install it at {target} (demo - nothing written)"))
+        if not _on_path(release_bin_dir()):
+            ensure_dir_on_path(style, release_bin_dir(), demo=True)
+        return None
+    version = ""
+    if spec.versioned:
+        version = latest_release_version(spec.repo)
+        if not version:
+            print(
+                style.dim(
+                    f"  {warn} could not download {spec.name}: the latest release could not "
+                    "be resolved"
+                )
+            )
+            _release_manual_route(style, spec, "", target)
+            return None
+    asset = spec.asset(plat, arch, version)
     if not asset:
         import platform as _platform
 
-        print(style.dim(f"  {warn} no osv-scanner build for {sys.platform}/{_platform.machine()}"))
-        _osv_manual_route(style, "")
+        print(style.dim(f"  {warn} no {spec.name} build for {sys.platform}/{_platform.machine()}"))
+        _release_manual_route(style, spec, "", target)
         return None
-    url = _OSV_RELEASE_BASE + asset
-    target = osv_bin_path()
-    if demo:
-        print(style.dim(f"    would download {url}"))
-        print(style.dim(f"    would install it at {target} (demo - nothing written)"))
-        if not _on_path(osv_bin_dir()):
-            ensure_dir_on_path(style, osv_bin_dir(), demo=True)
-        return None
+    url = _release_download_url(spec, asset, version)
     print(style.dim(f"  Downloading {url}"))
     import urllib.request  # stdlib; honours HTTPS_PROXY through the default opener
 
     tmp_path = None
+    archive_path = None
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         # Into a temp file beside the target, then one rename: a half-written binary that
-        # is already called osv-scanner is worse than no binary at all, because shutil.which
+        # is already called gitleaks is worse than no binary at all, because shutil.which
         # would find it and every later review would run it.
-        with urllib.request.urlopen(url, timeout=120) as response:  # nosec B310 - fixed https:// literal above
-            handle, tmp_name = tempfile.mkstemp(dir=str(target.parent), prefix=".osv-scanner-")
+        with urllib.request.urlopen(url, timeout=120) as response:  # nosec B310 - fixed https:// literal, built from the table above
+            handle, tmp_name = tempfile.mkstemp(dir=str(target.parent), prefix=f".{spec.name}-")
             tmp_path = Path(tmp_name)
             with os.fdopen(handle, "wb") as out:
                 shutil.copyfileobj(response, out)
+        suffix = _archive_suffix(asset)
+        if suffix:
+            archive_path, tmp_path = tmp_path, None
+            handle, tmp_name = tempfile.mkstemp(dir=str(target.parent), prefix=f".{spec.name}-")
+            os.close(handle)
+            tmp_path = Path(tmp_name)
+            # The ASSET's suffix, not the temp file's: the temp file has no name to read.
+            if not _extract_release_binary(archive_path, spec.name, tmp_path, suffix):
+                raise RuntimeError(f"no {spec.name} binary inside {asset}")
         if os.name != "nt":
             os.chmod(tmp_path, 0o755)  # nosec B103 - an executable this user is meant to run
         os.replace(str(tmp_path), str(target))
@@ -9883,26 +10275,72 @@ def install_osv_scanner(style: Style, mark_map: dict, demo: bool = False) -> Opt
         # THE ONE TIME THE USER IS GIVEN AN INSTRUCTION (owner, 2026-09-12). No network, a
         # proxy that refuses, an air-gapped box: say what was attempted, from where, and
         # where it was going, then carry on. An optional analyser must never fail an install.
-        print(style.dim(f"  {warn} could not download osv-scanner: {str(exc)[:120]}"))
-        _osv_manual_route(style, asset)
+        print(style.dim(f"  {warn} could not download {spec.name}: {str(exc)[:120]}"))
+        _release_manual_route(style, spec, url, target)
         return None
     finally:
-        if tmp_path is not None:
-            try:
-                tmp_path.unlink()
-            except OSError:
-                pass
-    proc = run_cmd([str(target), "--version"], timeout=30)
+        for leftover in (tmp_path, archive_path):
+            if leftover is not None:
+                try:
+                    leftover.unlink()
+                except OSError:
+                    pass
+    proc = run_cmd([str(target), *spec.version_argv], timeout=30)
     if proc.returncode != 0:
         print(style.dim(f"  {warn} downloaded, but {target} would not run"))
         detail = (proc.stderr or proc.stdout or "").strip().splitlines()
         if detail:
             print(style.dim("    " + detail[-1][:160]))
         return None
-    version = (proc.stdout or "").strip().splitlines()
-    print(f"{ok} osv-scanner installed at {target}" + (f" ({version[0][:60]})" if version else ""))
-    ensure_dir_on_path(style, osv_bin_dir(), demo=False)
+    reported = (proc.stdout or "").strip().splitlines()
+    print(
+        f"{ok} {spec.name} installed at {target}" + (f" ({reported[0][:60]})" if reported else "")
+    )
+    ensure_dir_on_path(style, release_bin_dir(), demo=False)
     return target
+
+
+def install_osv_scanner(style: Style, mark_map: dict, demo: bool = False) -> Optional[Path]:
+    """Download the osv-scanner release binary into ~/.local/bin. Returns its path, or None.
+
+    The scanner's own door into the shared installer above - kept because three callers
+    name it, and because the scanner is the one release binary that is not a language
+    analyser: it is fetched a step earlier, with its offline database.
+    """
+    return install_release_tool(_RELEASE_TOOLS["osv-scanner"], style, mark_map, demo=demo)
+
+
+# The node-based analysers, and the ONE condition on them: node is already here. Installing
+# node itself is a different kind of change to make to someone's machine - a runtime, not a
+# tool - and on a corporate box it is usually a policy decision rather than a download. So
+# npm is used when present and named as the reason when it is not (owner, 2026-09-12: the
+# user is told something only when the environment itself refuses).
+_NPM_TOOLS = (("eslint", "eslint"), ("typescript", "tsc"))
+
+
+def install_npm_tools(style: Style, mark_map: dict, demo: bool = False) -> tuple:
+    """Install eslint and tsc through npm. Returns (status, detail) for one step line.
+
+    Status is "ok" or "skip" - never a failure. A refused global install (no permission to
+    write into the node prefix, a proxy the registry is behind) is one line and a review
+    that infers TypeScript findings instead of measuring them, which is exactly where the
+    run was before this step existed.
+    """
+    npm = shutil.which("npm")
+    if npm is None:
+        return ("skip", "node/npm is not present, so eslint and tsc stay hints")
+    wanted = [package for package, binary in _NPM_TOOLS if not shutil.which(binary)]
+    if not wanted:
+        return ("ok", "eslint and tsc already installed")
+    if demo:
+        return ("ok", f"would run npm install -g {' '.join(wanted)} (demo)")
+    proc = run_cmd([npm, "install", "-g", *wanted], timeout=600)
+    if proc.returncode != 0:
+        tail = ((proc.stderr or proc.stdout or "").strip().splitlines() or ["npm install failed"])[
+            -1
+        ]
+        return ("skip", f"npm install -g {' '.join(wanted)} failed - {tail[:80]}")
+    return ("ok", f"installed by npm ({', '.join(wanted)})")
 
 
 def osv_db_dir() -> Optional[Path]:

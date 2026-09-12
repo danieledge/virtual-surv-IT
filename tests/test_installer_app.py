@@ -705,10 +705,12 @@ def test_the_update_decides_before_it_runs_not_during(ptk, monkeypatch):
     # set of steps than the one that runs.
     assert "Preflight checks" in captured["titles"]
     assert any("Sync to origin" in t for t in captured["titles"])
-    # Nine since 2026-09-12: the dependency scanner joins the database it feeds. The
-    # database step could do nothing without it (live report: it skipped with "nothing to
-    # fill" on a machine whose diagnostic said "osv-scanner: not installed").
-    assert len(captured["titles"]) == 9, "the update subset is nine steps, deliberately"
+    # Ten since 2026-09-12: the dependency scanner joins the database it feeds (the
+    # database step could do nothing without it - live report: it skipped with "nothing to
+    # fill" on a machine whose diagnostic said "osv-scanner: not installed"), and the
+    # language analysers follow it, installed the same way rather than left as hints.
+    assert len(captured["titles"]) == 10, "the update subset is ten steps, deliberately"
+    assert "Language analysers" in captured["titles"]
     assert captured["titles"].index("Dependency scanner") < captured["titles"].index(
         "Vulnerability database"
     ), "the scanner must be installed before the database it fills"

@@ -959,3 +959,290 @@ def test_an_unreadable_cache_dir_does_not_disable_a_working_tier(monkeypatch):
         raising=False,
     )
     assert rs._ts_grammar_available("python") is True
+
+
+# ------------- tree-sitter import edges (owner's request, 2026-09-12)
+#
+# "Does the framework enforce use of tree-sitter if it's present, to help build the code map?
+# I want to make sure it's used wherever possible." It did for symbols and not for the
+# reference graph: Python got real import edges from stdlib ast and every other language got
+# none, so PageRank ranked a Java or Scala estate uniformly and the map's ordering degraded to
+# alphabetical on exactly the codebases it exists for. These tests pin the edges per language,
+# the two resolution styles (JVM package path, relative JS/TS specifier), and the two
+# properties that must survive: no grammar means no edges rather than a failure, and the
+# Python path is exactly what it was.
+
+
+def _grammar_ready(suffix: str) -> bool:
+    """Is a cached grammar available for this extension HERE? Never a download - this is the
+    same refusal _ts_parser makes (see _ts_grammar_available)."""
+    return rs._ts_parser(Path(f"probe{suffix}")) is not None
+
+
+def _require_grammar(suffix: str) -> None:
+    if not _grammar_ready(suffix):
+        pytest.skip(
+            f"no cached tree-sitter grammar for '{suffix}' on this host - warm it with the "
+            "installer's Code intelligence step to run this case"
+        )
+
+
+def _write(root: Path, rel: str, body: str) -> None:
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(body, encoding="utf-8")
+
+
+_EDGE_CASES = [
+    (
+        ".java",
+        "src/com/acme/Engine.java",
+        "package com.acme;\nimport com.acme.rules.ScoreRule;\npublic class Engine {}\n",
+    ),
+    (
+        ".scala",
+        "src/com/acme/Pipe.scala",
+        "package com.acme\nimport com.acme.rules.ScoreRule\nclass Pipe\n",
+    ),
+    (
+        ".kt",
+        "src/com/acme/Feed.kt",
+        "package com.acme\nimport com.acme.rules.ScoreRule as R\nclass Feed\n",
+    ),
+]
+
+
+@pytest.mark.parametrize("suffix,source_rel,body", _EDGE_CASES)
+def test_jvm_imports_become_edges(tmp_path, suffix, source_rel, body):
+    """Java, Scala and Kotlin all resolve a fully-qualified import to the file that holds the
+    type, by package path."""
+    _require_grammar(suffix)
+    target = "src/com/acme/rules/ScoreRule.java"
+    _write(tmp_path, target, "package com.acme.rules;\npublic class ScoreRule {}\n")
+    _write(tmp_path, source_rel, body)
+
+    graph = build_reference_graph(tmp_path, [source_rel, target])
+    assert graph[source_rel] == {target}, f"{suffix} contributed no edge"
+
+
+def test_javascript_and_typescript_imports_become_edges(tmp_path):
+    """The other half of the five: relative specifiers, `require`, and a re-export."""
+    for suffix in (".ts", ".js"):
+        _require_grammar(suffix)
+    _write(tmp_path, "web/a.ts", "export const A = 1;\n")
+    _write(tmp_path, "web/b.js", "module.exports = 2;\n")
+    _write(
+        tmp_path,
+        "web/app.ts",
+        "import { A } from './a';\n"
+        "const b = require('./b');\n"
+        "export { A } from './a';\n"
+        "import react from 'react';\n",
+    )
+    _write(tmp_path, "web/widget.js", "const b = require('./b');\n")
+
+    files = ["web/a.ts", "web/app.ts", "web/b.js", "web/widget.js"]
+    graph = build_reference_graph(tmp_path, files)
+    assert graph["web/app.ts"] == {"web/a.ts", "web/b.js"}
+    assert graph["web/widget.js"] == {"web/b.js"}, "require() is an edge, not just `import`"
+
+
+def test_a_bare_package_specifier_is_not_an_edge(tmp_path):
+    """`react` is a dependency, not a file in this inventory. Inventing an edge for it would
+    put a file that does not exist into the ranking."""
+    _require_grammar(".ts")
+    _write(tmp_path, "web/app.ts", "import react from 'react';\nimport x from '@scope/pkg';\n")
+    graph = build_reference_graph(tmp_path, ["web/app.ts"])
+    assert graph["web/app.ts"] == set()
+
+
+def test_relative_specifiers_resolve_with_without_and_through_index(tmp_path):
+    """The three forms a JS/TS codebase actually writes: an extensionless specifier, one that
+    names the file outright, and a directory that means its index file. Plus `../`, which is
+    how a dashboard reaches its shared lib."""
+    _require_grammar(".ts")
+    _write(tmp_path, "web/lib/index.ts", "export const L = 1;\n")
+    _write(tmp_path, "web/lib/util.ts", "export const U = 2;\n")
+    _write(tmp_path, "web/panel/view.tsx", "export const V = 3;\n")
+    _write(
+        tmp_path,
+        "web/panel/app.ts",
+        "import L from '../lib';\n"
+        "import { U } from '../lib/util.ts';\n"
+        "import { V } from './view';\n",
+    )
+    files = ["web/lib/index.ts", "web/lib/util.ts", "web/panel/app.ts", "web/panel/view.tsx"]
+    graph = build_reference_graph(tmp_path, files)
+    assert graph["web/panel/app.ts"] == {
+        "web/lib/index.ts",
+        "web/lib/util.ts",
+        "web/panel/view.tsx",
+    }
+
+
+def test_a_dot_js_specifier_finds_the_typescript_source(tmp_path):
+    """A TypeScript source importing the EMITTED name (`./a.js`) is ordinary, and the file
+    next to it is `a.ts`. Resolving only what was written would lose those edges."""
+    _require_grammar(".ts")
+    _write(tmp_path, "web/a.ts", "export const A = 1;\n")
+    _write(tmp_path, "web/app.ts", "import { A } from './a.js';\n")
+    graph = build_reference_graph(tmp_path, ["web/a.ts", "web/app.ts"])
+    assert graph["web/app.ts"] == {"web/a.ts"}
+
+
+def test_a_commented_out_import_is_not_an_edge(tmp_path):
+    """The reason to use the parser here rather than another regex: only a real import
+    declaration counts."""
+    _require_grammar(".java")
+    _write(tmp_path, "src/com/acme/rules/ScoreRule.java", "package com.acme.rules;\nclass S {}\n")
+    _write(
+        tmp_path,
+        "src/com/acme/Engine.java",
+        "package com.acme;\n// import com.acme.rules.ScoreRule;\npublic class Engine {}\n",
+    )
+    files = ["src/com/acme/Engine.java", "src/com/acme/rules/ScoreRule.java"]
+    graph = build_reference_graph(tmp_path, files)
+    assert graph["src/com/acme/Engine.java"] == set()
+
+
+def test_a_static_member_import_still_finds_its_class(tmp_path):
+    """`import static com.acme.util.Helpers.clamp` names a method; the FILE is one component
+    up, and that is the edge worth having."""
+    _require_grammar(".java")
+    _write(tmp_path, "src/com/acme/util/Helpers.java", "package com.acme.util;\nclass Helpers {}\n")
+    _write(
+        tmp_path,
+        "src/com/acme/Engine.java",
+        "package com.acme;\nimport static com.acme.util.Helpers.clamp;\npublic class Engine {}\n",
+    )
+    files = ["src/com/acme/Engine.java", "src/com/acme/util/Helpers.java"]
+    graph = build_reference_graph(tmp_path, files)
+    assert graph["src/com/acme/Engine.java"] == {"src/com/acme/util/Helpers.java"}
+
+
+def test_an_ambiguous_type_name_produces_no_edge():
+    """Two files answering to one key is not a 50/50 guess to be taken - the index stores
+    None, and a wrong edge in something that decides what a reader sees first is worse than
+    no edge."""
+    index = rs._jvm_type_index(["a/Score.java", "b/Score.java"])
+    assert index["Score"] is None
+    assert index["a.Score"] == "a/Score.java"
+    assert rs._resolve_jvm_import("Score", index, "x/Other.java") is None
+
+
+def test_the_scala_selector_group_and_wildcards_are_read():
+    """`import a.b.{C, D}`, `a.b._` and Java/Kotlin's `a.b.*` are all ordinary. Pure text
+    handling, so it holds with or without a grammar on the host."""
+    assert rs._jvm_import_paths("import com.acme.util.{Helpers, Other}") == [
+        "com.acme.util.Helpers",
+        "com.acme.util.Other",
+    ]
+    assert rs._jvm_import_paths("import com.acme.util.{Helpers => H}") == ["com.acme.util.Helpers"]
+    assert rs._jvm_import_paths("import com.acme.deep._") == ["com.acme.deep"]
+    assert rs._jvm_import_paths("import com.acme.other.*;") == ["com.acme.other"]
+    assert rs._jvm_import_paths("import com.acme.util.Helpers as H") == ["com.acme.util.Helpers"]
+
+
+def test_no_cached_grammar_means_no_edges_and_no_failure(tmp_path, monkeypatch):
+    """The contract that lets this ship at all: an un-warmed language costs edges, never a
+    run. Uniform rank is the documented fallback, exactly as it was before edges existed."""
+    monkeypatch.setattr(rs, "_ts_parser", lambda path: None)
+    rs._ts_imports_cache.clear()
+    _write(tmp_path, "src/com/acme/Engine.java", "import com.acme.rules.ScoreRule;\n")
+    _write(tmp_path, "src/com/acme/rules/ScoreRule.java", "class ScoreRule {}\n")
+    files = ["src/com/acme/Engine.java", "src/com/acme/rules/ScoreRule.java"]
+    graph = build_reference_graph(tmp_path, files)
+    assert graph == {f: set() for f in files}
+    assert pagerank(graph), "ranking still answers - it just ranks uniformly"
+
+
+def test_the_python_graph_is_exactly_what_it_was(tmp_path):
+    """The Python path predates this and must not move: same edges, and no new ones from the
+    tree-sitter pass on a Python-only tree."""
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "__init__.py").write_text("", encoding="utf-8")
+    (tmp_path / "pkg" / "a.py").write_text("import pkg.b\n", encoding="utf-8")
+    (tmp_path / "pkg" / "b.py").write_text("x = 1\n", encoding="utf-8")
+    files = ["pkg/__init__.py", "pkg/a.py", "pkg/b.py"]
+    graph = build_reference_graph(tmp_path, files)
+    assert graph == {"pkg/__init__.py": set(), "pkg/a.py": {"pkg/b.py"}, "pkg/b.py": set()}
+
+
+def test_the_edge_pass_is_deterministic(tmp_path):
+    """Two runs, one answer - the module-wide contract, now with a second edge source in it."""
+    _require_grammar(".java")
+    _write(tmp_path, "src/com/acme/rules/ScoreRule.java", "package com.acme.rules;\nclass S {}\n")
+    _write(
+        tmp_path,
+        "src/com/acme/Engine.java",
+        "package com.acme;\nimport com.acme.rules.ScoreRule;\nclass Engine {}\n",
+    )
+    files = ["src/com/acme/Engine.java", "src/com/acme/rules/ScoreRule.java"]
+    rs._ts_imports_cache.clear()
+    first = build_reference_graph(tmp_path, files)
+    rs._ts_imports_cache.clear()
+    second = build_reference_graph(tmp_path, files)
+    assert first == second
+
+
+# ------------- the pattern-tier fallback notice (same request, 2026-09-12)
+
+
+def test_the_notice_names_only_the_languages_that_fell_back(monkeypatch):
+    """One line, and it has to be true: a language with files here whose grammar was not
+    cached. Python is excluded on purpose - its fallback is the exact stdlib ast tier, so
+    naming it would send a reader to fix something that costs them nothing."""
+    monkeypatch.setattr(rs, "_ts_parser", lambda path: None)
+    files = ["Engine.java", "app.ts", "m.py", "notes.md"]
+    assert rs.tree_sitter_fallback_languages(files) == ["Java", "TypeScript"]
+    notice = rs.fallback_notice(files)
+    assert notice.count("\n") == 0, "one line, not a paragraph"
+    assert "Java and TypeScript" in notice
+    assert "Python" not in notice
+    assert "Code intelligence" in notice, "the reader must be told how to fix it"
+
+
+def test_a_fully_warmed_run_says_nothing_extra(monkeypatch):
+    """No notice when there is nothing to notice, and none for a tree with no supported
+    language in it at all."""
+    monkeypatch.setattr(rs, "_ts_parser", lambda path: object())
+    assert rs.fallback_notice(["Engine.java", "app.ts"]) == ""
+    monkeypatch.setattr(rs, "_ts_parser", lambda path: None)
+    assert rs.fallback_notice(["README.md", "m.py"]) == "", "Python has an exact floor"
+
+
+def test_the_skeleton_header_carries_the_notice_only_when_it_happened(tmp_path, monkeypatch):
+    _init_repo(tmp_path)
+    (tmp_path / "Engine.java").write_text("public class Engine {}\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+
+    monkeypatch.setattr(rs, "_ts_parser", lambda path: None)
+    out = build_skeleton(tmp_path, budget_tokens=6000)
+    head = out.splitlines()[:4]
+    assert any(line.startswith("> Note:") and "Java" in line for line in head), (
+        "the notice belongs near the top, where a reader sees it before the listing"
+    )
+
+    monkeypatch.setattr(rs, "_ts_parser", lambda path: object())
+    assert "> Note:" not in build_skeleton(tmp_path, budget_tokens=6000)
+
+
+def test_the_cli_summary_surfaces_the_fallback(tmp_path, monkeypatch, capsys):
+    """With --out the header sits in a file the user may not open for hours; the end-of-run
+    summary is the moment they can act on it."""
+    _init_repo(tmp_path)
+    (tmp_path / "Engine.java").write_text("public class Engine {}\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    monkeypatch.setattr(rs, "_ts_parser", lambda path: None)
+    out_file = tmp_path / "skeleton.md"
+
+    assert rs.main(["repo_skeleton", str(tmp_path), "--out", str(out_file)]) == 0
+    captured = capsys.readouterr().out.splitlines()
+    assert captured[0].startswith("Wrote skeleton ->")
+    assert len(captured) == 2 and captured[1].startswith("Note:"), "one line, not a lecture"
+
+    # Printing the skeleton to stdout instead: the document stays exactly the document, so
+    # the same line goes to stderr rather than into a piped file.
+    assert rs.main(["repo_skeleton", str(tmp_path)]) == 0
+    streams = capsys.readouterr()
+    assert "> Note:" in streams.out and streams.err.strip().startswith("Note:")

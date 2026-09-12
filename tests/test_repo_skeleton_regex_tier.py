@@ -30,6 +30,13 @@ def _mod():
     m = importlib.util.module_from_spec(spec)
     sys.modules["repo_skeleton"] = m
     spec.loader.exec_module(m)
+    # 2026-09-12 (tree-sitter coverage request): these tests are about the REGEX tier but
+    # they go in through the tiered dispatcher, so on a host with tree-sitter installed and
+    # its grammars warmed a higher tier answers first and every assertion below reads as a
+    # failure of a tier it never exercised. Take the higher tiers out of THIS module instance
+    # (a fresh one per call) so the tier under test is the tier that answers, on any host.
+    m._symbols_tree_sitter = lambda path: None
+    m._symbols_ctags = lambda path: None
     return m
 
 

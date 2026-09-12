@@ -44,11 +44,12 @@ import argparse
 import ast
 import json
 import os
+import posixpath
 import re
 import shutil
 import subprocess  # nosec B404 - fixed-argv git/ctags calls only, never shell=True
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 # Directory names skipped entirely during the os.walk fallback (git ls-files already excludes
 # gitignored paths for free, so this list only matters when there's no git repo to ask).
@@ -654,10 +655,11 @@ def extract_symbols(path: Path) -> tuple[list[str], str]:
 
 
 def build_reference_graph(root: Path, files: list[str]) -> dict[str, set[str]]:
-    """Best-effort file-level def/ref graph. Python-only for this version - the ast tier is the
-    only one that gives real import statements without a heavier parser dependency; non-Python
-    files simply contribute no edges (uniform base rank, not an error). A future version can add
-    an import-graph builder per language without changing pagerank()/the ranking contract.
+    """Best-effort file-level def/ref graph: Python via stdlib ast, and Java/Scala/Kotlin/JS/TS
+    via tree-sitter wherever that grammar is already cached (2026-09-12 - see the
+    tree-sitter import edges section below for why). A file whose language has no extractor
+    here, or whose grammar was not warmed, simply contributes no edges - uniform base rank,
+    not an error. pagerank()'s contract is unchanged: it still receives {file: {file, ...}}.
     `files` are root-relative (as returned by inventory()) - resolved against `root` to read
     each file, never against the current working directory."""
     py_files = {f for f in files if f.endswith(_PY_EXT)}
@@ -681,6 +683,7 @@ def build_reference_graph(root: Path, files: list[str]) -> dict[str, set[str]]:
                 target = module_index.get(mod.rsplit(".", 1)[0])
             if target and target != f:
                 graph[f].add(target)
+    _add_tree_sitter_edges(root, files, graph)
     return graph
 
 
@@ -692,6 +695,265 @@ def _python_import_modules(path: Path) -> set[str]:
     with on typical Python projects."""
     _names, modules = _python_facts(path)
     return modules
+
+
+# ------------------------------------------------ tree-sitter import edges (2026-09-12)
+#
+# WHY (owner's request, 2026-09-12: "does the framework enforce use of tree-sitter if it's
+# present, to help build the code map? I want to make sure it's used wherever possible").
+# The SYMBOL tiers already prefer tree-sitter wherever a grammar is cached - the reference
+# graph did not. It read Python import statements with stdlib ast and nothing else, so on a
+# Java/Scala/Kotlin/JS estate, which is what surveillance systems are made of, every file
+# had zero edges, PageRank came back uniform, and the ordering that is supposed to put the
+# important files first degraded to alphabetical on exactly the codebases the map exists for.
+#
+# What does NOT change. This stays file-level and best effort: any failure - no grammar, an
+# unparseable file, an import that names nothing in this inventory - means no edge (uniform
+# rank), never an exception, exactly as the Python path behaves. The grammar is used only
+# when _ts_grammar_available() says it is ALREADY cached, so this never triggers the runtime
+# download that hangs behind a corporate proxy (see that function). And pagerank() is
+# untouched - it receives the same {file: {file, ...}} shape it always did.
+#
+# Why the import text is read off the parsed NODE rather than the raw file: the node types
+# below are real import declarations, so a commented-out import, an import-shaped string and
+# a word in a docstring cannot produce an edge. That is the whole reason to use the parser
+# here rather than another regex.
+
+# The five languages this request covers, mapped through the same _TS_LANGS table the symbol
+# tier uses (.kt -> kotlin, .tsx -> tsx, and so on).
+_JVM_EDGE_EXTS = frozenset({".java", ".scala", ".kt"})
+_JS_EDGE_EXTS = frozenset({".ts", ".tsx", ".js", ".jsx"})
+_TS_EDGE_EXTS = _JVM_EDGE_EXTS | _JS_EDGE_EXTS
+
+# Node types that ARE an import, verified against the shipped grammars on 2026-09-12: Java
+# and Scala both call it `import_declaration`, Kotlin wraps each one in `import_header`, and
+# JS/TS carry the specifier as a direct `string` child of `import_statement` or
+# `export_statement` (`export { C } from './c'` is a file-level edge too).
+_TS_JVM_IMPORT_TYPES = frozenset({"import_declaration", "import_header"})
+_TS_JS_IMPORT_TYPES = frozenset({"import_statement", "export_statement"})
+# `require('./x')` and dynamic `import('./x')` are call expressions, not import statements,
+# and both are ordinary in the dashboards and tooling around a surveillance platform.
+_TS_JS_CALL_NAMES = frozenset({"require", "import"})
+_TS_MAX_IMPORTS = 200  # bounded per file, same reasoning as every other walk in this module
+
+# Extensions tried when resolving a relative JS/TS specifier that has none of its own.
+_JS_RESOLVE_EXTS = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
+
+# One parse per file, like _python_facts_cache: build_reference_graph and a caller asking a
+# second time must not pay for the same tree twice. Specifiers are cached, not trees.
+_ts_imports_cache: dict[str, list[str]] = {}
+
+
+def _rel_suffix(rel_path: str) -> str:
+    """Lowercased extension of a forward-slash inventory path (never touches the filesystem)."""
+    return PurePosixPath(rel_path).suffix.lower()
+
+
+def _jvm_import_paths(statement: str) -> list[str]:
+    """Dotted names an `import ...` statement refers to, from the statement's own text.
+
+    Handles the three grammars' spellings together because the shapes overlap: Java's
+    `static`, Kotlin's `as Alias`, Scala's `{A, B}` selector group and `A => B` rename, and
+    the wildcard forms (`.*` in Java/Kotlin, `._` in Scala) which name a package rather than
+    a type and therefore resolve to nothing most of the time - harmless, since an
+    unresolvable name is just no edge."""
+    text = statement.strip().rstrip(";").strip()
+    if text.startswith("import"):
+        text = text[len("import") :].strip()
+    if text.startswith("static "):
+        text = text[len("static ") :].strip()
+    text = re.sub(r"\s+as\s+\w+$", "", text)
+    text = re.sub(r"\s+", "", text)
+    if text.endswith(".*") or text.endswith("._"):
+        text = text[:-2]
+    group = re.match(r"^([\w.]*?)\.?\{([^}]*)\}$", text)
+    if group:
+        prefix, selectors = group.group(1), group.group(2)
+        names: list[str] = []
+        for selector in selectors.split(","):
+            name = selector.split("=>")[0].strip()
+            if name and name not in ("_", "*"):
+                names.append(f"{prefix}.{name}" if prefix else name)
+        return names
+    return [text] if text else []
+
+
+def _jvm_type_index(files: list[str]) -> dict[str, str | None]:
+    """Dotted-suffix index over the JVM files in an inventory: `src/main/java/com/acme/Score
+    .java` answers to `Score`, `acme.Score`, `com.acme.Score` and so on, which is what lets a
+    fully-qualified import find its file without knowing where the source root starts.
+    A key two files answer to is stored as None - ambiguous, and no edge is better than a
+    wrong one in something that drives what a reader is shown first."""
+    index: dict[str, str | None] = {}
+    for rel in files:
+        suffix = _rel_suffix(rel)
+        if suffix not in _JVM_EDGE_EXTS:
+            continue
+        parts = [p for p in rel.split("/") if p and p != "."]
+        if not parts:
+            continue
+        parts[-1] = parts[-1][: -len(suffix)]
+        for start in range(len(parts)):
+            key = ".".join(parts[start:])
+            index[key] = None if key in index else rel
+    return index
+
+
+def _resolve_jvm_import(dotted: str, index: dict[str, str | None], source: str) -> str | None:
+    """The file a Java/Scala/Kotlin import names, or None. Best effort by design."""
+    parts = [p for p in dotted.split(".") if p]
+    if not parts:
+        return None
+    # Longest match first, then up to two trailing components dropped: `com.acme.util
+    # .Helpers.clamp` is a static member import, and `com.acme.Outer.Inner` a nested type -
+    # in both the FILE is one or two components up from the name that was written.
+    for drop in range(3):
+        if len(parts) - drop < 1:
+            break
+        target = index.get(".".join(parts[: len(parts) - drop]))
+        if target and target != source:
+            return target
+    # Flat layouts (sources not stored under their package path) never match by suffix, so
+    # fall back to the type NAME alone - the rightmost capitalised component, which is the
+    # naming convention in all three languages - and only when exactly one file answers to
+    # it (an ambiguous key is None in the index, so this returns None too).
+    for part in reversed(parts):
+        if part[:1].isupper():
+            target = index.get(part)
+            return target if target and target != source else None
+    return None
+
+
+def _resolve_relative_js(spec: str, source: str, inventory: set[str]) -> str | None:
+    """The file a relative JS/TS specifier names, or None.
+
+    Only relative specifiers resolve: a bare one (`react`, `@scope/pkg`) is a package, which
+    is not a file in this inventory and not an edge in this graph. Extensions and `index`
+    files are tried the way a bundler would, and `./a.js` also retries as `./a` because a
+    TypeScript source importing the EMITTED name is ordinary and the file next to it is
+    `a.ts`."""
+    if not spec.startswith("."):
+        return None
+    base = posixpath.normpath(posixpath.join(posixpath.dirname(source), spec))
+    if base.startswith(".."):
+        return None  # outside the inventory root - nothing here to point at
+    own = _rel_suffix(source)
+    # The source file's own extension first (a .js importing './x' should find x.js when both
+    # exist), the rest in a fixed order after - the answer must never depend on set or
+    # filesystem iteration order.
+    exts = (
+        (own, *(e for e in _JS_RESOLVE_EXTS if e != own))
+        if own in _JS_RESOLVE_EXTS
+        else _JS_RESOLVE_EXTS
+    )
+    bases = [base]
+    written = _rel_suffix(base)
+    if written in _JS_RESOLVE_EXTS:
+        bases.append(base[: -len(written)])
+    for candidate_base in bases:
+        candidates = [candidate_base]
+        candidates.extend(candidate_base + ext for ext in exts)
+        candidates.extend(f"{candidate_base}/index{ext}" for ext in exts)
+        for candidate in candidates:
+            if candidate in inventory and candidate != source:
+                return candidate
+    return None
+
+
+def _ts_direct_string(node, text_of) -> str:
+    """The first string literal among a node's DIRECT children, unquoted ("" if there is
+    none). Direct children only, on purpose: `export const a = './looks-like-a-path'` keeps
+    its string one level down inside the declaration, and reading that as an import would
+    invent an edge nobody wrote."""
+    for child in node.children:
+        if child.type == "string":
+            return text_of(child).strip("'\"`")
+    return ""
+
+
+def _ts_import_specifiers(path: Path) -> list[str]:
+    """Raw import specifiers from one file via tree-sitter ("com.acme.Score", "./widget"),
+    or [] when the grammar is not cached here, the file will not parse, or it imports
+    nothing. Never raises - this feeds ranking, and a tier that can throw is worse than a
+    tier that is absent."""
+    key = str(path)
+    cached = _ts_imports_cache.get(key)
+    if cached is not None:
+        return cached
+    found: list[str] = []
+    _ts_imports_cache[key] = found
+    parser = _ts_parser(path)
+    if parser is None:
+        return found
+    try:
+        source = path.read_bytes()
+        tree = parser.parse(source)
+    except Exception:
+        return found
+    is_jvm = path.suffix.lower() in _JVM_EDGE_EXTS
+
+    def text_of(node) -> str:
+        try:
+            return source[node.start_byte : node.end_byte].decode("utf-8", "replace")
+        except Exception:
+            return ""
+
+    def walk(node, depth: int = 0) -> None:
+        if depth > 40 or len(found) >= _TS_MAX_IMPORTS:
+            return
+        if is_jvm:
+            if node.type in _TS_JVM_IMPORT_TYPES:
+                found.extend(_jvm_import_paths(text_of(node)))
+                return  # the children are the pieces of the name just read
+        elif node.type in _TS_JS_IMPORT_TYPES:
+            spec = _ts_direct_string(node, text_of)
+            if spec:
+                found.append(spec)
+            return
+        elif node.type == "call_expression" and node.children:
+            if text_of(node.children[0]) in _TS_JS_CALL_NAMES:
+                for child in node.children:
+                    if child.type == "arguments":
+                        spec = _ts_direct_string(child, text_of)
+                        if spec:
+                            found.append(spec)
+                        break
+        for child in node.children:
+            walk(child, depth + 1)
+
+    try:
+        walk(tree.root_node)
+    except RecursionError:
+        found.clear()
+    return found
+
+
+def _add_tree_sitter_edges(root: Path, files: list[str], graph: dict[str, set[str]]) -> None:
+    """Add Java/Scala/Kotlin/JS/TS import edges to an existing graph, in place. A no-op when
+    the inventory holds none of those languages, and a no-op per file when its grammar was
+    not warmed - the fallback notice is what tells the reader that happened."""
+    sources = [f for f in sorted(files) if _rel_suffix(f) in _TS_EDGE_EXTS]
+    if not sources:
+        return
+    inventory_set = set(files)
+    jvm_index = _jvm_type_index(files)
+    for rel in sources:
+        try:
+            specifiers = _ts_import_specifiers(root / rel)
+        except Exception:
+            continue
+        is_jvm = _rel_suffix(rel) in _JVM_EDGE_EXTS
+        for spec in specifiers:
+            try:
+                target = (
+                    _resolve_jvm_import(spec, jvm_index, rel)
+                    if is_jvm
+                    else _resolve_relative_js(spec, rel, inventory_set)
+                )
+            except Exception:
+                target = None
+            if target and target != rel and target in graph:
+                graph[rel].add(target)
 
 
 _DAMPING = 0.85
@@ -847,6 +1109,72 @@ def _file_block(
     return "\n".join(lines)
 
 
+# ------------------------------------------- pattern-tier fallback notice (2026-09-12)
+#
+# Part of the same owner request as the import edges above. A skeleton built on a box where
+# a grammar was never warmed is QUIETLY less exact: the tier label on each file says "regex"
+# rather than "tree-sitter", which is true but easy to read past, and nothing anywhere told
+# the reader the fix takes one installer step and no network. One line, near the top, only
+# when it actually happened - a fully warmed run says nothing extra.
+
+# Grammar name -> the name a human calls that language. The map is read by people, and
+# "kotlin"/"tsx"/"cpp" are grammar identifiers, not language names.
+_TS_LANG_LABELS = {
+    "java": "Java",
+    "scala": "Scala",
+    "kotlin": "Kotlin",
+    "csharp": "C#",
+    "typescript": "TypeScript",
+    "tsx": "TypeScript",
+    "javascript": "JavaScript",
+    "sql": "SQL",
+    "bash": "Shell",
+    "go": "Go",
+    "ruby": "Ruby",
+    "rust": "Rust",
+    "c": "C",
+    "cpp": "C++",
+    "python": "Python",
+}
+
+
+def tree_sitter_fallback_languages(files: list[str]) -> list[str]:
+    """Language names that HAD files in this inventory and did not get the tree-sitter tier
+    here, sorted. Python is deliberately excluded: its fallback is the stdlib ast tier, which
+    is exact (same symbols, same line ranges), so naming it would send a reader to fix
+    something that costs them nothing."""
+    langs: dict[str, str] = {}
+    for rel in files:
+        suffix = _rel_suffix(rel)
+        lang = _TS_LANGS.get(suffix)
+        if lang and lang != "python":
+            langs.setdefault(lang, suffix)
+    missing = {
+        _TS_LANG_LABELS.get(lang, lang)
+        for lang, suffix in langs.items()
+        if _ts_parser(Path(f"probe{suffix}")) is None
+    }
+    return sorted(missing)
+
+
+def _join_human(items: list[str]) -> str:
+    if len(items) < 2:
+        return "".join(items)
+    return f"{', '.join(items[:-1])} and {items[-1]}"
+
+
+def fallback_notice(files: list[str]) -> str:
+    """The one-line notice, or "" when every language in the inventory had its grammar."""
+    langs = tree_sitter_fallback_languages(files)
+    if not langs:
+        return ""
+    return (
+        f"Note: no tree-sitter grammar is cached here for {_join_human(langs)}, so those files "
+        "were read by the pattern tier - indicative symbols, no exact line ranges. Run the "
+        "installer's Code intelligence step to warm the grammars offline, then re-run."
+    )
+
+
 def build_skeleton(
     root: Path,
     budget_tokens: int = _DEFAULT_BUDGET_TOKENS,
@@ -873,8 +1201,13 @@ def build_skeleton(
     header = [
         f"# Repository skeleton - {root}",
         f"# {len(files)} files inventoried, budget ~{budget_tokens} tokens",
-        "",
     ]
+    notice = fallback_notice(files)
+    if notice:
+        # Near the top on purpose: a reader who does not see this line can take the tier
+        # labels below at face value without cross-checking what is installed on the box.
+        header.append(f"> {notice}")
+    header.append("")
     body: list[str] = []
     used_tokens = _estimate_tokens("\n".join(header))
     compact_from: int | None = None
@@ -1269,11 +1602,20 @@ def main(argv: list[str]) -> int:
         mermaid_graph=graph if args.mermaid else None,
         files=files,
     )
+    # The same fact the skeleton's own header carries, in the run's closing summary (2026-09-12):
+    # with --out the header is in a file the user may not open for hours, and this is the
+    # moment they can act on it. To stderr when the skeleton itself is going to stdout, so a
+    # piped document stays exactly the document.
+    notice = fallback_notice(files)
     if args.out:
         args.out.write_text(text, encoding="utf-8")
         print(f"Wrote skeleton -> {args.out}")
+        if notice:
+            print(notice)
     else:
         print(text, end="")
+        if notice:
+            print(notice, file=sys.stderr)
     return 0
 
 

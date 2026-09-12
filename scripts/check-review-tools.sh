@@ -108,6 +108,15 @@ review_tool_state_for() {
 REVIEW_TOOL_STATES_CACHE="$(review_tool_states)"
 
 # tool | language/role | install hint
+#
+# "the installer downloads/pip-installs this" (2026-09-12): install_helper.py's
+# Language analysers step fetches gitleaks, shfmt and shellcheck from their own GitHub
+# releases into ~/.local/bin, pip-installs bashate and ast-grep-cli, and runs npm for
+# eslint/typescript when npm is already present. The hints that used to say apt/brew/go
+# were a dead end on the locked-down machines this team runs on - no package manager, no
+# Go toolchain, no admin rights - so the analysers were permanently missing and the
+# findings in those languages permanently inferred. The apt/brew/go route is kept after
+# the semicolon for anyone who prefers their own package manager.
 # pip-audit and semgrep deliberately NOT probed (2026-08-04): both make unconditional
 # network calls with no reliable offline mode found - live corp-proxy reports showed them
 # hanging rather than failing fast, both in real reviews and in this probe itself. Not
@@ -126,20 +135,20 @@ TOOLS=(
   "mypy|Python types|pip install -r requirements-review.txt"
   "bandit|Python security|pip install -r requirements-review.txt"
   "black|Python format|pip install -r requirements-review.txt"
-  "gitleaks|secret scan|apt/brew install gitleaks"
-  "shellcheck|Bash lint|apt install shellcheck"
-  "shfmt|Bash format|go install mvdan.cc/sh/v3/cmd/shfmt@latest"
-  "osv-scanner|dependency vulns (OFFLINE only)|go install github.com/google/osv-scanner/cmd/osv-scanner@latest"
-  "bashate|Bash style|pip install bashate"
-  "eslint|TypeScript/JS lint|npm install -g eslint"
-  "tsc|TypeScript types|npm install -g typescript"
+  "gitleaks|secret scan|the installer downloads this (Language analysers step); or apt/brew install gitleaks"
+  "shellcheck|Bash lint|the installer downloads this (Language analysers step); or apt install shellcheck"
+  "shfmt|Bash format|the installer downloads this (Language analysers step); or go install mvdan.cc/sh/v3/cmd/shfmt@latest"
+  "osv-scanner|dependency vulns (OFFLINE only)|the installer downloads this (Dependency scanner step)"
+  "bashate|Bash style|the installer pip-installs this (requirements-review.txt)"
+  "eslint|TypeScript/JS lint|the installer runs npm install -g eslint when npm is present"
+  "tsc|TypeScript types|the installer runs npm install -g typescript when npm is present"
   "sqlfluff|SQL lint|pip install sqlfluff"
   "scalafmt|Scala format|coursier install scalafmt"
   "checkstyle|Java style|via Maven/Gradle or brew/apt"
   "pmd|Java static analysis|via Maven/Gradle or brew/apt"
   "spotbugs|Java bugs/security|via Maven/Gradle or brew/apt"
   "pwsh|PowerShell + PSScriptAnalyzer|install PowerShell, then Install-Module PSScriptAnalyzer"
-  "ast-grep|structural multi-lang search (find-all-implementations/callers by AST pattern)|brew/cargo/npm install ast-grep, or https://ast-grep.github.io/guide/quick-start.html"
+  "ast-grep|structural multi-lang search (find-all-implementations/callers by AST pattern)|the installer pip-installs this (ast-grep-cli in requirements-review.txt)"
 )
 # NOTE: profilers/benchmarks (py-spy, scalene, hyperfine, cProfile, Measure-Command, JMH) are
 # intentionally NOT listed - the team is STATIC-ONLY for now (it does not execute reviewed code,

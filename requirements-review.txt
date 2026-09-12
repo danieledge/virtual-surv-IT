@@ -2,11 +2,12 @@
 # required to use the team or run tests). Install with:
 #   pip install -r requirements-review.txt
 #
-# Non-Python analysers install via the OS package manager - see the README "Code-review
-# tooling" table. Of the seven officially supported, configurable tools (code-reviewer.md),
-# gitleaks and shfmt are the two non-Python ones and are NOT here for that reason (apt/brew,
-# not pip). ShellCheck/PSScriptAnalyzer/Checkstyle/PMD/SpotBugs/scalafmt are best-effort,
-# not individually configurable - same README table.
+# Non-Python analysers are NOT here - a wheel cannot carry a Go or Haskell binary. Since
+# 2026-09-12 the installer downloads gitleaks, shfmt, shellcheck and osv-scanner from their
+# own GitHub releases into ~/.local/bin, so they no longer need apt/brew/go either; see
+# install_helper.py's release-binary table and the README "Code-review tooling" table.
+# PSScriptAnalyzer/Checkstyle/PMD/SpotBugs/scalafmt still need a JDK, coursier or
+# PowerShell and stay best-effort hints - same README table.
 # Pinned to the exact version CI uses (.github/workflows/ci.yml lint job) - ruff format is
 # version-sensitive, so a local `pip install -r requirements-review.txt` that floated to
 # whatever ruff shipped this week could disagree with CI on formatting/lint rules (T-6,
@@ -48,3 +49,13 @@ tree-sitter>=0.21
 # Runtime therefore never reaches the network on any version, and an un-warmed language
 # costs accuracy rather than a hang.
 tree-sitter-language-pack>=0.9
+
+# The language analysers the installer can install with no admin rights (2026-09-12, owner:
+# the full check listed every language-specific analyser as "not installed" and left the
+# user a list of apt/brew/go/npm commands to run by hand). bashate is the Bash style
+# checker; ast-grep-cli is the PyPI build of ast-grep and is what provides the `ast-grep`
+# and `sg` commands - the name scripts/check-review-tools.sh actually probes for. Both are
+# plain wheels, which is why they are here rather than in the release-binary set
+# (gitleaks, shfmt, shellcheck) the installer downloads from GitHub.
+bashate>=2.1
+ast-grep-cli>=0.28

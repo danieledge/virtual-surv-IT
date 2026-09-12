@@ -9690,3 +9690,348 @@ def test_the_database_step_asks_nothing(monkeypatch, capsys):
     inst.vuln_db_step()
     assert calls == [False]
     assert "downloaded to" in capsys.readouterr().out
+
+
+# --- the language analysers: installed, not listed as commands to run (2026-09-12) ------------
+#
+# The live report that put these here: the full check listed nine language-specific
+# analysers as "not installed" and offered apt/brew/go/npm commands for them, on a machine
+# with no package manager, no Go toolchain and no admin rights. Five of the nine were
+# ordinary downloads or ordinary wheels all along.
+
+
+@pytest.mark.parametrize(
+    "tool,platform_name,machine,version,want",
+    [
+        ("gitleaks", "linux", "x86_64", "8.28.0", "gitleaks_8.28.0_linux_x64.tar.gz"),
+        ("gitleaks", "darwin", "arm64", "8.28.0", "gitleaks_8.28.0_darwin_arm64.tar.gz"),
+        ("gitleaks", "win32", "AMD64", "8.28.0", "gitleaks_8.28.0_windows_x64.zip"),
+        ("shfmt", "linux", "x86_64", "3.12.0", "shfmt_v3.12.0_linux_amd64"),
+        ("shfmt", "darwin", "arm64", "3.12.0", "shfmt_v3.12.0_darwin_arm64"),
+        ("shfmt", "win32", "AMD64", "3.12.0", "shfmt_v3.12.0_windows_amd64.exe"),
+        ("shellcheck", "linux", "x86_64", "0.11.0", "shellcheck-v0.11.0.linux.x86_64.tar.xz"),
+        ("shellcheck", "darwin", "aarch64", "0.11.0", "shellcheck-v0.11.0.darwin.aarch64.tar.xz"),
+        ("shellcheck", "win32", "AMD64", "0.11.0", "shellcheck-v0.11.0.zip"),
+        ("osv-scanner", "linux", "x86_64", "", "osv-scanner_linux_amd64"),
+        ("osv-scanner", "win32", "ARM64", "", "osv-scanner_windows_arm64.exe"),
+        # No published build for this machine is a clean "cannot", not an error.
+        ("gitleaks", "sunos5", "x86_64", "8.28.0", ""),
+        ("shellcheck", "linux", "mips64", "0.11.0", ""),
+    ],
+)
+def test_each_tool_names_its_own_asset_per_platform(tool, platform_name, machine, version, want):
+    """Every project spells the same machine differently - x64 vs amd64 vs x86_64, arm64 vs
+    aarch64, a version in the file name or not - and getting one wrong is a 404 on the
+    machine the user is standing in front of rather than on this one."""
+    import install_helper as ih
+
+    spec = ih._RELEASE_TOOLS[tool]
+    plat, arch = ih._release_platform_arch(platform_name, machine)
+    assert (spec.asset(plat, arch, version) if plat else "") == want
+
+
+def test_the_download_url_is_tagged_only_for_the_tools_that_need_it():
+    """osv-scanner's assets carry no version, so it can use the /latest/download/ redirect;
+    the other three stamp the version into the file name, so their URL needs the tag."""
+    import install_helper as ih
+
+    osv = ih._RELEASE_TOOLS["osv-scanner"]
+    assert ih._release_download_url(osv, "osv-scanner_linux_amd64", "") == (
+        ih._OSV_RELEASE_BASE + "osv-scanner_linux_amd64"
+    )
+    shfmt = ih._RELEASE_TOOLS["shfmt"]
+    assert ih._release_download_url(shfmt, "shfmt_v3.12.0_linux_amd64", "3.12.0") == (
+        "https://github.com/mvdan/sh/releases/download/v3.12.0/shfmt_v3.12.0_linux_amd64"
+    )
+
+
+def test_the_latest_version_is_read_from_the_release_json(monkeypatch):
+    """One small JSON read, because the asset name cannot be built without the version. A
+    rate-limited API, a proxy, or a body that is not JSON are all the same normal answer -
+    "", which the caller turns into one dim line and a manual route."""
+    import install_helper as ih
+
+    monkeypatch.setattr(
+        "urllib.request.urlopen", lambda *a, **k: _Response(b'{"tag_name": "v8.28.0"}')
+    )
+    assert ih.latest_release_version("gitleaks/gitleaks") == "8.28.0"
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: _Response(b"<html>nope</html>"))
+    assert ih.latest_release_version("gitleaks/gitleaks") == ""
+
+    def _refuse(*a, **k):
+        raise OSError("proxy refused the connection")
+
+    monkeypatch.setattr("urllib.request.urlopen", _refuse)
+    assert ih.latest_release_version("gitleaks/gitleaks") == ""
+
+
+def _tar_fixture(path: Path, members: dict, mode: str) -> Path:
+    import tarfile
+
+    with tarfile.open(path, mode) as tf:
+        for name, body in members.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(body)
+            tf.addfile(info, io.BytesIO(body))
+    return path
+
+
+def test_the_right_member_comes_out_of_every_archive_shape(tmp_path):
+    """shellcheck's tarball carries its binary at shellcheck-v0.11.0/shellcheck with a
+    LICENSE beside it, gitleaks' carries a README, and a wrong pick installs a licence file
+    under the name of an analyser - which shutil.which would then happily find and run."""
+    import zipfile
+
+    import install_helper as ih
+
+    tgz = _tar_fixture(
+        tmp_path / "gitleaks_1_linux_x64.tar.gz",
+        {"README.md": b"read me", "gitleaks": b"BINARY-gitleaks"},
+        "w:gz",
+    )
+    out = tmp_path / "out-gitleaks"
+    assert ih._extract_release_binary(tgz, "gitleaks", out) is True
+    assert out.read_bytes() == b"BINARY-gitleaks"
+
+    txz = _tar_fixture(
+        tmp_path / "shellcheck-v1.linux.x86_64.tar.xz",
+        {"shellcheck-v1/LICENSE.txt": b"licence", "shellcheck-v1/shellcheck": b"BINARY-shellcheck"},
+        "w:xz",
+    )
+    out = tmp_path / "out-shellcheck"
+    assert ih._extract_release_binary(txz, "shellcheck", out) is True
+    assert out.read_bytes() == b"BINARY-shellcheck"
+
+    zip_path = tmp_path / "shellcheck-v1.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("shellcheck.exe", "BINARY-windows")
+        zf.writestr("readme.txt", "read me")
+    out = tmp_path / "out-windows"
+    assert ih._extract_release_binary(zip_path, "shellcheck", out) is True
+    assert out.read_bytes() == b"BINARY-windows"
+
+    # Nothing in there wearing the tool's name, and more than one candidate: refuse rather
+    # than guess. The caller turns False into the same soft failure as a refused download.
+    nothing = _tar_fixture(
+        tmp_path / "empty_linux_x64.tar.gz", {"LICENSE": b"a", "README": b"b"}, "w:gz"
+    )
+    assert ih._extract_release_binary(nothing, "gitleaks", tmp_path / "out-none") is False
+
+
+def test_an_archive_download_is_extracted_verified_and_put_on_PATH(monkeypatch, tmp_path, capsys):
+    """End to end for a versioned, archived tool: resolve the version, download the asset,
+    take the one binary out of it, prove it runs, and make it findable."""
+    import install_helper as ih
+
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+    monkeypatch.setenv("PATH", "/usr/bin")
+    rc = tmp_path / ".bashrc"
+    rc.write_text("# mine\n", encoding="utf-8")
+    archive = _tar_fixture(
+        tmp_path / "src.tar.gz", {"README.md": b"read me", "gitleaks": b"BINARY"}, "w:gz"
+    )
+    monkeypatch.setattr(ih, "latest_release_version", lambda repo, **k: "8.28.0")
+    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: _Response(archive.read_bytes()))
+    seen = []
+    monkeypatch.setattr(
+        ih, "run_cmd", lambda argv, **k: seen.append(argv) or _proc(returncode=0, stdout="v8.28.0")
+    )
+
+    path = ih.install_release_tool(ih._RELEASE_TOOLS["gitleaks"], ih.Style(False), ih.marks())
+    assert path == ih.release_bin_path("gitleaks")
+    assert path.read_bytes() == b"BINARY", "the archive itself must not be installed"
+    if os.name != "nt":
+        assert path.stat().st_mode & 0o111, "it has to be executable to be installed"
+    # `gitleaks version`, not `--version`: it is a cobra CLI with a version SUBCOMMAND and
+    # no such flag, so --version would report a good download as a binary that will not run.
+    assert seen[0][1:] == ["version"]
+    assert str(ih.release_bin_dir()) in os.environ["PATH"].split(os.pathsep)
+    assert ih._PATH_STAMP in rc.read_text(encoding="utf-8")
+    out = capsys.readouterr().out
+    assert "gitleaks installed at" in out
+    # Nothing half-written left behind beside it, under any name.
+    assert sorted(p.name for p in ih.release_bin_dir().iterdir()) == ["gitleaks"]
+
+
+def test_a_tar_xz_download_is_opened_as_xz_not_guessed_from_the_temp_file(
+    monkeypatch, tmp_path, capsys
+):
+    """The download lands in a temp file whose name carries nothing, so the format has to
+    come from the ASSET name. Reading it off the temp file instead opened every archive as
+    a gzip tar, which is every shellcheck release (.tar.xz) and every Windows one (.zip)."""
+    import install_helper as ih
+
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+    monkeypatch.setenv("PATH", "/usr/bin")
+    archive = _tar_fixture(
+        tmp_path / "src.tar.xz",
+        {"shellcheck-v0.11.0/LICENSE": b"licence", "shellcheck-v0.11.0/shellcheck": b"BINARY"},
+        "w:xz",
+    )
+    monkeypatch.setattr(ih, "latest_release_version", lambda repo, **k: "0.11.0")
+    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: _Response(archive.read_bytes()))
+    monkeypatch.setattr(ih, "run_cmd", lambda argv, **k: _proc(returncode=0, stdout="0.11.0"))
+
+    path = ih.install_release_tool(ih._RELEASE_TOOLS["shellcheck"], ih.Style(False), ih.marks())
+    assert path is not None and path.read_bytes() == b"BINARY"
+    assert "shellcheck installed at" in capsys.readouterr().out
+
+
+def test_a_blocked_release_download_is_reported_and_returns(monkeypatch, tmp_path, capsys):
+    """No network, a proxy that refuses, an air-gapped box: all normal states here. One dim
+    line naming what was attempted and the manual route, then the run carries on."""
+    import install_helper as ih
+
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+
+    # Failure one: the version cannot even be resolved, so there is no URL to try.
+    monkeypatch.setattr(ih, "latest_release_version", lambda repo, **k: "")
+    assert ih.install_release_tool(ih._RELEASE_TOOLS["shfmt"], ih.Style(False), ih.marks()) is None
+    out = capsys.readouterr().out
+    assert "could not download shfmt" in out
+    assert "github.com/mvdan/sh/releases" in out
+
+    # Failure two: the version resolves and the download itself is refused.
+    monkeypatch.setattr(ih, "latest_release_version", lambda repo, **k: "3.12.0")
+
+    def _refuse(*a, **k):
+        raise OSError("proxy refused the connection")
+
+    monkeypatch.setattr("urllib.request.urlopen", _refuse)
+    assert ih.install_release_tool(ih._RELEASE_TOOLS["shfmt"], ih.Style(False), ih.marks()) is None
+    out = capsys.readouterr().out
+    assert "could not download shfmt" in out and "proxy refused" in out
+    assert not ih.release_bin_path("shfmt").exists(), "nothing half-written wears the tool's name"
+
+
+def test_the_release_demo_path_writes_nothing_and_opens_no_socket(monkeypatch, tmp_path, capsys):
+    """--demo must reach a network call and a file write and do neither - including the
+    version lookup, which is a network call a dry run has no reason to make."""
+    import install_helper as ih
+
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("demo must not open the network")),
+    )
+    monkeypatch.setattr(
+        ih,
+        "latest_release_version",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("demo must not look up a version")),
+    )
+
+    for tool in ("gitleaks", "shfmt", "shellcheck"):
+        assert (
+            ih.install_release_tool(ih._RELEASE_TOOLS[tool], ih.Style(False), ih.marks(), demo=True)
+            is None
+        )
+    out = capsys.readouterr().out
+    assert out.count("would download") == 3
+    assert not (tmp_path / ".local" / "bin").exists(), "demo wrote something"
+
+
+def test_the_npm_tools_are_skipped_when_npm_is_absent(monkeypatch, capsys):
+    """node is a runtime, not a tool: installing one on someone's corporate machine is a
+    decision, not a convenience. Absent npm is one line saying so, never an attempt."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(
+        ih, "run_cmd", lambda *a, **k: (_ for _ in ()).throw(AssertionError("it ran something"))
+    )
+    status, detail = ih.install_npm_tools(ih.Style(False), ih.marks())
+    assert status == "skip"
+    assert "npm is not present" in detail
+
+    # Present, and both tools missing: one global install for the two of them.
+    calls = []
+    monkeypatch.setattr(ih.shutil, "which", lambda name: "/usr/bin/npm" if name == "npm" else None)
+    monkeypatch.setattr(ih, "run_cmd", lambda argv, **k: calls.append(argv) or _proc(returncode=0))
+    status, detail = ih.install_npm_tools(ih.Style(False), ih.marks())
+    assert status == "ok" and calls == [["/usr/bin/npm", "install", "-g", "eslint", "typescript"]]
+
+    # And a refused global install (permissions, a proxy) is reported, not raised.
+    monkeypatch.setattr(
+        ih, "run_cmd", lambda argv, **k: _proc(returncode=1, stderr="EACCES: permission denied")
+    )
+    status, detail = ih.install_npm_tools(ih.Style(False), ih.marks())
+    assert status == "skip" and "EACCES" in detail
+
+
+def test_the_pip_analysers_are_read_from_the_requirements_file(monkeypatch, tmp_path, capsys):
+    """The pins live in requirements-review.txt and nowhere else (2026-08-27, owner: "there's
+    an existing install requirements path"). Installing bare names would ignore the floors
+    that file exists to state, and a second list would be a second place to forget a bump."""
+    import install_helper as ih
+
+    (tmp_path / "requirements-review.txt").write_text(
+        "ruff==0.15.20\nbashate>=2.1\nast-grep-cli>=0.28\ntree-sitter>=0.21\n", encoding="utf-8"
+    )
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
+    inst.repo = tmp_path
+    assert inst.requirement_specs(["bashate", "ast-grep-cli"]) == [
+        "bashate>=2.1",
+        "ast-grep-cli>=0.28",
+    ]
+
+    calls = []
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ih, "run_cmd", lambda argv, **k: calls.append(argv) or _proc(returncode=0))
+    inst._language_analysers_by_pip()
+    assert calls, "the step never installed anything"
+    assert calls[0][-2:] == ["bashate>=2.1", "ast-grep-cli>=0.28"]
+    # ast-grep-cli is the package; ast-grep is the command the probe looks for, and the
+    # reported outcome has to be the command or a successful install still reads as missing.
+    out = capsys.readouterr().out
+    assert "ast-grep" in out and "bashate" in out
+
+
+def test_the_analyser_step_installs_what_it_can_and_never_fails(monkeypatch, tmp_path, capsys):
+    """Every tool here is optional. A refused download, a refused pip and an absent npm are
+    three normal outcomes, and the step reports each one and moves on."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ih, "run_cmd", lambda argv, **k: _proc(returncode=1, stderr="no index"))
+    monkeypatch.setattr(ih, "install_release_tool", lambda *a, **k: None)
+    monkeypatch.setattr(
+        ih, "confirm", lambda *a, **k: (_ for _ in ()).throw(AssertionError("it asked"))
+    )
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
+    inst.repo = tmp_path
+    inst.language_analysers_step()  # must not raise
+
+    out = capsys.readouterr().out
+    # The intro says what it is about to do, and why the untouched ones are untouched.
+    assert "used only when the reviewed code has that language" in out
+    assert "JDK, coursier or PowerShell" in out
+    for tool in ("bashate", "ast-grep", "gitleaks", "shfmt", "shellcheck", "eslint"):
+        assert tool in out, tool
+    statuses = {name: status for name, status, _detail in inst.tracker.steps}
+    assert statuses["gitleaks"] == "skip" and statuses["shellcheck"] == "skip"
+    assert "fail" not in statuses.values()
+
+
+def test_the_analyser_step_sits_right_after_the_scanner_in_both_flows():
+    """Same job, same place: the tools a review needs, fetched rather than listed as
+    commands to run by hand. The scanner is fetched first because its database step depends
+    on it."""
+    import install_helper as ih
+
+    for subset in ("full", "update"):
+        plan = ih.Installer(
+            _args(yes=True), ih.Style(False), ih.marks(), subset=subset
+        ).build_plan()
+        titles = [t() if callable(t) else t for t, _ in plan]
+        scanner = next(i for i, t in enumerate(titles) if t.startswith("Dependency scanner"))
+        analysers = next(i for i, t in enumerate(titles) if t.startswith("Language analysers"))
+        assert analysers == scanner + 1, f"{subset}: {titles}"
