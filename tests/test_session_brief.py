@@ -104,28 +104,46 @@ def test_bad_stdin_fails_open(monkeypatch, capsys):
 # that engagement - the session that most needs them, having just lost its context.
 
 
-def test_a_resume_adds_its_session_to_the_stamp(tmp_path):
+def test_a_session_the_stamp_never_knew_is_not_armed_by_a_resume(tmp_path):
+    """The first version stamped ANY resuming session while a pack was live, and a plain
+    session that compacted in a project with an open engagement woke up with the execution
+    gate armed against it (2026-09-12, the day it shipped). No stamp, or a stamp naming
+    only other sessions: nothing is written."""
     mod = _load()
     engagements = tmp_path / "artifacts"
     engagements.mkdir()
-    mod._restamp(engagements, "resumed-session")
+    mod._restamp(engagements, "never-engaged")
+    assert not (engagements / ".team-session.json").exists()
+    (engagements / ".team-session.json").write_text(
+        json.dumps({"session": "first", "stamped": "2026-09-12"}), encoding="utf-8"
+    )
+    mod._restamp(engagements, "never-engaged")
     data = json.loads((engagements / ".team-session.json").read_text(encoding="utf-8"))
-    assert data["session_id"] == "resumed-session"
-    assert [e["id"] for e in data["sessions"]] == ["resumed-session"]
+    assert data == {"session": "first", "stamped": "2026-09-12"}
 
 
-def test_a_resume_does_not_disarm_the_session_already_stamped(tmp_path):
-    """Append, never replace - two sessions engaged in one project must both stay armed."""
+def test_a_resume_refreshes_a_session_the_stamp_knows_and_keeps_the_others(tmp_path):
+    """Refresh, never replace: the resuming session moves to the newest slot with a fresh
+    timestamp, and a second session engaged in the same project stays armed."""
     mod = _load()
     engagements = tmp_path / "artifacts"
     engagements.mkdir()
     (engagements / ".team-session.json").write_text(
-        json.dumps({"session": "first", "stamped": "2026-09-12"}), encoding="utf-8"
+        json.dumps(
+            {
+                "session": "first",
+                "stamped": "2026-09-12",
+                "sessions": [{"id": "second", "stamped_at": "2026-09-12T10:00:00"}],
+            }
+        ),
+        encoding="utf-8",
     )
-    mod._restamp(engagements, "resumed-session")
+    mod._restamp(engagements, "first")
     data = json.loads((engagements / ".team-session.json").read_text(encoding="utf-8"))
     ids = [e["id"] for e in data["sessions"]]
-    assert ids == ["first", "resumed-session"]
+    assert ids == ["second", "first"]
+    assert data["session_id"] == "first"
+    assert data["sessions"][-1]["stamped_at"] != ""
 
 
 def test_the_stamped_session_list_is_capped(tmp_path):
@@ -133,11 +151,19 @@ def test_the_stamped_session_list_is_capped(tmp_path):
     mod = _load()
     engagements = tmp_path / "artifacts"
     engagements.mkdir()
-    for i in range(20):
-        mod._restamp(engagements, f"session-{i}")
+    (engagements / ".team-session.json").write_text(
+        json.dumps(
+            {
+                "session": "session-0",
+                "sessions": [{"id": f"session-{i}", "stamped_at": ""} for i in range(20)],
+            }
+        ),
+        encoding="utf-8",
+    )
+    mod._restamp(engagements, "session-3")
     data = json.loads((engagements / ".team-session.json").read_text(encoding="utf-8"))
     assert len(data["sessions"]) == mod._MAX_STAMPED_SESSIONS
-    assert data["sessions"][-1]["id"] == "session-19"
+    assert data["sessions"][-1]["id"] == "session-3"
 
 
 def test_a_dormant_session_start_stamps_nothing(tmp_path, monkeypatch, capsys):

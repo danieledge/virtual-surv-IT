@@ -54,13 +54,15 @@ jobs:
       # only, so the same numbers aren't uploaded three times over. No threshold gate yet -
       # this turns "which modules are referenced by a test file" (a static, this-audit-style
       # grep) into "which lines actually executed", nothing more.
+      # --durations: the Windows leg took 29 minutes on 2026-09-12 and tripped the job
+      # limit; the slowest tests have to be visible in the log before they can be fixed.
       - name: pytest
         if: ${{ !matrix.coverage }}
-        run: pytest
+        run: pytest --durations=25
       - name: pytest (with coverage)
         if: ${{ matrix.coverage }}
         run: >
-          pytest
+          pytest --durations=25
           --cov=scripts --cov=.claude/hooks
           --cov-report=xml --cov-report=term-missing:skip-covered
       - name: Upload coverage report

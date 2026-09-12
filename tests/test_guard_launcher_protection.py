@@ -94,14 +94,22 @@ def test_the_staged_copies_stay_editable():
 
 
 def _looks_like_python(candidate: str) -> bool:
-    """Drive the shell function itself rather than reimplement its case statement here."""
-    script = f"""
-    . /dev/stdin <<'SRC'
-{_validator_source()}
-SRC
-    if _looks_like_python {candidate!r}; then echo yes; else echo no; fi
-    """
-    proc = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    """Drive the shell function itself rather than reimplement its case statement here.
+
+    The function is sourced from a temp file, not from a heredoc on /dev/stdin: Git Bash on
+    the Windows runner has no /dev/stdin to source, so every candidate came back "no"
+    there and the acceptance test failed on the good names (2026-09-12)."""
+    with tempfile.NamedTemporaryFile("w", suffix=".sh", delete=False, encoding="utf-8") as fh:
+        fh.write(_validator_source() + "\n")
+        source_path = Path(fh.name).as_posix()
+    try:
+        script = f'. "{source_path}"\nif _looks_like_python {candidate!r}; then echo yes; else echo no; fi\n'
+        proc = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    finally:
+        try:
+            os.unlink(source_path)
+        except OSError:
+            pass
     return proc.stdout.strip() == "yes"
 
 

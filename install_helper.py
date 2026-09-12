@@ -2211,6 +2211,12 @@ def _demote_fake_console_stdin() -> None:
     CI leg after the 2026-09-12 audit; no effect anywhere but Windows."""
     if os.name != "nt":
         return
+    # Only the process's real stdin is probed. A test that stands in a fake terminal
+    # (an io object whose isatty() says True) replaces sys.stdin wholesale, and the
+    # console probe has nothing to say about that object - demoting it hid the menu
+    # from nineteen tests on the Windows runner (2026-09-12).
+    if sys.stdin is not sys.__stdin__:
+        return
     try:
         if not sys.stdin.isatty():
             return

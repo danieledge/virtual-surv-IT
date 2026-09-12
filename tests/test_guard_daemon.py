@@ -976,6 +976,7 @@ def test_a_port_file_owned_by_another_account_is_ignored(monkeypatch, tmp_path):
     assert client.read_port_and_token(tmp_path) == (None, None)
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Windows has no POSIX mode bits to assert on")
 def test_the_port_file_is_written_private(monkeypatch, tmp_path):
     gd = _load_guard_daemon(monkeypatch)
     daemon = gd.GuardDaemon(REPO_ROOT, idle_timeout=1, state_root=tmp_path)
