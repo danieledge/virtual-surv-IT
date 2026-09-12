@@ -30,11 +30,18 @@ import time
 from pathlib import Path
 from typing import Any
 
-# How hard to try again when Windows says "file in use". Four attempts spread over ~150ms:
-# long enough to outlast a scanner's handle, short enough that a genuinely locked file
-# still fails fast rather than hanging a CLI command.
-_RETRY_ATTEMPTS = 4
-_RETRY_SLEEP_SECONDS = 0.05
+# How hard to try again when Windows says "file in use". Sixteen attempts with a backoff
+# that starts at 20ms and caps at 250ms, about 2.5s in all: eight threads replacing the
+# same target on the Windows runner exhausted the first version's four tries in 150ms
+# (test_fsutil, 2026-09-12), while a genuinely locked file still fails within seconds
+# rather than hanging a CLI command.
+_RETRY_ATTEMPTS = 16
+_RETRY_SLEEP_SECONDS = 0.02
+_RETRY_SLEEP_CAP_SECONDS = 0.25
+
+
+def _retry_sleep(attempt: int) -> None:
+    time.sleep(min(_RETRY_SLEEP_SECONDS * (1.5**attempt), _RETRY_SLEEP_CAP_SECONDS))
 
 
 def _tmp_sibling(target: Path) -> Path:
@@ -51,7 +58,7 @@ def _replace_with_retry(tmp: Path, target: Path) -> None:
         except PermissionError:
             if attempt == _RETRY_ATTEMPTS - 1:
                 raise
-            time.sleep(_RETRY_SLEEP_SECONDS)
+            _retry_sleep(attempt)
 
 
 def unlink_quietly(path: str | os.PathLike[str], *, missing_ok: bool = True) -> bool:
@@ -68,7 +75,7 @@ def unlink_quietly(path: str | os.PathLike[str], *, missing_ok: bool = True) -> 
         except PermissionError:
             if attempt == _RETRY_ATTEMPTS - 1:
                 return not target.exists()
-            time.sleep(_RETRY_SLEEP_SECONDS)
+            _retry_sleep(attempt)
         except OSError:
             return not target.exists()
     return not target.exists()

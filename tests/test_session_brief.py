@@ -179,11 +179,31 @@ def test_a_dormant_session_start_stamps_nothing(tmp_path, monkeypatch, capsys):
     assert not (tmp_path / "artifacts" / ".team-session.json").exists()
 
 
-def test_a_live_engagement_resume_arms_the_gates_for_the_new_session(tmp_path, monkeypatch, capsys):
-    """The end-to-end shape of W-4: a resume into a live pack re-stamps, so the gates the
-    engagement was running under are still armed for the session that continues it."""
+def test_a_live_engagement_resume_keeps_the_gates_armed_for_the_session_that_had_them(
+    tmp_path, monkeypatch, capsys
+):
+    """The end-to-end shape of W-4: a resume into a live pack refreshes the stamp of the
+    session that was engaged, so the gates it was running under stay armed for the
+    continuation. A compaction keeps its session id, so the id is already in the stamp."""
     _ws(tmp_path, "audit")
-    rc, out = _run(monkeypatch, capsys, {"source": "resume", "session_id": "resumed-1"}, tmp_path)
+    stamp = tmp_path / "artifacts" / ".team-session.json"
+    stamp.write_text(
+        json.dumps({"session": "engaged-1", "stamped": "2026-09-11"}), encoding="utf-8"
+    )
+    rc, out = _run(monkeypatch, capsys, {"source": "resume", "session_id": "engaged-1"}, tmp_path)
     assert rc == 0 and "engagement-resume-brief" in out
-    data = json.loads((tmp_path / "artifacts" / ".team-session.json").read_text(encoding="utf-8"))
-    assert data["session_id"] == "resumed-1"
+    data = json.loads(stamp.read_text(encoding="utf-8"))
+    assert data["session_id"] == "engaged-1"
+    assert [e["id"] for e in data["sessions"]] == ["engaged-1"]
+    assert data["sessions"][0]["stamped_at"].startswith("20")
+
+
+def test_a_live_engagement_resume_does_not_arm_a_session_that_was_never_engaged(
+    tmp_path, monkeypatch, capsys
+):
+    """A plain session that compacts in a project with an open engagement still gets the
+    brief, and still stays dormant: no stamp appears for it (2026-09-12, seen live)."""
+    _ws(tmp_path, "audit")
+    rc, out = _run(monkeypatch, capsys, {"source": "resume", "session_id": "stranger-1"}, tmp_path)
+    assert rc == 0 and "engagement-resume-brief" in out
+    assert not (tmp_path / "artifacts" / ".team-session.json").exists()

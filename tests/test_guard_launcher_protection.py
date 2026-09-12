@@ -93,6 +93,21 @@ def test_the_staged_copies_stay_editable():
 # --------------------------------------------------------- what run-guard.sh will execute
 
 
+def _bash() -> str:
+    """The bash that can source a POSIX shell function. On a Windows runner a bare `bash`
+    from a Python subprocess resolves to C:\\Windows\\System32\\bash.exe, the WSL stub, which
+    runs nothing and prints an error - every candidate came back "no" (2026-09-12). Git's
+    own bash is what run-guard.sh executes under there, so it is what the test drives."""
+    if os.name == "nt":
+        for candidate in (
+            r"C:\Program Files\Git\bin\bash.exe",
+            r"C:\Program Files\Git\usr\bin\bash.exe",
+        ):
+            if Path(candidate).is_file():
+                return candidate
+    return "bash"
+
+
 def _looks_like_python(candidate: str) -> bool:
     """Drive the shell function itself rather than reimplement its case statement here.
 
@@ -104,7 +119,7 @@ def _looks_like_python(candidate: str) -> bool:
         source_path = Path(fh.name).as_posix()
     try:
         script = f'. "{source_path}"\nif _looks_like_python {candidate!r}; then echo yes; else echo no; fi\n'
-        proc = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+        proc = subprocess.run([_bash(), "-c", script], capture_output=True, text=True)
     finally:
         try:
             os.unlink(source_path)

@@ -29,7 +29,10 @@ jobs:
   test:
     name: Tests (${{ matrix.os }}, py${{ matrix.python }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    # 60, not 30: the Windows leg runs the suite in about 29 minutes with no single test
+    # over five seconds - 3,700 tests at Windows process-spawn cost - and was cancelled
+    # at the old limit three runs in a row on 2026-09-12. Linux finishes in about six.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
