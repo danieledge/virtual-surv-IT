@@ -125,6 +125,10 @@ def glyphs(mod):
         # Distinct from "archive" (📦, the WRITE action) - this is the read side, and
         # the archive glyph already fronts three different labels.
         "browse": "🗂️  " if rich and mod._can_encode("🗂️") else "",
+        # The day-to-day guide (2026-09-12). Probed on its own, like "browse": the shared
+        # probe string above does not carry this character, and a glyph nobody tested is
+        # exactly how mojibake reaches a cp1252 console.
+        "howto": "📖 " if rich and mod._can_encode("📖") else "",
     }
 
 

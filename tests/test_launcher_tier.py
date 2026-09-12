@@ -96,7 +96,19 @@ def test_picks_match_launcher_app_exactly():
     check(
         "actions are built in launcher_app's order",
         [a[0][0] for a in actions],
-        ["new", "jira", "settings", "open", "artifacts", "archive", "finished", "launch"],
+        [
+            "new",
+            "jira",
+            "settings",
+            "open",
+            "artifacts",
+            "archive",
+            "finished",
+            # [h] joined on 2026-09-12, when the day-to-day guide moved off the installer's
+            # menu. Unconditional on both tiers: it is the row that explains the others.
+            "howto",
+            "launch",
+        ],
     )
 
     async def pick_for(key):
@@ -116,6 +128,7 @@ def test_picks_match_launcher_app_exactly():
             ("b", ("finished",)),
             ("a", ("archive",)),
             ("v", ("artifacts",)),
+            ("h", ("howto",)),
         ):
             check(f"[{key}] returns launcher_app's pick", await pick_for(key), want)
         check("enter on a row resumes it", await pick_for("enter"), ("resume", 0))
@@ -590,7 +603,7 @@ def test_the_installer_chooser_matches_installer_app():
     )
 
     options = (
-        ("1", "Install or reconfigure the team (full run - asks everything)"),
+        ("1", "Install/update or reconfigure the team (full run - asks everything)"),
         ("3", "Diagnostics..."),
         ("u", "Update only (quick - new code + plugin, keeps every setting)"),
         ("q", "Quit"),
@@ -619,7 +632,7 @@ def test_the_installer_chooser_matches_installer_app():
         # Every row of the longest submenu must be reachable.
         adv = tuple((k, f"option {k}") for k in IH._ADVANCED_ACTIONS)
         check(
-            "the last row of a 16-row submenu is reachable",
+            "the last row of the longest submenu is reachable",
             await pick(["up", "enter"], adv, IH._ADVANCED_ACTIONS),
             "b",
         )
@@ -1283,3 +1296,93 @@ def test_both_typed_input_screens_handle_paste():
 
     for cls in (launcher_tiers.JiraApp, launcher_tiers.RequestApp):
         assert callable(getattr(cls, "on_paste", None)), cls.__name__
+
+
+# ---------------- the day-to-day guide (2026-09-12) ----------------
+
+
+def test_the_day_to_day_guide_matches_launcher_app():
+    """[h] is one screen in three renderings, not three narratives.
+
+    It was menu item 5 of the INSTALLER until the owner moved it ("move the working with me
+    day to day to virt-surv go... make sure this sits in textual not just showing in the
+    terminal"), which is why the parity is worth pinning on the day it lands: the installer's
+    copy printed to a console the next full-screen app painted over, and a second copy of
+    the words is how the tiers came to disagree about everything else.
+    """
+    import launcher_app
+    import launcher_textual
+    import launcher_tiers
+
+    check("the Textual tier has the screen", callable(launcher_textual.howto_screen), True)
+    check("so does the prompt_toolkit tier", callable(launcher_app.howto_screen), True)
+    check(
+        "both take the same arguments",
+        list(inspect.signature(launcher_textual.howto_screen).parameters),
+        list(inspect.signature(launcher_app.howto_screen).parameters),
+    )
+    check("the Textual widget exists", hasattr(launcher_tiers, "HowtoApp"), True)
+    check(
+        "and it is one of this file's screens",
+        issubclass(launcher_tiers.HowtoApp, launcher_tiers.TierApp),
+        True,
+    )
+
+    # Through the ONE dispatcher, like every other screen, and offered on the plain tier
+    # too - a key that exists on two renderings out of three is the drift this file exists
+    # to catch.
+    source = (REPO / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
+    flat = " ".join(source.split())
+    check(
+        "the launcher dispatches it through _tiered_screen",
+        '_tiered_screen( "howto_screen"' in flat or '_tiered_screen("howto_screen"' in flat,
+        True,
+    )
+    check(
+        "no tier is imported directly for it",
+        "from launcher_app import howto_screen" in source,
+        False,
+    )
+    check("the plain tier offers [h] too", 'choice.lower() == "h"' in source, True)
+    check("and prints the same narrative", "def _howto_plain(" in source, True)
+
+
+def test_the_guide_describes_the_VSIT_layout_and_not_the_old_one():
+    """The text it replaced still sent people to the pre-VSIT folder, which is the reason
+    the owner asked for it to be rewritten at the same time as it moved. Engagements live
+    in VSIT/engagements/<slug>/ and the register beside them."""
+    import howto_text
+
+    body = "\n".join(f"{heading}\n{text}" for heading, text in howto_text.sections())
+    check("the old workspace name is gone", "artifacts/" in body, False)
+    check("engagements are where they are", "VSIT/engagements/" in body, True)
+    check("the register is named", "ENGAGEMENTS.md" in body, True)
+    check("project settings are named", "VSIT/config/" in body, True)
+    check("machine-only caches are named", "VSIT/local/" in body, True)
+    check("every section has words in it", all(h and t for h, t in howto_text.sections()), True)
+
+
+def test_the_guide_screen_scrolls_and_leaves_on_esc():
+    """Read-only: there is nothing to pick, so the only things to get wrong are scrolling
+    and the way out. Driven rather than grepped, for the reason the pre-flight test records:
+    a test that matches on a key literal passes on a behaviour change."""
+    import howto_text
+    from launcher_tiers import HowtoApp
+
+    async def run():
+        app = HowtoApp(Path("/tmp/p"), howto_text.sections(), howto_text.TITLE)
+        async with app.run_test(size=(96, 26)) as p:
+            await p.pause()
+            check("it drew", app.ran, True)
+            panel = app.query_one("#panel")
+            await p.press("pagedown")
+            await p.pause()
+            check("pagedown moves the pane", panel.scroll_offset.y > 0, True)
+            await p.press("home")
+            await p.pause()
+            check("home comes back to the top", panel.scroll_offset.y, 0)
+            await p.press("escape")
+            await p.pause()
+        check("esc leaves", app.is_running, False)
+
+    asyncio.run(run())

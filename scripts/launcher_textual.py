@@ -238,6 +238,10 @@ def _actions(project_dir: Path, mod, shown: list, jira_on: bool) -> list:
         out.append((("artifacts",), label("archive", "view an engagement's artifacts"), "v"))
         out.append((("archive",), label("archive", "archive finished engagements"), "a"))
     out.append((("finished",), label("browse", "browse done and archived"), "b"))
+    # The day-to-day guide (2026-09-12 owner request). Offered unconditionally: it is the
+    # one row that explains the rest of the menu, so gating it on having work open would
+    # hide it from exactly the person who needs it.
+    out.append((("howto",), label("howto", "how to work with the team, day to day"), "h"))
     try:
         if mod._running_slug(project_dir):
             out.append((("watch",), label("launch", "watch the engagement running"), "t"))
@@ -522,6 +526,37 @@ def artifacts_screen(project_dir: Path, mod, slug: str, output=None):
             mod._open_path(items[index][1])
         except Exception:  # noqa: BLE001 - failing to open is not a crash  # nosec B110 - failing to open a path externally is not a crash
             pass
+    return True
+
+
+def howto_screen(project_dir: Path, mod, output=None):
+    """Morgan's day-to-day narrative, rendered in Textual. True when it ran, None when not.
+
+    Same contract and same signature as launcher_app.howto_screen, because _tiered_screen
+    calls both with the same arguments. The words are howto_text's; this only draws them.
+    """
+    widgets = _widgets()
+    if widgets is None:
+        return None
+    try:
+        import howto_text
+
+        blocks = howto_text.sections()
+        title = howto_text.TITLE
+    except Exception as exc:  # noqa: BLE001 - no text is not a crash, but it is not silent
+        _report_outside_loop("loading the day-to-day guide", exc)
+        return None
+    try:
+        app = widgets.HowtoApp(project_dir, blocks, title)
+        with _true_terminal_size():
+            app.run()
+    except Exception as exc:  # noqa: BLE001 - any failure degrades, and SAYS so
+        _report_outside_loop("the day-to-day guide (textual)", exc)
+        return None
+    if _crashed(app, "the day-to-day guide (textual)") is not None:
+        return None  # crashed: the next tier draws it instead
+    if not getattr(app, "ran", False):
+        return None
     return True
 
 

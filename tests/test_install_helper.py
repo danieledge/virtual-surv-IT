@@ -4041,12 +4041,15 @@ def test_machine_defaults_step_invalid_model_input_leaves_unchanged(tmp_path, mo
 
 
 def test_menu_option_4_maps_to_advanced_submenu():
+    # Renumbered 2026-09-12 when "Preferences for one project" left the submenu: model,
+    # machine defaults and the alias manager each moved up one.
     from install_helper import _ADVANCED_ACTIONS, MENU_ACTIONS
 
     assert MENU_ACTIONS["4"] == "advanced"
-    assert _ADVANCED_ACTIONS["3"] == "formats"
-    assert _ADVANCED_ACTIONS["5"] == "machinedefaults"
-    assert _ADVANCED_ACTIONS["9"] == "aliasmanage"
+    assert _ADVANCED_ACTIONS["3"] == "model"
+    assert _ADVANCED_ACTIONS["4"] == "machinedefaults"
+    assert _ADVANCED_ACTIONS["8"] == "aliasmanage"
+    assert "formats" not in _ADVANCED_ACTIONS.values()
 
 
 def test_write_team_preferences_regulatory_citations_flag(tmp_path):
@@ -6116,7 +6119,9 @@ def test_top_level_menu_actions_are_the_expected_set():
     """2026-08-17 restructure: manage-engagements retired (folder subcommands carry it),
     alias moved under Advanced as the two-option manager. 2026-08-18: 'Help: using the
     plugin' (Morgan's narrative) joins as item 5. 2026-08-25: a quick 'update' joins as a
-    LETTER key."""
+    LETTER key. 2026-09-12: item 5 LEAVES - the day-to-day guide moved to the `virt-surv
+    go` menu ([h]), where it is read daily, rather than behind an installer run once. It
+    was the last number, so nothing had to be renumbered to remove it."""
     from install_helper import MENU_ACTIONS
 
     assert MENU_ACTIONS == {
@@ -6124,7 +6129,6 @@ def test_top_level_menu_actions_are_the_expected_set():
         "2": "configure",
         "3": "diagnostics",
         "4": "advanced",
-        "5": "howto",
         "u": "update",
         "q": "quit",
     }
@@ -6144,7 +6148,6 @@ def test_adding_a_menu_entry_never_renumbers_the_existing_ones():
         ("2", "configure"),
         ("3", "diagnostics"),
         ("4", "advanced"),
-        ("5", "howto"),
     ):
         assert MENU_ACTIONS[key] == action, f"option {key} moved - that breaks stored keystrokes"
 
@@ -6170,19 +6173,22 @@ def test_advanced_submenu_full_mapping():
     assert _ADVANCED_ACTIONS == {
         "1": "setup",
         "2": "statusline",
-        "3": "formats",
-        "4": "model",
-        "5": "machinedefaults",
-        "6": "dashboard",
-        "7": "fixbashrc",
-        "8": "cleanplugincache",
-        "9": "aliasmanage",
-        "10": "gitbashperf",
-        "11": "codeintel",
-        "12": "extensions",
-        "13": "reprobe",
-        "14": "relocate",
-        "15": "osvdb",
+        # "formats" (Preferences for one project) left the menu on 2026-09-12 (owner: "it
+        # is configured without issue from virt-surv go, we do not need it in virt-surv").
+        # The SUBSET is still there and still tested - only the door is gone - and the
+        # items below closed the gap, as the Demo removal did the day before.
+        "3": "model",
+        "4": "machinedefaults",
+        "5": "dashboard",
+        "6": "fixbashrc",
+        "7": "cleanplugincache",
+        "8": "aliasmanage",
+        "9": "gitbashperf",
+        "10": "codeintel",
+        "11": "extensions",
+        "12": "reprobe",
+        "13": "relocate",
+        "14": "osvdb",
         "b": "back",
     }
 
@@ -6238,7 +6244,7 @@ def test_choose_action_resolves_through_diagnostics_submenu(monkeypatch):
 def test_choose_action_resolves_through_advanced_submenu(monkeypatch):
     import install_helper as ih
 
-    answers = iter(["4", "4"])  # Advanced -> Morgan's model only
+    answers = iter(["4", "3"])  # Advanced -> Morgan's model only
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     assert ih.choose_action(ih.Style(False)) == "model"
 
@@ -6249,7 +6255,7 @@ def test_choose_action_configure_direct_and_aliasmanage_via_advanced(monkeypatch
     monkeypatch.setattr("builtins.input", lambda prompt="": "2")
     assert ih.choose_action(ih.Style(False)) == "configure"
 
-    answers = iter(["4", "9"])  # Advanced -> Manage the alias
+    answers = iter(["4", "8"])  # Advanced -> Manage the alias
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     assert ih.choose_action(ih.Style(False)) == "aliasmanage"
 
@@ -6736,9 +6742,9 @@ def test_menu_loops_back_and_runs_a_second_action_before_quit(monkeypatch, tmp_p
         "run_alias_manage",
         lambda style, mm, assume_yes=False, demo=False, repo_hint=None: calls.append("alias") or 0,
     )
-    # 4,9 = Advanced -> Manage the alias, loop back, 2 = Configure, answer the
+    # 4,8 = Advanced -> Manage the alias, loop back, 2 = Configure, answer the
     # directory prompt, loop back again, then exhausted answers feed "q".
-    _menu_session(monkeypatch, tmp_path, ["4", "9", "2", str(tmp_path)])
+    _menu_session(monkeypatch, tmp_path, ["4", "8", "2", str(tmp_path)])
     rc = ih.main([])
     assert rc == 0
     assert calls == ["alias", "configure"]  # BOTH ran, in order, in one session
@@ -6754,7 +6760,7 @@ def test_menu_shows_again_after_an_action_completes(monkeypatch, tmp_path, capsy
         "run_alias_manage",
         lambda style, mm, assume_yes=False, demo=False, repo_hint=None: 0,
     )
-    _menu_session(monkeypatch, tmp_path, ["4", "10"])  # Advanced -> alias, exhausted -> "q"
+    _menu_session(monkeypatch, tmp_path, ["4", "8"])  # Advanced -> alias, exhausted -> "q"
     ih.main([])
     out = capsys.readouterr().out
     assert out.count("What can I do for you?") == 2  # once before "4", once before "q"
@@ -6772,7 +6778,7 @@ def test_invalid_menu_choice_reprompts_without_redrawing_menu(monkeypatch, tmp_p
     assert out.count("What can I do for you?") == 1  # drawn once, not once per bad keystroke
     # Derived from MENU_ACTIONS now, so it names every valid key - "u" (update) was a
     # real option this line had never mentioned.
-    assert out.count("1-5, u, q, please.") == 2  # one error per invalid attempt
+    assert out.count("1-4, u, q, please.") == 2  # one error per invalid attempt
     assert "u" in ih._menu_key_hint()
 
 
@@ -6811,14 +6817,17 @@ def test_demo_flag_protects_every_action_in_one_session(monkeypatch, tmp_path, c
         lambda target, style, mm, assume_yes=False, demo=False: configure_calls.append(demo) or 0,
     )
     # "2" = Configure (free-function path), directory prompt, loop back,
-    # "4","3" = Advanced -> Project preferences (Installer subset "formats"), loop back, "q".
+    # "4","3" = Advanced -> Morgan's model (Installer subset "model"), loop back, "q".
+    # It was Project preferences ("formats") until that item left the submenu on
+    # 2026-09-12; any Installer subset proves the same thing, which is that --demo reaches
+    # the Installer path as well as the free-function one.
     _menu_session(monkeypatch, tmp_path, ["2", str(tmp_path), "4", "3", "q"])
     rc = ih.main(["--demo"])
     assert rc == 0
     assert configure_calls == [True]  # demo threaded to the free-function path
     # demo threaded to the Installer path, AND run_cmd was swapped to the demo runner
     # for the duration of that construction+run.
-    assert installer_calls == [("formats", True, True)]
+    assert installer_calls == [("model", True, True)]
 
 
 def test_demo_menu_selection_is_one_shot_not_sticky(monkeypatch, tmp_path):
@@ -6848,9 +6857,9 @@ def test_demo_menu_selection_is_one_shot_not_sticky(monkeypatch, tmp_path):
             called_demo_values.append(demo) or 0
         ),
     )
-    # 4,5 = Advanced -> Demo (one-shot full-flow preview via the FakeInstaller), loop
+    # 4,4 = Advanced -> an Installer-subset item (run through the FakeInstaller), loop
     # back, 2 = Configure, directory prompt, loop back, then exhausted -> "q".
-    _menu_session(monkeypatch, tmp_path, ["4", "5", "2", str(tmp_path)])
+    _menu_session(monkeypatch, tmp_path, ["4", "4", "2", str(tmp_path)])
     ih.main([])
     # run_configure must have been called with demo=False - the earlier "Demo" menu pick
     # must not have left args.demo stuck true.
@@ -7946,19 +7955,24 @@ def test_clean_plugin_cache_never_offers_unattributable_dirs(tmp_path, monkeypat
     assert other.exists()  # untouched, unmentioned as removable
 
 
-def test_menu_5_shows_morgans_howto_narrative(monkeypatch, tmp_path, capsys):
-    """2026-08-18 user request: 'Help: using the plugin' displays Morgan's narrative -
-    leading with virt-surv go as the way to start, carrying the AI-identity line, and
-    read-only (a help view never counts as having changed anything)."""
+def test_the_day_to_day_guide_is_no_longer_an_installer_menu_item():
+    """It moved to `virt-surv go` on 2026-09-12 (owner: "move the working with me day to
+    day to virt-surv go... make sure this sits in textual not just showing in the
+    terminal"). What it SAYS is now tested where it lives - tests/test_launcher_tier.py -
+    and what must be true here is that the installer no longer owns a copy of it: two
+    narratives about how the team works is how they come to disagree."""
     import install_helper as ih
 
-    _menu_session(monkeypatch, tmp_path, ["5", "q"])
-    ih.main([])
-    out = capsys.readouterr().out
-    assert "Morgan (PM) here" in out
-    assert "AI agent with Virtual Surveillance IT" in out
-    assert "virt-surv go" in out
-    assert "nothing changed" in out  # read-only: the quit path still says so
+    assert "howto" not in ih.MENU_ACTIONS.values()
+    assert not hasattr(ih, "run_howto")
+    source = (Path(ih.__file__).resolve()).read_text(encoding="utf-8")
+    # The dispatch branch and the narrative's own opening line. Not "Morgan (PM) here" on
+    # its own: the installer's banner greets you with that too, and it is staying; and not
+    # the menu label, which the comment recording the move quotes on purpose.
+    assert 'action == "howto"' not in source
+    assert "Here's how working with the team goes" not in source, (
+        "the narrative lives in scripts/howto_text.py now"
+    )
 
 
 def test_installed_cache_note_flags_a_version_lag(tmp_path, monkeypatch):
@@ -8559,7 +8573,11 @@ def test_every_advanced_menu_item_can_actually_be_PICKED(monkeypatch, tmp_path, 
         "run_relocate_to_vsit",
         "run_alias_manage",
         "run_gitbash_perf",
-        "run_howto",
+        # Added 2026-09-12: picking the vulnerability-database item now tries to INSTALL
+        # osv-scanner and then fill its database, so an unstubbed run reached the network
+        # and its result depended on whether the machine running the suite happened to have
+        # the scanner already.
+        "run_osv_db_download",
         "run_configure",
         "run_statusline",
         "run_formats",
@@ -9293,3 +9311,238 @@ def test_backing_out_of_a_picker_does_not_pause(monkeypatch, tmp_path):
     _menu_session(monkeypatch, tmp_path, ["2"])
     assert ih.main([]) == 0
     assert paused == []
+
+
+# --- osv-scanner: install the tool, not just its database (2026-09-12) ------------------------
+
+
+@pytest.mark.parametrize(
+    "platform_name,machine,want",
+    [
+        ("linux", "x86_64", "osv-scanner_linux_amd64"),
+        ("linux", "aarch64", "osv-scanner_linux_arm64"),
+        ("linux2", "AMD64", "osv-scanner_linux_amd64"),
+        ("darwin", "x86_64", "osv-scanner_darwin_amd64"),
+        ("darwin", "arm64", "osv-scanner_darwin_arm64"),
+        ("win32", "AMD64", "osv-scanner_windows_amd64.exe"),
+        ("win32", "ARM64", "osv-scanner_windows_arm64.exe"),
+        ("linux", "mips64", ""),  # no published build: a clean "cannot", not an error
+        ("sunos5", "x86_64", ""),
+    ],
+)
+def test_the_release_asset_is_named_for_this_machine(platform_name, machine, want):
+    """The download URL is built from two strings that answer differently per OS for the
+    same silicon (x86_64 on Linux, AMD64 on Windows), and getting either wrong produces a
+    404 on the machine the user is standing in front of rather than on this one."""
+    import install_helper as ih
+
+    assert ih.osv_asset_name(platform_name, machine) == want
+
+
+def test_the_binary_goes_to_local_bin_on_every_platform(monkeypatch, tmp_path):
+    """NOT %APPDATA%, NOT Program Files (owner's corporate Windows boxes): group policy
+    blocks executables under APPDATA outright and Program Files needs an admin nobody has.
+    ~/.local/bin is where the claude CLI already lives on those machines."""
+    import install_helper as ih
+
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    assert ih.osv_bin_dir() == tmp_path / ".local" / "bin"
+    assert ih.osv_bin_path().parent == ih.osv_bin_dir()
+    assert ih.osv_bin_path().name.startswith("osv-scanner")
+
+
+def test_the_demo_path_writes_nothing(monkeypatch, tmp_path, capsys):
+    """--demo must reach a network call and a file write and do neither."""
+    import install_helper as ih
+
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("demo must not open the network")),
+    )
+
+    assert ih.install_osv_scanner(ih.Style(False), ih.marks(), demo=True) is None
+    out = capsys.readouterr().out
+    assert "would download" in out
+    assert not (tmp_path / ".local" / "bin").exists(), "demo wrote something"
+
+
+def test_a_blocked_download_is_reported_and_does_not_raise(monkeypatch, tmp_path, capsys):
+    """No network, a proxy that refuses, an air-gapped box: all normal states on the
+    machines this is aimed at. One dim line naming the manual route, then the run carries
+    on - an optional scanner must never be the thing that fails an install."""
+    import install_helper as ih
+
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+
+    def _refuse(*a, **k):
+        raise OSError("proxy refused the connection")
+
+    monkeypatch.setattr("urllib.request.urlopen", _refuse)
+
+    assert ih.install_osv_scanner(ih.Style(False), ih.marks()) is None  # no raise
+    out = capsys.readouterr().out
+    assert "could not download osv-scanner" in out
+    assert "github.com/google/osv-scanner/releases" in out  # the manual route, named
+    # And nothing half-written is left behind wearing the tool's name: shutil.which would
+    # find it and every later review would try to run it.
+    assert not ih.osv_bin_path().exists()
+
+
+class _Response(io.BytesIO):
+    """A urlopen() stand-in: bytes, usable as a context manager, no network."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+        return False
+
+
+def test_a_successful_download_is_verified_and_put_on_PATH(monkeypatch, tmp_path, capsys):
+    """A file at the right path is not an installed tool: it has to RUN, and it has to be
+    FINDABLE. The owner's rule (2026-09-12) is that the user does nothing by hand, so the
+    installer puts ~/.local/bin on PATH itself - in this process, so the database step that
+    follows can see the binary, and in the shell profile for every future terminal."""
+    import install_helper as ih
+
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    rc = tmp_path / ".bashrc"
+    rc.write_text("# mine\n", encoding="utf-8")
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+    monkeypatch.setenv("PATH", "/usr/bin")
+    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: _Response(b"#!/bin/true\n"))
+    monkeypatch.setattr(ih, "run_cmd", lambda argv, **k: _proc(returncode=0, stdout="v2.0.0"))
+
+    path = ih.install_osv_scanner(ih.Style(False), ih.marks())
+    assert path == ih.osv_bin_path()
+    assert path.read_bytes() == b"#!/bin/true\n"
+    if os.name != "nt":
+        assert path.stat().st_mode & 0o111, "it has to be executable to be installed"
+    # THIS run can find it, not just the next terminal - the database step comes next.
+    assert str(ih.osv_bin_dir()) in os.environ["PATH"].split(os.pathsep)
+    body = rc.read_text(encoding="utf-8")
+    assert str(ih.osv_bin_dir()) in body and "export PATH=" in body
+    assert ih._PATH_STAMP in body, "the line must be stamped, or nothing can replace it later"
+    out = capsys.readouterr().out
+    assert "osv-scanner installed at" in out
+    assert "PATH" in out  # it SAYS what it did to the profile
+
+
+def test_the_PATH_line_is_written_once_and_replaces_its_own_older_version(monkeypatch, tmp_path):
+    """Idempotent, and self-replacing. Append-only upgrades are what left five dead alias
+    definitions in a corporate profile (2026-08-17), which is why this line is stamped and
+    goes through the same removal logic rather than a second copy of it."""
+    import install_helper as ih
+
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+    monkeypatch.setenv("PATH", "/usr/bin")
+    rc = tmp_path / ".bashrc"
+    rc.write_text("# mine\n", encoding="utf-8")
+    target = tmp_path / ".local" / "bin"
+
+    ih.ensure_dir_on_path(ih.Style(False), target)
+    first = rc.read_text(encoding="utf-8")
+    ih.ensure_dir_on_path(ih.Style(False), target)
+    assert rc.read_text(encoding="utf-8") == first, "a second run must not write it again"
+    assert first.count(ih._PATH_STAMP) == 1
+    assert "# mine" in first, "it must never disturb what was already in the file"
+
+    # An older stamped line of ours is REPLACED, not stacked on top of.
+    rc.write_text(
+        f'# mine\nexport PATH="$PATH:/somewhere/old"  # {ih._PATH_MARKER}-v0\n', encoding="utf-8"
+    )
+    ih.ensure_dir_on_path(ih.Style(False), target)
+    body = rc.read_text(encoding="utf-8")
+    assert "/somewhere/old" not in body
+    assert body.count(ih._PATH_MARKER) == 1
+    assert "# mine" in body
+
+
+def test_the_PATH_change_is_narrated_and_not_written_in_demo(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+    monkeypatch.setenv("PATH", "/usr/bin")
+    rc = tmp_path / ".bashrc"
+    rc.write_text("# mine\n", encoding="utf-8")
+
+    ih.ensure_dir_on_path(ih.Style(False), tmp_path / ".local" / "bin", demo=True)
+    assert rc.read_text(encoding="utf-8") == "# mine\n"
+    assert "would add to" in capsys.readouterr().out
+
+
+def test_the_flow_step_never_asks_a_yes_no(monkeypatch, tmp_path, capsys):
+    """Owner, 2026-09-12: treat it like every other tool the installer sets up. The step
+    explains what it is fetching and then fetches it - a prompt here is the failure."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ih, "install_osv_scanner", lambda *a, **k: tmp_path / "osv-scanner")
+    monkeypatch.setattr(
+        ih, "confirm", lambda *a, **k: (_ for _ in ()).throw(AssertionError("it asked"))
+    )
+    monkeypatch.setattr(
+        "builtins.input", lambda prompt="": (_ for _ in ()).throw(AssertionError("it asked"))
+    )
+
+    ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full").osv_scanner_step()
+    out = capsys.readouterr().out
+    assert "installed at" in out
+    # The step_intro is the explanation, so it has to say what and where.
+    assert "github.com/google/osv-scanner" in out
+    assert ".local" in out
+
+
+def test_the_scanner_is_installed_before_the_database_in_both_flows():
+    """Order is the whole point of this change. The database step is a no-op without the
+    binary - it skipped with "osv-scanner not installed - nothing to fill" on the machine
+    that reported this, while the diagnostic beside it said "osv-scanner: not installed"."""
+    import install_helper as ih
+
+    for subset in ("full", "update"):
+        plan = ih.Installer(
+            _args(yes=True), ih.Style(False), ih.marks(), subset=subset
+        ).build_plan()
+        titles = [t() if callable(t) else t for t, _ in plan]
+        scanner = [i for i, t in enumerate(titles) if t.startswith("Dependency scanner")]
+        database = [i for i, t in enumerate(titles) if t.startswith("Vulnerability database")]
+        assert scanner, f"{subset} never installs the scanner"
+        assert database, f"{subset} never fills the database"
+        assert scanner[0] < database[0], f"{subset} fills the database before installing the tool"
+
+
+def test_the_step_is_soft_when_the_download_cannot_happen(monkeypatch, tmp_path, capsys):
+    """A step that fails an install over an optional analyser is worse than no step."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ih, "install_osv_scanner", lambda *a, **k: None)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
+    inst.osv_scanner_step()  # must not raise
+    assert "dependency findings stay off" in capsys.readouterr().out
+
+
+def test_the_database_menu_item_installs_the_scanner_first(monkeypatch, tmp_path, capsys):
+    """The live report: this item printed `go install github.com/google/osv-scanner/...`
+    at a corporate Windows laptop with no Go toolchain and no way to get one, so the one
+    door meant to make the scanner usable could never do anything."""
+    import install_helper as ih
+
+    tried = []
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(
+        ih, "install_osv_scanner", lambda *a, **k: tried.append(k.get("demo", False)) or None
+    )
+
+    assert ih.run_osv_db_download(ih.Style(False), ih.marks()) == 0  # still not a failure
+    assert tried == [False], "the menu item must try to install the scanner itself"
+    assert "go install github.com/google/osv-scanner" not in capsys.readouterr().out

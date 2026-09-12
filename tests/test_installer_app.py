@@ -59,12 +59,16 @@ def _args(**overrides):
     return SimpleNamespace(**base)
 
 
+# Real Advanced-submenu keys, because _rows resolves a key to its ACTION to decide what the
+# row says it writes. Renumbered 2026-09-12 with the submenu itself (machine defaults 5->4,
+# clean plugin cache 8->7, org extensions 12->11) - a stale key here silently looks up a
+# different action and the consequence column goes quiet.
 _OPTIONS = (
     ("1", "Environment setup only (deps + status line, no clone sync)"),
-    ("5", "Machine defaults (docx, citations, review tools, map skeleton, model)"),
-    ("8", "Clean plugin cache (remove stale cached copies of the plugin from ~/.claude)"),
+    ("4", "Machine defaults (docx, citations, review tools, map skeleton, model)"),
+    ("7", "Clean plugin cache (remove stale cached copies of the plugin from ~/.claude)"),
     ("", "-- internal / prototype --"),
-    ("12", "Org extensions (review/edit the standard workflow this machine applies)"),
+    ("11", "Org extensions (review/edit the standard workflow this machine applies)"),
     ("b", "Back"),
 )
 
@@ -93,17 +97,17 @@ def test_arrowing_and_enter_picks_the_row_you_are_looking_at(ptk):
     """The bug this shape keeps producing, asserted directly: the row highlighted is the
     row returned. Positional dispatch has broken that twice in this repo (the launcher's
     settings screen on 2026-08-28, and an Advanced-menu renumbering before it)."""
-    chosen, _ = _run(ptk, "\x1b[B\r")  # down once: row 1 -> row 6
-    assert chosen == "5"
+    chosen, _ = _run(ptk, "\x1b[B\r")  # down once: row 1 -> row 4
+    assert chosen == "4"
     chosen, _ = _run(ptk, "\x1b[B\x1b[B\r")  # down twice
-    assert chosen == "8"
+    assert chosen == "7"
 
 
 def test_typing_a_key_still_works_for_people_who_know_the_number(ptk):
     """A picker that punishes muscle memory from the numbered menu is a downgrade, not an
     upgrade. Single-character keys jump to their row."""
-    chosen, _ = _run(ptk, "8\r")
-    assert chosen == "8"
+    chosen, _ = _run(ptk, "7\r")
+    assert chosen == "7"
 
 
 def test_escape_is_a_decision_not_an_unavailability(ptk):
@@ -122,7 +126,7 @@ def test_divider_rows_are_not_selectable(ptk):
 
     keys = [key for key, _label, _blurb, _writes in installer_app._rows(_OPTIONS, None)]
     assert "" not in keys
-    assert keys == ["1", "5", "8", "12", "b"]
+    assert keys == ["1", "4", "7", "11", "b"]
 
 
 def test_the_explanation_leaves_the_label_and_goes_to_the_pane(ptk):
@@ -701,7 +705,13 @@ def test_the_update_decides_before_it_runs_not_during(ptk, monkeypatch):
     # set of steps than the one that runs.
     assert "Preflight checks" in captured["titles"]
     assert any("Sync to origin" in t for t in captured["titles"])
-    assert len(captured["titles"]) == 8, "the update subset is eight steps, deliberately"
+    # Nine since 2026-09-12: the dependency scanner joins the database it feeds. The
+    # database step could do nothing without it (live report: it skipped with "nothing to
+    # fill" on a machine whose diagnostic said "osv-scanner: not installed").
+    assert len(captured["titles"]) == 9, "the update subset is nine steps, deliberately"
+    assert captured["titles"].index("Dependency scanner") < captured["titles"].index(
+        "Vulnerability database"
+    ), "the scanner must be installed before the database it fills"
     # Added 2026-09-11: the offline vulnerability database goes stale, and an update is when
     # someone already expects a fetch. It is a no-op when osv-scanner is absent.
     assert "Vulnerability database" in captured["titles"]
@@ -737,15 +747,21 @@ def test_only_one_menu_option_calls_itself_an_update():
     2026-08-29: "should I be seeing this drop back on updating the team?").
 
     Asserted on the LABELS because that is where the ambiguity lived - both flows were
-    working exactly as designed."""
+    working exactly as designed.
+
+    2026-09-12: option 1 became "Install/update or reconfigure" at the owner's request -
+    the full run has always been able to bring an existing install up to date, and saying
+    only "Install" gave someone updating no reason to think it was their option either. So
+    the property is no longer "one label mentions updating": it is that exactly one option
+    is NAMED as the update, and it is the quick one."""
 
     source = (REPO_ROOT / "install_helper.py").read_text(encoding="utf-8")
-    start = source.index('("1", "Install or reconfigure')
+    start = source.index('("1", "Install/update or reconfigure')
     end = source.index('("q", "Quit")', start)
-    labels = source[start:end]
-    updates = [line for line in labels.split("\n") if "update" in line.lower() and '"' in line]
-    assert len(updates) == 1, f"exactly one option may claim to update:\n{updates}"
-    assert '"u"' in updates[0], "and it must be the quick update, not the full run"
+    labels = [line for line in source[start:end].split("\n") if '", "' in line]
+    named = [line for line in labels if '", "Update' in line]
+    assert len(named) == 1, f"exactly one option may be NAMED the update:\n{named}"
+    assert '"u"' in named[0], "and it must be the quick update, not the full run"
 
 
 def test_the_output_pane_shows_text_not_escape_codes():

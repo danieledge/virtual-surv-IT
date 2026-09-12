@@ -652,7 +652,10 @@ def test_a_local_bare_repo_is_recognised_as_a_git_source(tmp_path):
 
 
 def test_the_org_menu_entry_is_wired():
-    assert ih._ADVANCED_ACTIONS.get("12") == "extensions"
+    # 11 since 2026-09-12: "Preferences for one project" left the submenu and everything
+    # below it moved up one. Read from the table rather than pinned blind - the entry being
+    # WIRED is the property; its number is the submenu's business.
+    assert ih._ADVANCED_ACTIONS.get("11") == "extensions"
     assert callable(ih.run_extensions_editor)
 
 
@@ -770,7 +773,9 @@ def test_a_stale_inventory_says_how_old_it_is(tmp_path):
 def test_the_manual_reprobe_is_wired():
     """Installing a tool by hand - ShellCheck, gitleaks, ctags - needs a way to say
     "look again"; the code-intel step only clears the cache for the tool it installs."""
-    assert ih._ADVANCED_ACTIONS.get("13") == "reprobe"
+    # 12 since 2026-09-12 (the submenu closed the gap left by "Preferences for one
+    # project"); what matters is that the entry exists and dispatches.
+    assert ih._ADVANCED_ACTIONS.get("12") == "reprobe"
     assert callable(ih.run_tool_reprobe)
 
 

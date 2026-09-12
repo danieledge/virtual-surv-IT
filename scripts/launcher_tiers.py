@@ -1684,6 +1684,92 @@ class SlugPickerApp(ListApp):
         return t
 
 
+class HowtoApp(TierApp):
+    """Morgan's day-to-day narrative, as a screen you can read at your own pace.
+
+    MOVED HERE 2026-09-12 (owner: "move the working with me day to day to virt-surv go...
+    make sure this sits in textual not just showing in the terminal"). It used to be item 5
+    of the installer's menu, printed straight to the console - and the full-screen menu that
+    follows repaints over anything printed on the way back to it, so the one thing a new
+    user is meant to read was on screen for a frame.
+
+    Read-only: there is no pick and no confirmation, the keys scroll and Esc/q leaves. The
+    words come from howto_text.sections() rather than being restated here - three tiers draw
+    this, and a narrative kept in a renderer is a narrative that exists three times.
+    """
+
+    #: Lines a page key moves. Fixed rather than measured: the pane height is 0 on the first
+    #: paint, and a page that is a couple of lines conservative still lands the reader
+    #: somewhere they recognise.
+    PAGE = 10
+
+    def __init__(self, project, blocks: list, title: str) -> None:
+        super().__init__(project)
+        # `blocks`, and `title_text` rather than `title`: `title` is Textual's own App
+        # attribute (the window title it renders). That is the trap PreflightApp recorded on
+        # 2026-09-12 with `_modes` - our value stored under a framework name broke the app
+        # AFTER it had drawn, which is the worst moment to find out.
+        self.blocks = list(blocks)
+        self.title_text = title
+        self.ran = False
+
+    def on_mount(self) -> None:
+        self.ran = True
+        self._apply_width()
+        self.chrome_ready(self.title_text, "what is here")
+        self.paint()
+
+    def paint(self) -> None:
+        self.head(self.title_text if self.narrow else f"{self.folder()}  {_DOT}  {self.title_text}")
+        width = max(20, self.panel_width() - 4)
+        body = Text()
+        for heading, text in self.blocks:
+            body.append(f"  {heading}\n", style=f"bold {ACCENT}")
+            for line in wrap(text, width):
+                body.append(f"  {line}\n", style=TEXT)
+            body.append("\n")
+        self.query_one("#rows", Static).update(body)
+
+        side = Text("\n")
+        side.append("  What is here\n\n", style=f"bold {ACCENT}")
+        for heading, _text in self.blocks:
+            side.append(f"  {_BULLET} {heading}\n", style=DIM)
+        self.query_one("#side-body", Static).update(side)
+        self.foot(((_UPDOWN, "scroll"), ("pgup/pgdn", "page"), ("esc/q", "back")))
+
+    def _scroll(self, lines: int, top: bool = False, bottom: bool = False) -> None:
+        """Move the reading pane. Cosmetic: a scroll that fails must not end the screen."""
+        try:
+            panel = self.query_one("#panel")
+            if top:
+                panel.scroll_to(y=0, animate=False)
+            elif bottom:
+                panel.scroll_end(animate=False)
+            else:
+                panel.scroll_relative(y=lines, animate=False)
+        except Exception:  # noqa: BLE001 - scrolling is cosmetic  # nosec B110 - scrolling is cosmetic
+            pass
+
+    def on_key(self, event) -> None:
+        key = event.key
+        if key in ("escape", "q", "ctrl+c"):
+            event.stop()
+            self.exit()
+            return
+        if key == "down":
+            self._scroll(1)
+        elif key == "up":
+            self._scroll(-1)
+        elif key in ("pagedown", "space"):
+            self._scroll(self.PAGE)
+        elif key == "pageup":
+            self._scroll(-self.PAGE)
+        elif key == "home":
+            self._scroll(0, top=True)
+        elif key == "end":
+            self._scroll(0, bottom=True)
+
+
 class BrowseApp(TierApp):
     """Choose a project folder.
 

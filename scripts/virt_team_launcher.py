@@ -401,11 +401,53 @@ def _print_plain_help() -> None:
         ("m", "show every open engagement, not just the first few"),
         ("a", "archive finished engagements"),
         ("c", "settings"),
+        ("h", "how to work with the team, day to day"),
         ("?", "this list"),
         ("q / Esc", "leave without launching anything"),
     ):
         print(f"      {key:<9} {what}", file=sys.stderr)
     print(ink.dim("    Not every key applies on every screen.\n"), file=sys.stderr)
+
+
+def _howto_plain() -> None:
+    """Morgan's day-to-day guide, for a console that cannot host a SCREEN.
+
+    The third tier of the same thing (2026-09-12): the words are howto_text's, so the
+    plain console and the two full-screen tiers cannot come to say different things about
+    where the work lands. Held on screen afterwards, because the menu that follows is a
+    full-screen app and repaints over whatever was printed on the way back to it.
+    """
+    ink = _Ink()
+    err = sys.stderr
+    try:
+        import howto_text
+    except Exception:  # noqa: BLE001 - a bare clone without the text is not a crash
+        print(ink.dim("    the day-to-day guide is not available in this install"), file=err)
+        return
+    print("", file=err)
+    print(f"  {ink.bold(howto_text.TITLE)}", file=err)
+    for heading, text in howto_text.sections():
+        print("", file=err)
+        print(f"  {ink.bold(heading)}", file=err)
+        for line in _wrap_plain(text, 76):
+            print(f"    {line}", file=err)
+    print("", file=err)
+    _hold_for_reader()
+
+
+def _wrap_plain(text: str, width: int) -> list:
+    """Word-wrap for the plain tier. Hand-rolled for the same reason the app tiers do it:
+    this file cannot assume a terminal width, and textwrap's defaults are not it."""
+    out, line = [], ""
+    for word in (text or "").split():
+        if line and len(line) + 1 + len(word) > width:
+            out.append(line)
+            line = word
+        else:
+            line = f"{line} {word}".strip()
+    if line:
+        out.append(line)
+    return out
 
 
 def _warn_if_abort_will_be_ignored() -> None:
@@ -2893,6 +2935,20 @@ def _decision_from_pick(
         if not drew:
             _print_plain_help()
         return "__again__"
+    if pick[0] == "howto":
+        # Morgan's day-to-day guide (2026-09-12 owner request: "move the working with me day
+        # to day to virt-surv go... make sure this sits in textual not just showing in the
+        # terminal"). It came off the installer's top menu, where it printed to a console the
+        # next full-screen app painted over. Reading it starts nothing, so "__again__".
+        try:
+            if _tiered_screen("howto_screen", project_dir, _this_module()) is None:
+                _howto_plain()
+        except Exception:
+            try:
+                _howto_plain()
+            except Exception:  # nosec B110 - last-resort fallback display; if even the fallback cannot render, there is nothing further to show
+                pass
+        return "__again__"
     if pick[0] == "watch":
         # Watching starts NOTHING. Returning "__again__" puts the human back on the menu
         # afterwards rather than launching a session they never asked for.
@@ -3134,6 +3190,10 @@ def _menu_round(
     if shown:
         settings_opt += f"   {ink.bold('[a]')} archive finished engagements"
     settings_opt += f"   {ink.bold('[b]')} browse done and archived"
+    # Same row on every tier (2026-09-12): the app tiers offer [h] unconditionally, and a
+    # key that exists on two renderings out of three is how the launcher's tiers drifted
+    # apart the first time.
+    settings_opt += f"   {ink.bold('[h]')} how to work with the team, day to day"
     if _running_slug(project_dir):
         settings_opt += f"   {ink.bold('[t]')} watch the running engagement"
     print(settings_opt, file=err)
@@ -3198,6 +3258,8 @@ def _menu_round(
         # Same mapping as the app and picker tiers, so [b] cannot mean one thing
         # there and another here.
         return _decision_from_pick(("finished",), project_dir, engagement_state, menu, shown)
+    if choice.lower() == "h":
+        return _decision_from_pick(("howto",), project_dir, engagement_state, menu, shown)
     if choice.lower() == "t" and _running_slug(project_dir):
         return _decision_from_pick(("watch",), project_dir, engagement_state, menu, shown)
     engage_cmd = _engage_command(project_dir)

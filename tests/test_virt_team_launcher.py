@@ -2045,3 +2045,21 @@ def test_skip_for_now_still_launches(tmp_path, monkeypatch):
 
     monkeypatch.setattr(launcher_app, "setup_screen", lambda p, m, **k: launcher_app.SETUP_SKIP)
     assert mod._offer_first_time_setup(tmp_path) is False
+
+
+def test_the_day_to_day_guide_starts_nothing_and_falls_back_to_plain_text(
+    tmp_path, monkeypatch, capsys
+):
+    """[h] is a read, not a launch: it returns to the menu rather than starting a session.
+
+    And when no full-screen tier can draw - the console this plugin is aimed at, more often
+    than not - the words still arrive. The installer's copy of this narrative printed into a
+    console the next menu painted over, which is half of why it moved (2026-09-12)."""
+    mod = _load()
+    monkeypatch.setattr(mod, "_tiered_screen", lambda *a, **k: None)  # no tier can draw
+    monkeypatch.setattr(mod, "_hold_for_reader", lambda: None)
+
+    assert mod._decision_from_pick(("howto",), tmp_path, None, {}, []) == "__again__"
+    err = capsys.readouterr().err
+    assert "VSIT/engagements/" in err
+    assert "artifacts/" not in err, "the plain tier still points at the pre-VSIT workspace"

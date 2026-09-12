@@ -1116,3 +1116,30 @@ def test_esc_exits_at_the_top_level_and_goes_back_below_it():
     assert launcher.count("return _ABORT") >= 2, (
         "the menu and setup must both be able to abort the launch"
     )
+
+
+def test_menu_key_h_returns_the_day_to_day_pick(ptk):
+    """[h] joined the menu on 2026-09-12, when Morgan's day-to-day guide moved off the
+    installer's own menu. Unconditional: it is the row that explains the others."""
+    pick, text = _drive(ptk, "h", [_row()])
+    assert pick == ("howto",)
+    assert "how to work with the team, day to day" in text
+
+
+def test_the_day_to_day_guide_draws_and_pages(ptk):
+    """The narrative is longer than a frame, so the screen has to page rather than clip -
+    a guide whose last two sections cannot be reached is a guide that does not say them."""
+    create_app_session, create_pipe_input, PlainTextOutput = ptk
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    buf = io.StringIO()
+    out = PlainTextOutput(buf)
+    with create_pipe_input() as pipe:
+        pipe.send_text("\x1b[6~\x1b")  # PageDown, then Esc
+        with create_app_session(input=pipe, output=out):
+            drew = app.howto_screen(Path("."), launcher, output=out)
+    text = buf.getvalue()
+    assert drew is True
+    assert "Starting a session" in text
+    assert "more below" in text or "more above" in text, "it must say there is more to read"
+    assert "artifacts/" not in text, "the text still pointed at the pre-VSIT workspace"

@@ -1647,7 +1647,12 @@ MENU_ACTIONS = {
     "2": "configure",
     "3": "diagnostics",
     "4": "advanced",
-    "5": "howto",
+    # "How to use the team, day to day" was item 5 until 2026-09-12 (owner: "move the
+    # working with me day to day to virt-surv go... make sure this sits in textual not just
+    # showing in the terminal"). It is a daily read, and it sat behind an installer people
+    # run once; it is now [h] on the `virt-surv go` menu, drawn as a real screen in all
+    # three tiers. The narrative itself lives in scripts/howto_text.py. Nothing below it
+    # needed renumbering - it was the last number, and the two keys after it are letters.
     # 2026-08-25: updating used to mean option 1 - the whole 13-step install, pip and all,
     # re-asking every question the human had already answered. That is a reason not to
     # update, which is the worst thing a plugin's update path can be.
@@ -1676,23 +1681,28 @@ _DIAGNOSTICS_ACTIONS = {
 _ADVANCED_ACTIONS = {
     "1": "setup",
     "2": "statusline",
-    "3": "formats",
-    "4": "model",
+    # "Preferences for one project" removed 2026-09-12 (owner: "it is configured without
+    # issue from virt-surv go, we do not need it in virt-surv") - the launcher's settings
+    # editor is where people actually change a project's preferences, and a second door to
+    # the same screen from the installer only made the list longer. The "formats" SUBSET
+    # itself stays: `virt-surv go` and several tests reach it directly. Items below
+    # renumbered to close the gap, as the Demo removal did on 2026-09-11.
+    "3": "model",
     # "Demo" removed 2026-09-11 (owner: "remove the demo thats redundant") - every subset
     # already honours --demo, the full run explains itself as it goes, and a menu item whose
     # only job was to preview another menu item earned its place back when the flow was
     # unfamiliar. Items below renumbered to close the gap rather than leave a hole at 5.
-    "5": "machinedefaults",
-    "6": "dashboard",
-    "7": "fixbashrc",
-    "8": "cleanplugincache",
-    "9": "aliasmanage",
-    "10": "gitbashperf",
-    "11": "codeintel",
-    "12": "extensions",
-    "13": "reprobe",
-    "14": "relocate",
-    "15": "osvdb",
+    "4": "machinedefaults",
+    "5": "dashboard",
+    "6": "fixbashrc",
+    "7": "cleanplugincache",
+    "8": "aliasmanage",
+    "9": "gitbashperf",
+    "10": "codeintel",
+    "11": "extensions",
+    "12": "reprobe",
+    "13": "relocate",
+    "14": "osvdb",
     "b": "back",
 }
 
@@ -2244,11 +2254,13 @@ def choose_action(style: Style) -> str:
             # interactive run and met "which channel shall I track for you?" - a question
             # the quick update deliberately never asks. The word now appears once, on the
             # option that actually means it.
-            ("1", "Install or reconfigure the team (full run - asks everything)"),
+            # "Install/update" since 2026-09-12 (owner). The full run has always been able
+            # to bring an existing install up to date; the label said only "Install", so
+            # someone updating had no reason to think this was their option either.
+            ("1", "Install/update or reconfigure the team (full run - asks everything)"),
             ("2", "Set up a project (turn the team on for one folder, and choose its settings)"),
             ("3", "Diagnostics..."),
             ("4", "Advanced and one-off settings..."),
-            ("5", "How to use the team, day to day (Morgan explains)"),
             ("u", "Update to the latest version (quick, and keeps every setting)"),
             ("q", "Quit"),
         )
@@ -2338,49 +2350,48 @@ def choose_action(style: Style) -> str:
                 (
                     ("1", "Set up this machine only (does not download new code)"),
                     ("2", "Status line (shows the team's state in every project)"),
-                    ("3", "Preferences for one project (documents, citations, analysers)"),
-                    ("4", "Which model Morgan runs on (one project at a time)"),
+                    ("3", "Which model Morgan runs on (one project at a time)"),
                     # Parenthesised, not dashed: _rows splits label from explanation on
                     # the first " (", so a dash kept all 55 characters in the label column
                     # and pushed the row past the divider at phone width (independent TUI
                     # review, 2026-08-31).
                     (
-                        "5",
+                        "4",
                         "This machine's defaults (what a new project starts with)",
                     ),
-                    ("6", "Rebuild the team dashboard"),
-                    ("7", "Fix a slow ~/.bashrc (checks first, applies only if needed)"),
-                    ("8", "Clean stale plugin cache (removes old installs, keeps the active one)"),
+                    ("5", "Rebuild the team dashboard"),
+                    ("6", "Fix a slow ~/.bashrc (checks first, applies only if needed)"),
+                    ("7", "Clean stale plugin cache (removes old installs, keeps the active one)"),
                     (
-                        "9",
+                        "8",
                         "The 'virt-surv' command (re-register it, or change what 'go' launches)",
                     ),
                     (
-                        "10",
+                        "9",
                         "Git Bash speed fix (for slow Bash calls on Windows)",
                     ),
                     (
-                        "11",
+                        "10",
                         "Code intelligence (exact symbols and line ranges when reading "
                         "Java, Scala, SQL and more; optional)",
                     ),
                     (
-                        "12",
+                        "11",
                         "Standard workflow for this machine (the analysers, close actions "
                         "and instructions every project inherits)",
                     ),
                     (
-                        "13",
+                        "12",
                         "Look for installed tools again (run this after installing one, so "
                         "the team stops calling it missing)",
                     ),
                     (
-                        "14",
+                        "13",
                         "Tidy team files into one VSIT folder (shows you the plan before "
                         "moving anything)",
                     ),
                     (
-                        "15",
+                        "14",
                         "Vulnerability database (lets the dependency scanner work with no "
                         "network; downloads once)",
                     ),
@@ -3217,6 +3228,48 @@ class Installer:
             )
             return list(self.CODE_INTEL_PREFIXES)
         return specs
+
+    def osv_scanner_step(self) -> None:
+        """Install the dependency scanner itself, BEFORE the database that feeds it.
+
+        WHY IT IS A STEP (live report with a photo, corporate Windows laptop, 2026-09-12).
+        The full check reported every analyser clean and "osv-scanner: not installed", and
+        the database step below skipped with "osv-scanner not installed - nothing to fill",
+        printing a `go install` hint at a machine with no Go toolchain and no way to get
+        one. The install flow handled the database and not the tool, which is the half that
+        cannot work on its own.
+
+        SOFT, like the database and like code intelligence: no network, a proxy or an
+        unknown CPU all leave the run exactly as it was.
+        """
+        self.step_intro(
+            "The dependency scanner (osv-scanner) is a single downloaded binary. Without "
+            "it the dependency-vulnerability findings are never produced at all - and an "
+            "empty finding class reads like good news, which is the worst shape a gap can "
+            "take. I fetch the official release from "
+            f"{_OSV_RELEASE_BASE.rstrip('/')}, put it in {osv_bin_dir()}, and put that "
+            "folder on your PATH if it is not there already."
+        )
+        found = shutil.which("osv-scanner")
+        if found:
+            self.step_ok("osv-scanner", f"already installed ({found})")
+            return
+        # NO y/n HERE (owner, 2026-09-12: it must behave like every other tool the
+        # installer sets up). The step says what it is fetching, from where, and where it
+        # lands, then does it - the same contract the pip requirements and the status line
+        # keep, and the same under --yes as interactively. The only thing a user is ever
+        # asked to do by hand is when the download itself cannot complete.
+        path = install_osv_scanner(self.style, self.marks, demo=self.demo)
+        if self.demo:
+            self.step_ok("osv-scanner", "would download and install the release binary (demo)")
+            return
+        if path:
+            self.step_ok("osv-scanner", f"installed at {path}")
+        else:
+            # Not an error: install_osv_scanner has already said why and named the manual
+            # route. The reviews simply carry on without dependency findings, as they did
+            # before this step existed.
+            self.step_skip("osv-scanner", "not installed - dependency findings stay off")
 
     def vuln_db_step(self) -> None:
         """Top up the offline vulnerability database, in the flow rather than off a menu.
@@ -4819,10 +4872,16 @@ class Installer:
                     lambda: "Plugin " + ("update" if self.mode == "update" else "install"),
                     self.plugin,
                 ),
-                # In the update too, not just the install: the database goes stale, and an
-                # update is the moment someone is already expecting a fetch. It is a no-op
-                # when the scanner is absent, so the six-step promise above still holds for
-                # everyone who does not have it.
+                # In the update too, not just the install: the scanner and its database go
+                # stale, and an update is the moment someone is already expecting a fetch.
+                # Both are no-ops once the scanner is present and current, so the short
+                # promise above still holds for everyone who already has it.
+                #
+                # THE SCANNER FIRST (2026-09-12). The database step is a no-op without the
+                # binary - it skipped with "osv-scanner not installed - nothing to fill" on
+                # the machine that reported this - so filling a database for a tool that is
+                # not there was the one order these two could not run in.
+                ("Dependency scanner", self.osv_scanner_step),
                 ("Vulnerability database", self.vuln_db_step),
             ]
         if self.subset == "statusline":
@@ -4908,6 +4967,10 @@ class Installer:
             ("Quick setup or manual?", self.quick_setup_choice),
             ("Optional pip requirements", self.optional_pip),
             ("Code intelligence (optional)", self.code_intel_step),
+            # Scanner before database: the database step can do nothing until the binary
+            # exists (2026-09-12 live report - it skipped with "nothing to fill" while the
+            # diagnostic reported "osv-scanner: not installed").
+            ("Dependency scanner (optional)", self.osv_scanner_step),
             ("Vulnerability database (optional)", self.vuln_db_step),
             ("Claude Code marketplace", self.marketplace),
             (lambda: "Plugin " + ("update" if self.mode == "update" else "install"), self.plugin),
@@ -6747,8 +6810,8 @@ def heal_stale_aliases() -> list:
     return healed
 
 
-def _strip_stamped_definitions(existing: str) -> tuple:
-    """Remove every alias definition THIS tool wrote earlier - identified by the
+def _strip_stamped_definitions(existing: str, stamp_re=None) -> tuple:
+    """Remove every definition THIS tool wrote earlier - identified by the
     version stamp, which makes a line provably machine-written and safe to delete
     (live report 2026-08-17: upgrades only ever appended, so a corp profile carried 5
     dead definitions, one still baking the abandoned 'cc --debug'; dead lines are not
@@ -6757,11 +6820,17 @@ def _strip_stamped_definitions(existing: str) -> tuple:
     (and the spacer blank above it) with it. UNSTAMPED content mentioning the marker
     is never touched, even when it looks like ours - a pre-stamp-era line and a
     user-customised one are indistinguishable, and blind surgery on someone's shell rc
-    is the risk this file avoids everywhere else. Returns (stripped_text, removed)."""
+    is the risk this file avoids everywhere else. Returns (stripped_text, removed).
+
+    `stamp_re` defaults to the alias stamp, which is what every existing caller means. The
+    PATH line the osv-scanner install writes (2026-09-12) is stamped the same way and is
+    removed by the same logic rather than by a second copy of it - two hand-written shell-rc
+    surgeons is exactly the risk this docstring is about."""
     out = []
     removed = []
+    pattern = stamp_re if stamp_re is not None else _ALIAS_STAMP_ANY_RE
     for raw in existing.splitlines():
-        if _ALIAS_STAMP_ANY_RE.search(raw):
+        if pattern.search(raw):
             removed.append(raw)
             if out and _ALIAS_ADDED_BY_RE.match(out[-1]):
                 out.pop()
@@ -7350,60 +7419,6 @@ def run_gitbash_perf(
             "  Needs IT/admin (advice only): antivirus exclusions for the project folder and\n"
             "  the Git Bash install; prefer short local paths (C:/dev/...) over deep or\n"
             "  network-homed ones; WSL2 avoids the Windows process-spawn overhead entirely."
-        )
-    )
-    return 0
-
-
-def run_howto(style: Style) -> int:
-    """Menu item 5 (2026-08-18 user request): Morgan explains, in plain words, how to
-    actually use the plugin day to day. Narrative, not a reference - the README and
-    quick-start PDF carry the detail; this is the 60-second version a new user reads
-    once from inside the installer."""
-    s = style
-    hat = "🎩 " if _can_encode("🎩") else ""
-    print("")
-    print(s.bold(f"{hat}Morgan (PM) here - I'm an AI agent with Virtual Surveillance IT."))
-    print("Here's how working with the team goes, start to finish:")
-    print("")
-    print(s.bold("  Starting a session"))
-    print(
-        "  cd into your project folder and type " + s.cyan("virt-surv go") + ". You'll see\n"
-        "  your project's team settings at a glance, then a menu: resume an open piece of\n"
-        "  work, start something new, or just launch. Pick with the arrow keys (or the\n"
-        "  hotkeys) and Claude Code starts with your choice already typed in. If a project\n"
-        "  isn't set up yet, go walks you through it first."
-    )
-    print("")
-    print(s.bold("  Working with me"))
-    print(
-        "  Describe whatever you've got in plain English - a problem to solve, code to\n"
-        "  review, something to build, data to analyse. I classify it, ask what I genuinely\n"
-        "  need to know (batched, one screen), tell you how many specialists I intend to\n"
-        "  use and roughly what it will cost, and wait for your go-ahead. Then I run the\n"
-        "  work in small stages and come back to you at each gate. You only invoke the team\n"
-        "  once per piece of work - after that, just reply normally."
-    )
-    print("")
-    print(s.bold("  What you get back"))
-    print(
-        "  Everything lands in your project under artifacts/<engagement>/ - the brief, the\n"
-        "  work itself, reviews with evidence, and a closing summary email, each as .md and\n"
-        "  rendered .html. A START-HERE.md index shows where any engagement stands."
-    )
-    print("")
-    print(s.bold("  The standing safety rules"))
-    print(
-        "  I never read data/raw/ (hard-blocked), never run the code under review without\n"
-        "  your explicit consent (you create the marker; my asking is not the grant), and\n"
-        "  treat all real-looking data as sensitive - synthetic or masked only. Outside an\n"
-        "  engagement the plugin is dormant: a normal session is just ordinary Claude Code."
-    )
-    print("")
-    print(
-        s.dim(
-            "  More detail: README.md · docs/quick-start.pdf (one page) · /meet-the-team\n"
-            "  inside a session introduces the 13 specialists."
         )
     )
     return 0
@@ -8223,9 +8238,11 @@ def run_tool_check(style: Style, mark_map: dict) -> int:
     # would still land in one delayed batch at the end, silently defeating the point.
     sys.stdout.flush()
     bad = 0
+    missing_scanner = False
     with tempfile.TemporaryDirectory(prefix="virt-surv-it-toolcheck-") as tmp:
         for name, status, detail in probe_analyser_output(Path(tmp)):
             if status == "SKIP":
+                missing_scanner = missing_scanner or name == "osv-scanner"
                 print(f"  {style.dim('-')} {name}: not installed, skipped", flush=True)
             elif status == "OK":
                 print(f"  {ok} {name}: clean", flush=True)
@@ -8233,6 +8250,19 @@ def run_tool_check(style: Style, mark_map: dict) -> int:
                 bad += 1
                 print(f"  {fail} {name}: {status} - {detail}", flush=True)
     print("")
+    if missing_scanner:
+        # The line the live report photographed, with somewhere to go (2026-09-12). A
+        # diagnostic stays read-only, so it names the door rather than opening it - and the
+        # door it names is the one that ends in install_osv_scanner, not a `go install`
+        # command aimed at a toolchain nobody on a corporate box has.
+        print(
+            style.dim(
+                "  osv-scanner installs itself in the install/update flow (Dependency "
+                "scanner) or from Advanced > Vulnerability database - it is a downloaded "
+                "binary, not a Go build."
+            )
+        )
+        print("")
     if bad:
         print(
             style.yellow(
@@ -9458,6 +9488,276 @@ def run_relocate_to_vsit(style: Style, mark_map: dict) -> int:
     return 0 if moved == len(plan) else 1
 
 
+# --- osv-scanner itself ----------------------------------------------------------------
+#
+# WHY THE INSTALLER FETCHES A BINARY (live report with a photo, corporate Windows laptop,
+# 2026-09-12). The full check showed every analyser clean and "osv-scanner: not installed",
+# and both doors to the vulnerability database - the install flow's step and the Advanced
+# menu item - skipped with "osv-scanner not installed" and printed a `go install ...` hint.
+# Nobody on a locked-down corporate box has a Go toolchain, so the hint was a dead end and
+# the dependency-finding class stayed permanently empty: reviews ran, finished clean, and
+# the gap looked like good news. Installing the database for a scanner that is not there
+# was never going to help.
+#
+# The official releases are single static binaries, so this is a download and a chmod. It
+# stays SOFT everywhere - no network, a refusing proxy, an unknown CPU are all normal, and
+# the run carries on exactly as it did before.
+_OSV_RELEASE_BASE = "https://github.com/google/osv-scanner/releases/latest/download/"
+
+# sys.platform -> the name Google builds under. Anything else has no asset, which is a
+# clean "cannot", not an error.
+_OSV_PLATFORMS = {"linux": "linux", "darwin": "darwin", "win32": "windows"}
+
+# platform.machine() answers differently per OS for the same silicon (x86_64 on Linux,
+# AMD64 on Windows), so the map is by what the machine SAYS, lowercased.
+_OSV_ARCHES = {
+    "x86_64": "amd64",
+    "amd64": "amd64",
+    "x64": "amd64",
+    "arm64": "arm64",
+    "aarch64": "arm64",
+}
+
+
+def osv_asset_name(platform_name: Optional[str] = None, machine: Optional[str] = None) -> str:
+    """The release asset for this machine, or "" when there is no build for it.
+
+    Both arguments are injectable because the interesting cases are the ones this developer
+    machine is not: an ARM Mac, a Windows laptop, a CPU nobody publishes a binary for.
+    """
+    import platform as _platform  # stdlib, imported here to keep module import cheap
+
+    plat = _OSV_PLATFORMS.get((platform_name or sys.platform).lower())
+    if not plat:
+        # sys.platform is "linux" on modern CPython but "linux2" on older ones, and some
+        # BSDs report their own name while running Linux binaries. Prefix-match rather than
+        # refuse on a string that plainly says Linux.
+        for key, value in _OSV_PLATFORMS.items():
+            if (platform_name or sys.platform).lower().startswith(key):
+                plat = value
+                break
+    arch = _OSV_ARCHES.get((machine if machine is not None else _platform.machine()).lower())
+    if not plat or not arch:
+        return ""
+    return f"osv-scanner_{plat}_{arch}" + (".exe" if plat == "windows" else "")
+
+
+def osv_bin_dir() -> Path:
+    """~/.local/bin, on every platform including Windows.
+
+    NOT %APPDATA% and NOT Program Files. On the owner's corporate Windows boxes group
+    policy blocks executables under APPDATA outright, and Program Files needs an admin
+    nobody has; ~/.local/bin is where the `claude` CLI already lives on those machines, so
+    it is both writable and, for most of them, already on PATH. One location everywhere
+    also means the uninstall advice and the PATH line are the same sentence on every OS.
+    """
+    return Path.home() / ".local" / "bin"
+
+
+def osv_bin_path() -> Path:
+    """Where this installer puts the binary."""
+    name = "osv-scanner.exe" if sys.platform == "win32" else "osv-scanner"
+    return osv_bin_dir() / name
+
+
+def _on_path(directory: Path) -> bool:
+    """Is `directory` on this process's PATH? Never raises - an unanswerable question is a
+    "no", which only costs one extra line of advice."""
+    try:
+        target = os.path.normcase(str(directory.resolve()))
+    except Exception:  # noqa: BLE001
+        target = os.path.normcase(str(directory))
+    for entry in (os.environ.get("PATH") or "").split(os.pathsep):
+        if not entry:
+            continue
+        try:
+            if os.path.normcase(str(Path(entry).resolve())) == target:
+                return True
+        except Exception:  # noqa: BLE001 - a PATH entry that cannot be resolved is not a match  # nosec B112 - an unresolvable PATH entry is simply not a match
+            continue
+    return False
+
+
+# The PATH line this tool writes, stamped the way the alias line is. The stamp is what
+# makes a line provably machine-written: it is how a later version replaces its own
+# previous one, and how _strip_stamped_definitions knows what it may delete. Bump the
+# version if the template below ever changes.
+_PATH_MARKER = "virt-surv-path"
+_PATH_VERSION = 1
+_PATH_STAMP = f"# {_PATH_MARKER}-v{_PATH_VERSION}"
+_PATH_STAMP_ANY_RE = re.compile(rf"#\s*{re.escape(_PATH_MARKER)}-v\d+\s*$")
+
+
+def _path_line_for(rc_path: Path, directory: Path) -> str:
+    """The one line that puts `directory` on PATH in this file's language."""
+    if rc_path.suffix == ".ps1":
+        return f'$env:Path += ";{directory}"  {_PATH_STAMP}'
+    return f'export PATH="$PATH:{directory}"  {_PATH_STAMP}'
+
+
+def ensure_dir_on_path(style: Style, directory: Path, demo: bool = False) -> list:
+    """Put `directory` on PATH - in THIS process, and in future shells. Returns the files
+    written.
+
+    WHY THE INSTALLER DOES THIS (owner, 2026-09-12: "the user must not have to do anything
+    by hand"). A downloaded binary in a folder nothing searches is not an installed tool:
+    `shutil.which` would keep answering "not installed", the database step after it would
+    keep skipping, and the review would keep reporting no dependency findings. Printing the
+    export line for someone to paste is the same dead end the `go install` hint was.
+
+    Two halves, both needed. The PROCESS environment is prepended first so the rest of THIS
+    run - the vulnerability-database step in particular - can find what was just installed;
+    a child process inherits it, a future shell does not. The SHELL PROFILE carries it
+    afterwards, written the same way the alias is: one stamped line, idempotent, replacing
+    any older stamped line of ours and never touching anything unstamped.
+    """
+    written: list = []
+    if not _on_path(directory):
+        # This process and everything it spawns, now. os.environ is the only PATH a child
+        # actually inherits, and shutil.which reads it on every call.
+        os.environ["PATH"] = str(directory) + os.pathsep + (os.environ.get("PATH") or "")
+    targets = list(_posix_shell_rc_candidates()) + _powershell_profile_candidates()
+    if not targets:
+        # No rc file exists to carry it. Naming the line is the fallback, not the plan.
+        print(style.dim("    no shell startup file found to make that permanent - add:"))
+        print(style.dim(f'      export PATH="$PATH:{directory}"'))
+        return written
+    for label, rc_path in targets:
+        line = _path_line_for(rc_path, directory)
+        try:
+            existing = (
+                rc_path.read_text(encoding="utf-8", errors="replace") if rc_path.is_file() else ""
+            )
+        except OSError:
+            continue
+        if line in existing:
+            continue  # already ours, already current: writing it twice is how rc files rot
+        if demo:
+            print(style.dim(f"    would add to {label} ({rc_path}): {line}"))
+            continue
+        # An older stamped line of ours is replaced rather than appended to - the same
+        # append-only rot that left five dead alias definitions in a corporate profile
+        # (2026-08-17), which is why that removal logic is shared rather than re-invented.
+        stripped, _removed = _strip_stamped_definitions(existing, _PATH_STAMP_ANY_RE)
+        try:
+            rc_path.write_text(
+                stripped + f"\n# Added by install_helper.py (osv-scanner)\n{line}\n",
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            print(style.dim(f"    could not write {rc_path}: {str(exc)[:80]}"))
+            continue
+        written.append(rc_path)
+        print(style.dim(f"    added {directory} to your PATH in {label} ({rc_path})"))
+    if written and not demo:
+        print(style.dim("    new terminals pick that up; this run already has it."))
+    return written
+
+
+def _osv_manual_route(style: Style, asset: str) -> None:
+    """What to do by hand. Named once so the four ways this can fail say the same thing."""
+    print(
+        style.dim(f"    Fetch it on a connected machine: {_OSV_RELEASE_BASE}{asset or '<asset>'}")
+    )
+    print(style.dim(f"    then put it at {osv_bin_path()} (chmod 755 on macOS/Linux)."))
+
+
+def install_osv_scanner(style: Style, mark_map: dict, demo: bool = False) -> Optional[Path]:
+    """Download the osv-scanner release binary into ~/.local/bin. Returns its path, or None.
+
+    ONE FUNCTION, EVERY DOOR. The install flow's step, the update flow's step and the
+    Advanced menu's database item all come through here, so "install the scanner" means the
+    same thing and reports the same way wherever it is asked for.
+
+    ASKS NOTHING (owner, 2026-09-12: "the user must not have to do anything by hand"). It is
+    treated like every other tool the installer sets up: the caller's step_intro says what is
+    being fetched and where it lands, and this does it - no y/n, the same under --yes as
+    interactively. That is also what lets the menu item stay screen-only: every door in that
+    menu asks on a screen or not at all (test_no_menu_option_asks_only_at_a_prompt).
+
+    FINISHES USABLE. A binary in a folder nothing searches is not an installed tool, so the
+    directory goes on PATH - this process first, so the database step that follows can see
+    it, then the shell profile for every future terminal.
+
+    SOFT BY CONTRACT. Every failure - no network, a proxy that refuses, an unknown CPU, a
+    read-only home - prints one line naming the manual route and returns None. It must
+    never fail an install: the scanner is optional, and the run is still worth having
+    without it.
+
+    urllib's default opener honours HTTPS_PROXY, which is the whole reason this is stdlib
+    urllib rather than a hand-rolled socket: on the machines that need it most, the proxy is
+    the only way out.
+    """
+    ok, warn = mark_map.get("ok") or "OK", mark_map.get("warn") or "!"
+    found = shutil.which("osv-scanner")
+    if found:
+        print(f"{ok} osv-scanner already installed ({found})")
+        return Path(found)
+    if osv_bin_path().is_file():
+        # There, but invisible to every later `shutil.which`. Downloading a second copy over
+        # the top would not fix that - the PATH is what is missing, so fix the PATH.
+        print(f"{ok} osv-scanner is already at {osv_bin_path()}")
+        ensure_dir_on_path(style, osv_bin_dir(), demo=demo)
+        return osv_bin_path()
+    asset = osv_asset_name()
+    if not asset:
+        import platform as _platform
+
+        print(style.dim(f"  {warn} no osv-scanner build for {sys.platform}/{_platform.machine()}"))
+        _osv_manual_route(style, "")
+        return None
+    url = _OSV_RELEASE_BASE + asset
+    target = osv_bin_path()
+    if demo:
+        print(style.dim(f"    would download {url}"))
+        print(style.dim(f"    would install it at {target} (demo - nothing written)"))
+        if not _on_path(osv_bin_dir()):
+            ensure_dir_on_path(style, osv_bin_dir(), demo=True)
+        return None
+    print(style.dim(f"  Downloading {url}"))
+    import urllib.request  # stdlib; honours HTTPS_PROXY through the default opener
+
+    tmp_path = None
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        # Into a temp file beside the target, then one rename: a half-written binary that
+        # is already called osv-scanner is worse than no binary at all, because shutil.which
+        # would find it and every later review would run it.
+        with urllib.request.urlopen(url, timeout=120) as response:  # nosec B310 - fixed https:// literal above
+            handle, tmp_name = tempfile.mkstemp(dir=str(target.parent), prefix=".osv-scanner-")
+            tmp_path = Path(tmp_name)
+            with os.fdopen(handle, "wb") as out:
+                shutil.copyfileobj(response, out)
+        if os.name != "nt":
+            os.chmod(tmp_path, 0o755)  # nosec B103 - an executable this user is meant to run
+        os.replace(str(tmp_path), str(target))
+        tmp_path = None
+    except Exception as exc:  # noqa: BLE001 - every failure here is a normal state
+        # THE ONE TIME THE USER IS GIVEN AN INSTRUCTION (owner, 2026-09-12). No network, a
+        # proxy that refuses, an air-gapped box: say what was attempted, from where, and
+        # where it was going, then carry on. An optional analyser must never fail an install.
+        print(style.dim(f"  {warn} could not download osv-scanner: {str(exc)[:120]}"))
+        _osv_manual_route(style, asset)
+        return None
+    finally:
+        if tmp_path is not None:
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+    proc = run_cmd([str(target), "--version"], timeout=30)
+    if proc.returncode != 0:
+        print(style.dim(f"  {warn} downloaded, but {target} would not run"))
+        detail = (proc.stderr or proc.stdout or "").strip().splitlines()
+        if detail:
+            print(style.dim("    " + detail[-1][:160]))
+        return None
+    version = (proc.stdout or "").strip().splitlines()
+    print(f"{ok} osv-scanner installed at {target}" + (f" ({version[0][:60]})" if version else ""))
+    ensure_dir_on_path(style, osv_bin_dir(), demo=False)
+    return target
+
+
 def osv_db_dir() -> Optional[Path]:
     """Where osv-scanner keeps its offline database on THIS machine, if it can be found.
 
@@ -9508,9 +9808,25 @@ def run_osv_db_download(style: Style, mark_map: dict, demo: bool = False) -> int
     """
     ok, fail = mark_map["ok"], mark_map["fail"]
     if shutil.which("osv-scanner") is None:
-        print(style.dim("  osv-scanner is not installed - nothing to download for."))
-        print(style.dim("    go install github.com/google/osv-scanner/cmd/osv-scanner@latest"))
-        return 0
+        # INSTALL IT, rather than explain that it is missing (2026-09-12 live report). This
+        # branch used to print a `go install` line, which on the corporate Windows laptop
+        # that reported it was an instruction to install a Go toolchain first - so the menu
+        # item that exists to make the scanner usable could never do anything.
+        # No confirmation here: PICKING THIS MENU ITEM IS THE DECISION. The install flow's
+        # step asks first, because a download arrives there in the middle of a run nobody
+        # asked for it in.
+        install_osv_scanner(style, mark_map, demo=demo)
+        if shutil.which("osv-scanner") is None:
+            if demo:
+                print(
+                    style.dim(
+                        f"    would then download the OSV database to {osv_db_dir()} "
+                        "(demo - nothing written)"
+                    )
+                )
+            else:
+                print(style.dim("  osv-scanner is not installed - nothing to download for."))
+            return 0
     where = osv_db_dir()
     if osv_db_present():
         print(f"{ok} vulnerability database already present ({where})")
@@ -11371,8 +11687,6 @@ def _main(argv=None) -> int:
                 elif action == "aliasmanage":
                     run_alias_manage(style, marks(), args.yes, args.demo, args.repo)
                     did_anything = did_anything or not args.demo
-                elif action == "howto":
-                    run_howto(style)  # read-only narrative - never counts as "did anything"
                 elif action == "extensions":
                     # These three WRITE (edit/install/sync a contract, rewrite the tool
                     # cache, shutil.move whole directories) and were reached from a --demo

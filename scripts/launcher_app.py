@@ -95,6 +95,10 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
     if shown:
         actions.append((("archive",), f"{g['archive']}archive finished engagements", "a"))
     actions.append((("finished",), f"{g['browse']}browse done and archived", "b"))
+    # The day-to-day guide (2026-09-12 owner request, moved off the installer's menu).
+    # Offered unconditionally: it is the row that explains the rest of the menu, so gating
+    # it on having work open would hide it from exactly the person who needs it.
+    actions.append((("howto",), f"{g['howto']}how to work with the team, day to day", "h"))
     # Watching in-flight work and the workflow trace belong in THIS tier too. They were added
     # to the picker and plain tiers first and missed here (caught 2026-08-25 by rendering the
     # menu under a real pty, which is the only place the omission was visible) - the app tier
@@ -246,6 +250,7 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
         ("v", ("artifacts",)),
         ("a", ("archive",)),
         ("b", ("finished",)),
+        ("h", ("howto",)),
         ("t", ("watch",)),
     ):
         if any(r == ret for r, _label, _k in actions):
@@ -1417,6 +1422,7 @@ def _help_model(mod):
         ("o", "another project"),
         ("a", "archive"),
         ("b", "browse done and archived"),
+        ("h", "how the team works"),
         ("v", "view artifacts"),
         ("m", "show all open"),
         ("?", "this legend"),
@@ -1475,6 +1481,121 @@ def help_screen(project_dir: Path, mod, output=None):
         mod,
         "the help screen (prompt_toolkit)",
         title="Help",
+        body_fn=_body,
+        right_fn=_right,
+        footer_fn=_footer,
+        key_bindings=kb,
+        output=output,
+        project_dir=project_dir,
+    ):
+        return None
+    return True
+
+
+# Lines of narrative visible at once before it pages. Same reasoning as _BROWSE_PAGE: the
+# frame height is not known when the body is built, and 15 fits the 24-line terminal that
+# is the floor everywhere this runs.
+_HOWTO_PAGE = 15
+
+
+def _howto_lines(width: int) -> list:
+    """The narrative as (style, line) pairs, wrapped to `width`.
+
+    Built here rather than in the screen so the paging arithmetic has something countable
+    to page over, and so the test suite can read the rendered text without a terminal.
+    """
+    import howto_text
+
+    out: list = []
+    for heading, text in howto_text.sections():
+        out.append(("class:group", f"  {heading}"))
+        for line in _wrapped(text, width):
+            out.append(("", f"  {line}"))
+        out.append(("", ""))
+    return out
+
+
+def howto_screen(project_dir: Path, mod, output=None):
+    """Morgan's day-to-day narrative (2026-09-12). Returns True when it ran.
+
+    It was menu item 5 of the installer, printed to the console, where the next full-screen
+    app painted over it. The owner moved it to the launcher's own menu: "move the working
+    with me day to day to virt-surv go... make sure this sits in textual not just showing in
+    the terminal". This is the prompt_toolkit tier of that screen; the words come from
+    howto_text, shared with the Textual and plain tiers.
+    """
+    try:
+        p = mod._ptk_ui()
+        if not p:
+            return None
+        from prompt_toolkit.key_binding import KeyBindings
+    except Exception:
+        return None
+
+    try:
+        import howto_text
+
+        title = howto_text.TITLE
+        lines = _howto_lines(max(30, _chrome_pane_width(68)))
+    except Exception:
+        return None  # no text is nothing to draw, and the tier below can try
+
+    top = [0]
+
+    def _last() -> int:
+        return max(0, len(lines) - _HOWTO_PAGE)
+
+    def _body():
+        out = []
+        if top[0]:
+            out.append(("class:dim", f"      ... {top[0]} more above\n"))
+        for style, text in lines[top[0] : top[0] + _HOWTO_PAGE]:
+            out.append((style, f"{text}\n"))
+        below = len(lines) - (top[0] + _HOWTO_PAGE)
+        if below > 0:
+            out.append(("class:dim", f"      ... {below} more below\n"))
+        return out
+
+    def _right():
+        out = [("class:title", "\n  What is here\n\n")]
+        import howto_text
+
+        for heading, _text in howto_text.sections():
+            out.append(("class:dim", f"  {heading}\n"))
+        return out
+
+    def _footer():
+        return [("class:hint", ui_text(mod, "  ↑↓ scroll · PgUp/PgDn page · Esc/q back"))]
+
+    kb = KeyBindings()
+
+    @kb.add("down")
+    def _down(event):
+        top[0] = min(top[0] + 1, _last())
+
+    @kb.add("up")
+    def _up(event):
+        top[0] = max(top[0] - 1, 0)
+
+    @kb.add("pagedown")
+    @kb.add("space")
+    def _page_down(event):
+        top[0] = min(top[0] + _HOWTO_PAGE, _last())
+
+    @kb.add("pageup")
+    def _page_up(event):
+        top[0] = max(top[0] - _HOWTO_PAGE, 0)
+
+    @kb.add("escape", eager=True)
+    @kb.add("c-c")
+    @kb.add("q")
+    def _esc(event):
+        event.app.exit()
+
+    if not _draw(
+        mod,
+        "the day-to-day guide (prompt_toolkit)",
+        title=title,
         body_fn=_body,
         right_fn=_right,
         footer_fn=_footer,

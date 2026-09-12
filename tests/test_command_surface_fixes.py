@@ -376,10 +376,16 @@ def test_a_blocked_download_explains_the_manual_route(monkeypatch, tmp_path, cap
 
 
 def test_no_scanner_installed_is_not_a_failure(monkeypatch, capsys):
-    """Nothing to download for is a state, not an error: the tool is optional."""
+    """Nothing to download for is a state, not an error: the tool is optional.
+
+    Since 2026-09-12 this path first TRIES to install the scanner (the live report: the old
+    `go install` hint was useless on a corporate Windows box). Stubbed here, both because a
+    test must not reach the network and because what this one is about is the outcome when
+    the scanner still is not there afterwards."""
     import install_helper as ih
 
     monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ih, "install_osv_scanner", lambda *a, **k: None)
 
     assert ih.run_osv_db_download(ih.Style(False), ih.marks()) == 0
     assert "not installed" in capsys.readouterr().out
