@@ -954,7 +954,13 @@ class SettingsApp(TierApp):
         # Padding is CAPPED, not simply the longest label: one long label used to set
         # the column for every row and push the value hard against the divider, so the
         # longest value clipped. Rows past the cap keep one separating space instead.
-        width = min(max((len(lbl) for lbl, _v, _o in self.rows), default=0), 24)
+        # The cap follows the pane, not a constant (live report with a photo, 2026-09-12:
+        # three labels ended in "..." on a full-width laptop screen with half the pane
+        # empty). 24 is the floor that keeps the value column straight on a phone; on a
+        # wider pane the longest label gets the room it needs, up to the pane minus the
+        # marker, the dot and the widest value ("close-only", "applied").
+        longest = max((len(lbl) for lbl, _v, _o in self.rows), default=0)
+        width = min(longest, max(24, self.panel_width() - 22))
         t = Text()
         y, at = 0, 0
         for i, (label, value, on) in enumerate(self.rows):
@@ -1159,7 +1165,10 @@ class ChooserApp(TierApp):
         folder = self.folder()
         self.head(self.title_text if self.narrow else f"{folder}  {_DOT}  {self.title_text}")
 
-        width = min(max((len(lbl) for _k, lbl, _b, _w in self.rows), default=0), 34)
+        # Same rule as the settings rows (2026-09-12): 34 is the phone floor, a wider pane
+        # lets the longest label through, minus the marker column and the key.
+        longest = max((len(lbl) for _k, lbl, _b, _w in self.rows), default=0)
+        width = min(longest, max(34, self.panel_width() - 16))
         t = Text()
         for i, (key, label, _blurb, writes) in enumerate(self.rows):
             sel = self.cursor == i

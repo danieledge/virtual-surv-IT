@@ -9235,7 +9235,11 @@ def test_a_pause_holds_the_screen_when_someone_is_at_the_keyboard(monkeypatch, c
     monkeypatch.setattr(ih.sys.stdin, "isatty", lambda: True, raising=False)
     monkeypatch.setattr(ih.sys.stdout, "isatty", lambda: True, raising=False)
     ih.pause_before_menu(ih.Style(False))
-    assert len(asked) == 1 and "menu" in asked[0]
+    # The prompt is written to the caller's stream, not handed to input(): input(prompt)
+    # writes to stdout whatever stream was chosen, which leaked the words into the alias
+    # capture pipe under `virt-surv go` (2026-09-12). One read, and the words on screen.
+    assert len(asked) == 1 and asked[0] == ""
+    assert "menu" in capsys.readouterr().out
 
 
 def test_the_pause_is_silent_when_nobody_is_there(monkeypatch):

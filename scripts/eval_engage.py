@@ -1797,6 +1797,14 @@ def _acquire_driver_lock() -> Path | None:
 
 
 def main() -> int:
+    # THIS DRIVER IS NOT THE SESSION IT WAS LAUNCHED FROM (2026-09-12). Started from inside
+    # a Claude Code session it inherits that session's id and project directory, and every
+    # stamp writer keys on those: building the first sandbox stamped the developer's live
+    # session id into the real checkout's artifacts/ and armed the execution gate against
+    # the session that launched the run. The driver stands in for a human at a terminal;
+    # a human has neither variable.
+    for var in ("CLAUDE_CODE_SESSION_ID", "CLAUDE_PROJECT_DIR"):
+        os.environ.pop(var, None)
     ap = argparse.ArgumentParser(
         description="Run live /engage eval cases headlessly and score them."
     )
