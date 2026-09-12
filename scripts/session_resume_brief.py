@@ -66,14 +66,23 @@ def _restamp(engagements: Path, sid: str) -> None:
     _MAX_STAMPED_SESSIONS so an abandoned id cannot arm the gate forever. `session_id` is
     kept at the top level for readers that predate the list format. Best-effort throughout -
     a resume aid must never break a session start, so every failure path is silent.
+
+    ONLY A SESSION THE STAMP ALREADY KNOWS IS REFRESHED. The first version re-stamped any
+    session that resumed or compacted while a pack was live, engaged or not - so a plain
+    Claude Code session that merely compacted in a project with an open engagement woke up
+    with the execution gate armed against it (seen live the same day it shipped,
+    2026-09-12: the session that ran the audit fix pass was locked out of its own test
+    runs). A compaction keeps its session id and a --resume continues the conversation
+    under the id it had, so "already stamped" is exactly the set that should stay armed.
+    A dormant session that resumes stays dormant.
     """
     stamp_path = engagements / _STAMP_NAME
     try:
         data = json.loads(stamp_path.read_text(encoding="utf-8"))
-    except Exception:  # nosec B110 - absent/unreadable: start a fresh stamp
-        data = {}
+    except Exception:  # nosec B110 - absent/unreadable: nothing to refresh
+        return
     if not isinstance(data, dict):
-        data = {}
+        return
     sessions = data.get("sessions")
     if not isinstance(sessions, list):
         sessions = []
@@ -86,6 +95,9 @@ def _restamp(engagements: Path, sid: str) -> None:
         and not any(isinstance(e, dict) and e.get("id") == legacy for e in sessions)
     ):
         sessions.append({"id": legacy, "stamped_at": data.get("stamped") or ""})
+    known = {e.get("id") for e in sessions if isinstance(e, dict)}
+    if sid not in known:
+        return  # never engaged here: a resume does not arm what /engage did not
     sessions = [e for e in sessions if not (isinstance(e, dict) and e.get("id") == sid)]
     sessions.append({"id": sid, "stamped_at": _dt.datetime.now().isoformat(timespec="seconds")})
     data["sessions"] = sessions[-_MAX_STAMPED_SESSIONS:]
