@@ -241,6 +241,9 @@ def test_set_status_closed_sets_date_clears_outstanding(tmp_path):
         encoding="utf-8",
     )
     _run(tmp_path, "add-artifact", "engagement-summary-t.txt", "--title", "Email", "--final")
+    # W-25: the close sequence's recorded steps are checked before any write; a pack with
+    # deliverables owes a footprint (step 6).
+    _run(tmp_path, "set-footprint", "--agents", "2", "--tokens", "40k")
     assert _run(tmp_path, "set-status", "closed", "--verdict", "ready") == 0
     state = load_state(tmp_path)
     assert state["engagement"]["closed"] and state["outstanding"] == []
@@ -250,24 +253,26 @@ def test_set_status_closed_sets_date_clears_outstanding(tmp_path):
 
 def test_close_requires_team_and_finalised_artifacts(tmp_path):
     """2026-07-26 live-run finding: the pack closed with team [] and every artifact interim
-    because nothing enforced the close. Now the close refuses until both are done."""
-    import pytest
+    because nothing enforced the close. Now the close refuses until both are done.
 
+    W-25 (2026-09-12): the refusal is an EXIT CODE with a named missing step, not a raw
+    `INVALID:` schema dump raised from inside a write that had already been attempted."""
     _run(tmp_path, "init", "--title", "T", "--slug", "t")
     (tmp_path / "review-pass-1.md").write_text("# review\n", encoding="utf-8")
     (tmp_path / "review-pass-1.html").write_text("<p>x</p>", encoding="utf-8")
     _run(tmp_path, "add-artifact", "review-pass-1.md", "--title", "First review")
-    with pytest.raises(SystemExit):
-        _run(tmp_path, "set-status", "closed")  # no team yet
+    assert _run(tmp_path, "set-status", "closed") == 1  # no team yet
+    assert load_state(tmp_path)["status"] == "in_progress", "a refused close must not write"
     _run(tmp_path, "set-team", "Mateo (rules)")
-    with pytest.raises(SystemExit):
-        _run(tmp_path, "set-status", "closed")  # artifact still interim
+    assert _run(tmp_path, "set-status", "closed") == 1  # artifact still interim
     _run(tmp_path, "finalise-artifacts")
     (tmp_path / "engagement-summary-t.txt").write_text(
         "Done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
         encoding="utf-8",
     )
     _run(tmp_path, "add-artifact", "engagement-summary-t.txt", "--title", "Email", "--final")
+    assert _run(tmp_path, "set-status", "closed", "--verdict", "ready") == 1  # no footprint
+    _run(tmp_path, "set-footprint", "--agents", "1", "--tokens", "12000")
     assert _run(tmp_path, "set-status", "closed", "--verdict", "ready") == 0
     state = load_state(tmp_path)
     assert all(a["status"] == "final" for a in state["artifacts"])
@@ -1326,12 +1331,19 @@ def test_a_busy_queue_does_not_starve_a_waiter(tmp_path):
     the old code passed almost always, which is why this only ever surfaced as a flake.
 
     This test drives the LOCK directly rather than 24 subprocesses: the property is that a
-    waiter behind a moving queue keeps waiting, and that is cheap to state exactly."""
+    waiter behind a moving queue keeps waiting, and that is cheap to state exactly.
+
+    T-3 (2026-09-12 audit): the wait budget is INJECTED rather than taken from the module
+    default, so the same property is proven in a fraction of a second instead of ~8 real
+    ones. The behaviour under test is unchanged - it is stated against a 0.25s deadline
+    instead of a 5s one, which also removes the CI-scheduler noise that a multi-second sleep
+    was exposed to."""
     import threading
     import time as _time
 
-    from scripts.engagement_state import _LOCK_WAIT_SECONDS, _state_lock
+    from scripts.engagement_state import _state_lock
 
+    wait = 0.25  # the injected deadline this test's timings are all relative to
     pack = tmp_path / "pack"
     pack.mkdir()
     stop = threading.Event()
@@ -1340,11 +1352,11 @@ def test_a_busy_queue_does_not_starve_a_waiter(tmp_path):
     def churn():
         # Hand the lock over again and again for longer than a waiter's whole deadline.
         # Nothing here is stuck, so nothing should time out.
-        deadline = _time.time() + _LOCK_WAIT_SECONDS * 1.5
+        deadline = _time.time() + wait * 1.5
         try:
             while _time.time() < deadline and not stop.is_set():
-                with _state_lock(pack):
-                    _time.sleep(0.01)
+                with _state_lock(pack, wait_seconds=wait):
+                    _time.sleep(0.005)
         except SystemExit as exc:  # pragma: no cover - would be the bug itself
             churn_error.append(str(exc))
 
@@ -1352,8 +1364,8 @@ def test_a_busy_queue_does_not_starve_a_waiter(tmp_path):
     for t in holders:
         t.start()
     try:
-        _time.sleep(_LOCK_WAIT_SECONDS * 1.2)  # outlast a fixed deadline
-        with _state_lock(pack):
+        _time.sleep(wait * 1.2)  # outlast a fixed deadline
+        with _state_lock(pack, wait_seconds=wait):
             acquired = True
     finally:
         stop.set()
@@ -1370,23 +1382,312 @@ def test_one_stuck_holder_still_times_a_waiter_out(tmp_path):
     Restarting the clock on every hand-over must not become "wait forever": a holder that
     never lets go has to exhaust a waiter, or a stuck process jams the pack silently. The
     deadline now measures the thing that is actually wrong - ONE holder not letting go -
-    rather than how busy everyone else is."""
+    rather than how busy everyone else is.
+
+    T-3: the deadline is injected, so "it must actually wait" is proven against 0.25s
+    instead of 5s. The stale TTL is injected high on purpose - this test is about the WAIT
+    deadline, and letting the reclaim path fire instead would prove a different thing."""
     import os
     import time as _time
 
-    from scripts.engagement_state import LOCK_FILENAME, _LOCK_WAIT_SECONDS, _state_lock
+    from scripts.engagement_state import LOCK_FILENAME, _state_lock
 
+    wait = 0.25
     pack = tmp_path / "pack"
     pack.mkdir()
     lock = pack / LOCK_FILENAME
     fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-    os.write(fd, b"12345:deadbeef")  # a holder that will never move
+    # Our OWN pid: a holder that is demonstrably alive, so the reclaim path (which now
+    # refuses to steal from a live process, S-3) cannot short-circuit the wait.
+    os.write(fd, f"{os.getpid()}:deadbeef".encode())
     os.close(fd)
 
     started = _time.time()
     with pytest.raises(SystemExit) as caught:
-        with _state_lock(pack):
+        with _state_lock(pack, wait_seconds=wait, stale_seconds=60):
             pass
     waited = _time.time() - started
     assert "holds the lock" in str(caught.value)
-    assert waited >= _LOCK_WAIT_SECONDS * 0.8, "it must actually wait before giving up"
+    assert waited >= wait * 0.8, "it must actually wait before giving up"
+
+
+# ------------------------------------------------ 2026-09-12 audit (S-2/S-3/S-5/S-11/S-21,
+#                                                   W-2/W-24/W-25/W-26/W-27, H-13)
+
+
+def test_every_mutating_command_is_locked():
+    """S-2: four commands that read-modify-write the state file were missing from
+    _MUTATING_CMDS and so ran with no lock at all - including sign-off, the human-acceptance
+    record the whole Definition-of-Done gate exists to protect.
+
+    Enumerated from the MODULE rather than from a hand-written list, so a new `_cmd_*` that
+    mutates fails this test on the day it is written instead of silently racing later. The
+    detector is the call itself: anything whose source calls `_mutate(` or `_write_state(`
+    performs a read-modify-write cycle and therefore needs the lock."""
+    import inspect
+
+    import scripts.engagement_state as es
+
+    mutating = set()
+    for name, fn in vars(es).items():
+        if not name.startswith("_cmd_") or not callable(fn):
+            continue
+        try:
+            source = inspect.getsource(fn)
+        except OSError:  # pragma: no cover - source is always available in this repo
+            continue
+        if "_mutate(" in source or "_write_state(" in source:
+            mutating.add(name)
+    registered = {fn.__name__ for fn in es._MUTATING_CMDS}
+    assert mutating, "the detector found no mutating commands - it has stopped working"
+    missing = sorted(mutating - registered)
+    assert not missing, (
+        f"these commands mutate engagement-state.json but are not in _MUTATING_CMDS, so "
+        f"main() dispatches them with no lock: {missing}"
+    )
+
+
+def test_a_lock_release_never_deletes_another_holders_lock(tmp_path):
+    """S-3: release used to unlink whatever file sat at the lock path. After a reclaim that
+    file is the NEXT holder's lock, so a third process could acquire while the second was
+    still inside its critical section - two writers, one state file, no error from either."""
+    from scripts.engagement_state import LOCK_FILENAME, _state_lock
+
+    pack = tmp_path / "pack"
+    pack.mkdir()
+    lock = pack / LOCK_FILENAME
+    with _state_lock(pack):
+        # Someone else reclaimed it mid-flight and is now the holder.
+        lock.write_bytes(b"999999:someone-else")
+    assert lock.is_file(), "the exiting holder deleted a lock it no longer owned"
+    assert lock.read_bytes() == b"999999:someone-else"
+
+
+def test_a_live_holders_lock_is_not_reclaimed_by_age(tmp_path):
+    """S-3, the other half: staleness alone said "older than the TTL = dead", which is false
+    for any mutation that legitimately runs longer (the close gate runs the whole DoD
+    checker). A stale-LOOKING lock whose pid is still running is waited on, not taken."""
+    import os
+    import time
+
+    from scripts.engagement_state import LOCK_FILENAME, _state_lock
+
+    pack = tmp_path / "pack"
+    pack.mkdir()
+    lock = pack / LOCK_FILENAME
+    lock.write_bytes(f"{os.getpid()}:still-working".encode())  # this process is alive
+    old = time.time() - 600
+    os.utime(lock, (old, old))
+
+    with pytest.raises(SystemExit) as caught:
+        with _state_lock(pack, wait_seconds=0.1, stale_seconds=0.01):
+            pass
+    assert "holds the lock" in str(caught.value)
+    assert lock.read_bytes() == f"{os.getpid()}:still-working".encode()
+
+
+def test_a_dead_holders_lock_is_still_reclaimed(tmp_path):
+    """The fix must not turn "never steal a live lock" into "jam forever on a dead one".
+    A pid that cannot be running is reclaimed exactly as before."""
+    import os
+    import time
+
+    from scripts.engagement_state import LOCK_FILENAME, _state_lock
+
+    pack = tmp_path / "pack"
+    pack.mkdir()
+    lock = pack / LOCK_FILENAME
+    lock.write_bytes(b"2147483646:long-gone")
+    old = time.time() - 600
+    os.utime(lock, (old, old))
+
+    with _state_lock(pack, wait_seconds=0.5, stale_seconds=0.01):
+        acquired = True
+    assert acquired
+
+
+def test_resolve_outstanding_refuses_an_empty_substring(tmp_path):
+    """S-5: an empty (or all-whitespace) substring is inside every string, so the filter
+    cleared the ENTIRE outstanding list and reported success."""
+    _run(tmp_path, "init", "--title", "T", "--slug", "t")
+    _run(tmp_path, "add-outstanding", "QA not yet run")
+    before = load_state(tmp_path)["outstanding"]
+    assert _run(tmp_path, "resolve-outstanding", "") == 2
+    assert _run(tmp_path, "resolve-outstanding", "   ") == 2
+    assert load_state(tmp_path)["outstanding"] == before
+
+
+def test_sign_off_requires_a_human_created_marker(tmp_path):
+    """W-2: sign-off is the one DoD item that requires a person, and it was an ordinary
+    subcommand of an allow-listed script - the model could run it and append its own
+    approval. The grant is now a file only a human can create, the same shape the execution
+    gate already uses."""
+    from scripts.engagement_state import SIGN_OFF_MARKER
+
+    _run(tmp_path, "init", "--title", "T", "--slug", "t")
+    assert _run(tmp_path, "sign-off", "--by", "Daniel") == 2
+    assert not load_state(tmp_path).get("ratifications")
+
+    (tmp_path / SIGN_OFF_MARKER).write_text("ok\n", encoding="utf-8")
+    assert _run(tmp_path, "sign-off", "--by", "Daniel") == 0
+    rats = load_state(tmp_path)["ratifications"]
+    assert rats[0]["text"] == "human sign-off: Daniel"
+    assert rats[0]["basis"] == "marker"
+
+
+def test_sign_off_force_is_honoured_only_inside_the_eval_sandbox(tmp_path, monkeypatch):
+    """The eval harness signs whole engagements with nobody at the keyboard. It gets an
+    explicit, env-gated bypass - and every use is recorded, so a signed pack always says
+    which kind of signature it carries."""
+    _run(tmp_path, "init", "--title", "T", "--slug", "t")
+    monkeypatch.delenv("CST_EVAL_SANDBOX", raising=False)
+    assert _run(tmp_path, "sign-off", "--by", "Harness", "--force-without-marker") == 2
+
+    monkeypatch.setenv("CST_EVAL_SANDBOX", "1")
+    assert _run(tmp_path, "sign-off", "--by", "Harness", "--force-without-marker") == 0
+    state = load_state(tmp_path)
+    assert state["ratifications"][0]["basis"].startswith("eval-sandbox")
+    assert any("WITHOUT a human marker" in entry for entry in state["log"])
+
+
+def test_set_footprint_rejects_a_value_that_is_not_a_number(tmp_path):
+    """W-24: `--tokens "a lot"` stored fine and the rendered cost line then said "a lot" -
+    a figure that means nothing, presented as measured."""
+    _run(tmp_path, "init", "--title", "T", "--slug", "t")
+    assert _run(tmp_path, "set-footprint", "--tokens", "a lot") == 2
+    assert _run(tmp_path, "set-footprint", "--agents", "-3") == 2
+    assert load_state(tmp_path)["footprint"]["approx_tokens"] is None
+    # The shorthand the close step actually types is accepted and normalised to a number.
+    assert _run(tmp_path, "set-footprint", "--agents", "4", "--tokens", "850k") == 0
+    footprint = load_state(tmp_path)["footprint"]
+    assert footprint["agents"] == 4 and footprint["approx_tokens"] == 850000
+
+
+def test_record_dispatch_builds_a_ledger_and_budget_status_reports_it(tmp_path, capsys):
+    """S-11 / W-5: the agent-count budget was nominal - a recorded cap with nothing counting
+    against it. record-dispatch is the counter; budget-status is where it is read."""
+    _run(tmp_path, "init", "--title", "T", "--slug", "t")
+    _run(tmp_path, "set-budget", "--agents", "2")
+    assert _run(tmp_path, "record-dispatch", "--agent", "code-reviewer", "--model", "opus") == 0
+    assert _run(tmp_path, "record-dispatch", "--agent", "qa-engineer") == 0
+    rows = load_state(tmp_path)["dispatches"]
+    assert [r["agent"] for r in rows] == ["code-reviewer", "qa-engineer"]
+    assert rows[0]["model"] == "opus" and rows[0]["at"].endswith("+00:00")
+
+    capsys.readouterr()
+    assert _run(tmp_path, "budget-status") == 0
+    assert "DISPATCHES dispatched=2 cap=2" in capsys.readouterr().out
+
+    assert _run(tmp_path, "record-dispatch", "--agent", "tuning-analyst") == 0
+    capsys.readouterr()
+    assert _run(tmp_path, "budget-status") == 3, "over the dispatch cap must not exit clean"
+    assert "OVER-BUDGET" in capsys.readouterr().out
+
+
+def test_budget_status_says_so_when_spend_cannot_be_computed(tmp_path, capsys, monkeypatch):
+    """S-10: a failure to compute spend degraded to HEADROOM=unknown in total silence, which
+    reads exactly like "no spend yet" - on the one signal the PM paces dispatch against."""
+    import scripts.engagement_state as es
+
+    _run(tmp_path, "init", "--title", "T", "--slug", "t")
+    _run(tmp_path, "set-budget", "--daily-usd", "10")
+    monkeypatch.setattr(es, "_load_dashboard_module", lambda: None)
+    capsys.readouterr()
+    assert _run(tmp_path, "budget-status") == 0
+    captured = capsys.readouterr()
+    assert "SPEND_ERROR=" in captured.out
+    assert "spend could not be computed" in captured.err
+
+
+def test_mark_auto_records_a_typed_outcome(tmp_path):
+    """W-26: AUTO-NOT-PARTIAL matched the substring "PARTIAL" anywhere in the prose. The
+    typed field is what the gate reads now; `auto` stays the boolean everything else reads."""
+    _run(tmp_path, "init", "--title", "T", "--slug", "t")
+    assert _run(tmp_path, "mark-auto", "--outcome", "partial") == 0
+    state = load_state(tmp_path)
+    assert state["auto"] is True and state["auto_outcome"] == "partial"
+
+
+def test_init_records_the_branch_and_show_warns_when_it_changes(tmp_path, monkeypatch):
+    """W-27: nothing tied a pack to the branch it was opened on, so a project whose
+    .gitignore does not cover the workspace could carry two divergent states for one slug
+    with nothing noticing."""
+    import scripts.engagement_state as es
+
+    monkeypatch.setattr(es, "current_git_branch", lambda root: "feature/x")
+    _run(tmp_path, "init", "--title", "T", "--slug", "t")
+    assert load_state(tmp_path)["git_branch"] == "feature/x"
+
+    monkeypatch.setattr(es, "current_git_branch", lambda root: "main")
+    warnings = es.branch_drift_warnings(tmp_path, load_state(tmp_path))
+    assert warnings and warnings[0].startswith("BRANCH-CHANGED:")
+    # Silent when git cannot answer, and on a pack that predates the field.
+    monkeypatch.setattr(es, "current_git_branch", lambda root: None)
+    assert es.branch_drift_warnings(tmp_path, load_state(tmp_path)) == []
+    assert es.branch_drift_warnings(tmp_path, {}) == []
+
+
+def test_the_session_stamp_remembers_several_sessions(tmp_path, monkeypatch):
+    """H-13: arming is "my session id == the one stamped", against a file holding ONE id -
+    so a second /engage in the same project silently disarmed the first session's hooks
+    mid-engagement. The stamp is a short ring now, newest first, deduped and capped."""
+    import json as _json
+
+    from scripts.engagement_state import (
+        TEAM_SESSION_MARKER,
+        read_team_session,
+        stamp_team_session,
+        team_sessions,
+    )
+
+    root = tmp_path / "artifacts"
+    for sid in ("sess-a", "sess-b", "sess-a"):
+        monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", sid)
+        stamp_team_session(root)
+
+    record = _json.loads((root / TEAM_SESSION_MARKER).read_text(encoding="utf-8"))
+    assert record["session_id"] == "sess-a"
+    assert record["session"] == "sess-a", "the legacy single-id key still names the latest"
+    assert [e["id"] for e in record["sessions"]] == ["sess-a", "sess-b"], "deduped, newest first"
+    assert all(e["stamped_at"] for e in record["sessions"])
+    assert read_team_session(root) == "sess-a"
+    assert team_sessions(root) == ["sess-a", "sess-b"]
+
+    for i in range(12):
+        monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", f"sess-{i}")
+        stamp_team_session(root)
+    record = _json.loads((root / TEAM_SESSION_MARKER).read_text(encoding="utf-8"))
+    assert len(record["sessions"]) == 8, "the ring is capped, not unbounded"
+
+
+def test_the_session_stamp_keeps_a_legacy_single_id_marker(tmp_path, monkeypatch):
+    """Upgrading the file must not disarm the session that wrote the old one."""
+    import json as _json
+
+    from scripts.engagement_state import TEAM_SESSION_MARKER, stamp_team_session, team_sessions
+
+    root = tmp_path / "artifacts"
+    root.mkdir(parents=True)
+    (root / TEAM_SESSION_MARKER).write_text(
+        _json.dumps({"session": "sess-old", "stamped": "2026-09-01"}), encoding="utf-8"
+    )
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "sess-new")
+    stamp_team_session(root)
+    assert team_sessions(root) == ["sess-new", "sess-old"]
+
+
+def test_recorded_timestamps_are_timezone_aware(tmp_path):
+    """S-21: every close/ratify/log/archive date was the SERVER's local wall clock with
+    nothing recording which zone that was."""
+    import datetime as _dt
+
+    from scripts.engagement_state import SIGN_OFF_MARKER
+
+    _run(tmp_path, "init", "--title", "T", "--slug", "t")
+    (tmp_path / SIGN_OFF_MARKER).write_text("ok\n", encoding="utf-8")
+    _run(tmp_path, "sign-off", "--by", "Daniel")
+    at = load_state(tmp_path)["ratifications"][0]["at"]
+    assert _dt.datetime.fromisoformat(at).tzinfo is not None
+    # Dates stay plain YYYY-MM-DD (every consumer compares them as text) but are now UTC.
+    opened = load_state(tmp_path)["engagement"]["opened"]
+    assert opened == _dt.datetime.now(_dt.timezone.utc).date().isoformat()

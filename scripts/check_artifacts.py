@@ -332,6 +332,76 @@ def _required_close_action_findings(artifacts_dir: Path) -> list[str]:
     return findings
 
 
+def _engagement_ledger_findings(
+    artifacts_dir: Path, _all_md: list[Path] | None = None
+) -> list[str]:
+    """Three state-level gates added by the 2026-09-12 audit, all of the same shape: a fact
+    the state file already records, checked against what actually happened.
+
+      FOOTPRINT-MISSING     (W-24) - a pack with deliverables closed without recording what
+                            it cost. The figure feeds cost reporting and the rendered index
+                            said "not yet recorded" forever, because nothing ever asked.
+      DISPATCH-OVER-BUDGET  (S-11/W-5) - more subagent dispatches than the engagement was
+                            sized for. The agent-count budget was nominal until
+                            record-dispatch started counting against it; this is where the
+                            count is read at the gate.
+      BRANCH-CHANGED        (W-27) - the checkout is on a different branch from the one the
+                            pack was opened on. A warning about divergence, not a defect in
+                            the work, so it is reported only where a human reads findings."""
+    findings: list[str] = []
+    es = _load_engagement_state_module()
+    for pack in sorted(p for p in artifacts_dir.rglob("engagement-state.json") if p.is_file()):
+        workspace = pack.parent
+        if _under_archive(pack, artifacts_dir):
+            continue
+        try:
+            state = json.loads(pack.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue  # STATE-INVALID owns that failure
+        status = str(state.get("status") or "").lower()
+        footprint = state.get("footprint") if isinstance(state.get("footprint"), dict) else {}
+        recorded = any(footprint.get(k) is not None for k in ("agents", "approx_tokens"))
+        # Only once there are deliverables to have cost something: an empty pack closing
+        # (cancelled, or never started) has no basis for a cost line and is not asked for one.
+        # Reuses check()'s single shared walk rather than re-rglob'ing the tree (2026-08-03
+        # perf audit: a gated Stop event paid for that walk several times over).
+        md_files = _all_md if _all_md is not None else sorted(artifacts_dir.rglob("*.md"))
+        has_deliverables = any(
+            m.name.upper() != "START-HERE.MD"
+            and not _under_archive(m, artifacts_dir)
+            and (m == workspace or workspace in m.parents)
+            for m in md_files
+        )
+        if status == "closed" and has_deliverables and not recorded:
+            findings.append(
+                f"FOOTPRINT-MISSING: {workspace.name} closed without a recorded footprint - "
+                "`python -m scripts.engagement_state set-footprint --agents <N> --tokens <N> "
+                f"--slug {workspace.name}` (what the engagement cost is part of the close, "
+                "not an optional extra)"
+            )
+        budget = state.get("budget") if isinstance(state.get("budget"), dict) else {}
+        cap = budget.get("agents")
+        dispatched = len([d for d in (state.get("dispatches") or []) if isinstance(d, dict)])
+        if isinstance(cap, int) and cap > 0 and dispatched > cap:
+            findings.append(
+                f"DISPATCH-OVER-BUDGET: {workspace.name} dispatched {dispatched} subagent(s) "
+                f"against a recorded budget of {cap} - right-sizing was stated and then "
+                "exceeded. Record why (log-note / a decision), or re-budget deliberately "
+                "with `set-budget --agents <N>`"
+            )
+        if es is not None and hasattr(es, "branch_drift_warnings"):
+            try:
+                findings.extend(
+                    f"{w} [{workspace.name}]" for w in es.branch_drift_warnings(workspace, state)
+                )
+            except Exception as exc:
+                findings.append(
+                    f"CHECK-CRASHED-BRANCH-DRIFT: {workspace.name} - the branch check raised "
+                    f"{type(exc).__name__}: {exc}"
+                )
+    return findings
+
+
 def _auto_mode_findings(artifacts_dir: Path) -> list[str]:
     """Unattended runs must never read as signed off (2026-08-20).
 
@@ -360,15 +430,27 @@ def _auto_mode_findings(artifacts_dir: Path) -> list[str]:
             continue
         if str(state.get("status") or "") not in ("closed", "closing"):
             continue  # still running, or parked - nothing to assert about a verdict yet
-        evidence = str(state.get("verdict") or "")
-        for name in ("delivery-report.md", "START-HERE.md"):
-            candidate = workspace / name
-            if candidate.is_file():
-                try:
-                    evidence += candidate.read_text(encoding="utf-8", errors="replace")
-                except OSError:
-                    pass
-        if "PARTIAL" not in evidence.upper():
+        # W-26: the typed field first. The substring sweep below stays as the FALLBACK for
+        # packs that predate `auto_outcome` (and for a run that recorded the word in its
+        # prose but never called mark-auto --outcome), but a field beats a word: "PARTIAL"
+        # also matches "IMPARTIAL", and a verdict nobody recorded structurally is a verdict
+        # no tool can act on.
+        outcome = state.get("auto_outcome")
+        if outcome is None and isinstance(state.get("auto"), dict):
+            outcome = state["auto"].get("outcome")
+        if isinstance(outcome, str) and outcome:
+            partial = outcome.lower() == "partial"
+        else:
+            evidence = str(state.get("verdict") or "")
+            for name in ("delivery-report.md", "START-HERE.md"):
+                candidate = workspace / name
+                if candidate.is_file():
+                    try:
+                        evidence += candidate.read_text(encoding="utf-8", errors="replace")
+                    except OSError:
+                        pass
+            partial = "PARTIAL" in evidence.upper()
+        if not partial:
             findings.append(
                 f"AUTO-NOT-PARTIAL: {workspace} ran unattended but nothing in the verdict, "
                 "delivery report or START-HERE says PARTIAL - an unattended run reaches "
@@ -784,7 +866,7 @@ def archived_open_packs(artifacts_dir: Path) -> list[str]:
     that is the entire cost archived packs keep. CLI-report only (the stop gate stays
     silent for archived packs by design - archiving IS the mute button; this warning
     surfaces on explicit checker runs so the dodge is visible, not fatal)."""
-    findings = []
+    findings: list[str] = []
     if not artifacts_dir.is_dir():
         return findings
     for p in sorted(artifacts_dir.iterdir()):
@@ -897,7 +979,12 @@ def _batch_resolve_shas(shas: list[str], repo_dir: Path) -> dict[str, bool | Non
     # git answers one line per input line, in order - zip by position, never by string
     # match (a RESOLVED line echoes the resolved objectname, not the "<sha>^{commit}"
     # text we sent; only a MISSING line echoes the literal input back).
-    out: dict[str, bool | None] = dict(zip(shas, (ln.strip().endswith(" commit") for ln in lines)))
+    # strict=False, deliberately: git can stop answering part-way through a batch (a bad
+    # object aborts the walk), and the setdefault below is what turns each unanswered sha
+    # into None. Raising here would fail the whole map over one unreadable sha.
+    out: dict[str, bool | None] = dict(
+        zip(shas, (ln.strip().endswith(" commit") for ln in lines), strict=False)
+    )
     for sha in shas:
         out.setdefault(sha, None)  # a git error mid-stream left this sha unanswered - skip it
     return out
@@ -921,12 +1008,19 @@ def _batch_resolve_shas(shas: list[str], repo_dir: Path) -> dict[str, bool | Non
 # memoized, so any commit landing (HEAD moves) invalidates every cached answer for that
 # repo at once, never later - and a HEAD lookup failure (no repo, git unavailable)
 # disables caching for that call entirely rather than caching under a None key.
-_MAP_GIT_CACHE: dict[tuple, object] = {}
+# S-14 (2026-09-12 audit): one shared `dict[tuple, object]` held three different value
+# shapes, disambiguated only by a literal tag string inside the key. Correct as written, and
+# uncheckable: a future edit reusing a tag, or dropping it from a key, would silently mix an
+# `int | None` into a `bool | None` lookup with nothing to catch it. Three typed caches make
+# that a type error instead.
+_MAP_ANCHOR_CACHE: dict[tuple, bool | None] = {}
+_MAP_BEHIND_CACHE: dict[tuple, int | None] = {}
+_MAP_BATCH_CACHE: dict[tuple, dict[str, bool | None]] = {}
 
 
 def _current_head_sha(repo_dir: Path) -> str | None:
     """One cheap `git rev-parse HEAD`. Always computed fresh by the caller - see
-    _MAP_GIT_CACHE's module comment for why this specific value must never be cached."""
+    the map-git caches' module comment for why this specific value must never be cached."""
     try:
         result = subprocess.run(  # nosec B603 B607 - fixed argv, shell=False
             ["git", "-C", str(repo_dir), "rev-parse", "HEAD"],
@@ -942,34 +1036,34 @@ def _current_head_sha(repo_dir: Path) -> str | None:
 
 
 def _cached_anchor_resolves(sha: str, repo_dir: Path, head: str | None) -> bool | None:
-    key = (str(repo_dir), head, "anchor", sha) if head else None
-    if key is not None and key in _MAP_GIT_CACHE:
-        return _MAP_GIT_CACHE[key]
+    key = (str(repo_dir), head, sha) if head else None
+    if key is not None and key in _MAP_ANCHOR_CACHE:
+        return _MAP_ANCHOR_CACHE[key]
     result = _anchor_resolves(sha, repo_dir)
     if key is not None:
-        _MAP_GIT_CACHE[key] = result
+        _MAP_ANCHOR_CACHE[key] = result
     return result
 
 
 def _cached_commits_behind(sha: str, repo_dir: Path, head: str | None) -> int | None:
-    key = (str(repo_dir), head, "behind", sha) if head else None
-    if key is not None and key in _MAP_GIT_CACHE:
-        return _MAP_GIT_CACHE[key]
+    key = (str(repo_dir), head, sha) if head else None
+    if key is not None and key in _MAP_BEHIND_CACHE:
+        return _MAP_BEHIND_CACHE[key]
     result = _commits_behind(sha, repo_dir)
     if key is not None:
-        _MAP_GIT_CACHE[key] = result
+        _MAP_BEHIND_CACHE[key] = result
     return result
 
 
 def _cached_batch_resolve_shas(
     shas: list[str], repo_dir: Path, head: str | None
 ) -> dict[str, bool | None]:
-    key = (str(repo_dir), head, "batch", frozenset(shas)) if head else None
-    if key is not None and key in _MAP_GIT_CACHE:
-        return _MAP_GIT_CACHE[key]
+    key = (str(repo_dir), head, frozenset(shas)) if head else None
+    if key is not None and key in _MAP_BATCH_CACHE:
+        return _MAP_BATCH_CACHE[key]
     result = _batch_resolve_shas(shas, repo_dir)
     if key is not None:
-        _MAP_GIT_CACHE[key] = result
+        _MAP_BATCH_CACHE[key] = result
     return result
 
 
@@ -1111,7 +1205,7 @@ def check_map(map_path: Path, project_dir: Path | None = None) -> list[str]:
     anchor_line = next((ln for ln in lines[:30] if "Anchor" in ln), "")
     anchor_sha = _SHA_RE.search(anchor_line)
     # H1: one HEAD lookup, shared by every git-derived fact check_map() computes below -
-    # see _MAP_GIT_CACHE's module comment.
+    # see the map-git caches' module comment.
     head = _current_head_sha(map_path.parent)
     if anchor_sha:
         resolves = _cached_anchor_resolves(anchor_sha.group(0), map_path.parent, head)
@@ -1270,6 +1364,41 @@ def check_map(map_path: Path, project_dir: Path | None = None) -> list[str]:
     return findings
 
 
+# S-23 (2026-09-12 audit): the "package import, else file-relative, else None, memoized"
+# dance below was hand-copied once per module - the same four steps, differing only in the
+# module name, so a genuine fix to the pattern would have had to be applied by hand in every
+# copy. One parameterised loader instead. The per-module cache globals are kept (the tests
+# clear them by name, and a single shared dict would make a stale entry for one module look
+# like a stale entry for all of them); `_<NAME>_MODULE_CACHE` is the slot for `<name>`.
+def _load_sibling_module(name: str):
+    """Import a sibling `scripts/` module in BOTH run modes: as part of the `scripts`
+    package when running under `-m`, else by file path next to this one (a plugin install
+    can execute these files directly, with no package on sys.path). Memoized per module -
+    the fallback re-parses and re-execs the whole file, which only needs to happen once per
+    process. None when neither route works; every caller degrades rather than failing."""
+    try:
+        # The `from scripts import <name>` form, spelled as a call so the module name can be
+        # a parameter. importlib.import_module would bypass builtins.__import__, and the
+        # plugin-mode tests prove the fallback branch by blocking exactly that hook.
+        return getattr(__import__("scripts", fromlist=[name]), name)
+    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
+        pass
+    slot = f"_{name.upper()}_MODULE_CACHE"
+    cached = globals().get(slot)
+    if cached is not None:
+        return cached
+    try:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(f"{name}.py"))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        globals()[slot] = module
+        return module
+    except Exception:
+        return None
+
+
 _VALIDATE_FINDINGS_MODULE_CACHE = None
 _FINDINGS_PACK_IO_MODULE_CACHE = None
 
@@ -1277,26 +1406,7 @@ _FINDINGS_PACK_IO_MODULE_CACHE = None
 def _load_findings_pack_io_module():
     """Import scripts.findings_pack_io in BOTH run modes - same dual-mode pattern and
     memoization as _load_validate_findings_module below."""
-    global _FINDINGS_PACK_IO_MODULE_CACHE
-    try:
-        from scripts import findings_pack_io  # normal `-m` / package mode
-
-        return findings_pack_io
-    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
-        pass
-    if _FINDINGS_PACK_IO_MODULE_CACHE is not None:
-        return _FINDINGS_PACK_IO_MODULE_CACHE
-    try:
-        import importlib.util
-
-        path = Path(__file__).with_name("findings_pack_io.py")
-        spec = importlib.util.spec_from_file_location("findings_pack_io", path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        _FINDINGS_PACK_IO_MODULE_CACHE = module
-        return module
-    except Exception:
-        return None
+    return _load_sibling_module("findings_pack_io")
 
 
 def _load_validate_findings_module():
@@ -1309,26 +1419,7 @@ def _load_validate_findings_module():
     in plugin mode. The __file__-relative fallback branch here gives the exact same
     path-independence without a subprocess: it resolves the file next to this one, exactly
     as the subprocess invocation did, just executed in-process."""
-    global _VALIDATE_FINDINGS_MODULE_CACHE
-    try:
-        from scripts import validate_findings  # normal `-m` / package mode
-
-        return validate_findings
-    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
-        pass
-    if _VALIDATE_FINDINGS_MODULE_CACHE is not None:
-        return _VALIDATE_FINDINGS_MODULE_CACHE
-    try:
-        import importlib.util
-
-        path = Path(__file__).with_name("validate_findings.py")
-        spec = importlib.util.spec_from_file_location("validate_findings", path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        _VALIDATE_FINDINGS_MODULE_CACHE = module
-        return module
-    except Exception:
-        return None
+    return _load_sibling_module("validate_findings")
 
 
 _RENDER_FINDINGS_MODULE_CACHE = None
@@ -1345,51 +1436,13 @@ def _load_render_findings_module():
     endpoint-security scanning (corp Windows), a handover pack with several deliverables
     chained enough untimed spawns to present as the whole close step hanging. Both loops in
     apply_fixes() now call the render function in-process instead."""
-    global _RENDER_FINDINGS_MODULE_CACHE
-    try:
-        from scripts import render_findings
-
-        return render_findings
-    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
-        pass
-    if _RENDER_FINDINGS_MODULE_CACHE is not None:
-        return _RENDER_FINDINGS_MODULE_CACHE
-    try:
-        import importlib.util
-
-        path = Path(__file__).with_name("render_findings.py")
-        spec = importlib.util.spec_from_file_location("render_findings", path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        _RENDER_FINDINGS_MODULE_CACHE = module
-        return module
-    except Exception:
-        return None
+    return _load_sibling_module("render_findings")
 
 
 def _load_render_html_module():
     """Import scripts.render_html in BOTH run modes - same dual-mode pattern as
     _load_render_findings_module above (2026-08-05 perf fix)."""
-    global _RENDER_HTML_MODULE_CACHE
-    try:
-        from scripts import render_html
-
-        return render_html
-    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
-        pass
-    if _RENDER_HTML_MODULE_CACHE is not None:
-        return _RENDER_HTML_MODULE_CACHE
-    try:
-        import importlib.util
-
-        path = Path(__file__).with_name("render_html.py")
-        spec = importlib.util.spec_from_file_location("render_html", path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        _RENDER_HTML_MODULE_CACHE = module
-        return module
-    except Exception:
-        return None
+    return _load_sibling_module("render_html")
 
 
 _MAP_FINGERPRINT_MODULE_CACHE = None
@@ -1399,26 +1452,7 @@ def _load_map_fingerprint_module():
     """Import scripts.map_fingerprint in BOTH run modes - same dual-mode pattern as
     _load_render_findings_module above (ADR-007 Phase 1 Chunk C: MAP-DRIFT needs
     compute_fingerprint to agree byte-for-byte with what repo_skeleton --fingerprint wrote)."""
-    global _MAP_FINGERPRINT_MODULE_CACHE
-    try:
-        from scripts import map_fingerprint
-
-        return map_fingerprint
-    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
-        pass
-    if _MAP_FINGERPRINT_MODULE_CACHE is not None:
-        return _MAP_FINGERPRINT_MODULE_CACHE
-    try:
-        import importlib.util
-
-        path = Path(__file__).with_name("map_fingerprint.py")
-        spec = importlib.util.spec_from_file_location("map_fingerprint", path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        _MAP_FINGERPRINT_MODULE_CACHE = module
-        return module
-    except Exception:
-        return None
+    return _load_sibling_module("map_fingerprint")
 
 
 def check_findings_packs(artifacts_dir: Path) -> list[str]:
@@ -1440,8 +1474,18 @@ def check_findings_packs(artifacts_dir: Path) -> list[str]:
         except (OSError, ValueError) as exc:
             findings.append(f"FINDINGS-INVALID: {pack.name} - cannot read/parse {pack}: {exc}")
             continue
-        except Exception:  # nosec B112 - deliberate fail-open, see comment below
-            continue  # an unexpected validator crash must not brick the gate (fail open)
+        except Exception as exc:
+            # S-8 (2026-09-12 audit): this used to `continue` in silence. Failing open is
+            # still right - a validator bug must not brick the close gate - but a check that
+            # COULD NOT RUN has to be distinguishable from a pack that passed it. The gate
+            # reported "DoD artifact gate: OK" over packs it had never actually validated.
+            findings.append(
+                f"CHECK-CRASHED-FINDINGS-VALIDATOR: {pack.name} was not validated - "
+                f"scripts.validate_findings raised {type(exc).__name__}: {exc}. This is a "
+                "tooling failure, not a verdict on the pack: fix the validator, then re-run "
+                "the gate"
+            )
+            continue
         if errs:
             findings.append(f"FINDINGS-INVALID: {pack.name} - " + "; ".join(errs))
     return findings
@@ -1620,27 +1664,7 @@ def _load_engagement_state_module():
     file from scratch on every single call. Memoized in a module-level variable - not
     sys.modules, so this cache can never collide with an unrelated `engagement_state` some
     other import path might load."""
-    global _ENGAGEMENT_STATE_MODULE_CACHE
-    try:
-        from scripts import engagement_state  # normal `-m` / package mode
-
-        return engagement_state
-    # Probe only; fall through to the file-relative loader.
-    except Exception:  # nosec B110
-        pass
-    if _ENGAGEMENT_STATE_MODULE_CACHE is not None:
-        return _ENGAGEMENT_STATE_MODULE_CACHE
-    try:
-        import importlib.util
-
-        path = Path(__file__).with_name("engagement_state.py")
-        spec = importlib.util.spec_from_file_location("engagement_state", path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        _ENGAGEMENT_STATE_MODULE_CACHE = module
-        return module
-    except Exception:
-        return None
+    return _load_sibling_module("engagement_state")
 
 
 def check_state(artifacts_dir: Path, _all_md: list[Path] | None = None) -> list[str]:
@@ -1790,14 +1814,33 @@ def check_review_fingerprints(artifacts_dir: Path) -> list[str]:
     for review in reviews:
         text = review.read_text(encoding="utf-8", errors="replace")
         mentioned.update(h.lower() for h in _HEX32_RE.findall(text))
+    shipped = [
+        f
+        for f in sorted(artifacts_dir.rglob("*"))
+        if f.is_file()
+        and f.suffix.lower() in _CODE_EXTS
+        and not _TEST_FILE_RE.search(f.name)
+        and not _under_archive(f, artifacts_dir)
+    ]
     if not mentioned:
-        return []
+        # S-4 (2026-09-12 audit): the check used to return here, so the DEFAULT case - a
+        # review artifact that never recorded a hash - was the case it could not see. That
+        # made the whole "code-reviewed" gate opt-in: a pack passed it by never hashing
+        # anything, which is precisely the unenforced prose claim the DoD says must not
+        # exist. A pack shipping code alongside a review now has to say WHICH bytes were
+        # reviewed. (No shipped code = nothing to evidence; still silent.)
+        if not shipped:
+            return []
+        return [
+            f"REVIEW-NOT-EVIDENCED: {len(shipped)} code file(s) ship with "
+            f"{len(reviews)} review artifact(s) that record no md5 fingerprint at all "
+            f"(e.g. {shipped[0].name}) - a review that does not name the bytes it read "
+            "cannot be tied to the shipped build. Record each reviewed file's md5 in the "
+            "review artifact, or disclose at the DoD code-review row that the link is "
+            "unevidenced (judgement item)"
+        ]
     findings: list[str] = []
-    for f in sorted(artifacts_dir.rglob("*")):
-        if not (
-            f.is_file() and f.suffix.lower() in _CODE_EXTS and not _TEST_FILE_RE.search(f.name)
-        ):
-            continue
+    for f in shipped:
         md5 = hashlib.md5(f.read_bytes()).hexdigest()  # nosec B324 - fingerprint, not crypto
         if md5 not in mentioned:
             findings.append(
@@ -1832,27 +1875,7 @@ def _load_validate_rtm_module():
     load under direct-path plugin invocation). None = unavailable; the RTM check then skips
     rather than bricking the gate - the same posture _load_engagement_state_module takes.
     Memoized the same way, for the same reason (2026-08-03 perf audit)."""
-    global _VALIDATE_RTM_MODULE_CACHE
-    try:
-        from scripts import validate_rtm
-
-        return validate_rtm
-    # Probe only; fall through to the file-relative loader.
-    except Exception:  # nosec B110
-        pass
-    if _VALIDATE_RTM_MODULE_CACHE is not None:
-        return _VALIDATE_RTM_MODULE_CACHE
-    try:
-        import importlib.util
-
-        path = Path(__file__).with_name("validate_rtm.py")
-        spec = importlib.util.spec_from_file_location("validate_rtm", path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        _VALIDATE_RTM_MODULE_CACHE = module
-        return module
-    except Exception:
-        return None
+    return _load_sibling_module("validate_rtm")
 
 
 def check_rtm(
@@ -2060,6 +2083,7 @@ def check(artifacts_dir: Path) -> list[str]:
     # down.
     findings.extend(_auto_mode_findings(artifacts_dir))
     findings.extend(_required_close_action_findings(artifacts_dir))
+    findings.extend(_engagement_ledger_findings(artifacts_dir, _all_md=all_md))
 
     # The START-HERE living index: created at OPEN (with the first artifact), updated on
     # every artifact write, finalised at close (docs/templates/start-here.md). It is also
@@ -2198,6 +2222,46 @@ def check(artifacts_dir: Path) -> list[str]:
     return findings
 
 
+def _write_state_through_engagement_state(artifacts_dir: Path, state: dict) -> str | None:
+    """Persist a --fix state change through engagement_state's own writer. Returns None on
+    success, or a short reason to log.
+
+    S-1 (2026-09-12 audit): apply_fixes used to `state_file.write_text(json.dumps(...))`
+    directly - no schema validation, no atomic replace, no lock - against the one file
+    engagement_state.py was specifically hardened to protect, at the one moment (pre-close)
+    where its integrity matters most. `_write_state` validates, writes via a unique temp file
+    plus os.replace, and re-renders the human view in the same step, so the index can never
+    be left describing a state that was never written. The lock is taken by main() around the
+    whole apply_fixes call (S-12b), not here, because a fix pass makes several related
+    changes and they belong in one critical section."""
+    es = _load_engagement_state_module()
+    if es is None:
+        return "engagement_state module unavailable"
+    try:
+        es._write_state(artifacts_dir, state)
+    except SystemExit:
+        # _write_state exits 1 on a schema-invalid state, having printed each problem.
+        # STATE-INVALID owns that failure; --fix must not take the process down with it.
+        return "the resulting state failed validation (see INVALID: lines above)"
+    except Exception as exc:
+        return f"{type(exc).__name__}: {exc}"
+    return None
+
+
+def _pack_state_lock(artifacts_dir: Path):
+    """engagement_state's per-pack mutation lock, or a no-op when the module is unavailable.
+
+    S-12b: a --fix run is typically invoked immediately before `set-status closed` - exactly
+    when a parallel subagent might be running `add-artifact` against the same pack. The two
+    were mutually exclusive with nothing at all."""
+    es = _load_engagement_state_module()
+    if es is None:
+        import contextlib
+
+        return contextlib.nullcontext()
+    return es._state_lock(artifacts_dir)
+
+
 def apply_fixes(artifacts_dir: Path) -> list[str]:
     """Mechanically resolve the auto-fixable DoD defects (docs/DEFINITION-OF-DONE.md 'AUTO-FIX'
     class) so the close does not depend on the model remembering each step:
@@ -2260,14 +2324,14 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
                 for row in state.get("artifacts") or []:
                     if isinstance(row, dict) and row.get("path") == bad.name:
                         row["path"] = target.name
-                        state_file.write_text(
-                            json.dumps(state, ensure_ascii=False, indent=2) + "\n",
-                            encoding="utf-8",
-                        )
-                        fixed.append(
-                            f"FIXED STALE-INDEX: updated state artifact row {bad.name} -> "
-                            f"{target.name} (index re-renders below)"
-                        )
+                        problem = _write_state_through_engagement_state(artifacts_dir, state)
+                        if problem:
+                            fixed.append(f"COULD-NOT-SYNC state after email rename: {problem}")
+                        else:
+                            fixed.append(
+                                f"FIXED STALE-INDEX: updated state artifact row {bad.name} -> "
+                                f"{target.name} (index re-renders below)"
+                            )
                         break
             except Exception as exc:
                 fixed.append(f"COULD-NOT-SYNC state after email rename: {exc}")
@@ -2324,10 +2388,10 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
                         keep.append(r)
                 if dropped:
                     state["artifacts"] = keep
-                    state_file.write_text(
-                        json.dumps(state, ensure_ascii=False, indent=2) + "\n",
-                        encoding="utf-8",
-                    )
+                    problem = _write_state_through_engagement_state(artifacts_dir, state)
+                    if problem:
+                        fixed.append(f"COULD-NOT-FIX ghost artifact rows: {problem}")
+                        dropped = []
                     for path in dropped:
                         fixed.append(
                             f"FIXED STALE-INDEX: removed ghost artifact row {path} "
@@ -2455,8 +2519,16 @@ def check_root_orphans(artifacts_dir: Path, create_snapshot: bool = False) -> li
         allowed = set(
             json.loads(allowlist_path.read_text(encoding="utf-8")).get("grandfathered") or []
         )
-    except Exception:
-        allowed = set()
+    except Exception as exc:
+        # S-17: this used to degrade to an EMPTY allowlist, so an unreadable file reported
+        # every grandfathered root file as a brand-new orphan - a burst of findings whose
+        # real cause (one corrupt file) appeared nowhere in the output.
+        return [
+            f"ALLOWLIST-UNREADABLE: {allowlist_path.name} could not be parsed ({exc}) - the "
+            "root-orphan grandfathering snapshot is unreadable, so ORPHAN-ARTIFACT is "
+            "suspended rather than reported against every pre-existing root file. Fix or "
+            "delete the file (deleting it re-snapshots on the next CLI run)"
+        ]
     return [
         f"ORPHAN-ARTIFACT: {p.name} sits in the artifacts ROOT, outside every engagement "
         "workspace - no per-pack gate covers root files; move it into its engagement's "
@@ -2580,7 +2652,12 @@ def main(argv: list[str]) -> int:
     if do_fix:
         for pack in workspaces or [artifacts_dir]:
             prefix = f"[{pack.name}] " if pack != artifacts_dir else ""
-            for line in apply_fixes(pack):
+            # S-12b: one critical section per pack, so a concurrent engagement_state
+            # mutation cannot interleave with the several related state changes a fix
+            # pass makes.
+            with _pack_state_lock(pack):
+                lines = apply_fixes(pack)
+            for line in lines:
                 print(f"{prefix}{line}")
         if workspace_dirs(artifacts_dir):
             es = _load_engagement_state_module()
@@ -2591,7 +2668,7 @@ def main(argv: list[str]) -> int:
     es = _load_engagement_state_module()
     skipped_fresh = 0
     if workspaces:
-        findings = []
+        findings: list[str] = []
         for pack in workspaces:
             # 0.33.2 fast path: a closed pack whose stat-only fingerprint still matches
             # the one stored at its gate-passing close needs no content re-scan.

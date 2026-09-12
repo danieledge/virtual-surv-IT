@@ -2426,10 +2426,15 @@ def test_fix_removes_ghost_artifact_row_when_true_row_resolves(tmp_path):
     art.mkdir(parents=True)
     (art / "engagement-brief.md").write_text("# brief\n", encoding="utf-8")
     (art / "engagement-brief.html").write_text("<p>b</p>", encoding="utf-8")
+    # A COMPLETE state: since S-1 the fix pass writes through engagement_state's validated
+    # path, so a fixture missing required fields is refused (which is the point - --fix must
+    # not be a second, unvalidated way to write this file).
     state = {
         "schema": 2,
         "status": "in_progress",
-        "engagement": {"slug": "pack", "title": "t"},
+        "phase": "delivery",
+        "engagement": {"slug": "pack", "title": "t", "opened": "2026-08-17"},
+        "outstanding": [],
         "artifacts": [
             {"path": "engagement-brief.md", "title": "Brief", "status": "interim"},
             {
@@ -2549,3 +2554,254 @@ def test_no_qa_handover_means_no_level_nagging(tmp_path):
         json.dumps({"status": "closed", "engagement": {"slug": "eng"}}), encoding="utf-8"
     )
     assert _qa_depth_findings(tmp_path / "artifacts") == []
+
+
+# ---------------------------------------------- 2026-09-12 audit (S-1/S-4/S-8/S-11/S-17,
+#                                                 W-24/W-26/W-27)
+
+
+def _closed_pack(art: Path, slug: str = "pack", **extra):
+    """A workspace pack recorded as closed, written straight to disk. The state-level gates
+    below read the file rather than the pack's contents, so this stays a fixture, not a
+    replay of the whole close sequence."""
+    pack = art / slug
+    pack.mkdir(parents=True, exist_ok=True)
+    state = {
+        "schema": 2,
+        "status": "closed",
+        "phase": "close",
+        "engagement": {"slug": slug, "title": "T", "opened": "2026-09-01", "closed": "2026-09-02"},
+        "outstanding": [],
+        "team": ["Ana (analysis)"],
+        "artifacts": [],
+    }
+    state.update(extra)
+    (pack / "engagement-state.json").write_text(json.dumps(state), encoding="utf-8")
+    return pack
+
+
+def test_footprint_missing_when_a_pack_with_deliverables_closes_without_one(tmp_path):
+    """W-24: `set-footprint` had no corresponding finding code, so a pack could close having
+    never recorded what it cost - and the rendered index simply said "not yet recorded"."""
+    from scripts.check_artifacts import _engagement_ledger_findings
+
+    art = tmp_path / "artifacts"
+    pack = _closed_pack(art)
+    (pack / "report.md").write_text("# report\n", encoding="utf-8")
+    findings = _engagement_ledger_findings(art)
+    assert any(f.startswith("FOOTPRINT-MISSING:") for f in findings)
+
+    pack2 = _closed_pack(art, slug="two", footprint={"agents": 3, "approx_tokens": 90000})
+    (pack2 / "report.md").write_text("# report\n", encoding="utf-8")
+    assert not [
+        f for f in _engagement_ledger_findings(art) if f.startswith("FOOTPRINT-MISSING: two")
+    ]
+
+
+def test_an_empty_pack_is_not_asked_for_a_footprint(tmp_path):
+    """A pack with nothing but its generated index has no basis for a cost line, and asking
+    for one would be noise on every formality close."""
+    from scripts.check_artifacts import _engagement_ledger_findings
+
+    art = tmp_path / "artifacts"
+    _closed_pack(art)
+    assert not _engagement_ledger_findings(art)
+
+
+def test_dispatch_over_budget_is_reported_at_the_gate(tmp_path):
+    """S-11 / W-5: right-sizing was stated in prose and counted by nobody. The ledger makes
+    over-dispatch a finding rather than an observation nobody makes."""
+    from scripts.check_artifacts import _engagement_ledger_findings
+
+    art = tmp_path / "artifacts"
+    _closed_pack(
+        art,
+        budget={"agents": 2},
+        dispatches=[{"agent": "a"}, {"agent": "b"}, {"agent": "c"}],
+    )
+    findings = _engagement_ledger_findings(art)
+    assert any("DISPATCH-OVER-BUDGET" in f and "3 subagent(s)" in f for f in findings)
+
+    art2 = tmp_path / "within"
+    _closed_pack(art2, budget={"agents": 4}, dispatches=[{"agent": "a"}])
+    assert not [f for f in _engagement_ledger_findings(art2) if "DISPATCH-OVER-BUDGET" in f]
+
+
+def test_branch_changed_is_reported_when_the_checkout_moved(tmp_path, monkeypatch):
+    """W-27: nothing tied a pack to the branch it was opened on."""
+    import scripts.engagement_state as es
+    from scripts.check_artifacts import _engagement_ledger_findings
+
+    art = tmp_path / "artifacts"
+    _closed_pack(art, git_branch="feature/x")
+    monkeypatch.setattr(es, "current_git_branch", lambda root: "main")
+    assert any("BRANCH-CHANGED" in f for f in _engagement_ledger_findings(art))
+    monkeypatch.setattr(es, "current_git_branch", lambda root: "feature/x")
+    assert not [f for f in _engagement_ledger_findings(art) if "BRANCH-CHANGED" in f]
+
+
+def test_auto_not_partial_reads_the_typed_outcome_first(tmp_path):
+    """W-26: the gate matched the substring "PARTIAL" anywhere in the prose - which also
+    matches "IMPARTIAL", and leaves the fact it cares about recorded nowhere a tool can read.
+    The typed field decides; the prose sweep is the fallback for packs that predate it."""
+    from scripts.check_artifacts import _auto_mode_findings
+
+    art = tmp_path / "artifacts"
+    # Prose says PARTIAL, the typed field says it completed: the field wins, so the gate
+    # fires. Belt and braces against a run that leaves the old wording lying around.
+    pack = _closed_pack(
+        art,
+        auto=True,
+        auto_outcome="complete",
+        decisions={"assumed-scope": "single venue"},
+    )
+    (pack / "delivery-report.md").write_text("Verdict: PARTIAL\n", encoding="utf-8")
+    assert any("AUTO-NOT-PARTIAL" in f for f in _auto_mode_findings(art))
+
+    art2 = tmp_path / "typed"
+    pack2 = _closed_pack(art2, auto=True, auto_outcome="partial", decisions={"assumed-x": "y"})
+    (pack2 / "delivery-report.md").write_text("nothing about the p-word here\n", encoding="utf-8")
+    assert not [f for f in _auto_mode_findings(art2) if "AUTO-NOT-PARTIAL" in f]
+
+    # No typed field at all: the substring fallback still carries packs written before it.
+    art3 = tmp_path / "legacy"
+    pack3 = _closed_pack(art3, auto=True, decisions={"assumed-x": "y"})
+    (pack3 / "delivery-report.md").write_text("DoD: PARTIAL - sign-off outstanding\n", "utf-8")
+    assert not [f for f in _auto_mode_findings(art3) if "AUTO-NOT-PARTIAL" in f]
+
+
+def test_review_without_any_fingerprint_is_not_evidence(tmp_path):
+    """S-4: REVIEW-FINGERPRINT-GAP only engaged once a review artifact ALREADY contained a
+    32-hex hash, so the default case - a review that never hashed anything - was the one case
+    it could not see. "Code-reviewed" was then exactly the unenforced prose claim the DoD
+    says must not exist."""
+    from scripts.check_artifacts import check_review_fingerprints
+
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    (art / "review-pass-1.md").write_text("# review\n\nLooks fine.\n", encoding="utf-8")
+    (art / "rule.py").write_text("x = 1\n", encoding="utf-8")
+    findings = check_review_fingerprints(art)
+    assert len(findings) == 1 and findings[0].startswith("REVIEW-NOT-EVIDENCED:")
+
+    # Record the shipped file's md5 and the claim is evidenced.
+    import hashlib
+
+    md5 = hashlib.md5((art / "rule.py").read_bytes()).hexdigest()  # nosec B324
+    (art / "review-pass-1.md").write_text(f"# review\n\nReviewed rule.py at {md5}\n", "utf-8")
+    assert check_review_fingerprints(art) == []
+
+
+def test_a_review_with_no_shipped_code_raises_nothing(tmp_path):
+    """Most engagements ship no code at all - there is nothing to fingerprint and the check
+    must stay silent rather than inventing a gap."""
+    from scripts.check_artifacts import check_review_fingerprints
+
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    (art / "review-pass-1.md").write_text("# review\n", encoding="utf-8")
+    assert check_review_fingerprints(art) == []
+
+
+def test_an_unreadable_root_allowlist_is_its_own_finding(tmp_path):
+    """S-17: a corrupt allowlist degraded to an EMPTY one, reporting every grandfathered
+    root file as a brand-new orphan with the real cause appearing nowhere."""
+    from scripts.check_artifacts import check_root_orphans
+
+    art = tmp_path / "artifacts"
+    (art / "pack").mkdir(parents=True)
+    (art / "legacy-note.md").write_text("# legacy\n", encoding="utf-8")
+    (art / ".dod-root-allowlist.json").write_text("{not json", encoding="utf-8")
+    findings = check_root_orphans(art)
+    assert len(findings) == 1
+    assert findings[0].startswith("ALLOWLIST-UNREADABLE:")
+    # One finding naming the real cause, not one per grandfathered root file.
+    assert "legacy-note.md" not in findings[0]
+
+
+def test_a_crashed_findings_validator_reports_itself(tmp_path, monkeypatch):
+    """S-8: a validator crash used to `continue` in silence, so the gate printed
+    "DoD artifact gate: OK" over a pack it had never actually validated."""
+    import scripts.check_artifacts as ca
+
+    art = tmp_path / "artifacts"
+    _pack(art, _VALID_PACK)
+
+    class _Exploding:
+        @staticmethod
+        def load_and_validate(path):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(ca, "_load_validate_findings_module", lambda: _Exploding)
+    findings = ca.check_findings_packs(art)
+    assert len(findings) == 1
+    assert findings[0].startswith("CHECK-CRASHED-FINDINGS-VALIDATOR:")
+    assert "RuntimeError: boom" in findings[0]
+
+
+def test_fix_writes_state_through_the_validated_locked_path(tmp_path, monkeypatch):
+    """S-1: apply_fixes wrote engagement-state.json with a bare write_text - no schema
+    validation, no atomic replace, no lock - against the one file engagement_state.py was
+    hardened to protect, at the one moment (pre-close) its integrity matters most."""
+    import scripts.check_artifacts as ca
+
+    art = tmp_path / "artifacts" / "pack"
+    art.mkdir(parents=True)
+    (art / "engagement-brief.md").write_text("# brief\n", encoding="utf-8")
+    (art / "engagement-brief.html").write_text("<p>b</p>", encoding="utf-8")
+    state = {
+        "schema": 2,
+        "status": "in_progress",
+        "phase": "delivery",
+        "engagement": {"slug": "pack", "title": "t", "opened": "2026-09-01"},
+        "outstanding": [],
+        "artifacts": [
+            {"path": "engagement-brief.md", "title": "Brief", "status": "interim"},
+            {
+                "path": "artifacts/pack/engagement-brief.md",
+                "title": "Brief",
+                "status": "interim",
+                "added_before_file_existed": True,
+            },
+        ],
+    }
+    (art / "engagement-state.json").write_text(json.dumps(state), encoding="utf-8")
+
+    seen = []
+    real = ca._load_engagement_state_module()
+    real_write = real._write_state
+    monkeypatch.setattr(
+        real, "_write_state", lambda d, s: (seen.append(d), real_write(d, s))[1], raising=True
+    )
+    ca.apply_fixes(art)
+    assert seen, "the fix pass wrote the state file without going through _write_state"
+
+
+def test_fix_refuses_to_write_a_state_that_would_not_validate(tmp_path):
+    """The other half of S-1: --fix must not become a second, unvalidated way to write this
+    file. A fix that would leave the state invalid is logged and skipped, not forced."""
+    from scripts.check_artifacts import apply_fixes
+
+    art = tmp_path / "artifacts" / "pack"
+    art.mkdir(parents=True)
+    (art / "engagement-brief.md").write_text("# brief\n", encoding="utf-8")
+    (art / "engagement-brief.html").write_text("<p>b</p>", encoding="utf-8")
+    state = {
+        "schema": 2,
+        "status": "in_progress",
+        "engagement": {"slug": "pack", "title": "t"},  # no `opened`, no phase: invalid
+        "artifacts": [
+            {"path": "engagement-brief.md", "title": "Brief", "status": "interim"},
+            {
+                "path": "artifacts/pack/engagement-brief.md",
+                "title": "Brief",
+                "status": "interim",
+                "added_before_file_existed": True,
+            },
+        ],
+    }
+    (art / "engagement-state.json").write_text(json.dumps(state), encoding="utf-8")
+    log = apply_fixes(art)
+    assert any("COULD-NOT-FIX ghost artifact rows" in line for line in log)
+    on_disk = json.loads((art / "engagement-state.json").read_text(encoding="utf-8"))
+    assert len(on_disk["artifacts"]) == 2, "the invalid state was left exactly as found"

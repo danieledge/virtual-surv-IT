@@ -59,6 +59,11 @@ def _pack(tmp_path: Path, slug="demo"):
     workspace = tmp_path / "artifacts" / slug
     _run("init", "--dir", str(workspace), "--slug", slug, "--title", "Demo", check=True)
     _run("set-team", "--dir", str(workspace), "morgan", check=True)
+    # The human sign-off marker (W-2, 2026-09-12): `sign-off` now refuses without a file
+    # only a person can create, so every fixture that exercises the signature MECHANICS
+    # stands the marker up first. That the refusal itself works is pinned separately, by
+    # tests/test_engagement_state.py::test_sign_off_requires_a_human_created_marker.
+    (workspace / ".human-sign-off").write_text("test fixture\n", encoding="utf-8")
     return workspace
 
 

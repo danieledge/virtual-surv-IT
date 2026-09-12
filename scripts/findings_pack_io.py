@@ -24,7 +24,14 @@ precedent as `scripts/map_fingerprint.py`).
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
+
+try:  # package mode (`from scripts import findings_pack_io`)
+    from scripts.fsutil import atomic_write_text
+except ImportError:  # loaded by path from a plugin install: scripts/ may not be on sys.path
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from fsutil import atomic_write_text  # type: ignore[no-redef]  # same symbol, other path
 
 PACK_SUFFIX = ".jsonl"
 
@@ -67,5 +74,8 @@ def write_pack(path: Path, pack: dict) -> None:
     Write/Edit the same way they did for the old JSON format."""
     lines = [envelope_line(pack)]
     lines += [finding_line(f) for f in pack.get("findings") or []]
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("".join(lines), encoding="utf-8")
+    # Atomic (S-12, 2026-09-12 audit): a direct write left a TRUNCATED pack behind if the
+    # process died mid-write - the exact multi-hour, large-pack failure the JSONL format was
+    # adopted to end. A staged temp file plus os.replace means a reader sees the whole old
+    # pack or the whole new one.
+    atomic_write_text(path, "".join(lines))

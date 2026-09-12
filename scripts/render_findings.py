@@ -49,7 +49,9 @@ _KIND = {
 def _force_utf8_output() -> None:
     for stream in (sys.stdout, sys.stderr):
         try:
-            stream.reconfigure(encoding="utf-8", errors="replace")
+            # mypy cannot prove sys.stdout is a real stream (TextIO has no .reconfigure in
+            # the stubs); CPython's always is, and a swap-in that isn't lands in the except.
+            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
         except (AttributeError, ValueError, OSError):
             pass
 

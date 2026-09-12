@@ -34,9 +34,13 @@ Usage (all consent-free team tooling, `python -m scripts.engagement_state <cmd>`
   set-team "Name (role)" ...
   finalise-artifacts
   set-footprint [--agents N] [--tokens TEXT]
-  set-budget [--daily-usd N] [--engagement-usd N]   # advisory pacing - the org spend limit
-                                                    # stays the hard stop
-  budget-status                # spent-vs-cap from this project's transcripts (read-only)
+  set-budget [--daily-usd N] [--engagement-usd N] [--agents N]  # advisory pacing - the org
+                                                    # spend limit stays the hard stop
+  record-dispatch --agent NAME [--model TIER] [--note TEXT]  # append one subagent dispatch
+                                # to the ledger; written by the PostToolUse Task hook
+  budget-status                # spent-vs-cap from this project's transcripts + dispatched-
+                                # vs-budget (read-only; exit 3 = over the dispatch cap)
+  sign-off --by WHO            # needs the human-created <pack>/.human-sign-off marker
   log-note TEXT [--tag NAME]   # dated event/completion note - NOT the outstanding list;
                                 # --tag (e.g. review-loop) marks a bracketed prefix the
                                 # dashboard timeline reads to pick an icon - plain notes
@@ -104,6 +108,12 @@ import time
 import uuid
 from pathlib import Path, PurePosixPath
 
+try:  # package mode (`python -m scripts.engagement_state`)
+    from scripts.fsutil import atomic_write_json, atomic_write_text, unlink_quietly
+except ImportError:  # standalone run from a bare clone: scripts/ may not be on sys.path yet
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from fsutil import atomic_write_json, atomic_write_text, unlink_quietly
+
 STATE_FILENAME = "engagement-state.json"
 INDEX_FILENAME = "START-HERE.md"
 SCHEMA_VERSION = 2
@@ -120,6 +130,10 @@ _PROFILES = ("standard", "light")
 # level from reading as a full pass.
 _QA_DEPTHS = ("quick", "deep", "audit")
 _ARTIFACT_STATUSES = ("interim", "final")
+# What an unattended run delivered, as a typed field rather than a word the gate hunts for
+# in prose (W-26). "partial" is what an unattended run actually reaches: every Definition-of-
+# Done line except the human sign-off it had nobody to ask for.
+_AUTO_OUTCOMES = ("partial", "complete")
 
 # The one hard exclusion (ADR-002 / ADR-006): consent must never gain a second home here.
 _FORBIDDEN_KEY_FRAGMENTS = ("consent", "exec")
@@ -153,9 +167,27 @@ _HASH_MARKER_SUFFIX = "-->"
 def _force_utf8_output() -> None:
     for stream in (sys.stdout, sys.stderr):
         try:
-            stream.reconfigure(encoding="utf-8", errors="replace")
+            # mypy cannot prove sys.stdout is a real stream (TextIO has no .reconfigure in
+            # the stubs); CPython's always is, and a swap-in that isn't lands in the except.
+            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
         except (AttributeError, ValueError, OSError):
             pass
+
+
+# Dates and timestamps are UTC (2026-09-12 audit, S-21). Every close, ratification, log and
+# archive date used to be the SERVER's local wall clock with nothing recording which zone
+# that was, so a session run near midnight - or on a host in a different zone from the
+# analyst - logged an off-by-one-day audit date that nothing could later disambiguate.
+# READING is unchanged: older naive values stay valid strings and are only ever compared
+# or displayed as text, never parsed back into a datetime.
+def _today() -> str:
+    """Today's date in UTC, ISO (YYYY-MM-DD) - the shape every dated field here uses."""
+    return _dt.datetime.now(_dt.timezone.utc).date().isoformat()
+
+
+def _utc_now_iso(timespec: str = "seconds") -> str:
+    """A timezone-AWARE ISO timestamp, so the offset travels with the value."""
+    return _dt.datetime.now(_dt.timezone.utc).isoformat(timespec=timespec)
 
 
 def _vsit_paths():
@@ -305,21 +337,20 @@ def write_active(root: Path, slug: str) -> None:
     gate can scope its fix instruction to a pack THIS session actually activated and
     surface everything else without actioning it."""
     root.mkdir(parents=True, exist_ok=True)
-    record = {"slug": slug, "set": _dt.date.today().isoformat()}
+    record = {"slug": slug, "set": _today()}
     sid = os.environ.get("CLAUDE_CODE_SESSION_ID")
     if sid:
         record["session"] = sid
-    (root / ACTIVE_MARKER).write_text(
-        json.dumps(record, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    # Atomic like the state file beside it (S-13): a reader that catches this marker
+    # half-written reads "no active engagement" and silently mutates the wrong pack.
+    atomic_write_json(root / ACTIVE_MARKER, record)
 
 
 def clear_active(root: Path, slug: str | None = None) -> None:
     """Remove the marker; with a slug given, only if it is the one recorded."""
     if slug is not None and read_active(root) != slug:
         return
-    (root / ACTIVE_MARKER).unlink(missing_ok=True)
+    unlink_quietly(root / ACTIVE_MARKER)
 
 
 # Which Claude Code SESSION last acted on this project's engagement layer (2026-08-16
@@ -338,30 +369,105 @@ def clear_active(root: Path, slug: str | None = None) -> None:
 TEAM_SESSION_MARKER = ".team-session.json"
 
 
+# How many acting sessions the stamp remembers. Two Claude sessions genuinely can be
+# engaged in one project at once (H-13, 2026-09-12 audit): the single-id stamp meant the
+# second /engage silently DISARMED the first mid-engagement, because arming is
+# "my session id == the one stamped". A short ring of recent ids arms both without letting
+# the file grow forever or keeping a long-abandoned session armed indefinitely.
+_TEAM_SESSION_HISTORY = 8
+
+
 def stamp_team_session(root: Path) -> None:
-    """Record the calling session as the one driving this project's engagements.
+    """Record the calling session as one of the sessions driving this project's engagements.
+
     Advisory marker - never fails a state mutation over it, and writes nothing when the
-    session id isn't in the environment."""
+    session id isn't in the environment. APPENDS rather than overwrites: `sessions` keeps
+    the most recent ids (newest first, deduped, capped), while `session_id`/`session` keep
+    naming the latest one so a reader that only knows the old single-id shape still works."""
     sid = os.environ.get("CLAUDE_CODE_SESSION_ID")
     if not sid:
         return
     try:
+        existing = json.loads((root / TEAM_SESSION_MARKER).read_text(encoding="utf-8"))
+    except Exception:
+        existing = {}
+    prior = existing.get("sessions") if isinstance(existing, dict) else None
+    entries: list[dict] = [
+        e
+        for e in (prior or [])
+        if isinstance(e, dict) and isinstance(e.get("id"), str) and e.get("id") and e["id"] != sid
+    ]
+    # A pre-`sessions` marker carries only the single id - keep it, so upgrading the file
+    # does not disarm the session that wrote it.
+    if isinstance(existing, dict):
+        legacy = existing.get("session_id") or existing.get("session")
+        if isinstance(legacy, str) and legacy and legacy != sid:
+            if not any(e["id"] == legacy for e in entries):
+                entries.append({"id": legacy, "stamped_at": str(existing.get("stamped") or "")})
+    record = {
+        "session_id": sid,
+        "session": sid,  # legacy key: hooks and probes not yet reading session_id
+        "stamped": _today(),
+        "sessions": [{"id": sid, "stamped_at": _utc_now_iso()}, *entries][:_TEAM_SESSION_HISTORY],
+    }
+    try:
         root.mkdir(parents=True, exist_ok=True)
-        (root / TEAM_SESSION_MARKER).write_text(
-            json.dumps({"session": sid, "stamped": _dt.date.today().isoformat()}) + "\n",
-            encoding="utf-8",
-        )
+        atomic_write_json(root / TEAM_SESSION_MARKER, record)
     except OSError:
         pass
 
 
 def read_team_session(root: Path) -> str | None:
-    """The stamped session id, or None. Fail toward None (= hooks stay dormant)."""
+    """The MOST RECENT stamped session id, or None. Fail toward None (= hooks stay dormant)."""
+    ids = team_sessions(root)
+    return ids[0] if ids else None
+
+
+def team_sessions(root: Path) -> list[str]:
+    """Every session id the stamp still remembers, newest first. Empty on a missing or
+    unreadable marker - failing toward "nobody is armed" is the dormant-by-default answer."""
     try:
-        sid = json.loads((root / TEAM_SESSION_MARKER).read_text(encoding="utf-8")).get("session")
+        data = json.loads((root / TEAM_SESSION_MARKER).read_text(encoding="utf-8"))
     except Exception:
+        return []
+    if not isinstance(data, dict):
+        return []
+    ids: list[str] = []
+    for candidate in (data.get("session_id"), data.get("session")):
+        if isinstance(candidate, str) and candidate and candidate not in ids:
+            ids.append(candidate)
+    for entry in data.get("sessions") or []:
+        if isinstance(entry, dict):
+            sid = entry.get("id")
+            if isinstance(sid, str) and sid and sid not in ids:
+                ids.append(sid)
+    return ids
+
+
+def current_git_branch(project_root: Path) -> str | None:
+    """The checked-out branch name, or None (no git, detached HEAD, not a repo).
+
+    W-27: nothing tied a pack to the branch it was opened on. The workspace being gitignored
+    is what usually saves this, but that is an INSTALLER convention, not something the state
+    machine checks - so a project whose .gitignore does not cover the workspace could carry
+    two divergent committed states for one slug with nothing noticing. Recording the branch
+    at init costs one subprocess once and makes the drift visible (BRANCH-CHANGED) instead."""
+    import subprocess  # nosec B404 - fixed argv, shell=False, read-only query
+
+    try:
+        result = subprocess.run(  # nosec B603 B607
+            ["git", "-C", str(project_root), "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
         return None
-    return sid if isinstance(sid, str) and sid else None
+    if result.returncode != 0:
+        return None
+    name = result.stdout.decode(errors="replace").strip()
+    # "HEAD" is git's answer for a detached checkout: not a branch, so not a fact worth
+    # recording as one.
+    return name if name and name != "HEAD" else None
 
 
 def _stamp_root(pack_dir: Path | None) -> Path:
@@ -620,6 +726,41 @@ def scan_engagements(root: Path, known: tuple[Path, dict] | None = None) -> list
     return rows
 
 
+# S-23 (2026-09-12 audit): the "package import, else file-relative, else None, memoized"
+# dance below was hand-copied once per module - the same four steps, differing only in the
+# module name, so a genuine fix to the pattern would have had to be applied by hand in every
+# copy. One parameterised loader instead. The per-module cache globals are kept (the tests
+# clear them by name, and a single shared dict would make a stale entry for one module look
+# like a stale entry for all of them); `_<NAME>_MODULE_CACHE` is the slot for `<name>`.
+def _load_sibling_module(name: str):
+    """Import a sibling `scripts/` module in BOTH run modes: as part of the `scripts`
+    package when running under `-m`, else by file path next to this one (this script also
+    runs standalone from a bare clone, where `scripts/` may not be on sys.path). Memoized
+    per module - the fallback re-parses and re-execs the whole file, which only needs to
+    happen once per process. None when neither route works; every caller degrades."""
+    try:
+        # The `from scripts import <name>` form, spelled as a call so the module name can be
+        # a parameter. importlib.import_module would bypass builtins.__import__, and the
+        # plugin-mode tests prove the fallback branch by blocking exactly that hook.
+        return getattr(__import__("scripts", fromlist=[name]), name)
+    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
+        pass
+    slot = f"_{name.upper()}_MODULE_CACHE"
+    cached = globals().get(slot)
+    if cached is not None:
+        return cached
+    try:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(f"{name}.py"))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        globals()[slot] = module
+        return module
+    except Exception:
+        return None
+
+
 _RENDER_HTML_MODULE_CACHE = None
 
 
@@ -635,26 +776,7 @@ def _load_render_html_module():
     fails), that used to re-parse and re-exec render_html.py twice per mutation.
     Memoized in a module-level variable, same reasoning as check_artifacts.py's own
     loaders."""
-    global _RENDER_HTML_MODULE_CACHE
-    try:
-        from scripts import render_html  # normal `-m` / package mode
-
-        return render_html
-    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
-        pass
-    if _RENDER_HTML_MODULE_CACHE is not None:
-        return _RENDER_HTML_MODULE_CACHE
-    try:
-        import importlib.util
-
-        path = Path(__file__).with_name("render_html.py")
-        spec = importlib.util.spec_from_file_location("render_html", path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        _RENDER_HTML_MODULE_CACHE = module
-        return module
-    except Exception:
-        return None
+    return _load_sibling_module("render_html")
 
 
 def render_registry(
@@ -716,6 +838,15 @@ def render_registry(
     registry_html = md_path.with_suffix(".html")
     if not force and previous_registry == registry_md and registry_html.is_file():
         written.append(registry_html)  # up to date, not skipped - see render_files above
+        # The .md above was rewritten byte-identically, which still bumps its mtime - and
+        # check_artifacts' REGISTRY-HTML-STALE compares those mtimes (with a 1s tolerance).
+        # A couple of mutations spaced more than a second apart therefore reported a mirror
+        # that is in fact perfectly current; observed failing 2 runs in 3 (2026-09-12). The
+        # mirror IS up to date, so say so on disk rather than leaving a real check to guess.
+        try:
+            os.utime(registry_html, None)
+        except OSError:
+            pass
         return written
     render_html = _load_render_html_module()
     if render_html is not None:
@@ -727,7 +858,7 @@ def render_registry(
                     md_text,
                     render_html._title_from(md_text, md_path.stem),
                     source=md_path.name,
-                    generated=_dt.date.today().isoformat(),
+                    generated=_today(),
                 ),
                 encoding="utf-8",
             )
@@ -992,6 +1123,41 @@ def validate_state(state: dict) -> list[str]:
     footprint = state.get("footprint")
     if footprint is not None and not isinstance(footprint, dict):
         problems.append("'footprint' must be an object")
+    elif isinstance(footprint, dict):
+        # W-24: the footprint is a MEASURED figure the rendered cost line reports, so a
+        # non-numeric or negative value is worse than an absent one - it reads as measured.
+        # A numeric-looking STRING stays valid: packs written before set-footprint
+        # normalised its input hold "40k", and invalidating them retroactively would brick
+        # real closed engagements over a formatting change.
+        for field in ("agents", "approx_tokens"):
+            value = footprint.get(field)
+            if value is None:
+                continue
+            if _coerce_count(value) is None:
+                problems.append(
+                    f"footprint.{field} must be a non-negative number (got {value!r}) - "
+                    "set it with `set-footprint`, which validates and normalises the value"
+                )
+
+    # The subagent dispatch ledger (S-11 / W-5): append-only rows, each naming an agent.
+    dispatches = state.get("dispatches")
+    if dispatches is not None:
+        if not isinstance(dispatches, list):
+            problems.append("'dispatches' must be a list")
+        else:
+            for i, row in enumerate(dispatches):
+                if not isinstance(row, dict) or not (
+                    isinstance(row.get("agent"), str) and row.get("agent")
+                ):
+                    problems.append(f"dispatches[{i}] must be an object with a non-empty 'agent'")
+
+    auto_outcome = state.get("auto_outcome")
+    if auto_outcome is not None and auto_outcome not in _AUTO_OUTCOMES:
+        problems.append(f"auto_outcome must be one of {_AUTO_OUTCOMES} (got {auto_outcome!r})")
+
+    git_branch = state.get("git_branch")
+    if git_branch is not None and not isinstance(git_branch, str):
+        problems.append("'git_branch' must be a string (the branch the pack was opened on)")
 
     settings_snapshot = state.get("settings_snapshot")
     if settings_snapshot is not None and not isinstance(settings_snapshot, dict):
@@ -1289,7 +1455,7 @@ def render_files(
                 md_text,
                 render_html._title_from(md_text, md_path.stem),
                 source=md_path.name,
-                generated=_dt.date.today().isoformat(),
+                generated=_today(),
             ),
             encoding="utf-8",
         )
@@ -1314,8 +1480,61 @@ _LOCK_RETRY_BASE_SECONDS = 0.01
 _LOCK_RETRY_JITTER_SECONDS = 0.06
 
 
+def _holder_pid(token: bytes) -> int | None:
+    """The pid out of a `pid:uuid` lock stamp, or None when the stamp is absent/unparseable
+    (an empty file is the created-but-not-yet-stamped window, or a pre-stamp lock)."""
+    try:
+        return int(token.split(b":", 1)[0])
+    except (ValueError, IndexError):
+        return None
+
+
+def _pid_is_alive(pid: int) -> bool:
+    """Is that process still running? Reclaiming a lock whose holder is ALIVE is how two
+    writers end up inside one critical section, so the answer is load-bearing.
+
+    POSIX: signal 0 probes without delivering. Windows: OpenProcess + GetExitCodeProcess via
+    ctypes (no fcntl, no tasklist spawn). When we genuinely cannot tell, the caller has
+    already waited out the full stale TTL, so "cannot tell" resolves to not-alive: the
+    conservative window is the TTL itself, and a lock older than that with an unprobeable
+    holder must not jam the pack forever."""
+    if pid <= 0:
+        return False
+    if os.name != "nt":
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True  # alive, just owned by another user
+        except OSError:
+            return False
+        return True
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        # PROCESS_QUERY_LIMITED_INFORMATION - the least privilege that answers this.
+        handle = kernel32.OpenProcess(0x1000, False, pid)
+        if not handle:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return True  # openable but unreadable: treat as alive, never steal
+            return code.value == 259  # STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+    except Exception:
+        return False
+
+
 @contextlib.contextmanager
-def _state_lock(artifacts_dir: Path):
+def _state_lock(
+    artifacts_dir: Path,
+    wait_seconds: float | None = None,
+    stale_seconds: float | None = None,
+):
     """Advisory cross-process mutex around one read-modify-write cycle on
     engagement-state.json. 2026-08 audit (C5): parallel Workflow-tool dispatch can run
     several mutating commands (set-status, add-artifact, log-note, ...) against the SAME
@@ -1338,50 +1557,103 @@ def _state_lock(artifacts_dir: Path):
     filesystem timestamp tick and would report two different holders as one. A dead holder
     is still handled, by _LOCK_STALE_SECONDS - that is what the absolute bound is for, and
     it is a better bound than a wait deadline because it measures the thing that is
-    actually wrong."""
+    actually wrong.
+
+    Two 2026-09-12 audit fixes, both about not stealing a lock that is still held (S-3):
+
+      * RELEASE compares before it deletes. The exit path used to unlink whatever file sat
+        at the path, which after a reclaim is the NEXT holder's lock - so a third process
+        could then acquire while the second was still inside its critical section. It now
+        unlinks only a file still carrying the token this holder stamped.
+      * RECLAIM asks whether the holder is alive. Age alone said "older than 30s = dead",
+        which is false for any mutation that legitimately takes longer (a close gate runs
+        the whole DoD checker). A stale-looking lock whose pid is still running is waited
+        on, not taken.
+
+    `wait_seconds`/`stale_seconds` override the module defaults - the lock-fairness tests
+    prove the same properties in milliseconds instead of seconds (T-3)."""
+    wait_seconds = _LOCK_WAIT_SECONDS if wait_seconds is None else wait_seconds
+    stale_seconds = _LOCK_STALE_SECONDS if stale_seconds is None else stale_seconds
     lock_path = artifacts_dir / LOCK_FILENAME
     artifacts_dir.mkdir(parents=True, exist_ok=True)
-    deadline = time.time() + _LOCK_WAIT_SECONDS
-    held_by = None  # token of the holder we are currently waiting behind
+    our_token = f"{os.getpid()}:{uuid.uuid4().hex}".encode()
+    deadline = time.time() + wait_seconds
+    # The backstop on "the deadline restarts whenever the lock changes hands": a pack being
+    # hammered hard enough that this waiter never wins still has to fail eventually rather
+    # than spin forever. Sized off the stale TTL, so a genuinely stuck holder is reclaimed
+    # (above) well before this fires.
+    hard_deadline = time.time() + wait_seconds + stale_seconds
+    held_by = None  # (inode, token) of the holder we are currently waiting behind
     fd = None
+    stamped = False
     while fd is None:
         try:
             fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            break
         except FileExistsError:
-            try:
-                stat = lock_path.stat()
-                token = lock_path.read_bytes()
-            except (FileNotFoundError, OSError):
-                continue  # released between our open() and read - retry immediately
-            age = time.time() - stat.st_mtime
-            if age > _LOCK_STALE_SECONDS:
-                lock_path.unlink(missing_ok=True)  # holder is gone - reclaim it
-                continue
-            if token and token != held_by:
+            pass
+        except PermissionError:
+            # Windows only: a lock file inside its delete-pending window answers O_EXCL
+            # with EACCES rather than EEXIST. That is the previous holder LETTING GO, so
+            # it is progress - fall through to the same handling as a vanished file.
+            pass
+        now = time.time()
+        observed: tuple | None
+        try:
+            stat = lock_path.stat()
+            # Identify the holder by INODE as well as token: a fresh O_EXCL create makes a
+            # new inode, while mtime can repeat inside one filesystem timestamp tick and
+            # would report two different holders as one.
+            observed = (stat.st_ino, lock_path.read_bytes())
+            age = now - stat.st_mtime
+        except OSError:
+            # Gone, or unreadable mid-hand-over. Either way the lock is moving, which is the
+            # same progress signal a changed token gives - restart the deadline and retry.
+            observed, age = None, 0.0
+        if observed is None:
+            held_by = None
+            deadline = now + wait_seconds
+        else:
+            token = observed[1]
+            if age > stale_seconds:
+                pid = _holder_pid(token)
+                if pid is None or not _pid_is_alive(pid):
+                    unlink_quietly(lock_path)  # holder is gone - reclaim it
+                    continue
+            if token and observed != held_by:
                 # It changed hands, so the system is making progress and nothing is stuck.
                 # Only a holder that will not let go should ever exhaust a waiter. An EMPTY
                 # read is the created-but-not-yet-stamped window, not a new holder -
                 # treating it as one would restart the deadline forever.
-                held_by = token
-                deadline = time.time() + _LOCK_WAIT_SECONDS
-            if time.time() >= deadline:
-                raise SystemExit(
-                    f"another engagement_state process holds the lock on {artifacts_dir} "
-                    f"(age {age:.1f}s) - if it's genuinely dead, delete {lock_path} by hand"
-                )
-            time.sleep(_LOCK_RETRY_BASE_SECONDS + random.random() * _LOCK_RETRY_JITTER_SECONDS)
+                held_by = observed
+                deadline = now + wait_seconds
+        if now >= deadline or now >= hard_deadline:
+            raise SystemExit(
+                f"another engagement_state process holds the lock on {artifacts_dir} "
+                f"(age {age:.1f}s) - if it's genuinely dead, delete {lock_path} by hand"
+            )
+        time.sleep(_LOCK_RETRY_BASE_SECONDS + random.random() * _LOCK_RETRY_JITTER_SECONDS)
     try:
-        # Stamp WHO holds it, so a waiter can tell one stuck holder from a busy queue.
-        # Best-effort: a lock that cannot be stamped is still a lock, it just costs
-        # waiters the progress signal.
+        # Stamp WHO holds it, so a waiter can tell one stuck holder from a busy queue - and
+        # so release can prove the file it is about to delete is still ours.
         try:
-            os.write(fd, f"{os.getpid()}:{uuid.uuid4().hex}".encode())
+            os.write(fd, our_token)
+            stamped = True
         except OSError:
             pass
         os.close(fd)
         yield
     finally:
-        lock_path.unlink(missing_ok=True)
+        try:
+            current: bytes | None = lock_path.read_bytes()
+        except OSError:
+            current = None
+        # Unlink only OUR lock. A file carrying someone else's token means ours was already
+        # reclaimed and another holder is inside the critical section right now; deleting it
+        # would let a third process in alongside them. An empty file is ours only if our own
+        # stamp write failed - otherwise it is the next holder's not-yet-stamped window.
+        if current is None or current == our_token or (not stamped and current == b""):
+            unlink_quietly(lock_path)
 
 
 def _write_state(artifacts_dir: Path, state: dict) -> None:
@@ -1392,10 +1664,10 @@ def _write_state(artifacts_dir: Path, state: dict) -> None:
             print(f"INVALID: {problem}", file=sys.stderr)
         raise SystemExit(1)
     artifacts_dir.mkdir(parents=True, exist_ok=True)
-    target = state_path(artifacts_dir)
-    tmp = target.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    os.replace(tmp, target)
+    # fsutil's temp file is unique per call; this used to stage through a shared
+    # `engagement-state.json.tmp`, which two writers racing the lock's reclaim path could
+    # both be inside at once (S-13).
+    atomic_write_json(state_path(artifacts_dir), state)
     for path in render_files(artifacts_dir, known_state=state):
         print(f"wrote {path}")
     registry_root = _registry_root_for(artifacts_dir)
@@ -1562,7 +1834,7 @@ def _cmd_init(args: argparse.Namespace) -> int:
             "title": args.title,
             "slug": args.slug,
             "requested_by": args.requested_by,
-            "opened": _dt.date.today().isoformat(),
+            "opened": _today(),
             "closed": None,
         },
         "status": "in_progress",
@@ -1591,7 +1863,7 @@ def _cmd_init(args: argparse.Namespace) -> int:
         "budget": (
             {
                 "engagement_usd": _handoff["engagement_usd"],
-                "set": _dt.date.today().isoformat(),
+                "set": _today(),
                 # The ENFORCED cap, kept apart from the advisory ceiling above it. They are
                 # two different promises (2026-08-25) and a reader must never have to infer
                 # which one this engagement was given.
@@ -1635,6 +1907,10 @@ def _cmd_init(args: argparse.Namespace) -> int:
         "artifacts": [],
         "decisions": {},
         "team_version": args.team_version,
+        # W-27: which branch this engagement was opened on. Best-effort metadata, never
+        # load-bearing - `show` and the DoD gate warn on a mismatch (BRANCH-CHANGED) so a
+        # mid-engagement branch switch is visible rather than silently divergent.
+        "git_branch": current_git_branch(_project_root_for(args.dir)),
     }
     _write_state(args.dir, state)
     if workspaced:
@@ -1675,7 +1951,27 @@ def _cmd_show(args: argparse.Namespace) -> int:
         print(f"{STATE_FILENAME} is not valid JSON: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(state, ensure_ascii=False, indent=2))
+    for warning in branch_drift_warnings(args.dir, state):
+        print(warning, file=sys.stderr)
     return 0
+
+
+def branch_drift_warnings(pack_dir: Path, state: dict) -> list[str]:
+    """BRANCH-CHANGED (W-27): the pack was opened on one branch and the checkout is now on
+    another. A WARNING, never a refusal - switching branches mid-engagement is a normal
+    thing to do and the workspace is usually gitignored, so nothing is actually wrong. What
+    is wrong is not knowing, which is the state this replaces. Silent when the pack predates
+    the field, when git cannot answer, or when the branch still matches."""
+    recorded = state.get("git_branch")
+    if not isinstance(recorded, str) or not recorded:
+        return []
+    current = current_git_branch(_project_root_for(Path(pack_dir)))
+    if current is None or current == recorded:
+        return []
+    return [
+        f"BRANCH-CHANGED: this engagement was opened on '{recorded}' but the checkout is "
+        f"now on '{current}' - confirm the work and its workspace still belong together"
+    ]
 
 
 def _cmd_render(args: argparse.Namespace) -> int:
@@ -1718,27 +2014,7 @@ def _load_checker():
     Memoized (2026-08-03 perf audit) - same reasoning as the other loaders in this file
     and in check_artifacts.py: the fallback branch re-parses+re-execs a ~90KB file, and
     only needs to happen once per process regardless of how many times this is called."""
-    global _CHECK_ARTIFACTS_MODULE_CACHE
-    try:
-        from scripts import check_artifacts  # normal `-m` / package mode
-
-        return check_artifacts
-    # Probe only; fall through to the file-relative loader.
-    except Exception:  # nosec B110
-        pass
-    if _CHECK_ARTIFACTS_MODULE_CACHE is not None:
-        return _CHECK_ARTIFACTS_MODULE_CACHE
-    try:
-        import importlib.util
-
-        path = Path(__file__).with_name("check_artifacts.py")
-        spec = importlib.util.spec_from_file_location("check_artifacts", path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        _CHECK_ARTIFACTS_MODULE_CACHE = module
-        return module
-    except Exception:
-        return None
+    return _load_sibling_module("check_artifacts")
 
 
 _ENGAGE_PROBE_MODULE_CACHE = None
@@ -1748,26 +2024,77 @@ def _load_engage_probe():
     """scripts.engage_probe in BOTH run modes, same dual-mode/memoized pattern as
     _load_checker(). None = unavailable; _cmd_init then simply skips the settings
     snapshot - optional metadata, never load-bearing for the engagement itself."""
-    global _ENGAGE_PROBE_MODULE_CACHE
-    try:
-        from scripts import engage_probe  # normal `-m` / package mode
+    return _load_sibling_module("engage_probe")
 
-        return engage_probe
-    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
-        pass
-    if _ENGAGE_PROBE_MODULE_CACHE is not None:
-        return _ENGAGE_PROBE_MODULE_CACHE
-    try:
-        import importlib.util
 
-        path = Path(__file__).with_name("engage_probe.py")
-        spec = importlib.util.spec_from_file_location("engage_probe", path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        _ENGAGE_PROBE_MODULE_CACHE = module
-        return module
-    except Exception:
-        return None
+def close_prerequisites_missing(pack_dir: Path, state: dict) -> list[str]:
+    """Which recorded close-sequence steps are still outstanding (W-25).
+
+    THE SEQUENCE, in order, as the close skill runs it:
+      1. `set-status closing`            - the close is underway on disk
+      2. write the close artifacts       - delivery report, summary email
+      3. `check_artifacts --fix`         - resolve the auto-fixable defects
+      4. `set-team "Name (role)" ...`    - who delivered
+      5. `finalise-artifacts`            - every artifact row interim -> final
+      6. `set-footprint --agents N --tokens N` - what it cost
+      7. `set-status closed`             - runs the full DoD gate, refuses on findings
+
+    Ordering used to be narrated by prose alone: only step 7 was hard-gated, and a pack
+    missing step 4 or 5 learned that from a raw `INVALID:` schema dump inside the write it
+    had already attempted. This checks the steps that are RECORDED IN STATE before any write
+    happens, and names the command that fixes each. Steps 2/3 are files rather than state,
+    so the DoD gate at step 7 stays their owner - this is the ordering check, not a second
+    copy of the gate.
+
+    Human sign-off is deliberately NOT here: it is recorded AFTER a close (`sign-off`,
+    append-only), because an unattended or partial close is exactly the case where a person
+    signs later or not at all."""
+    missing: list[str] = []
+    if not (state.get("team") or []):
+        missing.append(
+            "step 4 of the close sequence is missing: no team recorded - "
+            '`set-team "Name (role)" ...` (who delivered this)'
+        )
+    interim = [
+        a.get("path")
+        for a in (state.get("artifacts") or [])
+        if isinstance(a, dict) and a.get("status") == "interim"
+    ]
+    if interim:
+        missing.append(
+            f"step 5 of the close sequence is missing: {len(interim)} artifact(s) still "
+            f"'interim' (e.g. {interim[0]}) - `finalise-artifacts`"
+        )
+    # The footprint is only meaningful once the pack has deliverables to have cost
+    # something; an empty pack closing (a cancelled or never-started engagement) is not
+    # asked for a cost line it has no basis for.
+    footprint = state.get("footprint") if isinstance(state.get("footprint"), dict) else {}
+    has_footprint = any(footprint.get(k) is not None for k in ("agents", "approx_tokens"))
+    if not has_footprint and _pack_has_deliverables(pack_dir):
+        missing.append(
+            "step 6 of the close sequence is missing: no footprint recorded - "
+            "`set-footprint --agents <N> --tokens <N>` (what the engagement cost)"
+        )
+    return missing
+
+
+def _pack_has_deliverables(pack_dir: Path) -> bool:
+    """Any real content artifact: a .md that is not the generated index and is not machine-
+    readable source under data/. Deliberately does NOT count the closing summary email on its
+    own - a pack whose only artifact is that email is a formality close with nothing to
+    have cost anything. Mirrors check_artifacts' FOOTPRINT-MISSING test exactly, so the two
+    always agree on which packs are held to the full close sequence."""
+    try:
+        path = Path(pack_dir)
+        for md in path.rglob("*.md"):
+            if (
+                md.name.upper() != INDEX_FILENAME.upper()
+                and "data" not in md.relative_to(path).parts
+            ):
+                return True
+    except OSError:
+        return False
+    return False
 
 
 def _cmd_set_status(args: argparse.Namespace) -> int:
@@ -1794,6 +2121,16 @@ def _cmd_set_status(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 1
+        missing = close_prerequisites_missing(args.dir, before)
+        if missing:
+            for step in missing:
+                print(f"CLOSE-REFUSED: {step}", file=sys.stderr)
+            print(
+                "CLOSE-REFUSED: the close sequence is not finished. No write was made - "
+                "complete the step(s) above and re-run `set-status closed`.",
+                file=sys.stderr,
+            )
+            return 1
     state["status"] = args.status
     if args.verdict:
         state["verdict"] = args.verdict
@@ -1803,13 +2140,13 @@ def _cmd_set_status(args: argparse.Namespace) -> int:
         outstanding = state.get("outstanding") or []
         if outstanding:
             entry = (
-                f"{_dt.date.today().isoformat()}: close: cleared {len(outstanding)} "
+                f"{_today()}: close: cleared {len(outstanding)} "
                 "outstanding item(s): " + "; ".join(outstanding)
             )
             log = state.setdefault("log", [])
             if entry not in log:
                 log.append(entry)
-        state["engagement"]["closed"] = _dt.date.today().isoformat()
+        state["engagement"]["closed"] = _today()
         state["outstanding"] = []
         state["phase"] = "close"
     else:
@@ -1892,8 +2229,49 @@ def _cmd_set_qa_depth(args: argparse.Namespace) -> int:
 
 def _cmd_mark_auto(args) -> int:
     """Flag the engagement as unattended. One-way on purpose: a run that proceeded without
-    asking anyone cannot later be relabelled as attended to dodge the AUTO-* gates."""
-    return _mutate(args, lambda s: s.__setitem__("auto", True))
+    asking anyone cannot later be relabelled as attended to dodge the AUTO-* gates.
+
+    `--outcome` writes the TYPED verdict the AUTO-NOT-PARTIAL gate reads (W-26). That gate
+    used to depend on the substring "PARTIAL" turning up somewhere in the prose, which both
+    over-matches (IMPARTIAL) and leaves the one fact it cares about unrecorded anywhere
+    machine-readable. `auto` itself stays the boolean every other consumer reads."""
+
+    def fn(state: dict) -> None:
+        state["auto"] = True
+        if getattr(args, "outcome", None):
+            state["auto_outcome"] = args.outcome
+
+    return _mutate(args, fn)
+
+
+def _cmd_record_dispatch(args: argparse.Namespace) -> int:
+    """Append one subagent dispatch to the engagement's ledger (S-11 / W-5, 2026-09-12).
+
+    Right-sizing a fan-out was prose the model was asked to follow, measured by nobody: the
+    budget recorded a cap and nothing on disk ever counted against it. This is the counter.
+    It is written by the PostToolUse Task hook rather than by the session, for the same
+    reason the unattended flag moved to the launcher handoff - a count the counted party
+    maintains voluntarily is not a count.
+
+    Deliberately dumb and append-only: one row per dispatch, never a running total that
+    could be rewritten. budget-status reports dispatched-vs-budget and the DoD gate reports
+    DISPATCH-OVER-BUDGET, so the ledger is read at the two places a decision is made."""
+    agent = str(args.agent or "").strip()
+    if not agent:
+        print("record-dispatch needs --agent <name>", file=sys.stderr)
+        return 2
+
+    def fn(state: dict) -> None:
+        row = {"agent": agent, "at": _utc_now_iso()}
+        model = str(getattr(args, "model", None) or "").strip()
+        if model:
+            row["model"] = model
+        note = str(getattr(args, "note", None) or "").strip()
+        if note:
+            row["note"] = note
+        state.setdefault("dispatches", []).append(row)
+
+    return _mutate(args, fn)
 
 
 def _cmd_add_artifact(args: argparse.Namespace) -> int:
@@ -1943,7 +2321,7 @@ def _cmd_add_artifact(args: argparse.Namespace) -> int:
             "path": args.path,
             "title": args.title,
             "status": "final" if args.final else "interim",
-            "added": _dt.date.today().isoformat(),
+            "added": _today(),
         }
         # R8: after a crash, "remove the row or restore the artifact" must be decidable
         # from disk - a row recorded before its file existed says so explicitly.
@@ -1977,6 +2355,17 @@ def _cmd_add_outstanding(args: argparse.Namespace) -> int:
 
 def _cmd_resolve_outstanding(args: argparse.Namespace) -> int:
     state = load_state(args.dir)
+    # An empty (or all-whitespace) substring is inside EVERY string, so the filter below
+    # would clear the entire outstanding list and report success (S-5, 2026-09-12 audit).
+    # Resolving open work is deliberate, item by item; "resolve everything" is not a thing
+    # this command offers.
+    if not str(args.substring or "").strip():
+        print(
+            "resolve-outstanding needs a non-empty substring - an empty one matches every "
+            "item and would clear the whole list. Name the item you finished.",
+            file=sys.stderr,
+        )
+        return 2
     items = state.get("outstanding", [])
     kept = [i for i in items if args.substring.lower() not in i.lower()]
     if len(kept) == len(items):
@@ -2047,7 +2436,7 @@ def _cmd_set_decisions(args: argparse.Namespace) -> int:
 
 def _cmd_log_note(args: argparse.Namespace) -> int:
     def fn(state: dict) -> None:
-        date = _dt.date.today().isoformat()
+        date = _today()
         tag = getattr(args, "tag", None)
         # Bracket-tag convention, not a new field: `log` stays a plain list[str] (zero
         # validate_state/schema change) while giving the dashboard timeline enough signal
@@ -2071,12 +2460,25 @@ def _cmd_add_ratification(args: argparse.Namespace) -> int:
 
 
 def _now_stamp() -> str:
-    import datetime
-
-    return datetime.datetime.now().isoformat(timespec="seconds")
+    """A sign-off's timestamp. UTC and offset-carrying since 2026-09-12 (S-21) - a
+    signature whose hour cannot be placed in a zone is weaker evidence than one whose can."""
+    return _utc_now_iso()
 
 
 SIGN_OFF_PREFIX = "human sign-off"
+
+# The one DoD item that requires a HUMAN, made mechanical (W-2, 2026-09-12 audit). Until
+# this, `sign-off --by "<any string>"` was an ordinary subcommand of an allow-listed script:
+# the model could run it and append its own approval, which is precisely the act the whole
+# Definition-of-Done gate exists to prevent. The marker is the same shape as the execution
+# consent grant (ADR-002): a file only a human can create, write-blocked for the model by
+# guard-consent-writes.py, so the CLI's "yes" is intent and the marker is the grant.
+SIGN_OFF_MARKER = ".human-sign-off"
+
+# The eval harness closes and signs whole engagements with nobody at the keyboard. It gets
+# an explicit, env-gated bypass rather than a weaker marker rule, and every use of it is
+# recorded IN the ratification, so a signed pack always says which kind of signature it has.
+_EVAL_SANDBOX_ENV = "CST_EVAL_SANDBOX"
 
 
 def _cmd_sign_off(args: argparse.Namespace) -> int:
@@ -2109,6 +2511,28 @@ def _cmd_sign_off(args: argparse.Namespace) -> int:
     if existing:
         print(f"already signed off: {existing[0].get('text')}", file=sys.stderr)
         return 0
+    marker = Path(args.dir) / SIGN_OFF_MARKER
+    forced = bool(getattr(args, "force_without_marker", False))
+    sandbox = os.environ.get(_EVAL_SANDBOX_ENV) == "1"
+    basis = "marker"
+    if not marker.is_file():
+        if forced and sandbox:
+            basis = "eval-sandbox (no human marker)"
+        else:
+            print(
+                "sign-off: no human sign-off marker. This command records that a PERSON "
+                "accepted the work, so a person has to leave the evidence:\n"
+                f"  create this file, by hand, then re-run:  {marker}\n"
+                "  (any content; `touch` is enough - the model is blocked from writing it)",
+                file=sys.stderr,
+            )
+            if forced:
+                print(
+                    f"--force-without-marker is refused: it applies only when "
+                    f"{_EVAL_SANDBOX_ENV}=1 is set (the eval harness), and it is not.",
+                    file=sys.stderr,
+                )
+            return 2
 
     def fn(s: dict) -> None:
         s.setdefault("ratifications", []).append(
@@ -2116,12 +2540,20 @@ def _cmd_sign_off(args: argparse.Namespace) -> int:
                 "text": f"{SIGN_OFF_PREFIX}: {who}",
                 "status": "ratified",
                 "at": _now_stamp(),
+                "basis": basis,
             }
         )
+        if basis != "marker":
+            # Recorded in the log too, not only in the ratification: a bypassed signature
+            # must be legible to someone skim-reading the pack's history.
+            s.setdefault("log", []).append(
+                f"{_today()}: sign-off recorded WITHOUT a human marker "
+                f"(--force-without-marker under {_EVAL_SANDBOX_ENV}=1)"
+            )
 
     rc = _mutate(args, fn)
     if rc == 0:
-        print(f"signed off by {who}")
+        print(f"signed off by {who}" + ("" if basis == "marker" else f" [{basis}]"))
     return rc
 
 
@@ -2140,7 +2572,7 @@ def _cmd_ratify(args: argparse.Namespace) -> int:
         return 2
     for r in matched:
         r["status"] = "ratified"
-        r["date"] = _dt.date.today().isoformat()
+        r["date"] = _today()
         if args.by:
             r["by"] = args.by
     _write_state(args.dir, state)
@@ -2226,10 +2658,10 @@ def _cmd_archive(args: argparse.Namespace) -> int:
             if not pack.is_dir():
                 print(f"no directory at {pack}", file=sys.stderr)
                 return 2
-            (pack / ARCHIVE_MARKER).write_text(
-                f"archived {_dt.date.today().isoformat()} via engagement_state archive "
+            atomic_write_text(
+                pack / ARCHIVE_MARKER,
+                f"archived {_today()} via engagement_state archive "
                 "(--force; no engagement-state.json found - excluded from DoD scope only)\n",
-                encoding="utf-8",
             )
             clear_active(root, pack.name)
             archived_now += 1
@@ -2256,14 +2688,12 @@ def _cmd_archive(args: argparse.Namespace) -> int:
                 )
                 return 2
             state.setdefault("log", []).append(
-                f"{_dt.date.today().isoformat()}: archived while '{status}' (--force) - "
-                "close gate never passed"
+                f"{_today()}: archived while '{status}' (--force) - close gate never passed"
             )
             _write_state(pack, state)
-        (pack / ARCHIVE_MARKER).write_text(
-            f"archived {_dt.date.today().isoformat()} via engagement_state archive "
-            f"(status: {status})\n",
-            encoding="utf-8",
+        atomic_write_text(
+            pack / ARCHIVE_MARKER,
+            f"archived {_today()} via engagement_state archive (status: {status})\n",
         )
         clear_active(root, pack.name)
         archived_now += 1
@@ -2300,7 +2730,7 @@ def _cmd_record_consent_outcome(args: argparse.Namespace) -> int:
     representable here - it remains ONLY the human-created marker (ADR-002)."""
 
     def fn(state: dict) -> None:
-        rec = {"outcome": args.outcome, "date": _dt.date.today().isoformat()}
+        rec = {"outcome": args.outcome, "date": _today()}
         if args.note:
             rec["note"] = args.note
         state[_CONSENT_OUTCOME_KEY] = rec
@@ -2328,7 +2758,7 @@ def _cmd_record_close_action(args: argparse.Namespace) -> int:
 
     def fn(state: dict) -> None:
         done = state.setdefault(_CLOSE_ACTIONS_KEY, {})
-        rec = {"date": _dt.date.today().isoformat()}
+        rec = {"date": _today()}
         if args.note:
             rec["note"] = args.note
         done[action_id] = rec
@@ -2361,13 +2791,64 @@ def _cmd_finalise_artifacts(args: argparse.Namespace) -> int:
     return _mutate(args, fn)
 
 
+def _coerce_count(raw) -> int | float | None:
+    """A non-negative number out of a CLI value or a stored one, else None. Accepts the
+    human shorthand the close step actually types (120k, 1.5M, 12,000) - pure, no output."""
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, (int, float)):
+        return raw if raw >= 0 else None
+    text = str(raw).strip().replace(",", "").replace("_", "")
+    # "~20k" is what the close step actually types into a field literally named
+    # approx_tokens - the tilde is the approximation the name already promises, not a
+    # different kind of value. Strip it rather than refuse a figure that IS a number.
+    text = text.lstrip("~≈").strip()
+    multiplier = 1
+    if text[-1:].lower() in ("k", "m") and len(text) > 1:
+        multiplier = 1000 if text[-1].lower() == "k" else 1000000
+        text = text[:-1]
+    try:
+        value = float(text) * multiplier
+    except ValueError:
+        return None
+    if value < 0:
+        return None
+    return int(value) if value.is_integer() else value
+
+
+def _parse_count(raw, label: str) -> int | float | None:
+    """A non-negative number out of a CLI value, or None with the reason printed. Footprint
+    figures used to be free text (W-24): `--tokens "a lot"` stored fine and the cost line in
+    every rendered index then said "a lot". A number that means nothing is worse than an
+    absent one, because it reads as measured."""
+    value = _coerce_count(raw)
+    if value is None:
+        print(
+            f"set-footprint: --{label} must be a non-negative number (got {raw!r}) - the "
+            "footprint is a measured figure the cost line reports, not a description "
+            "(120k and 1.5M are accepted)",
+            file=sys.stderr,
+        )
+    return value
+
+
 def _cmd_set_footprint(args: argparse.Namespace) -> int:
+    agents = tokens = None
+    if args.agents is not None:
+        agents = _parse_count(args.agents, "agents")
+        if agents is None:
+            return 2
+    if args.tokens is not None:
+        tokens = _parse_count(args.tokens, "tokens")
+        if tokens is None:
+            return 2
+
     def fn(state: dict) -> None:
         footprint = state.setdefault("footprint", {})
-        if args.agents is not None:
-            footprint["agents"] = args.agents
-        if args.tokens is not None:
-            footprint["approx_tokens"] = args.tokens
+        if agents is not None:
+            footprint["agents"] = agents
+        if tokens is not None:
+            footprint["approx_tokens"] = tokens
 
     return _mutate(args, fn)
 
@@ -2385,7 +2866,9 @@ def _cmd_set_budget(args: argparse.Namespace) -> int:
             budget["daily_usd"] = args.daily_usd
         if args.engagement_usd is not None:
             budget["engagement_usd"] = args.engagement_usd
-        budget["set"] = _dt.date.today().isoformat()
+        if getattr(args, "agents", None) is not None:
+            budget["agents"] = args.agents
+        budget["set"] = _today()
 
     return _mutate(args, fn)
 
@@ -2393,23 +2876,7 @@ def _cmd_set_budget(args: argparse.Namespace) -> int:
 def _load_dashboard_module():
     """dashboard.py's transcript pricing, importable in BOTH run modes - the same
     package-then-file-relative fallback pattern as the render_html import."""
-    try:
-        from scripts import dashboard
-
-        return dashboard
-    # Probe only; fall through to the file-relative loader.
-    except Exception:  # nosec B110
-        pass
-    import importlib.util
-
-    candidate = Path(__file__).resolve().with_name("dashboard.py")
-    try:
-        spec = importlib.util.spec_from_file_location("dashboard", candidate)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
-    except Exception:
-        return None
+    return _load_sibling_module("dashboard")
 
 
 def _cmd_budget_status(args: argparse.Namespace) -> int:
@@ -2425,14 +2892,19 @@ def _cmd_budget_status(args: argparse.Namespace) -> int:
     budget = state.get("budget") or {}
     daily = budget.get("daily_usd")
     ceiling = budget.get("engagement_usd")
-    if not daily and not ceiling:
+    agent_cap = budget.get("agents")
+    dispatched = len([d for d in (state.get("dispatches") or []) if isinstance(d, dict)])
+    if not daily and not ceiling and not agent_cap:
         print(
             "no budget recorded - set one with: set-budget --daily-usd <N> "
-            "[--engagement-usd <N>] (docs/INTEGRATIONS.md is unrelated; this is "
-            "advisory pacing state, ADR-006)"
+            "[--engagement-usd <N>] [--agents <N>] (docs/INTEGRATIONS.md is unrelated; "
+            "this is advisory pacing state, ADR-006)"
         )
+        if dispatched:
+            print(f"DISPATCHES dispatched={dispatched} cap=unset")
         return 0
     spent_today = spent_since_open = None
+    parse_error = None
     dash = _load_dashboard_module()
     if dash is not None:
         try:
@@ -2440,14 +2912,22 @@ def _cmd_budget_status(args: argparse.Namespace) -> int:
             parsed = dash.parse_transcripts(
                 dash.transcripts_dir_for(project_root, Path.home() / ".claude")
             )
-            today = _dt.date.today().isoformat()
+            today = _today()
             opened = (state.get("engagement") or {}).get("opened") or today
             spent_today = sum(s["cost_usd"] for s in parsed["sessions"] if s.get("date") == today)
             spent_since_open = sum(
                 s["cost_usd"] for s in parsed["sessions"] if (s.get("date") or "") >= opened
             )
-        except Exception:
+        except Exception as exc:
+            # S-10: this used to degrade to HEADROOM=unknown in total silence, which reads
+            # exactly like "no spend yet". Since this is the one signal the PM paces every
+            # dispatch against, a failure to compute it has to be visible as a failure.
             spent_today = spent_since_open = None
+            parse_error = f"{type(exc).__name__}: {exc}"
+            print(f"note: spend could not be computed ({parse_error})", file=sys.stderr)
+    else:
+        parse_error = "dashboard module unavailable"
+        print(f"note: spend could not be computed ({parse_error})", file=sys.stderr)
 
     def verdict(spent, cap):
         if spent is None or not cap:
@@ -2471,11 +2951,28 @@ def _cmd_budget_status(args: argparse.Namespace) -> int:
         print(f"DAILY cap={money(daily)} spent_today={money(spent_today)}")
     if ceiling:
         print(f"ENGAGEMENT ceiling={money(ceiling)} spent_since_open={money(spent_since_open)}")
+    # The dispatch ledger (S-11 / W-5): the agent-count budget was nominal until something
+    # counted against it. record-dispatch appends, this reports, and going over is an exit
+    # code the caller cannot mistake for a clean run.
+    over_dispatch = False
+    if agent_cap or dispatched:
+        cap_text = str(agent_cap) if agent_cap else "unset"
+        over_dispatch = bool(agent_cap) and dispatched > agent_cap
+        print(
+            f"DISPATCHES dispatched={dispatched} cap={cap_text}"
+            + (" OVER-BUDGET" if over_dispatch else "")
+        )
+    if parse_error:
+        # Also a FIELD, not only a stderr note: a caller parsing this block can tell
+        # "unknown because it broke" from "unknown because nothing is recorded".
+        print(f"SPEND_ERROR={parse_error}")
     # No trailing attribution disclaimer: it restated a rule the docstring and the engage
     # skill already carry, ~190B consumed by nothing at every gate (token audit Track C,
     # 2026-08-18). The caveat lives in this function's docstring and ADR-006.
     print(f"HEADROOM={worst}")
-    return 0
+    # 3, not 1: exit 1 already means "the state is invalid" throughout this CLI, and a
+    # caller must be able to tell an over-dispatched engagement from a broken one.
+    return 3 if over_dispatch else 0
 
 
 _OPEN_STATUSES = ("in_progress", "blocked", "closing")
@@ -2607,11 +3104,20 @@ def _cmd_migrate(args: argparse.Namespace) -> int:
 # itself - _write_state's atomic os.replace already makes concurrent reads of that file
 # safe without a lock), and _cmd_set_active/_cmd_clear_active/_cmd_unarchive/_cmd_migrate
 # (single-value marker writes or one-off structural moves, not read-modify-write races).
+#
+# S-2 (2026-09-12 audit): four commands that DO read-modify-write were missing here and so
+# ran with no lock at all - set-qa-depth, mark-auto, record-close-action and, worst,
+# sign-off, the human-acceptance record the whole Definition-of-Done gate exists to protect.
+# Membership is now enumerated against the module itself by
+# tests/test_engagement_state.py::test_every_mutating_command_is_locked: anything calling
+# _mutate() or _write_state() has to be in this set, so the list cannot drift again.
 _MUTATING_CMDS = {
     _cmd_init,
     _cmd_set_status,
     _cmd_set_phase,
     _cmd_set_profile,
+    _cmd_set_qa_depth,
+    _cmd_mark_auto,
     _cmd_add_artifact,
     _cmd_add_outstanding,
     _cmd_resolve_outstanding,
@@ -2620,9 +3126,12 @@ _MUTATING_CMDS = {
     _cmd_log_note,
     _cmd_add_ratification,
     _cmd_ratify,
+    _cmd_sign_off,
     _cmd_set_team,
     _cmd_archive,
     _cmd_record_consent_outcome,
+    _cmd_record_close_action,
+    _cmd_record_dispatch,
     _cmd_set_runtime,
     _cmd_finalise_artifacts,
     _cmd_set_footprint,
@@ -2723,6 +3232,13 @@ def main(argv: list[str] | None = None) -> int:
         help="record a HUMAN's sign-off on a finished engagement (append-only)",
     )
     p.add_argument("--by", required=True, help="who is signing off")
+    p.add_argument(
+        "--force-without-marker",
+        dest="force_without_marker",
+        action="store_true",
+        help=f"sign without the human marker - honoured ONLY when {_EVAL_SANDBOX_ENV}=1 "
+        "(the eval harness); the bypass is recorded in the pack",
+    )
     p.set_defaults(fn=_cmd_sign_off)
 
     p = sub.add_parser(
@@ -2730,7 +3246,25 @@ def main(argv: list[str] | None = None) -> int:
         parents=[common],
         help="record that this engagement is running UNATTENDED (--auto)",
     )
+    p.add_argument(
+        "--outcome",
+        choices=_AUTO_OUTCOMES,
+        default=None,
+        help="what the unattended run delivered - 'partial' is what an unattended run "
+        "reaches (every DoD line except human sign-off); read by the AUTO-NOT-PARTIAL gate",
+    )
     p.set_defaults(fn=_cmd_mark_auto)
+
+    p = sub.add_parser(
+        "record-dispatch",
+        parents=[common],
+        help="append one subagent dispatch to the engagement's ledger (renders). Called by "
+        "the PostToolUse Task hook; budget-status and the DoD gate read the count",
+    )
+    p.add_argument("--agent", required=True, help="the agent/subagent type dispatched")
+    p.add_argument("--model", default=None, help="model tier, e.g. opus|sonnet|haiku")
+    p.add_argument("--note", default=None, help="optional short context for the dispatch")
+    p.set_defaults(fn=_cmd_record_dispatch)
 
     p = sub.add_parser(
         "set-qa-depth",
@@ -2893,8 +3427,10 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser(
         "set-footprint", parents=[common], help="update agent/token footprint (renders)"
     )
-    p.add_argument("--agents", type=int, default=None)
-    p.add_argument("--tokens", default=None)
+    # No `type=int`: the validation (and its message) lives in _parse_count, which also
+    # accepts the 120k/1.5M shorthand the close step actually types for --tokens.
+    p.add_argument("--agents", default=None, help="how many agent dispatches it took")
+    p.add_argument("--tokens", default=None, help="approximate tokens, e.g. 850000 or 850k")
     p.set_defaults(fn=_cmd_set_footprint)
 
     p = sub.add_parser(
@@ -2904,6 +3440,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--daily-usd", dest="daily_usd", type=float, default=None)
     p.add_argument("--engagement-usd", dest="engagement_usd", type=float, default=None)
+    p.add_argument(
+        "--agents",
+        type=int,
+        default=None,
+        help="how many subagent dispatches this engagement is sized for - the cap "
+        "record-dispatch counts against (budget-status exits 3 over it)",
+    )
     p.set_defaults(fn=_cmd_set_budget)
 
     p = sub.add_parser(

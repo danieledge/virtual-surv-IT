@@ -84,7 +84,9 @@ def _force_utf8_output() -> None:
     path from an installed plugin, where `from scripts...` would not resolve."""
     for stream in (sys.stdout, sys.stderr):
         try:
-            stream.reconfigure(encoding="utf-8", errors="replace")
+            # mypy cannot prove sys.stdout is a real stream (TextIO has no .reconfigure in
+            # the stubs); CPython's always is, and a swap-in that isn't lands in the except.
+            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
         except (AttributeError, ValueError, OSError):
             pass
 
@@ -142,7 +144,10 @@ def parse_rtm(text: str) -> tuple[list[dict], list[str]]:
                 f"has {len(header)} - a ragged row shifts every value into the wrong column"
             )
             continue
-        row_cells = dict(zip(header, cells))
+        # strict=True: the ragged-row guard above already returned, so a length mismatch
+        # here would be a bug in that guard, not data - and silently truncating would shift
+        # every value into the wrong column, which is exactly what the guard exists to stop.
+        row_cells = dict(zip(header, cells, strict=True))
         rows.append({"label": _row_label(row_cells, lineno), "line": lineno, "cells": row_cells})
     if header is None and not rows:
         problems.append(
@@ -385,16 +390,21 @@ def validate(
 
     cited_raw = " | ".join(cited_obligations).lower()
     cited_norm = _normalise_citation(" | ".join(cited_obligations))
-    for obligation in load_register(root, register_path):
-        if _obligation_cited(obligation, cited_raw, cited_norm):
+    # `reg_obligation`, not `obligation`: the loop above binds that name to a CELL (a str)
+    # and this one to a REGISTER ENTRY (a dict). No live bug today - the first loop finishes
+    # before this one starts - but the shadowing blinds the type checker to both, so a future
+    # merge or reorder of these two related loops would fail at runtime with nothing to catch
+    # it first (S-15).
+    for reg_obligation in load_register(root, register_path):
+        if _obligation_cited(reg_obligation, cited_raw, cited_norm):
             continue
         findings.append(
             {
                 "code": "RTM-ORPHAN-OBLIGATION",
                 "row": None,
                 "detail": (
-                    f"{obligation.get('pinpoint') or obligation.get('id')} "
-                    f"[{obligation.get('id')}] is in the regulatory register but no RTM row "
+                    f"{reg_obligation.get('pinpoint') or reg_obligation.get('id')} "
+                    f"[{reg_obligation.get('id')}] is in the regulatory register but no RTM row "
                     "references it - a potential surveillance gap, or an obligation outside "
                     "this engagement's scope (advisory: confirm which)"
                 ),

@@ -79,8 +79,29 @@ def _force_utf8_output() -> None:
 
 
 def default_file() -> Path:
+    """This project's extensions contract, resolved through the layout resolver.
+
+    Found by the 2026-09-12 audit (wave 4): this hardcoded `docs/team-extensions.md`, the
+    legacy location, and never asked `vsit_paths.extensions_file()`, so a project on the
+    VSIT layout (`VSIT/config/extensions.md`) had its contract silently ignored. The
+    resolver import is lazy and file-relative for the same reason engagement_state's is:
+    this script also runs standalone from a bare clone."""
     root = os.environ.get("CLAUDE_PROJECT_DIR")
-    return (Path(root) if root else Path.cwd()) / "docs" / "team-extensions.md"
+    project = Path(root) if root else Path.cwd()
+    try:
+        import sys as _sys
+
+        here = Path(__file__).resolve().parent
+        for candidate in (here, here.parent, here.parent / "scripts"):
+            if (candidate / "vsit_paths.py").is_file():
+                if str(candidate) not in _sys.path:
+                    _sys.path.insert(0, str(candidate))
+                break
+        import vsit_paths
+
+        return vsit_paths.extensions_file(project)
+    except Exception:  # noqa: BLE001 - resolver missing or unreadable: legacy location
+        return project / "docs" / "team-extensions.md"
 
 
 # A close action an ORG declares mandatory, written as a leading token on its bullet:
@@ -178,14 +199,40 @@ def merge_contracts(org: dict | None, project: dict | None) -> dict:
         elif org_body:
             sections[name] = org_body
 
+    # S-16 (2026-09-12 audit): entries were keyed straight on `entry.get("name")`, so two
+    # entries with no name (or the same name) collided on one dict key and the later one
+    # silently replaced the earlier. For the ORG tier that meant an org-MANDATED registry
+    # entry could vanish from the merged contract with no error and no log line - and the
+    # thing that made it vanish might be an unrelated project entry that also happened to
+    # lack a name. A dropped entry is now a reported problem, never a silent loss.
     by_name: dict = {}
-    for entry in _tag_origin(list(org["registry"]), "org"):
-        by_name[entry.get("name")] = entry
-    for entry in _tag_origin(list(project["registry"]), "project"):
-        by_name[entry.get("name")] = entry  # project wins on collision, by design
+    name_problems: list[str] = []
+    for tier, entries in (
+        ("org", _tag_origin(list(org["registry"]), "org")),
+        ("project", _tag_origin(list(project["registry"]), "project")),
+    ):
+        seen_in_tier: set = set()
+        for index, entry in enumerate(entries):
+            name = entry.get("name")
+            if not isinstance(name, str) or not name.strip():
+                name_problems.append(
+                    f"[{tier}] registry entry {index + 1} has no 'name' - every entry needs "
+                    "one to be addressable in the merged contract; it was dropped"
+                )
+                continue
+            name = name.strip()
+            if name in seen_in_tier:
+                name_problems.append(
+                    f"[{tier}] registry entry {name!r} is declared twice in the same tier - "
+                    "the later one replaced the earlier; give them distinct names"
+                )
+            seen_in_tier.add(name)
+            # Across tiers the project tier still wins on collision, by design.
+            by_name[name] = entry
 
     problems = [f"[org] {p}" for p in org["problems"]]
     problems += [f"[project] {p}" for p in project["problems"]]
+    problems += name_problems
     return {"sections": sections, "registry": list(by_name.values()), "problems": problems}
 
 
