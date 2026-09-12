@@ -9546,3 +9546,67 @@ def test_the_database_menu_item_installs_the_scanner_first(monkeypatch, tmp_path
     assert ih.run_osv_db_download(ih.Style(False), ih.marks()) == 0  # still not a failure
     assert tried == [False], "the menu item must try to install the scanner itself"
     assert "go install github.com/google/osv-scanner" not in capsys.readouterr().out
+
+
+def test_the_database_download_scans_seed_manifests_not_an_empty_directory(
+    monkeypatch, tmp_path, capsys
+):
+    """Live report, 2026-09-12: the scanner installed and the database step then ended in
+    "No package sources found". --download-offline-databases fetches the archive for every
+    ecosystem it meets in the scan target and nothing for an empty one, so the target must
+    carry one manifest per ecosystem the team reviews."""
+    import install_helper as ih
+
+    seen = {}
+
+    def fake_run_cmd(argv, cwd=None, timeout=300):
+        target = ih.Path(argv[-1])
+        seen["files"] = sorted(p.name for p in target.iterdir())
+        seen["flags"] = argv[1:-1]
+        return ih.subprocess.CompletedProcess(argv, 1, stdout="", stderr="findings on seeds")
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: "/usr/local/bin/osv-scanner")
+    monkeypatch.setattr(ih, "run_cmd", fake_run_cmd)
+    monkeypatch.setattr(ih, "osv_db_present", lambda: bool(seen))
+    assert ih.run_osv_db_download(ih.Style(False), ih.marks()) == 0
+    assert seen["files"] == ["package-lock.json", "pom.xml", "requirements.txt"]
+    assert "--download-offline-databases" in seen["flags"]
+    assert "ready" in capsys.readouterr().out
+
+
+def test_the_database_presence_check_knows_the_2x_cache_layout(monkeypatch, tmp_path):
+    """osv-scanner 2.x writes {cache}/osv-scalibr/{ecosystem}/all.zip, not the documented
+    osv-scanner/ directory; a download that had succeeded was reported as a failure."""
+    import install_helper as ih
+
+    monkeypatch.setenv("OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY", str(tmp_path))
+    assert ih.osv_db_present() is False
+    (tmp_path / "osv-scalibr" / "PyPI").mkdir(parents=True)
+    (tmp_path / "osv-scalibr" / "PyPI" / "all.zip").write_bytes(b"PK")
+    assert ih.osv_db_present() is True
+    (tmp_path / "osv-scanner" / "npm").mkdir(parents=True)
+    (tmp_path / "osv-scanner" / "npm" / "all.zip").write_bytes(b"PK")
+    assert ih.osv_db_present() is True
+
+
+def test_the_database_step_asks_nothing(monkeypatch, capsys):
+    """Owner, 2026-09-12: tools are set up for the user and explained, never asked about.
+    The step downloads; only a refused network is reported."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: "/usr/local/bin/osv-scanner")
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: (_ for _ in ()).throw(AssertionError))
+    calls = []
+    present = {"value": False}
+    monkeypatch.setattr(ih, "osv_db_present", lambda: present["value"])
+
+    def fake_download(style, marks, demo=False):
+        calls.append(demo)
+        present["value"] = True
+        return 0
+
+    monkeypatch.setattr(ih, "run_osv_db_download", fake_download)
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
+    inst.vuln_db_step()
+    assert calls == [False]
+    assert "downloaded to" in capsys.readouterr().out

@@ -3302,17 +3302,11 @@ class Installer:
         if self.demo:
             self.step_ok("Vulnerability database", "would download it (demo)")
             return
-        if not confirm(
-            "  Download the vulnerability database now? (one-off, needs the network)",
-            default=True,
-            assume_yes=getattr(self.args, "yes", False),
-            style=self.style,
-        ):
-            self.step_skip(
-                "Vulnerability database",
-                "skipped - Advanced > Vulnerability database does it later",
-            )
-            return
+        # No question here any more (owner, 2026-09-12: "the user shouldn't have to do
+        # anything by hand, handle the install for them but explain what it's doing, like
+        # any other tool"). The scanner step just above installed the binary without
+        # asking; a database it cannot use without is the same decision, already made.
+        # The intro sentence is the explanation; a refused network is reported, not asked.
         run_osv_db_download(self.style, self.marks, demo=False)
         if osv_db_present():
             self.step_ok("Vulnerability database", f"downloaded to {osv_db_dir()}")
@@ -9782,17 +9776,53 @@ def osv_db_dir() -> Optional[Path]:
 def osv_db_present() -> bool:
     """Is there an offline database to scan against?
 
-    The layout osv-scanner documents is {cache}/osv-scanner/{ecosystem}/all.zip, so one
-    ecosystem archive is enough to say the download has happened. Never raises: this is
-    asked to decide whether to OFFER a download, and a question we cannot answer must not
+    The layout osv-scanner documents is {cache}/osv-scanner/{ecosystem}/all.zip, and the
+    2.x releases actually write {cache}/osv-scalibr/{ecosystem}/all.zip (seen with 2.5.1 on
+    2026-09-12: a download that had plainly succeeded was reported as a failure because
+    only the documented directory was checked). Either counts. Never raises: this is asked
+    to decide whether to OFFER a download, and a question we cannot answer must not
     become an error."""
     try:
         root = osv_db_dir()
         if not root:
             return False
-        return any((root / "osv-scanner").glob("*/all.zip"))
+        return any(
+            any((root / layout).glob("*/all.zip")) for layout in ("osv-scanner", "osv-scalibr")
+        )
     except Exception:  # noqa: BLE001
         return False
+
+
+# What osv-scanner is pointed at when we want its DATABASES rather than its findings.
+# `--download-offline-databases` fetches the archive for every ecosystem it meets in the
+# scan target and nothing else, so an empty target directory ends in "No package sources
+# found" and no download at all (live report, 2026-09-12: the scanner installed fine and the
+# database step then failed on exactly that). These are the ecosystems the team reviews
+# (docs/scope-and-stack.md: Python, the JVM, JavaScript); one pinned dependency each is
+# enough to make the scanner fetch the ecosystem's archive. The findings on these seeds are
+# discarded - the exit code is not the success signal, the archives on disk are.
+_OSV_SEED_MANIFESTS = {
+    "requirements.txt": "requests==2.31.0\n",
+    "package-lock.json": (
+        '{"name":"seed","version":"1.0.0","lockfileVersion":3,"requires":true,'
+        '"packages":{"":{"name":"seed","version":"1.0.0"},'
+        '"node_modules/lodash":{"version":"4.17.21",'
+        '"resolved":"https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz"}}}\n'
+    ),
+    "pom.xml": (
+        '<project xmlns="http://maven.apache.org/POM/4.0.0">'
+        "<modelVersion>4.0.0</modelVersion><groupId>seed</groupId>"
+        "<artifactId>seed</artifactId><version>1.0</version><dependencies><dependency>"
+        "<groupId>org.apache.commons</groupId><artifactId>commons-lang3</artifactId>"
+        "<version>3.12.0</version></dependency></dependencies></project>\n"
+    ),
+}
+
+
+def seed_osv_manifests(target: Path) -> None:
+    """Write the seed manifests into `target` so a database download has something to scan."""
+    for name, body in _OSV_SEED_MANIFESTS.items():
+        (target / name).write_text(body, encoding="utf-8")
 
 
 def run_osv_db_download(style: Style, mark_map: dict, demo: bool = False) -> int:
@@ -9838,8 +9868,10 @@ def run_osv_db_download(style: Style, mark_map: dict, demo: bool = False) -> int
     print(style.dim("  This is the one step that needs the network; scans afterwards do not."))
     # --offline-vulnerabilities, NOT --offline: the download itself must reach the network,
     # and --offline would forbid exactly that. The positional path is the scan TARGET, so
-    # point it at a throwaway directory - we want the database, not the findings.
+    # point it at a throwaway directory - we want the database, not the findings - seeded
+    # with one manifest per ecosystem, because an empty target downloads nothing.
     with tempfile.TemporaryDirectory() as tmp:
+        seed_osv_manifests(Path(tmp))
         proc = run_cmd(
             [
                 "osv-scanner",
