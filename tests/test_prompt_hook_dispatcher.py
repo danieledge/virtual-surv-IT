@@ -47,19 +47,22 @@ def _payload(prompt: str = "hello", cwd: Path | None = None, session_id: str = "
 
 
 def _run(payload: str, script: Path, env: dict | None = None) -> tuple[int, str]:
+    # encoding="utf-8": the hooks write UTF-8 (the brief carries box-drawing and arrows),
+    # and on Windows text=True alone decodes with the console code page. The reader
+    # thread then died on the first byte cp1252 cannot map, .stdout came back None, and
+    # the "None observed on the Windows runners" normalisation that used to sit here
+    # turned that crash into an empty string - so both hooks looked silent and the test
+    # failed on "must produce output" (Windows VM, 2026-09-12). errors="replace" keeps a
+    # stray byte from ever hiding the whole payload again.
     proc = subprocess.run(
         [sys.executable, str(script)],
         input=payload,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         env=env,
     )
-    # A subprocess that produced no output is "" everywhere this suite is asserted
-    # (see test_a_dormant_prompt_still_emits_nothing_at_all below). On the Windows
-    # CI runners `.stdout` has been observed None rather than "" for a script run
-    # this way - normalise here so a reference call's absence of output can never
-    # itself be the failure (a TypeError concatenating it), leaving the actual
-    # assertions to compare like-for-like content on every platform.
     return proc.returncode, proc.stdout or ""
 
 
