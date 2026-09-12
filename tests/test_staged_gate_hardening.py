@@ -254,10 +254,19 @@ def test_nudge_says_finish_the_close_never_delete(tmp_path, monkeypatch, capsys)
 
 # --- 2026-08-03: cross-turn suppression (token-usage audit) - an unchanging finding must
 # nudge once, then stay silent across every later stop/turn/session, not just the same
-# stop_hook_active cycle; a NEW/DIFFERENT finding set must re-arm it. ----------------------
+# stop_hook_active cycle; a NEW/DIFFERENT finding set must re-arm it.
+#
+# 2026-09-12 (W-6): the suppression half of that was self-serve. `dod-nudged:<hash>` is a
+# deterministic hash of the findings the nudge itself prints, so recording it required none
+# of the work it claimed, and the gate then stayed silent on a genuinely unresolved finding
+# set forever. The findings come from a check_artifacts run that just happened, so a marker
+# on the CURRENT hash means the findings are STILL open - the marker no longer silences the
+# gate, and the block text calls the stale claim out. The ceiling (3 blocks per engagement,
+# then DOD-GATE-EXHAUSTED and a warning) is what stops it nudging forever instead.
+# ------------------------------------------------------------------------------------------
 
 
-def test_unchanged_finding_nudges_once_then_stays_silent_across_calls(
+def test_a_suppression_marker_does_not_silence_a_finding_that_is_still_open(
     tmp_path, monkeypatch, capsys
 ):
     from scripts.engagement_state import main as es_main
@@ -282,12 +291,15 @@ def test_unchanged_finding_nudges_once_then_stays_silent_across_calls(
     marker = m.group(1)
     assert es_main(["--dir", str(ws), "log-note", marker]) == 0
 
-    # Same finding, same hash, marker now recorded - a later stop (a fresh process, a new
-    # turn, even a new session) must go silent instead of repeating the identical nudge.
+    # Same finding, same hash, marker now recorded - and the finding is STILL there, which
+    # is the point: the marker claims work that a fresh check says did not clear anything.
+    # The gate must block again and name the stale claim, rather than take it at face value.
     capsys.readouterr()
     rc2, out2 = _run_gate(monkeypatch, capsys, {"cwd": str(tmp_path)}, tmp_path)
     assert rc2 == 0
-    assert out2 == ""
+    reason2 = json.loads(out2)["reason"]
+    assert "STILL reports the same findings" in reason2
+    assert "MISSING-HTML" in reason2
 
 
 def test_a_new_finding_re_arms_the_nudge_even_with_an_old_marker_present(

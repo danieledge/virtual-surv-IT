@@ -36,6 +36,9 @@ and the options must say so or the user is misled into thinking they've consente
 Record the answer; don't re-ask per command. Default to **No** if unsure; **never** run code of
 unknown provenance or touch production data/systems.
 
+**A marker that already exists is never inherited in silence** - state it and ask keep-or-close
+through the question tool in this same batch (H-6; wording in `engage/SKILL.md` step 0a).
+
 ## The menu answer is INTENT; the marker is the CONSENT
 
 Execution is hard-blocked by `guard-code-execution.py` until authorised - and **the team cannot

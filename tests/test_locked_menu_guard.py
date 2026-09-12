@@ -360,3 +360,167 @@ def test_target_labels_match_the_reference_doc():
     )
     for label in _TARGET_FULL:
         assert f"**{label}**" in doc, f"target-menu.md missing option {label!r}"
+
+
+# ---------------------------------------------- W-13: canonical sets come from the docs
+
+
+def _load_guard():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("staged_locked_menu_guard", HOOK)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_w13_canonical_sets_are_parsed_from_the_reference_docs():
+    """W-13: the guard used to enforce a hand-synced copy of the spec, which had already
+    drifted once. In a normal checkout it now reads the same files the skill cites."""
+    guard = _load_guard()
+    assert guard.CANONICAL["source"] == "parsed"
+    assert guard.CANONICAL["review"]["headers"] == ["Depth", "Performance", "Fix-cycle", "Origin"]
+    assert guard.CANONICAL["review"]["labels"]["Depth"] == {"Quick", "Deep", "Audit", "None"}
+    assert guard.CANONICAL["target_non_git"] == {
+        "Whole working directory",
+        "A file or folder I'll name",
+    }
+    assert set(guard.CANONICAL["stage2"]) == {"Spec docs", "Reviews", "Handover"}
+
+
+def test_w13_parsed_sets_agree_with_the_hardcoded_fallback():
+    """Both directions of W-13 in one assertion: the parse is right AND the fallback is
+    still correct. A fallback that has quietly gone stale is the same defect one layer
+    down, and only a comparison catches it."""
+    guard = _load_guard()
+    labels = guard.CANONICAL["review"]["labels"]
+    assert labels["Depth"] == guard._FALLBACK_DEPTH_LABELS
+    assert labels["Performance"] == guard._FALLBACK_PERF_LABELS
+    assert labels["Fix-cycle"] == guard._FALLBACK_FIXCYCLE_LABELS
+    assert labels["Origin"] == guard._FALLBACK_ORIGIN_LABELS
+    assert guard.CANONICAL["target"] == set(guard._FALLBACK_TARGET_LABELS)
+    assert guard.CANONICAL["stage2"] == guard._FALLBACK_STAGE2_CANON
+
+
+def test_w13_unreachable_references_fall_back_instead_of_failing(monkeypatch):
+    """The other direction: a plugin layout that ships no reference files, or a file
+    mid-edit, must leave the guard working on the known-good literals - never blocking
+    everything and never blocking nothing."""
+    guard = _load_guard()
+    monkeypatch.setattr(guard, "_references_dir", lambda: None)
+    canonical = guard._load_canonical()
+    assert canonical["source"] == "fallback"
+    assert canonical["review"]["labels"]["Depth"] == guard._FALLBACK_DEPTH_LABELS
+
+
+def test_w13_a_malformed_reference_file_falls_back(tmp_path, monkeypatch):
+    guard = _load_guard()
+    (tmp_path / "review-menu.md").write_text("# nothing useful here\n", encoding="utf-8")
+    monkeypatch.setattr(guard, "_references_dir", lambda: tmp_path)
+    assert guard._load_canonical()["source"] == "fallback"
+
+
+def test_w13_a_changed_spec_changes_what_the_guard_accepts(tmp_path, monkeypatch):
+    """The point of parsing: the guard follows the spec instead of needing its own edit.
+    A reference file with a renamed option makes the OLD wording the drift."""
+    guard = _load_guard()
+    (tmp_path / "review-menu.md").write_text(
+        "- **Headers:** Q1 `Depth`\n"
+        '\n**Q1 - "What depth?"  (single-select):**\n'
+        "\n| Label | Description |\n|---|---|\n"
+        "| **Skim** | shallow |\n| **Deep** | thorough |\n\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "target-menu.md").write_text("broken\n", encoding="utf-8")
+    monkeypatch.setattr(guard, "_references_dir", lambda: tmp_path)
+    canonical = guard._load_canonical()
+    # target-menu.md is unparseable, so the whole load falls back - the sets are one
+    # spec, not four independent ones, and a half-parsed spec is worse than the literals.
+    assert canonical["source"] == "fallback"
+
+    (tmp_path / "target-menu.md").write_text(
+        "**Q - pick one (header `Target`, single-select):**\n"
+        "\n| Label | Description |\n|---|---|\n"
+        "| **Uncommitted changes** | a |\n| **Branch vs main** | b |\n"
+        "| **Whole working directory** | c |\n| **A file or folder I'll name** | d |\n\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "artifact-menu.md").write_text(
+        "- header `Spec docs`: BRD · FSD\n", encoding="utf-8"
+    )
+    canonical = guard._load_canonical()
+    assert canonical["source"] == "parsed"
+    assert canonical["review"]["labels"]["Depth"] == {"Skim", "Deep"}
+
+
+# ------------------------------------- W-28: a locked menu rebuilt under another header
+
+
+def test_w28_locked_depth_options_under_another_header_are_blocked():
+    """Renaming the header was all it took to walk a divergent or retired locked menu past
+    a guard that recognises menus BY header."""
+    proc = _run([_q("Review type", ["Quick", "Deep", "Audit", "None"])])
+    assert proc.returncode == 2
+    assert "locked 'Depth' option set" in proc.stderr
+
+
+def test_w28_retired_packaging_menu_under_a_new_header_is_blocked():
+    """The packaging question is retired outright; a rename must not resurrect it."""
+    proc = _run([_q("Packaging", ["Consolidated Delivery Report", "Separate artifacts", "Both"])])
+    assert proc.returncode == 2
+    assert "locked 'Artifacts' option set" in proc.stderr
+
+
+def test_w28_target_options_under_another_header_are_blocked():
+    proc = _run(
+        [
+            _q(
+                "Scope",
+                [
+                    "Uncommitted changes",
+                    "Branch vs main",
+                    "Whole working directory",
+                    "A file or folder I'll name",
+                ],
+            )
+        ]
+    )
+    assert proc.returncode == 2
+    assert "locked 'Target' option set" in proc.stderr
+
+
+def test_w28_the_menus_under_their_own_headers_still_pass():
+    """The other direction, and the one that matters: the shape check must not fire on the
+    locked menus asked correctly."""
+    assert _run(VALID_REVIEW_MENU).returncode == 0
+    assert _run(VALID_STAGE2).returncode == 0
+    assert (
+        _run(
+            [
+                _q(
+                    "Target",
+                    [
+                        "Uncommitted changes",
+                        "Branch vs main",
+                        "Whole working directory",
+                        "A file or folder I'll name",
+                    ],
+                )
+            ]
+        ).returncode
+        == 0
+    )
+
+
+def test_w28_ordinary_questions_are_not_caught_by_the_shape_check():
+    """False positives are the risk with a blocking guard. A yes/no, a two-option pick and
+    an unrelated three-option question must all pass."""
+    assert _run([_q("Proceed", ["Yes", "No"])]).returncode == 0
+    assert _run([_q("Env", ["Dev", "Prod"])]).returncode == 0
+    assert _run([_q("Format", ["Markdown", "HTML", "DOCX"])]).returncode == 0
+
+
+def test_w28_a_near_miss_is_not_blocked():
+    """Exact-set matching only: a question that merely overlaps a locked set is somebody
+    asking something else, and a blocking guard must not guess."""
+    assert _run([_q("Review type", ["Quick", "Deep", "Exhaustive"])]).returncode == 0

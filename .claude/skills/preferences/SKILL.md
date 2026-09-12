@@ -1,5 +1,5 @@
 ---
-description: View or change this project's team preferences (docx export, regulatory citations, large-context review splitting, workflow-based parallel dispatch, standards-critique pass, codebase-skeleton drift checking)
+description: View or change this project's team preferences (docx export, regulatory citations, large-context review splitting, parallel dispatch, standards-critique pass, skeleton drift checking)
 disable-model-invocation: true
 ---
 

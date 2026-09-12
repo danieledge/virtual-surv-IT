@@ -239,3 +239,11 @@ pass-scoped names, and `delivery-report.md` + the summary email are written at �
 
 > For audit/regulatory sign-off with a fix→re-review loop, use `/audit-review` (which runs this
 > deep review as its first step).
+
+**If a reviewer pass crashes, times out or returns nothing:** re-dispatch it **once**; if the
+second attempt also fails, STOP and tell the user which pass failed (error text verbatim),
+record `REVIEW-INCOMPLETE` in the log and the pack's `limitations`, retag every downstream
+finding 🧠 inferred, and say "REVIEW-INCOMPLETE - <pass> did not run" in the verdict. Then
+check the retag mechanically with `<python> -m scripts.eval_score --check-tag-basis
+<pack>.jsonl` (exits 1 if a finding still claims `basis: measured`). Full rule:
+`.claude/skills/.shared/workflow-dispatch.md` §A reviewer pass that crashes.

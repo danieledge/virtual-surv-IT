@@ -45,6 +45,28 @@ stays read-only). Unchanged findings nudge once, then go silent; a NEW or DIFFER
 set changes the hash and nudges again - the backstop still catches drift, it just stops
 repeating itself.
 
+2026-09-12 audit (W-6): the suppression above was self-serve. `dod-nudged:<hash>` is a
+deterministic SHA-256 of the findings text the nudge itself prints, so the model could record
+it without doing any of the work it claims, and the backstop then stayed silent for that exact
+finding set forever. Two changes, both structural rather than a firmer instruction:
+
+  * The marker no longer decides anything on its own. The findings this gate reports come
+    from a `check_artifacts` run that just happened, so a marker matching the CURRENT hash is
+    a marker whose findings are still being reported - evidence the work was not done. The
+    suppression is therefore honoured only by the finding set changing, which is the same
+    thing as a fresh run reporting them resolved. A claimed-but-stale marker is called out in
+    the block text rather than being quietly ignored.
+  * That alone would nudge forever on something genuinely unfixable, so the gate counts its
+    own blocks (`dod-gate-block:<hash>` notes it writes itself, never the model) and gives up
+    after `_BLOCK_CEILING` of them PER ENGAGEMENT: it degrades to a plain stderr warning so the
+    turn can end, and records `DOD-GATE-EXHAUSTED:<hash>` so a gate that went quiet is
+    distinguishable from a gate that was satisfied. The warning still prints the findings at
+    every stop after that, so nothing disappears - only the blocking stops.
+
+Fail-open is unchanged: every new path is wrapped, an unreadable log counts as zero blocks
+(fail toward blocking, matching `_already_nudged`'s direction), and a failed log-note costs the
+record, never the block.
+
 Stdin: the Stop-hook JSON payload. Stdout: a single JSON `{"decision":"block","reason":...}` for
 the one nudge (which feeds the findings back to the PM to act on), else nothing. Exit code is
 always 0.
@@ -111,9 +133,16 @@ def _findings_hash(findings: list[str]) -> str:
 
 
 def _already_nudged(pack: Path, findings_hash: str) -> bool:
-    """True if this EXACT finding set was already nudged for this pack - read-only, mirrors
-    todo_panel_nudge.py's marker check. An unreadable or marker-less state file is "not yet
-    nudged", never a suppression (fail toward warning, not toward silence)."""
+    """True if this EXACT finding set carries a suppression marker for this pack.
+
+    Read-only, mirrors todo_panel_nudge.py's marker check. An unreadable or marker-less
+    state file is "not yet nudged", never a suppression (fail toward warning, not toward
+    silence).
+
+    W-6, 2026-09-12: this is no longer the suppression decision on its own. See
+    `_suppression_is_stale` and main() - a marker whose findings are still being reported
+    by a fresh `check_artifacts` run is evidence that nothing was fixed, not evidence that
+    it was."""
     try:
         state = json.loads((pack / "engagement-state.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -123,6 +152,98 @@ def _already_nudged(pack: Path, findings_hash: str) -> bool:
         return False
     marker = f"{_NUDGE_MARKER_PREFIX}{findings_hash}"
     return any(marker in str(entry) for entry in log)
+
+
+# W-6: how many times this gate may re-block ONE ENGAGEMENT before it gives up and degrades
+# to a warning. Three is enough to be unmissable and few enough that a genuinely stuck session
+# can still end its turn; the DOD-GATE-EXHAUSTED note is what keeps the give-up from being
+# invisible - a gate going quiet has to leave a record, or it is indistinguishable from a gate
+# that was satisfied.
+#
+# Per ENGAGEMENT, not per finding-hash, and that is deliberate. Recording a block is itself a
+# state mutation, which re-renders the index and the registry - and that can legitimately
+# change the finding set (a REGISTRY-HTML-STALE appearing between two stops was seen doing
+# exactly this). A per-hash ceiling is therefore resettable by the gate's own bookkeeping,
+# which is not a ceiling at all. After exhaustion the findings are still printed at every
+# stop as a warning, so nothing goes unseen; only the blocking stops.
+_BLOCK_CEILING = 3
+_BLOCK_MARKER_PREFIX = "dod-gate-block:"
+_EXHAUSTED_MARKER_PREFIX = "DOD-GATE-EXHAUSTED:"
+
+
+def _log_entries(pack: Path) -> list:
+    try:
+        state = json.loads((pack / "engagement-state.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    log = state.get("log")
+    return log if isinstance(log, list) else []
+
+
+def _blocks_recorded(pack: Path) -> int:
+    """How many times THIS gate has already blocked this engagement.
+
+    Counted from hook-written markers, never from the model-written suppression note: the
+    whole point of W-6 is that a count the blocked party maintains is not a count."""
+    return sum(1 for entry in _log_entries(pack) if _BLOCK_MARKER_PREFIX in str(entry))
+
+
+def _exhausted_recorded(pack: Path) -> bool:
+    return any(_EXHAUSTED_MARKER_PREFIX in str(entry) for entry in _log_entries(pack))
+
+
+def _engagement_state_module():
+    """`engagement_state`, importable from a repo checkout AND from a plugin install.
+
+    Same two-step every other hook here uses: the package import first, then a
+    file-relative load that also covers this file's staged copy under
+    scripts/staged_hooks/. None means "cannot record", which the caller treats as a reason
+    to keep blocking rather than a reason to go quiet."""
+    try:
+        from scripts import engagement_state  # noqa: PLC0415
+
+        return engagement_state
+    except Exception:  # nosec B110 - probe only; the file-relative loader is next
+        pass
+    import importlib.util
+
+    here = Path(__file__).resolve()
+    for candidate in (
+        here.with_name("engagement_state.py"),
+        here.parent.parent / "engagement_state.py",
+    ):
+        try:
+            if candidate.is_file():
+                spec = importlib.util.spec_from_file_location("engagement_state", candidate)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                return module
+        except Exception:  # nosec B112 - a candidate that won't load must not stop the next
+            continue
+    return None
+
+
+def _log_note(pack: Path, text: str) -> bool:
+    """Append one note to the pack's log through `engagement_state`, silently.
+
+    Through the CLI entry point rather than a direct file write so the pack lock and the
+    atomic write are the ones `engagement_state` already owns. Both streams are swallowed:
+    a Stop hook's stdout is the block-decision channel and must carry nothing else, and its
+    stderr is the user's console. `SystemExit` is caught because several `engagement_state`
+    error paths exit rather than return, and bookkeeping must never take the gate down."""
+    state = _engagement_state_module()
+    if state is None:
+        return False
+    try:
+        import contextlib
+        import io
+
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            return int(state.main(["log-note", text, "--dir", str(pack)])) == 0
+    except SystemExit:
+        return False
+    except Exception:
+        return False
 
 
 def _summarise_pack_findings(name: str, findings: list[str]) -> str:
@@ -146,6 +267,8 @@ def _reason(
     slug: str | None,
     findings_hash: str,
     session_owned: bool = True,
+    suppression_claimed: bool = False,
+    blocks_so_far: int = 0,
 ) -> str:
     log_note = (
         f'engagement_state --slug {slug} log-note "{_NUDGE_MARKER_PREFIX}{findings_hash}"'
@@ -214,12 +337,32 @@ def _reason(
             "outstanding DoD findings of its own."
         )
         other_block = ""
+    # W-6: the suppression note is no longer a silencer the model can write ahead of the
+    # work. It is honoured by the findings actually clearing - which is what changes the
+    # hash - so the tail says what will and will not make this stop, and how many blocks
+    # are left before the gate degrades to a warning and records that it gave up.
+    stale_block = ""
+    if suppression_claimed:
+        stale_block = (
+            f"\n\n⚠️ A `{_NUDGE_MARKER_PREFIX}{findings_hash}` note is already in this pack's "
+            "log, but the check that just ran STILL reports the same findings - so the work "
+            "the note claims was done was not done, or did not clear them. The note does not "
+            "suppress this gate; only the findings going away does."
+        )
+    # Deliberately NOT a live countdown. The block count IS tracked (see _blocks_recorded),
+    # but printing "N blocks left" would make this text differ between two otherwise
+    # identical stops, and the reason string is compared for equality by the stop-hook
+    # dispatcher's own contract test - a gate whose message shifts under its callers is a
+    # worse trade than a reader not knowing the exact number, which the log records anyway.
     return (
         f"{head}"
         f"{other_block}"
-        "\n\n(One-time nudge - it will not fire again this stop cycle, "
-        f"and once you record `{log_note}` it will not repeat for this SAME finding set in "
-        "any later turn or session either - only a new or changed finding re-arms it.)"
+        f"{stale_block}"
+        "\n\n(This nudge will not fire again this stop cycle. It stops repeating when a fresh "
+        f"`check_artifacts` run no longer reports these findings; recording `{log_note}` is the "
+        "audit trail for that work, not a way to silence the gate. Repeated blocks on an "
+        f"unchanged engagement are counted, and after {_BLOCK_CEILING} the gate degrades to a "
+        "warning and records DOD-GATE-EXHAUSTED - the findings stay open either way.)"
     )
 
 
@@ -308,14 +451,27 @@ def main() -> int:
     # /engage resume menu, virt-surv go, and the statusline). Fail-direction note:
     # this deliberately fails toward silence, the opposite of _already_nudged's
     # fail-toward-warning - dormancy is the promise being kept here.
+    # 2026-09-12: match against EVERY session the stamp still remembers, not just the
+    # latest one. The marker now records a `sessions` history alongside the single latest
+    # `session`/`session_id` (engagement_state.stamp_team_session), and a single-id check
+    # disarms this gate for session A the moment session B - or this hook's own W-6 block
+    # note - writes a state mutation. Same semantics as engagement_state.team_sessions;
+    # reimplemented here rather than imported so the gate keeps working when the module is
+    # unreachable, and still failing toward silence on anything unreadable.
     session_id = data.get("session_id")
     try:
-        stamped = json.loads((artifacts / ".team-session.json").read_text(encoding="utf-8")).get(
-            "session"
-        )
+        stamp = json.loads((artifacts / ".team-session.json").read_text(encoding="utf-8"))
+        stamped = [
+            s for s in (stamp.get("session_id"), stamp.get("session")) if isinstance(s, str) and s
+        ]
+        stamped += [
+            e.get("id")
+            for e in (stamp.get("sessions") or [])
+            if isinstance(e, dict) and isinstance(e.get("id"), str) and e.get("id")
+        ]
     except Exception:
-        stamped = None
-    if not session_id or stamped != session_id:
+        stamped = []
+    if not session_id or session_id not in stamped:
         return 0
 
     ca = _load_checker(cwd)
@@ -426,12 +582,60 @@ def main() -> int:
     # holds the marker is not semantically load-bearing - it is just a durable place to
     # record "this exact finding set was already nudged", shared across every gated pack.
     marker_name, marker_pack = next((g for g in gated if not g[0]), gated[0])
-    if _already_nudged(marker_pack, findings_hash):
+    slug = marker_name or None
+
+    # W-6 (2026-09-12 audit). The suppression marker used to end the story: a
+    # `dod-nudged:<hash>` note in the log silenced this gate permanently for that exact
+    # finding set, with nothing checking that the findings had actually gone. The hash is a
+    # deterministic SHA-256 of the printed findings, so recording it required none of the
+    # work it claimed to represent.
+    #
+    # The correction is structural rather than a stronger instruction: the findings above
+    # come from a check_artifacts run that just happened, this turn. So a marker matching
+    # THIS hash is a marker whose findings are, right now, still being reported - that is
+    # evidence the work was not done, not evidence that it was. The marker is therefore
+    # honoured only by the finding set changing (a different hash never matches in the
+    # first place), which is the same thing as "a fresh run reports them resolved".
+    #
+    # That alone would nudge forever on a genuinely unfixable finding, so the gate counts
+    # its own blocks and gives up after _BLOCK_CEILING of them - degrading to a plain
+    # stderr warning that lets the turn end, and recording DOD-GATE-EXHAUSTED so the
+    # give-up is in the engagement's own record rather than silent. Both the counting and
+    # the give-up note are written by this hook, not by the model.
+    suppression_claimed = _already_nudged(marker_pack, findings_hash)
+    try:
+        blocks = _blocks_recorded(marker_pack)
+    except Exception:
+        blocks = 0  # unreadable log: fail toward blocking, same direction as _already_nudged
+
+    if blocks >= _BLOCK_CEILING:
+        if not _exhausted_recorded(marker_pack):
+            _log_note(
+                marker_pack,
+                f"{_EXHAUSTED_MARKER_PREFIX}{findings_hash} - the DoD backstop blocked "
+                f"{blocks} times on this engagement without its findings clearing, and has "
+                "degraded to a warning so turns can end. The findings are still open; they "
+                "are printed at every stop from here on, but nothing blocks on them.",
+            )
+        print(
+            f"🎩 DoD backstop: still {len(active_findings) + len(other_findings)} outstanding "
+            f"DoD finding(s) on this engagement after {blocks} blocks (DOD-GATE-EXHAUSTED "
+            "recorded). The gate has degraded to this warning so the turn can end; the "
+            "findings are still open and the record now says so:\n- "
+            + "\n- ".join(active_findings or other_findings),
+            file=sys.stderr,
+        )
         return 0
 
-    slug = marker_name or None
+    _log_note(marker_pack, f"{_BLOCK_MARKER_PREFIX}{findings_hash} (block {blocks + 1})")
     reason = _reason(
-        active_findings, other_findings, slug, findings_hash, session_owned=active_owned
+        active_findings,
+        other_findings,
+        slug,
+        findings_hash,
+        session_owned=active_owned,
+        suppression_claimed=suppression_claimed,
+        blocks_so_far=blocks,
     )
     print(json.dumps({"decision": "block", "reason": reason}))
     return 0

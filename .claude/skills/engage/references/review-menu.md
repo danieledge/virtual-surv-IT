@@ -56,6 +56,8 @@ the repo looks big: state, and let the user correct in one word.
   work was even classified as a review. Never carry `Execution` or `Data safety` into this call:
   by step 1b they are already answered and recorded, not still pending.
 - **Headers:** Q1 `Depth` · Q2 `Performance` · Q3 `Fix-cycle` · Q4 `Origin` (locked, like the option wording).
+  `locked_menu_guard.py` parses this line and the option tables below at runtime, so a change here
+  changes what the guard accepts; it also blocks any of these option sets asked under another header.
 - **Q1 (depth) is single-select** - exactly one depth; Quick ⊂ Deep ⊂ Audit.
 - **Q2 (performance) is a SEPARATE question** (yes/no) - never merged into the depth list.
 - Every depth produces the **same clean findings artifact** - keep the option descriptions

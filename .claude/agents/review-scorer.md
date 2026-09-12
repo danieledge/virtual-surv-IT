@@ -1,11 +1,10 @@
 ---
 name: review-scorer
 description: >
-  When the team is engaged, use as the cheap-tier mechanical helper for all four pack-emitting
-  review pipelines (code-reviewer, performance-reviewer, compliance-reviewer, model-validator) -
-  context/language detection, lens selection per the router, confidence scoring + filtering for
-  code/performance findings, dedup + accounting (never filtering) for compliance/model-validation
-  findings. No Write/Edit; judgement stays with the reviewers and Morgan.
+  When the team is engaged, use as the cheap-tier mechanical helper for the four pack-emitting
+  review pipelines - context/language detection, lens selection per the router, confidence
+  scoring and filtering (code/performance findings), dedup and accounting only, never
+  filtering (compliance/model-validation findings).
 tools: Read, Grep, Glob, Bash
 model: haiku
 ---

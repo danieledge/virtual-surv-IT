@@ -43,8 +43,7 @@ carries the engagement's substance - a diagnosis report, a review report, an ass
 that artifact IS the delivery. Append a short closing block to it (final status/verdict,
 the team with 🤖 markers, next steps) instead of authoring a separate delivery report,
 and never invent wrapper documents or executive summaries to satisfy the packaging
-default (live 2026-08-18: a /why-no-alert close demanded an "engagement report" over a
-diagnosis that already covered everything, then offered an exec summary when challenged).
+default.
 The summary email stays - it is the short requester-facing bookend, not a duplicate of
 the deliverable. The full consolidated Delivery Report is for engagements whose substance
 spans MULTIPLE artifacts. **Naming is deterministic (2026-08-18):** the single
@@ -82,6 +81,11 @@ work-in-progress rather than artifacts appearing with no state transition to exp
 
 (the `--fix` mode auto-renders missing `.html` siblings and renames a mis-typed summary email to
 `.txt`).
+
+**Human sign-off is NOT in that sequence.** `sign-off` records only once the human has created
+`VSIT/engagements/<slug>/.human-sign-off` themselves; never create or offer to create it. Ask
+them to run it, wait, then record - full wording in
+`.claude/skills/engage/references/close-checklist.md`.
 
 **Map currency (before `set-status closed`, 2026-08-17 build review):** a build is the one
 activity guaranteed to outdate the codebase map, and direct-invoked skills never pass through

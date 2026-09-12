@@ -95,6 +95,34 @@ Workflow
 - A `null` slot in the returned array means that pass was skipped by the user or died on a
   terminal API error. Re-run **just that pass** via the fallback Task path; keep the others.
 
+## A reviewer pass that crashes, times out, or returns nothing (W-8)
+
+A `null` slot, an empty return, or a pass that died mid-way is **not a pass**. Re-dispatch it
+**once**, same brief. If the second attempt also fails or comes back empty:
+
+1. **Stop and tell the user in one line** which pass failed, with the error text verbatim -
+   not a paraphrase, and never a silent continue with the remaining passes.
+2. Record `REVIEW-INCOMPLETE: <pass> failed twice` in the engagement log
+   (`engagement_state log-note`) **and** in the pack's `limitations`.
+3. **Retag every downstream finding that depended on that pass 🧠 inferred.** A code finding
+   whose analyser never ran, a performance claim with no measured pass, a DoD verdict with no
+   compliance pass: 📊 observed / `basis: measured` asserts something actually ran.
+4. The verdict says **"REVIEW-INCOMPLETE - <pass> did not run"**. Passes that DID run are still
+   reported; what is never reported is a partial review presented as a whole one.
+
+`review-scorer` is not an exception: a **crashed** scorer is not a **skipped** scorer.
+Re-dispatch once, then record REVIEW-INCOMPLETE and leave the pack self-scored, saying so in
+`scoring` - the `PACK-UNSCORED` gate staying armed is the correct outcome, not a nuisance.
+
+**The retag is checked, not trusted.** Before the report is rendered:
+
+```
+<python> -m scripts.eval_score --check-tag-basis <pack>.jsonl
+```
+
+It exits 1 when the pack records a tool or pass as missing/skipped/failed while a finding still
+claims `basis: measured`. Fix the tags, do not edit the coverage line to silence it.
+
 Contract notes (verified against Claude Code 2.1.226, 2026-08-08; the `args` line below is
 verified by a real live invocation, everything else by schema extraction - if the tool
 rejects the script on a future version, treat it as a fallback trigger and report the error,

@@ -24,7 +24,27 @@ Roles (per field):
 Usage:
   export MASKING_KEY=...            # from ~/.secrets, never hard-coded
   python -m scripts.ingest --schema config/masking-schema.yaml \\
-      --in data/raw/orders.jsonl --out data/masked/orders.jsonl
+      --in <the governed raw input>.jsonl --out data/masked/orders.jsonl
+
+Flags:
+  --out                 optional; omit it (or pass '-') to stream JSONL to stdout.
+  --no-validate         skip the post-mask validate_masking scan, which otherwise
+                        runs on every masked output by default. Masking that is
+                        never checked is faith, not control, so the check is opt-OUT.
+  --allow-unknown-keep  accept `on_unknown: keep` passthrough without a non-zero
+                        exit. The warning still prints - the flag only says the
+                        passthrough was a deliberate decision, not an oversight.
+
+Exit codes: a run reports EVERY condition it found on stderr and THEN returns the
+highest code, so a validation failure can never quietly swallow an unknown-field
+warning (or the reverse) - you always see both reasons.
+  0  masked cleanly; the post-mask scan passed (or was skipped with --no-validate)
+  1  findings exist: record(s) were skipped, and/or `on_unknown: keep` passed
+     unknown fields through without --allow-unknown-keep. The output was still
+     written; a human decides whether the findings matter.
+  2  the post-mask validate_masking scan FAILED - the output may still carry PII.
+     Treat the file as unsafe (it is not safe to hand to an agent) until the
+     reported check is resolved.
 """
 
 from __future__ import annotations
@@ -78,7 +98,7 @@ _PII_PATTERNS = [
     # 2. IBAN - ISO 13616: CC + 2 check digits + up to 30 BBAN chars.
     #    Allow optional spaces/dashes (printed IBANs are often grouped).
     ("IBAN", re.compile(r"\b[A-Z]{2}\d{2}[\s\-]?(?:[A-Z0-9]{4}[\s\-]?){2,7}[A-Z0-9]{1,4}\b")),
-    # 3. Payment card - 13–19 digits, optionally grouped by spaces or dashes.
+    # 3. Payment card - 13-19 digits, optionally grouped by spaces or dashes.
     #    Luhn validation is not done here (would require more logic); the regex
     #    catches the structural pattern only.
     ("CARD", re.compile(r"\b(?:\d[\s\-]?){13,18}\d\b")),
@@ -93,7 +113,7 @@ _PII_PATTERNS = [
             r"\b(?:\d{4}[-/]\d{2}[-/]\d{2}|\d{2}[-/]\d{2}[-/]\d{4}|\d{1,2}[\s\-][A-Za-z]{3}[\s\-]\d{4})\b"
         ),
     ),
-    # 6. Phone number - international (+CC) or long local (7–14 digits).
+    # 6. Phone number - international (+CC) or long local (7-14 digits).
     #    Lookbehind/ahead excludes '/' and '-' so a phone run cannot start mid-date.
     ("PHONE", re.compile(r"(?<![\d/\-])\+?\d[\d \-().]{7,}\d(?![\d/\-])")),
     # 7. Account number - any unmatched run of 8+ digits (catch-all, must be last).
@@ -115,7 +135,9 @@ def get_key_from_env() -> bytes:
 def load_schema(path: str | Path) -> dict:
     if yaml is None:
         raise RuntimeError("pyyaml is required: pip install -r requirements-dev.txt")
-    return yaml.safe_load(Path(path).read_text())
+    # Explicit encoding: a schema authored on Linux must load identically on a Windows
+    # console whose locale default is cp1252, or a non-ASCII comment silently breaks it.
+    return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
 
 
 def validate_schema(schema: dict) -> None:
@@ -129,6 +151,12 @@ def validate_schema(schema: dict) -> None:
     Raises ValueError with an explanation if the schema is invalid.
     This is called once before the record loop so a config error is caught early,
     not per-row, and never with record content in the error message.
+
+    `on_unknown: keep` is not an error - a config may legitimately need it - but it is
+    warned about here because it inverts the safe default: every field the author did
+    not think about survives into the masked output. The warning fires on the CONFIG,
+    before any data is read, so the operator sees the posture even on a run where no
+    unknown field happens to appear.
     """
     fields = schema.get("fields", {})
     errors = []
@@ -147,6 +175,13 @@ def validate_schema(schema: dict) -> None:
     if errors:
         raise ValueError(
             "Masking schema validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
+        )
+    if schema.get("on_unknown", "drop") == "keep":
+        print(
+            "WARNING: schema sets on_unknown: keep - any field NOT declared in `fields:` "
+            "will pass through UNMASKED. The safe default is `drop`. Change it unless the "
+            "passthrough is a deliberate, reviewed decision.",
+            file=sys.stderr,
         )
 
 
@@ -176,19 +211,52 @@ def _generalise(value, spec: dict):
 
 
 def _redact_text(text, key: bytes):
+    """Replace PII in free text with typed, deterministic surrogates.
+
+    Surrogates are TOKEN_LEN wide - the same 96 bits as a structured identifier token,
+    and for the same reason: a surrogate is a referential-integrity handle too. An analyst
+    links "[EMAIL_xxx] appears in these 40 chats" exactly as they link an order_id token,
+    so a collision merges two people's correspondence. The old 6 hex chars were 24 bits,
+    colliding at roughly 1 in 16M - tolerable for one field, reckless across a comms corpus.
+
+    Patterns are applied in _PII_PATTERNS order (most-specific-first; see the table above),
+    but text already replaced is CLOSED to further matching. That protection is what makes
+    the widening safe: a 24-char hex token has a real chance of containing a 9+ digit run,
+    and a later pattern pass would happily rewrite the middle of it into a nested surrogate,
+    destroying the very referential integrity the extra bits were bought for.
+    """
     if not isinstance(text, str):
         return text
-    out = text
+    # Segments of (still-open-to-matching?, text).
+    segments: list[tuple[bool, str]] = [(True, text)]
     for label, pat in _PII_PATTERNS:
+        rewritten: list[tuple[bool, str]] = []
+        for is_open, chunk in segments:
+            if not is_open:
+                rewritten.append((False, chunk))
+                continue
+            pos = 0
+            for m in pat.finditer(chunk):
+                if m.start() > pos:
+                    rewritten.append((True, chunk[pos : m.start()]))
+                token = _hmac_hex(key, f"{label}:{m.group(0)}")[:TOKEN_LEN]
+                rewritten.append((False, f"[{label}_{token}]"))
+                pos = m.end()
+            if pos < len(chunk):
+                rewritten.append((True, chunk[pos:]))
+        segments = rewritten
+    return "".join(chunk for _, chunk in segments)
 
-        def repl(m, label=label):
-            return f"[{label}_{_hmac_hex(key, f'{label}:{m.group(0)}')[:6]}]"
 
-        out = pat.sub(repl, out)
-    return out
+def mask_record(
+    record: dict, schema: dict, key: bytes, unknown_seen: set[str] | None = None
+) -> dict:
+    """Mask one record.
 
-
-def mask_record(record: dict, schema: dict, key: bytes) -> dict:
+    `unknown_seen`, when given, collects the NAMES of fields that were not declared in
+    the schema and were passed through anyway under `on_unknown: keep`. Names only -
+    never values (§5) - so the caller can name the leak without echoing the data.
+    """
     fields = schema["fields"]
     out: dict = {}
     for name, value in record.items():
@@ -196,6 +264,8 @@ def mask_record(record: dict, schema: dict, key: bytes) -> dict:
         if spec is None:
             if schema.get("on_unknown", "drop") == "keep":
                 out[name] = value
+                if unknown_seen is not None:
+                    unknown_seen.add(name)
             continue
         role = spec["role"]
         if role == "drop":
@@ -222,19 +292,23 @@ def mask_record(record: dict, schema: dict, key: bytes) -> dict:
     return out
 
 
-def mask_records(records: list[dict], schema: dict, key: bytes) -> list[dict]:
+def mask_records(
+    records: list[dict], schema: dict, key: bytes, unknown_seen: set[str] | None = None
+) -> list[dict]:
     """
     Mask a list of records, skipping (not aborting on) individual bad rows.
 
     Bad rows are collected by INDEX only - record content is never echoed into
     error messages or logs (CLAUDE.md §5: PII must not egress into logs).
     A summary count is printed at the end if any rows were skipped.
+
+    `unknown_seen` is passed straight through to mask_record(); see its docstring.
     """
     out = []
     failures: list[int] = []  # row indices only - no record content
     for idx, record in enumerate(records):
         try:
-            out.append(mask_record(record, schema, key))
+            out.append(mask_record(record, schema, key, unknown_seen))
         except (ValueError, KeyError, TypeError, IndexError, ArithmeticError):
             # Skip DATA-shaped row errors (bad/missing/non-numeric fields), by INDEX only -
             # never echo record content. A schema/programming error (e.g. NameError, a bad
@@ -258,10 +332,34 @@ def main() -> None:
             _stream.reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, ValueError, OSError):
             pass
-    ap = argparse.ArgumentParser(description="Mask raw records into the governed pipeline.")
+    ap = argparse.ArgumentParser(
+        description="Mask raw records into the governed pipeline.",
+        epilog=(
+            "Exit codes: 0 = clean; 1 = findings exist (rows skipped, and/or unknown "
+            "fields passed through under on_unknown: keep); 2 = the post-mask "
+            "validate_masking scan FAILED, so the output may still carry PII. Every "
+            "condition found is printed on stderr before the highest code is returned, "
+            "so the two never mask each other."
+        ),
+    )
     ap.add_argument("--schema", type=Path, default=Path("config/masking-schema.yaml"))
     ap.add_argument("--in", dest="inp", type=Path, required=True)
-    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="output .jsonl; omit or pass '-' to write JSONL to stdout",
+    )
+    ap.add_argument(
+        "--no-validate",
+        action="store_true",
+        help="skip the post-mask validate_masking scan (it runs by default)",
+    )
+    ap.add_argument(
+        "--allow-unknown-keep",
+        action="store_true",
+        help="accept on_unknown: keep passthrough without exiting non-zero",
+    )
     args = ap.parse_args()
 
     key = get_key_from_env()
@@ -274,7 +372,7 @@ def main() -> None:
     # Failures are logged by line number only - never with line content (§5).
     records = []
     parse_failures = []
-    for lineno, line in enumerate(args.inp.read_text().splitlines(), start=1):
+    for lineno, line in enumerate(args.inp.read_text(encoding="utf-8").splitlines(), start=1):
         if not line.strip():
             continue
         try:
@@ -289,16 +387,77 @@ def main() -> None:
             file=sys.stderr,
         )
 
-    masked = mask_records(records, schema, key)
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text("\n".join(json.dumps(r) for r in masked) + "\n")
-    print(f"Masked {len(masked)} records -> {args.out}")
+    # Names of undeclared fields that `on_unknown: keep` let through (S-20).
+    unknown_seen: set[str] = set()
+    masked = mask_records(records, schema, key, unknown_seen)
+
+    payload = "\n".join(json.dumps(r) for r in masked) + "\n"
+    to_stdout = args.out is None or str(args.out) == "-"
+    if to_stdout:
+        # No --out: stream the JSONL so the tool composes in a pipeline. Everything
+        # else this function prints already goes to stderr, so stdout stays pure data.
+        sys.stdout.write(payload)
+        print(f"Masked {len(masked)} records -> stdout", file=sys.stderr)
+    else:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(payload, encoding="utf-8")
+        print(f"Masked {len(masked)} records -> {args.out}")
+
+    # Collect every reason to exit non-zero BEFORE exiting on any one of them, so a
+    # validation failure cannot hide an unknown-field warning (or the reverse).
+    findings = False  # -> exit 1
+    validation_failed = False  # -> exit 2 (outranks findings)
+
     if len(masked) < len(records):
         print(
             f"WARNING: {len(records) - len(masked)} record(s) were skipped; "
             "review stderr output for row indices.",
             file=sys.stderr,
         )
+        findings = True
+
+    if unknown_seen:
+        # Field NAMES only - never values (§5). Loud, because the whole point of
+        # `on_unknown: keep` going wrong is that nobody notices the extra columns.
+        names = ", ".join(sorted(unknown_seen))
+        print(
+            "=" * 72 + "\nWARNING: on_unknown: keep passed UNDECLARED fields through UNMASKED.\n"
+            f"  Fields: {names}\n"
+            "  These were never reviewed against a masking role, so whatever they hold "
+            "(PII, MNPI, free text) is in the output verbatim.\n"
+            "  Fix: declare a role for each in the schema, or set on_unknown: drop.\n"
+            "  If the passthrough IS intended, re-run with --allow-unknown-keep.\n" + "=" * 72,
+            file=sys.stderr,
+        )
+        if not args.allow_unknown_keep:
+            findings = True
+
+    if not args.no_validate:
+        # Import lazily: validate_masking imports from this module, so a module-level
+        # import here would be circular. In-process, never a subprocess - the checks are
+        # this repo's own tooling, not the untrusted code the exec gate covers (§7).
+        from scripts.validate_masking import scan_masked_records
+
+        checks = scan_masked_records(masked, schema)
+        failed = [(name, detail) for name, ok, detail in checks if not ok]
+        if failed:
+            print(
+                "FAIL: post-mask validation of the output found problems:",
+                file=sys.stderr,
+            )
+            for name, detail in failed:
+                print(f"  - {name}: {detail}", file=sys.stderr)
+            print(
+                "  The masked output may still carry PII - do not share it or hand it "
+                "to an agent until this is resolved. Re-run with --no-validate only if "
+                "you have another control in place.",
+                file=sys.stderr,
+            )
+            validation_failed = True
+
+    if validation_failed:
+        sys.exit(2)
+    if findings:
         sys.exit(1)
 
 

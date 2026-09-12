@@ -6,7 +6,10 @@
 #   timestamps            -> shift   (intra-trader deltas preserved exactly)
 #   signal-bearing values -> keep    (price/qty/side drive detection - must not change)
 
-on_unknown: drop            # any field not listed below is dropped (safe default)
+# Any field not listed below is dropped. Keep it that way: the alternative, `keep`, passes
+# every field nobody thought about straight into the output unmasked. ingest warns on the
+# setting, names the fields it let through, and exits 1 unless run with --allow-unknown-keep.
+on_unknown: drop
 
 k_anonymity: 5              # minimum group size for quasi-identifier combinations
 quasi_identifiers: []       # none here (price/qty are signal, not quasi-identifiers)

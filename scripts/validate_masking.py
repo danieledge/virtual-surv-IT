@@ -9,6 +9,10 @@ Privacy (re-identification risk):
     `token` roles + any `keep`-role direct identifier). Numeric fields (`shift` timestamps,
     `keep` prices/qty, `generalise` buckets) are excluded to avoid digit-run false positives;
     the direct-identifier-passthrough check is the backstop for mis-roled identifier fields.
+  - identifier-SHAPED values: covers exactly the gap the exclusion above opens. Every value
+    in the output, numeric fields included, is matched against anchored identifier FORMATS
+    (IBAN, long account/card digit runs, email, phone) so a mis-roled field is caught on the
+    shape of what it holds even when its name gives nothing away.
   - direct-identifier passthrough: any field declared as a direct identifier (role
     `token`/`drop`) that is instead given a pass-through role (`keep`/`generalise`)
     is a configuration error - flagged as FAIL
@@ -39,6 +43,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from collections import Counter
 from pathlib import Path
@@ -50,7 +55,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from rules.spoofing import detect_spoofing
 from scripts.gen_synthetic import event_to_record, record_to_event, spoofing_session
-from scripts.ingest import _PII_PATTERNS, load_schema, mask_records
+from scripts.ingest import _PII_PATTERNS, TOKEN_LEN, load_schema, mask_records
 
 # Roles that destroy / replace the original identifier value.
 SENSITIVE_ROLES = {"token", "drop", "redact"}
@@ -81,6 +86,72 @@ _IDENTIFIER_NAME_HINTS = {
     "ssn",
     "dob",
 }
+
+# ---------------------------------------------------------------------------
+# Identifier SHAPE heuristics - the companion to _IDENTIFIER_NAME_HINTS above.
+#
+# Names only catch the fields someone remembered to name conventionally. A column
+# called `ref7` or `cust_val` holding an IBAN is invisible to a name list, and the
+# free-text PII scan deliberately skips numeric `keep` fields so that shifted
+# timestamps and prices do not trip the digit-run patterns. That exclusion is the
+# gap these checks close: they look at the VALUE's format, not the field's name.
+#
+# Conservatism is the whole design constraint - a false positive here sends a human
+# to re-review a clean config, so every pattern is anchored (fullmatch on the whole
+# value, never a substring), length-bounded, and guarded against the numerics that
+# legitimately live in surveillance data:
+#   - floats are never checked at all: prices, rates and quantities are floats, and
+#     no identifier format is a float.
+#   - epoch-shaped integers are excluded by width + leading digit (see below).
+#   - ISO dates/datetimes are excluded explicitly.
+#   - digit runs shorter than _ACCOUNT_MIN_DIGITS are ignored, so quantities, small
+#     ints, years and reference numbers do not fire.
+# ---------------------------------------------------------------------------
+
+# A value must carry at least this many digits before a bare digit run is treated as an
+# account/card number. 12 sits above realistic quantities and below the 13-19 of a payment
+# card, and above the 10 digits of an epoch-second timestamp.
+_ACCOUNT_MIN_DIGITS = 12
+_ACCOUNT_MAX_DIGITS = 19
+# Phone numbers: E.164 tops out at 15 digits; below 9 the run is too short to tell apart
+# from an ordinary reference number.
+_PHONE_MIN_DIGITS = 9
+_PHONE_MAX_DIGITS = 15
+# Digit widths at which an integer is a plausible epoch timestamp (seconds, millis,
+# micros, nanos). Combined with a leading "1" this covers roughly 2001-2033 in every
+# unit, which is the whole range surveillance data realistically holds. Payment cards
+# in issue start 3/4/5/6, so excluding leading-1 runs at these widths costs almost
+# nothing and removes the single largest source of false positives.
+_EPOCH_DIGIT_WIDTHS = {10, 13, 16, 19}
+
+_EMAIL_VALUE_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+# ISO 13616: 2-letter country + 2 check digits + 11-30 alphanumeric BBAN chars.
+_IBAN_VALUE_RE = re.compile(r"[A-Z]{2}\d{2}[A-Z0-9]{11,30}")
+# Phone shape, checked only when the value carries a "+" or a separator - a bare digit
+# run is handled by the account/card rule instead, so the two cannot both fire.
+_PHONE_VALUE_RE = re.compile(r"\+?\d[\d\s\-().]{5,20}\d")
+# Dates are not identifiers. Matches YYYY-MM-DD and the ISO 8601 datetimes built on it.
+_ISO_DATE_VALUE_RE = re.compile(
+    r"\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?"
+)
+# Separator characters stripped before a format is matched, because printed IBANs, cards
+# and phone numbers are all conventionally grouped.
+_SEPARATORS_RE = re.compile(r"[\s\-()]")
+
+# Masking artifacts ingest itself produces: the `[EMAIL_<24 hex>]` redaction surrogate and
+# the `party_<24 hex>` structured token. Both are TOKEN_LEN wide, and at 24 hex chars a token
+# carries a 9+ digit run often enough to matter - roughly one masked file in a handful - which
+# the PHONE and ACCT patterns then report as residual PII. That is the masker's own output
+# being flagged as the PII it just removed, and it is not a hypothetical: the first end-to-end
+# run of the shipped schema through the post-mask scan failed on exactly this.
+#
+# So the artifacts are removed before the pattern scan. Deliberately narrow - an underscore
+# followed by EXACTLY TOKEN_LEN lowercase hex characters, nothing else - so a genuine leak
+# sitting next to a token still survives the strip and is still reported.
+_MASKING_ARTIFACT_RES = (
+    re.compile(rf"\[[A-Z][A-Z_]*_[0-9a-f]{{{TOKEN_LEN}}}\]"),  # redaction surrogate
+    re.compile(rf"\b[A-Za-z][A-Za-z0-9]*_[0-9a-f]{{{TOKEN_LEN}}}\b"),  # structured token
+)
 
 # Fixed deterministic test key used when MASKING_KEY is absent.
 # This is a PUBLIC constant - it is intentionally non-secret and must NEVER be
@@ -121,6 +192,113 @@ def _direct_identifier_fields(schema: dict) -> set[str]:
         name for name in schema.get("fields", {}) if name.lower() in _IDENTIFIER_NAME_HINTS
     }
     return explicit | heuristic
+
+
+def _strip_masking_artifacts(text: str) -> str:
+    """Remove ingest's own surrogates and tokens before a PII pattern scan."""
+    for pat in _MASKING_ARTIFACT_RES:
+        text = pat.sub(" ", text)
+    return text
+
+
+def _looks_like_epoch(digits: str) -> bool:
+    """True if a bare digit run is a plausible epoch timestamp rather than an identifier."""
+    return len(digits) in _EPOCH_DIGIT_WIDTHS and digits.startswith("1")
+
+
+def _shaped_identifier_label(value) -> str | None:
+    """
+    Return an identifier-format label if `value` IS an identifier by shape, else None.
+
+    Shape only - the field name plays no part, which is the point: this catches the
+    mis-roled column whose name gave nothing away. See the heuristics block above for
+    why each exclusion exists.
+    """
+    # bool is an int subclass in Python, and True/False are never identifiers.
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, float):
+        # Prices, rates, quantities. No identifier format is a float.
+        return None
+    if isinstance(value, int):
+        text = str(value)
+    elif isinstance(value, str):
+        text = value.strip()
+    else:
+        return None
+    if not text:
+        return None
+    if _ISO_DATE_VALUE_RE.fullmatch(text):
+        return None
+
+    if _EMAIL_VALUE_RE.fullmatch(text):
+        return "EMAIL"
+
+    compact = _SEPARATORS_RE.sub("", text)
+    if _IBAN_VALUE_RE.fullmatch(compact):
+        return "IBAN"
+
+    plus = compact.startswith("+")
+    digits = compact[1:] if plus else compact
+    if not digits.isdigit():
+        return None
+    n = len(digits)
+    # An explicit international prefix is a phone number and nothing else.
+    if plus and _PHONE_MIN_DIGITS <= n <= _PHONE_MAX_DIGITS:
+        return "PHONE"
+    if _ACCOUNT_MIN_DIGITS <= n <= _ACCOUNT_MAX_DIGITS and not _looks_like_epoch(digits):
+        return "ACCOUNT_OR_CARD"
+    # Grouped (separated) runs that are too short to be an account number but long
+    # enough to be a dialled number. A bare run never reaches here.
+    if (
+        text != compact
+        and _PHONE_MIN_DIGITS <= n <= _PHONE_MAX_DIGITS
+        and _PHONE_VALUE_RE.fullmatch(text)
+    ):
+        return "PHONE"
+    return None
+
+
+def _iter_shaped_labels(value):
+    """Yield identifier-format labels found in `value`, recursing into dicts and lists."""
+    if isinstance(value, dict):
+        for v in value.values():
+            yield from _iter_shaped_labels(v)
+    elif isinstance(value, (list, tuple)):
+        for v in value:
+            yield from _iter_shaped_labels(v)
+    else:
+        label = _shaped_identifier_label(value)
+        if label is not None:
+            yield label
+
+
+def shaped_identifier_hits(records) -> list[tuple[str, str]]:
+    """
+    Return sorted (field_name, format_label) pairs for identifier-SHAPED values.
+
+    Field names and format labels only - the offending VALUE is never returned or
+    logged (§5). Knowing that `ref7` holds something IBAN-shaped is enough to act on;
+    printing the IBAN would be the leak this tool exists to prevent.
+    """
+    hits: set[tuple[str, str]] = set()
+    for rec in records:
+        if not isinstance(rec, dict):
+            continue
+        for name, value in rec.items():
+            for label in _iter_shaped_labels(value):
+                hits.add((name, label))
+    return sorted(hits)
+
+
+def _shaped_identifier_check(records) -> tuple[str, bool, str]:
+    """Build the standard (name, ok, detail) check tuple for the shape heuristic."""
+    hits = shaped_identifier_hits(records)
+    return (
+        "no identifier-shaped values (format heuristic)",
+        not hits,
+        str(hits[:5]) if hits else f"clean across {len(records)} record(s)",
+    )
 
 
 def run_privacy_checks(original_records, schema, key):
@@ -189,8 +367,10 @@ def run_privacy_checks(original_records, schema, key):
         for name, spec in schema["fields"].items()
         if spec["role"] in _FREE_TEXT_ROLES or (spec["role"] == "keep" and name in direct_ids)
     } | keep_str_fields
-    pii_scan_text = " ".join(
-        str(r.get(f, "")) for r in masked for f in pii_scan_fields if isinstance(r.get(f), str)
+    pii_scan_text = _strip_masking_artifacts(
+        " ".join(
+            str(r.get(f, "")) for r in masked for f in pii_scan_fields if isinstance(r.get(f), str)
+        )
     )
     pii_hits = [label for label, pat in _PII_PATTERNS if pat.search(pii_scan_text)]
     scanned_count = len(pii_scan_fields)
@@ -210,6 +390,14 @@ def run_privacy_checks(original_records, schema, key):
             detail,
         )
     )
+
+    # ------------------------------------------------------------------
+    # 2b. Identifier-SHAPED values, across EVERY field including the numeric ones
+    #     check 2 excludes. Name-blind and role-blind on purpose: this is the only
+    #     check that would catch a `keep`-role integer column quietly carrying card
+    #     numbers. See the heuristics block at the top for the conservatism rules.
+    # ------------------------------------------------------------------
+    checks.append(_shaped_identifier_check(masked))
 
     # ------------------------------------------------------------------
     # 3. Direct-identifier passthrough assertion.
@@ -283,32 +471,20 @@ def _iter_strings(obj):
             yield from _iter_strings(v)
 
 
-def scan_masked_file(path: str | Path, schema: dict) -> list:
-    """Inspect a user's ACTUAL masked file (not a fixture). Data-independent checks only.
+def scan_masked_records(
+    records: list[dict], schema: dict, extra_checks: list | None = None
+) -> list:
+    """Run the data-independent checks over already-parsed masked records.
 
-    Scans every STRING field value for residual free-text PII (numbers are skipped so shifted
-    timestamps / prices don't trigger digit-run false positives), and runs k-anonymity over any
-    declared quasi-identifiers. It CANNOT verify 'no original identifier survived' or detection
-    fidelity - those need the original data, which by design never reaches this tool.
+    Split out of scan_masked_file() so ingest can validate its own output in-process,
+    with no temp file and no second parse - and, when it is writing to stdout, with no
+    file to read back at all.
     """
-    records = []
-    bad_lines = 0
-    for line in Path(path).read_text().splitlines():
-        if not line.strip():
-            continue
-        try:
-            records.append(json.loads(line))
-        except json.JSONDecodeError:
-            # Count malformed lines (by position only - never echo content) rather than
-            # crashing the whole scan on one bad row.
-            bad_lines += 1
-    checks = []
-    if bad_lines:
-        checks.append(("file parse", False, f"{bad_lines} malformed JSON line(s) skipped"))
+    checks = list(extra_checks or [])
 
     # Residual free-text PII across all STRING values, including those nested inside list/dict
     # fields (a flat record is the norm, but nested values must not be a blind spot).
-    text = " ".join(s for r in records for s in _iter_strings(r))
+    text = _strip_masking_artifacts(" ".join(s for r in records for s in _iter_strings(r)))
     hits = [label for label, pat in _PII_PATTERNS if pat.search(text)]
     checks.append(
         (
@@ -317,6 +493,10 @@ def scan_masked_file(path: str | Path, schema: dict) -> list:
             str(hits) if hits else f"clean across {len(records)} record(s)",
         )
     )
+
+    # Identifier-shaped values across EVERY value, numerics included - the string-only
+    # scan above cannot see a card number stored as an integer.
+    checks.append(_shaped_identifier_check(records))
 
     # k-anonymity over declared quasi-identifiers (skipped if none declared).
     qis = schema.get("quasi_identifiers", [])
@@ -331,6 +511,33 @@ def scan_masked_file(path: str | Path, schema: dict) -> list:
         checks.append(("k-anonymity", worst >= k, f"min group={worst}, required k={k}"))
 
     return checks
+
+
+def scan_masked_file(path: str | Path, schema: dict) -> list:
+    """Inspect a user's ACTUAL masked file (not a fixture). Data-independent checks only.
+
+    Scans every STRING field value for residual free-text PII (numbers are skipped so shifted
+    timestamps / prices don't trigger digit-run false positives), applies the identifier-shape
+    heuristic to every value including the numeric ones, and runs k-anonymity over any declared
+    quasi-identifiers. It CANNOT verify 'no original identifier survived' or detection fidelity -
+    those need the original data, which by design never reaches this tool.
+    """
+    records = []
+    bad_lines = 0
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError:
+            # Count malformed lines (by position only - never echo content) rather than
+            # crashing the whole scan on one bad row.
+            bad_lines += 1
+    parse_checks = []
+    if bad_lines:
+        parse_checks.append(("file parse", False, f"{bad_lines} malformed JSON line(s) skipped"))
+
+    return scan_masked_records(records, schema, extra_checks=parse_checks)
 
 
 def main() -> None:

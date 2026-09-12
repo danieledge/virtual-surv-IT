@@ -59,6 +59,16 @@ execution question as **intent, not grant** (the human creates the consent marke
 reference has the per-OS commands; verify the marker exists before executing anything; a "No"
 deletes any existing marker, fail-safe).
 
+**Never inherit an execution gate in silence (H-6).** The marker outlives the session that asked
+for it, so a project that granted consent last week opens today with the gate already OPEN. Check
+at step 0: the prefetch block prints `PRE_EXISTING_EXEC_CONSENT=<where>` when one is live, and
+without that block a read-only `ls .claude/` answers it (reading is allowed; creating is not).
+If one is live, **say so on screen and put it in the 0a batch as its own question** (header
+`Execution`, the standard tool, never buried prose): *"Execution consent is already granted in
+this project (`<where>`) - keep it, or close the gate for this engagement?"* → **Keep it** ·
+**Close it** (you delete the marker - closing is always fail-safe and allowed). An intake that
+never mentions a live gate leaves the user believing the default (blocked) while it is open.
+
 **Sequence the opening, then batch - one screen, not three round-trips.** Two hard rules first:
 - **Precedence on a bare `/engage`** (no concrete target/inputs in the request): step 1a wins -
   your first reply asks **only** what/where the code or inputs are. The gated questions below are

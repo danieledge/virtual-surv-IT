@@ -72,3 +72,12 @@ written during the 🔒 closing window.
    transition. Present the pack only after `set-status closed` succeeds.
 
 Stop for human sign-off - real reviewers will read these, and approval/execution is theirs.
+
+**Sign-off is recorded only after the human creates the marker file.** `engagement_state
+sign-off` refuses unless `VSIT/engagements/<slug>/.human-sign-off` already exists, and
+`guard-consent-writes.py` blocks the model from creating that filename by any route. **Never
+create it, never offer to** - ask the user to run `touch
+VSIT/engagements/<slug>/.human-sign-off` (macOS/Linux) or `New-Item -ItemType File
+VSIT/engagements/<slug>/.human-sign-off` (Windows PowerShell) themselves, then
+`<python> -m scripts.engagement_state sign-off --by "<name>" --slug <slug>`. Until it exists,
+the pack is PARTIAL with "human sign-off" outstanding - say so plainly.

@@ -3,7 +3,9 @@
 > Use **exactly** these options and descriptions - do not improvise, reword, add or drop
 > (2026-08-17 user decision: "it changes nearly every time in some way" - the same drift
 > class the locked review menu closed). `scripts/locked_menu_guard.py` mechanically blocks
-> a divergent `Target` question - don't rely on it instead of following this file.
+> a divergent `Target` question - don't rely on it instead of following this file. The guard
+> now READS the option table below at runtime, so editing this file changes what it accepts;
+> it also blocks this same option set asked under a different header.
 
 **This question fires ONLY when the target is underivable** (`deep-review` step 2): an
 uncommitted/branch diff or a path named in the request IS the target and is stated, not

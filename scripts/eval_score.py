@@ -40,6 +40,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import re
 import sys
@@ -75,7 +76,7 @@ def _load_yaml(path: str | Path) -> dict:
         import yaml
     except ImportError:  # pragma: no cover - exercised only without pyyaml
         raise RuntimeError("pyyaml is required: pip install -r requirements-dev.txt")
-    return yaml.safe_load(Path(path).read_text())
+    return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
 
 
 def _norm(text: str) -> str:
@@ -180,6 +181,37 @@ _NEGATION_RE = re.compile(
 )
 
 
+@functools.lru_cache(maxsize=2048)
+def _keyword_re(keyword: str) -> re.Pattern | None:
+    """One keyword as a LEFT-ANCHORED regex, or None when there is nothing to match.
+
+    W-19 (2026-09-12 audit): the deterministic layer matched keywords as bare substrings,
+    so a one-word keyword fired from inside a longer word - "just" inside "adjust", "ai"
+    inside "said", "fix" inside "prefix". That is the same class of gaming-by-phrasing the
+    scorer's own comments already record being patched twice.
+
+    Anchored on the LEFT only, and deliberately so. The manifests genuinely rely on
+    open-ended right-hand matching for inflections (a keyword like "traceab" is written to
+    catch "traceability" and "traceable"), so a full `\b...\b` would silently drop real
+    matches and change existing case results - the opposite of the requirement. A left
+    boundary alone kills every inside-a-longer-word false positive while leaving every
+    prefix-style keyword working exactly as before.
+
+    The boundary is only applied when the keyword STARTS with an alphanumeric: keywords
+    beginning with punctuation or an emoji ("/engage", "🔴") have no word boundary to the
+    left of them, and asserting one there would never match."""
+    norm = _norm(keyword)
+    if not norm:
+        return None
+    prefix = r"(?<![0-9a-z])" if norm[0].isalnum() else ""
+    return re.compile(prefix + re.escape(norm))
+
+
+def _keyword_hit(keyword: str, haystack: str) -> bool:
+    pattern = _keyword_re(keyword)
+    return bool(pattern and pattern.search(haystack))
+
+
 def _matches(spec: dict, finding: dict) -> bool:
     """A finding matches a planted/forbidden spec if location OR any keyword matches.
 
@@ -202,7 +234,7 @@ def _matches(spec: dict, finding: dict) -> bool:
     hay = _norm(
         f"{finding.get('title', '')} {finding.get('kind', '')} {finding.get('location', '')}"
     )
-    if any(_norm(kw) in hay for kw in spec.get("exclude_keywords", []) or []):
+    if any(_keyword_hit(kw, hay) for kw in spec.get("exclude_keywords", []) or []):
         return False
     # A stated intention from the team's own prose is not evidence that the work was done.
     # PLANTED specs only: a planted spec asserts the work happened, so a promise cannot satisfy
@@ -223,7 +255,7 @@ def _matches(spec: dict, finding: dict) -> bool:
     if _location_matches(spec.get("location"), finding.get("location")):
         return _severity_ok(finding.get("severity"), spec.get("min_severity"), kind)
     for kw in spec.get("keywords", []) or []:
-        if _norm(kw) in hay:
+        if _keyword_hit(kw, hay):
             return _severity_ok(finding.get("severity"), spec.get("min_severity"), kind)
     return False
 
@@ -272,6 +304,73 @@ def score(expected: dict, findings: list[dict]) -> dict:
     }
 
 
+# --------------------------------------------------------- evidence-basis cross-check
+#
+# W-9 (2026-09-12 audit). "A tool became unavailable mid-review, so retag the remaining
+# findings inferred" was prose in one agent prompt and nothing else. A reviewer that loses
+# an analyser to a corporate-proxy timeout and forgets to retag ships a report that
+# overstates its own evidence basis, and no check anywhere caught it - `check_artifacts`
+# cross-references evidence tags for the codebase map only, never for a findings pack.
+#
+# Lexical and narrow on purpose. `basis: "measured"` is the only tag that ASSERTS something
+# actually ran; "coded" is a value read out of the source and "inferred" is reasoning, and
+# neither needs a tool. So the rule is exactly one sentence: if the pack itself says a tool
+# or a pass did not run, no finding in it may still claim "measured".
+_UNAVAILABLE_MARKERS = (
+    "missing",
+    "unavailable",
+    "not available",
+    "not installed",
+    "skipped",
+    "not run",
+    "did not run",
+    "failed",
+    "timed out",
+    "review-incomplete",
+)
+_OBSERVED_BASIS = "measured"
+
+
+def _pack_records(path: Path) -> list[dict]:
+    """Every JSON object in a findings pack, envelope first. JSONL, one object per line."""
+    records = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        records.append(json.loads(line))
+    return records
+
+
+def check_tag_basis(records: list[dict]) -> list[str]:
+    """Problems where the pack records a tool/pass as unavailable but still claims measured.
+
+    Returns a list of human-readable problems; empty means consistent. Pure - no I/O."""
+    envelope = next((r for r in records if "findings" in r or "tooling_coverage" in r), None)
+    if envelope is None:
+        envelope = records[0] if records else {}
+    coverage = " ".join(
+        str(envelope.get(field) or "")
+        for field in ("tooling_coverage", "limitations", "methodology", "scoring")
+    ).lower()
+    hits = [marker for marker in _UNAVAILABLE_MARKERS if marker in coverage]
+    if not hits:
+        return []
+    findings = list(envelope.get("findings") or [])
+    findings += [r for r in records if "id" in r and "basis" in r]
+    offenders = [
+        str(f.get("id") or "?") for f in findings if _norm(f.get("basis")) == _OBSERVED_BASIS
+    ]
+    if not offenders:
+        return []
+    return [
+        f"TAG-BASIS-OVERSTATED: the pack records {sorted(set(hits))!r} in its tooling "
+        f"coverage or limitations, but finding(s) {offenders!r} still carry "
+        f"basis={_OBSERVED_BASIS!r}. A tool or pass that did not run cannot evidence a "
+        "measured finding - retag them inferred (CLAUDE.md §6)."
+    ]
+
+
 def _main(argv: list[str] | None = None) -> int:
     # Force UTF-8 output so a cp1252 (Windows) console can't crash on non-ASCII (0.19.0).
     for _stream in (sys.stdout, sys.stderr):
@@ -280,12 +379,30 @@ def _main(argv: list[str] | None = None) -> int:
         except (AttributeError, ValueError, OSError):
             pass
     ap = argparse.ArgumentParser(description="Score team findings vs a golden manifest.")
-    ap.add_argument("--expected", required=True, help="path to expected.yaml")
-    ap.add_argument("--findings", required=True, help="path to findings JSON")
+    ap.add_argument("--expected", help="path to expected.yaml")
+    ap.add_argument("--findings", help="path to findings JSON")
+    ap.add_argument(
+        "--check-tag-basis",
+        metavar="PACK.jsonl",
+        help="cross-check one findings pack: fail if it records a tool or pass as "
+        "unavailable while a finding still claims basis=measured (W-9). Exits 1 on a "
+        "problem, 0 when consistent.",
+    )
     args = ap.parse_args(argv)
 
+    if args.check_tag_basis:
+        problems = check_tag_basis(_pack_records(Path(args.check_tag_basis)))
+        for problem in problems:
+            print(problem, file=sys.stderr)
+        if not problems:
+            print("tag basis consistent with recorded tooling coverage")
+        return 1 if problems else 0
+
+    if not args.expected or not args.findings:
+        ap.error("--expected and --findings are both required unless --check-tag-basis is used")
+
     expected = _load_yaml(args.expected)
-    findings = json.loads(Path(args.findings).read_text()).get("findings", [])
+    findings = json.loads(Path(args.findings).read_text(encoding="utf-8")).get("findings", [])
     result = score(expected, findings)
     print(json.dumps(result, indent=2))
     return 0 if result["passed"] else 1

@@ -207,7 +207,8 @@
     ".claude/skills/engage/references/extensions.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 466
+      "baseline_tokens": 671,
+      "repin_reason": "2026-09-12 W-11: the 'extensions can never waive a gate' claim now states plainly how narrow the mechanical enforcement is, and carries the weakening-phrase deny-list the model is expected to refuse on. Paid for partly by trimming the close-action and registry paragraphs; the remainder is new safety text, re-pinned deliberately."
     },
     ".claude/skills/engage/references/integrations.md": {
       "tier": "DEFERRED",
@@ -327,7 +328,8 @@
     "docs/DEFINITION-OF-DONE.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 6313
+      "baseline_tokens": 7782,
+      "repin_reason": "2026-09-12 DoD audit item: new HARD/ADVISORY table stating, per checklist line, whether a mechanism enforces it and which file does, plus a plain statement of what remains advisory. DEFERRED tier (read at the gate, not loaded every turn), so the cost lands where the question is actually asked; re-pinned deliberately rather than trimmed, since the whole point is that the table is exhaustive."
     },
     "docs/WAYS-OF-WORKING.md": {
       "tier": "DEFERRED",

@@ -343,3 +343,136 @@ def test_legacy_marker_without_session_keeps_old_behaviour(tmp_path, monkeypatch
     )
     assert rc == 0
     assert "AUTO-FIX" in json.loads(out)["reason"]
+
+
+# --- W-6 (2026-09-12 audit): self-serve suppression, and the give-up ceiling -------------
+
+
+_W6_SID = "sess-w6"
+
+
+def _w6_project(tmp_path: Path) -> Path:
+    """A REAL pack (built by engagement_state, so its own validator is satisfied) carrying
+    one stable, unchanging DoD finding.
+
+    A hand-written stub pack would do for the gate's read path, but not here: the W-6
+    ceiling is counted in hook-written log notes, and `log-note` refuses to mutate a state
+    file that does not validate - so a stub would silently never count."""
+    from scripts import engagement_state as es
+
+    pack = tmp_path / "artifacts" / "eng"
+    assert es.main(["init", "--slug", "eng", "--title", "W-6", "--dir", str(pack)]) == 0
+    (pack / "NOTES.md").write_text("# notes\n", encoding="utf-8")
+    assert es.main(["add-artifact", "NOTES.md", "--title", "Notes", "--dir", str(pack)]) == 0
+    (tmp_path / "artifacts" / ".team-session.json").write_text(
+        json.dumps({"session": _W6_SID}), encoding="utf-8"
+    )
+    return pack
+
+
+def _w6_run(monkeypatch, capsys, tmp_path: Path):
+    # Drain first: the fixture's own engagement_state/render_html calls print "wrote ..."
+    # to stdout, and this hook's whole contract is that stdout carries the block decision
+    # and nothing else - leftover setup chatter would be read as part of it.
+    capsys.readouterr()
+    staged = _load_staged_gate()
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        "sys.stdin", io.StringIO(json.dumps({"session_id": _W6_SID, "cwd": str(tmp_path)}))
+    )
+    rc = staged.main()
+    captured = capsys.readouterr()
+    return rc, captured.out, captured.err
+
+
+def _w6_log(pack: Path) -> str:
+    return json.dumps(
+        json.loads((pack / "engagement-state.json").read_text(encoding="utf-8")).get("log") or []
+    )
+
+
+def test_w6_a_claimed_suppression_does_not_silence_an_unresolved_finding(
+    tmp_path, monkeypatch, capsys
+):
+    """The whole W-6 finding: `dod-nudged:<hash>` is a deterministic hash of the printed
+    findings, so recording it needed none of the work it claimed. The findings reported
+    here come from a check that just ran, so a marker on THIS hash means they are still
+    open - the gate must block anyway and say the note did not match reality."""
+    from scripts import engagement_state as es
+
+    pack = _w6_project(tmp_path)
+    staged = _load_staged_gate()
+    from scripts import check_artifacts as ca
+
+    findings = [f"[eng] {f}" for f in ca.check(pack)]
+    digest = staged._findings_hash(findings)
+    assert es.main(["log-note", f"dod-nudged:{digest}", "--dir", str(pack)]) == 0
+
+    rc, out, _err = _w6_run(monkeypatch, capsys, tmp_path)
+    assert rc == 0
+    reason = json.loads(out)["reason"]
+    assert "STILL reports the same findings" in reason
+    assert "MISSING-HTML" in reason
+
+
+def test_w6_the_gate_gives_up_after_three_blocks_and_records_it(tmp_path, monkeypatch, capsys):
+    """A finding nobody can clear must not nudge forever. Three blocks, then a warning on
+    stderr (no block decision, so the turn can end) and DOD-GATE-EXHAUSTED in the log, so
+    a gate that went quiet is distinguishable from a gate that was satisfied."""
+    pack = _w6_project(tmp_path)
+
+    for expected_blocks in (1, 2, 3):
+        rc, out, err = _w6_run(monkeypatch, capsys, tmp_path)
+        assert rc == 0
+        assert json.loads(out)["decision"] == "block"
+        assert err == ""
+        # The count is kept in the pack's own log by the hook, never by the model, and
+        # never printed in the reason (the reason must stay identical between stops).
+        assert _w6_log(pack).count("dod-gate-block:") == expected_blocks
+
+    rc, out, err = _w6_run(monkeypatch, capsys, tmp_path)
+    assert rc == 0
+    assert out == "", "the gate must stop BLOCKING once exhausted, so the turn can end"
+    assert "DOD-GATE-EXHAUSTED recorded" in err
+    assert "DOD-GATE-EXHAUSTED" in _w6_log(pack)
+
+
+def test_w6_exhausted_is_recorded_once_not_on_every_later_stop(tmp_path, monkeypatch, capsys):
+    pack = _w6_project(tmp_path)
+    for _ in range(6):
+        _w6_run(monkeypatch, capsys, tmp_path)
+    assert _w6_log(pack).count("DOD-GATE-EXHAUSTED") == 1
+
+
+def test_w6_actually_clearing_the_finding_ends_the_nudges(tmp_path, monkeypatch, capsys):
+    """The other direction, and the only one that should ever silence the gate: fix the
+    finding and the next stop is silent - no block, no warning, nothing recorded."""
+    pack = _w6_project(tmp_path)
+    rc, out, _err = _w6_run(monkeypatch, capsys, tmp_path)
+    assert json.loads(out)["decision"] == "block"
+
+    # Render the missing sibling the same way the fix-list tells the model to.
+    from scripts import render_html
+
+    render_html.render_file(pack / "NOTES.md")
+    rc, out, err = _w6_run(monkeypatch, capsys, tmp_path)
+    assert rc == 0
+    assert out == "" and err == ""
+
+
+def test_w6_after_exhaustion_new_findings_still_surface_as_a_warning(tmp_path, monkeypatch, capsys):
+    """The ceiling is per ENGAGEMENT, so a later finding does not re-arm the block - but it
+    must still be SEEN. The degraded warning keeps printing the current findings at every
+    stop, so drift after a give-up is surfaced rather than swallowed."""
+    from scripts import engagement_state as es
+
+    pack = _w6_project(tmp_path)
+    for _ in range(4):
+        _w6_run(monkeypatch, capsys, tmp_path)
+
+    (pack / "SECOND.md").write_text("# second\n", encoding="utf-8")
+    assert es.main(["add-artifact", "SECOND.md", "--title", "Second", "--dir", str(pack)]) == 0
+    rc, out, err = _w6_run(monkeypatch, capsys, tmp_path)
+    assert rc == 0
+    assert out == "", "exhausted means no more blocking, whatever the findings are"
+    assert "SECOND.md" in err, "the new finding must still be printed in the warning"

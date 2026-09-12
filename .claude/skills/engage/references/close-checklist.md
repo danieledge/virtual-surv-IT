@@ -87,6 +87,31 @@ comments), and verify each against the FINAL state:
   evidence is unfalsifiable. A 📊 measured tag needs a surviving artifact (output, log, cache) -
   downgrade to 🧠 inferred if nothing survives.
 
+## Human sign-off is a file only the human can create
+
+Sign-off is the one Definition-of-Done item the team cannot produce for itself, so it is no
+longer a claim in prose: `engagement_state sign-off` records it **only** when the marker file
+`VSIT/engagements/<slug>/.human-sign-off` already exists, and `guard-consent-writes.py` blocks
+the model from creating that filename by any route (Write, Edit or a shell redirect). The same
+shape as the execution-consent marker, for the same reason.
+
+**Never create it, never offer to create it, and never ask for permission to create it** - ask
+the USER to run one of these in their own terminal:
+
+```
+touch VSIT/engagements/<slug>/.human-sign-off                              # macOS / Linux
+New-Item -ItemType File VSIT/engagements/<slug>/.human-sign-off            # Windows PowerShell
+```
+
+Then, and only then:
+
+```
+<python> -m scripts.engagement_state sign-off --by "<the human's name>" --slug <slug>
+```
+
+Until the marker exists, the truthful close state is **PARTIAL with "human sign-off"
+outstanding** - say that plainly rather than implying the pack is signed.
+
 ## Evidence Room (only when the project opted in)
 
 Projects that set `"evidence_room": true` get one self-contained HTML pack assembling the

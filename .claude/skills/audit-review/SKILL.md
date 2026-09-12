@@ -121,3 +121,11 @@ together with its index row via `<python> -m scripts.engagement_state init` + `a
 signed off as Morgan, then `<python> -m scripts.check_artifacts --fix` and act on whatever it
 still flags. A pause on unanswered user input is ⛔ BLOCKED said out loud, interim output takes
 pass-scoped names, and `delivery-report.md` + the summary email are written at ✅ close only.
+
+**If a reviewer pass crashes, times out or returns nothing:** re-dispatch it **once**; if the
+second attempt also fails, STOP and tell the user which pass failed (error text verbatim),
+record `REVIEW-INCOMPLETE` in the log and the pack's `limitations`, retag every downstream
+finding 🧠 inferred, and say "REVIEW-INCOMPLETE - <pass> did not run" in the verdict. Then
+check the retag mechanically with `<python> -m scripts.eval_score --check-tag-basis
+<pack>.jsonl` (exits 1 if a finding still claims `basis: measured`). Full rule:
+`.claude/skills/.shared/workflow-dispatch.md` §A reviewer pass that crashes.

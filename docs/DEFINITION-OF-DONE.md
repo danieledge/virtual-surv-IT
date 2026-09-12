@@ -282,7 +282,58 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       the staleness budget, basis tags, secrets) is part of the
       `python -m scripts.check_artifacts` gate.
 - [ ] **Signed off** - human approval recorded at the gate; nothing touching live systems
-      proceeds without it.
+      proceeds without it. **The team cannot record this for itself**: `engagement_state
+      sign-off` writes the ratification only once the human has created
+      `VSIT/engagements/<slug>/.human-sign-off`, and `guard-consent-writes.py` blocks the
+      model from creating that filename by any route (Write, Edit or a shell redirect) - the
+      same shape as the execution-consent marker, for the same reason. Ask the user to run
+      `touch VSIT/engagements/<slug>/.human-sign-off` (or `New-Item -ItemType File ...` on
+      Windows) themselves; never create it, never offer to. Until it exists, the truthful
+      close state is PARTIAL with "human sign-off" outstanding.
+
+## HARD or ADVISORY - what actually enforces each item
+
+Every line above is a requirement. They are **not** equally enforced, and pretending otherwise is
+how a checklist stops being a gate. HARD means something mechanical refuses or reports when the
+item is missing, and names the file that does it. ADVISORY means the only thing holding the item
+up is the model following prose - a reviewer, or the human at the gate, is the check.
+
+State current as of 2026-09-12, after the audit-remediation pass.
+
+| DoD item | HARD / ADVISORY | Mechanism (file) |
+|---|---|---|
+| Briefed | ADVISORY | Skill prose (`.claude/skills/.shared/engagement-bookends.md` standard open). No finding code checks a brief exists. |
+| Traceable (RTM) | HARD | `scripts/validate_rtm.py`, run at the DoD gate; `scripts/check_citations.py` for pinpoint citations. |
+| Open questions dispositioned | ADVISORY | Skill prose + `compliance-reviewer`'s read. Nothing counts dangling questions. |
+| Tested | ADVISORY | Prose. `check_artifacts` cannot tell a passing suite from a claimed one; the QA handover is the evidence a human reads. |
+| Independently QA'd | HARD (partly) | `QA-QUICK-NOT-PARTIAL`, `QA-LEVEL-UNDECLARED` in `scripts/check_artifacts.py`. The *independence* and *evidence-preservation* halves stay ADVISORY. |
+| Code-reviewed (deep) | HARD (partly) | `PACK-UNSCORED` + findings-pack schema checks (`scripts/validate_findings.py`). That a review actually RAN is advisory; that its pack is well-formed and scored is mechanical. |
+| Unattended runs close PARTIAL | HARD | `AUTO-NOT-PARTIAL`, `AUTO-LEDGER-MISSING` in `scripts/check_artifacts.py`; the `--auto` flag is recorded by the launcher, not the run. |
+| Critiqued against the named standard | ADVISORY | Opt-in preference; prose only when on. |
+| Audit-compatible skeleton | HARD (partly) | Report shape is rendered from the pack by `check_artifacts --fix`, so the sections exist; their CONTENT is advisory. |
+| Independent synthesis read (Audit) | ADVISORY | Skill prose (`/audit-review` step 6). Nothing checks who read the pack. |
+| Performance-reviewed | ADVISORY | Prose, plus the basis rule below. |
+| Evidence tags match tooling coverage | HARD | `python -m scripts.eval_score --check-tag-basis <pack>.jsonl` - exits 1 when the pack records a tool or pass as missing/skipped/failed while a finding still claims `basis: measured` (W-9). |
+| Compliance-reviewed | ADVISORY | Routing prose. Conditional on deliverable type, which no checker can determine. |
+| Documented for handover | ADVISORY | Prose; `compliance-reviewer` reads it at the gate. |
+| Handover docs clear & usable | ADVISORY | Judgement by definition - a reviewer's read, never a checker's. |
+| Indexed (living START-HERE) | HARD | `MISSING-INDEX`, `STALE-INDEX`, `STATE-STALE-RENDER`, `INDEX-HAND-EDITED`, `REGISTRY-STALE` (`scripts/check_artifacts.py`); the render is hash-verified. |
+| Stateful | HARD | `INDEX-NO-STATUS`, `FINAL-BEFORE-CLOSE`, `SUMMARY-BEFORE-CLOSE`, `STATE-INVALID`; `set-status closed` validates and rolls back. |
+| Distributable (.md + .html) | HARD | `MISSING-HTML` + `check_artifacts --fix` auto-renders. |
+| Reconciled at close | HARD (partly) | `STALE-DOCSTATUS` covers document-control Status fields only. The sweep itself is ADVISORY. |
+| Engagement-summary email | HARD | Presence, `.txt` naming and close-window timing checked (`SUMMARY-BEFORE-CLOSE`, auto-renamed by `--fix`). Its content is advisory. |
+| Codebase map updated | HARD (partly) | Size, provenance, anchor resolution, staleness budget, basis tags and secrets are checked (`MAP-*`); whether the map is CORRECT is advisory. Anchors are fingerprinted by `scripts/repo_skeleton.py --fingerprint`. |
+| Dispatch budget respected | HARD | `engagement_state record-dispatch` is written by the PostToolUse Task hook (`subagent_return_budget.py`), not by the session; `budget-status` exits 3 past the cap and the gate reports `DISPATCH-OVER-BUDGET`. **The hook is PostToolUse and cannot BLOCK a dispatch** - it counts and reports. |
+| DoD backstop at turn end | HARD (bounded) | `dod_stop_gate.py` blocks at stop while findings are open; the suppression note no longer silences it, and it gives up after 3 blocks per engagement, recording `DOD-GATE-EXHAUSTED`. After that it warns rather than blocks - deliberately, so a stuck session can still end. |
+| Signed off | HARD | `engagement_state sign-off` requires the human-created `<pack>/.human-sign-off`; `guard-consent-writes.py` blocks the model from creating that filename. |
+
+**What is still ADVISORY, said plainly.** That a brief exists; that tests were actually run and
+passed; that the QA reviewer was genuinely independent and its evidence survived; that a review
+pass genuinely ran at the stated depth; that the standards critique, the compliance routing, the
+independent synthesis read and the close-time reconciliation sweep happened; and that any of the
+prose in any artifact is true. Those rest on the model following its instructions and on the
+human reading the pack. The mechanical gates check SHAPE, TIMING and INTERNAL CONSISTENCY - they
+do not check that work was done, and no amount of tightening them will.
 
 ## When execution consent is withheld (static-only mode)
 

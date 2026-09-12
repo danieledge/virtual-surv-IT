@@ -2,8 +2,8 @@
 name: tuning-analyst
 description: >
   When the team is engaged, use for threshold calibration and alert tuning - ATL/BTL testing,
-  risk-based segmentation, dry-run analysis, false-positive reduction and model-performance MI -
-  quantifying the volume-coverage trade-off. Also the data work for TM model validation.
+  risk-based segmentation, dry-run analysis, false-positive reduction and model-performance MI.
+  Also the data work for TM model validation.
 tools: Read, Write, Bash, Grep, Glob
 model: sonnet
 ---

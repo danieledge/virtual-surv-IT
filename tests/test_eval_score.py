@@ -359,3 +359,111 @@ def test_severity_floor_still_bites_on_graded_findings():
     assert eval_score._matches(
         spec, {"severity": "critical", "title": "hardcoded key", "kind": "security"}
     )
+
+
+# ----------------------------------------- W-19: keyword matching is left-anchored now
+
+
+def test_w19_a_keyword_no_longer_fires_from_inside_a_longer_word():
+    """The deterministic layer matched bare substrings, so a short keyword fired from
+    inside an unrelated word. 'just' must not be satisfied by 'adjust'."""
+    spec = {"keywords": ["just"]}
+    assert not eval_score._matches(spec, {"title": "adjusted the threshold", "kind": "prose"})
+    assert eval_score._matches(spec, {"title": "just the builder and a reviewer", "kind": "prose"})
+
+
+def test_w19_prefix_style_keywords_still_match_inflections():
+    """Left-anchored only, deliberately: the manifests rely on open-ended right-hand
+    matching, so a prefix keyword must keep catching its inflections."""
+    spec = {"keywords": ["traceab"]}
+    assert eval_score._matches(spec, {"title": "traceability is intact", "kind": "prose"})
+    assert eval_score._matches(spec, {"title": "the rule is traceable", "kind": "prose"})
+
+
+def test_w19_a_keyword_starting_with_punctuation_still_matches():
+    """No word boundary exists to the left of '/' or an emoji - asserting one there would
+    make the keyword unmatchable."""
+    assert eval_score._matches(
+        {"keywords": ["/engage"]}, {"title": "run /engage first", "kind": "prose"}
+    )
+    assert eval_score._matches({"keywords": ["🔴"]}, {"title": "🔴 critical", "kind": "prose"})
+
+
+def test_w19_exclude_keywords_are_anchored_the_same_way():
+    """The exclusion list is the mirror of the keyword list; anchoring one and not the
+    other would make a mention-guard fire on a word it was never meant to see."""
+    spec = {"keywords": ["threshold"], "exclude_keywords": ["fix"]}
+    # "prefix" must not satisfy the "fix" exclusion.
+    assert eval_score._matches(spec, {"title": "threshold prefix is wrong", "kind": "prose"})
+    assert not eval_score._matches(spec, {"title": "threshold fix applied", "kind": "prose"})
+
+
+# -------------------------------------- W-9: evidence tag vs recorded tooling coverage
+
+
+def test_w9_measured_finding_with_a_missing_analyser_is_flagged():
+    """A tool that never ran cannot evidence a measured finding. The retag was prose in one
+    agent prompt; this is the mechanical half."""
+    records = [
+        {
+            "slug": "x",
+            "kind": "code",
+            "tooling_coverage": "ruff, mypy run; bandit MISSING on this host",
+            "findings": [{"id": "SEC-1", "basis": "measured"}],
+        }
+    ]
+    problems = eval_score.check_tag_basis(records)
+    assert problems and "TAG-BASIS-OVERSTATED" in problems[0]
+    assert "SEC-1" in problems[0]
+
+
+def test_w9_inferred_and_coded_findings_are_never_flagged():
+    """The other direction: only 'measured' asserts that something ran."""
+    records = [
+        {
+            "slug": "x",
+            "tooling_coverage": "bandit unavailable",
+            "findings": [
+                {"id": "A", "basis": "inferred"},
+                {"id": "B", "basis": "coded"},
+            ],
+        }
+    ]
+    assert eval_score.check_tag_basis(records) == []
+
+
+def test_w9_full_tool_coverage_allows_measured_findings():
+    records = [
+        {
+            "slug": "x",
+            "tooling_coverage": "ruff, mypy, bandit, shellcheck all run",
+            "findings": [{"id": "A", "basis": "measured"}],
+        }
+    ]
+    assert eval_score.check_tag_basis(records) == []
+
+
+def test_w9_review_incomplete_in_limitations_also_arms_the_check():
+    """A crashed reviewer pass is the W-8 half of the same problem - REVIEW-INCOMPLETE in
+    the pack's own limitations must invalidate a measured claim just as a missing analyser
+    does."""
+    records = [
+        {"slug": "x", "limitations": "REVIEW-INCOMPLETE: the performance pass failed twice"},
+        {"id": "PERF-1", "basis": "measured"},
+    ]
+    problems = eval_score.check_tag_basis(records)
+    assert problems and "PERF-1" in problems[0]
+
+
+def test_w9_jsonl_pack_round_trips_through_the_cli(tmp_path):
+    pack = tmp_path / "findings-x.jsonl"
+    pack.write_text(
+        '{"slug": "x", "tooling_coverage": "bandit skipped"}\n{"id": "A", "basis": "measured"}\n',
+        encoding="utf-8",
+    )
+    assert eval_score._main(["--check-tag-basis", str(pack)]) == 1
+    pack.write_text(
+        '{"slug": "x", "tooling_coverage": "all analysers run"}\n{"id": "A", "basis": "measured"}\n',
+        encoding="utf-8",
+    )
+    assert eval_score._main(["--check-tag-basis", str(pack)]) == 0

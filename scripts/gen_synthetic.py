@@ -180,7 +180,9 @@ def main() -> None:
 
     events = _KINDS[args.kind](seed=args.seed)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(_to_jsonl(events))
+    # Explicit encoding: without it Windows writes cp1252 and the JSONL stops being
+    # readable by everything downstream that (correctly) assumes UTF-8.
+    args.out.write_text(_to_jsonl(events), encoding="utf-8")
     print(f"Wrote {len(events)} synthetic events ({args.kind}) -> {args.out}")
 
 
