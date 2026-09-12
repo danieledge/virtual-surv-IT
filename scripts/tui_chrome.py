@@ -285,8 +285,17 @@ def hold_for_reader(stream=None, prompt: str = "       Press Enter to continue..
             return
     except Exception:  # noqa: BLE001 - a stream that cannot answer is a no
         return
+    # The prompt goes to the caller's stream by hand. input(prompt) writes its prompt to
+    # STDOUT whatever stream the caller chose, and `virt-surv go` runs inside `$(...)`: the
+    # words "Press Enter to go back to the menu..." were captured with the launch decision
+    # and handed to Claude Code as the opening prompt (live report with a photo, 2026-09-12).
     try:
-        input(prompt)
+        target.write(prompt)
+        target.flush()
+    except Exception:  # noqa: BLE001 - a pause must never cost the caller  # nosec B110 - a pause must never cost the caller
+        pass
+    try:
+        input()
     except (EOFError, KeyboardInterrupt):
         try:
             print("", file=target)

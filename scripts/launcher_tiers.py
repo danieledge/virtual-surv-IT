@@ -1892,7 +1892,12 @@ class PreflightApp(TierApp):
         self._value_of = value_of
         self._caps = caps
         self._on_budget = on_budget
-        self._modes = modes
+        # Not `_modes`: that is Textual's own private attribute on App (its screen-mode
+        # registry, a dict it clears on shutdown). Storing our tuple under that name made
+        # every run end in "'tuple' object has no attribute 'clear'" AFTER the screen had
+        # drawn, and the gate degraded to an attended launch (live report with a photo,
+        # corp Windows laptop, 2026-09-12; reproduced headlessly the same evening).
+        self._mode_options = modes
         self.confirmed = False
         self.ran = False
 
@@ -1961,7 +1966,7 @@ class PreflightApp(TierApp):
             elif name == "cap":
                 self.state["cap"] = (self.state["cap"] + 1) % len(self._caps)
             elif name == "mode":
-                self.state["mode"] = (self.state["mode"] + 1) % len(self._modes)
+                self.state["mode"] = (self.state["mode"] + 1) % len(self._mode_options)
             else:
                 self.state["on_budget"] = (self.state["on_budget"] + 1) % len(self._on_budget)
         else:

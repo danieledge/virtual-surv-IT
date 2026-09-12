@@ -952,10 +952,34 @@ def _stamp_team_session(project_dir: Path) -> None:
     try:
         art = _vsit_paths().engagements_dir(project_dir)
         art.mkdir(parents=True, exist_ok=True)
-        (art / ".team-session.json").write_text(
-            json.dumps({"session": sid, "stamped": _dt.date.today().isoformat()}) + "\n",
-            encoding="utf-8",
-        )
+        stamp = art / ".team-session.json"
+        # LIST FORMAT, appended (2026-09-12 audit, H-13). engagement_state moved the stamp
+        # to a capped list of session ids so two sessions in one project both stay armed,
+        # and this duplicate kept writing the single-id shape - so every probe run REPLACED
+        # the list with one id and disarmed every other session. Same record shape as
+        # engagement_state.stamp_team_session, newest first, capped at eight, the legacy
+        # keys kept for readers that only know the old shape.
+        try:
+            existing = json.loads(stamp.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 - absent or unreadable: start a fresh stamp
+            existing = {}
+        entries: list = []
+        if isinstance(existing, dict):
+            for e in existing.get("sessions") or []:
+                if isinstance(e, dict) and isinstance(e.get("id"), str) and e["id"] != sid:
+                    entries.append({"id": e["id"], "stamped_at": str(e.get("stamped_at") or "")})
+            legacy = existing.get("session_id") or existing.get("session")
+            if isinstance(legacy, str) and legacy and legacy != sid:
+                if not any(e["id"] == legacy for e in entries):
+                    entries.append({"id": legacy, "stamped_at": str(existing.get("stamped") or "")})
+        now = _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")
+        record = {
+            "session_id": sid,
+            "session": sid,
+            "stamped": _dt.date.today().isoformat(),
+            "sessions": [{"id": sid, "stamped_at": now}, *entries][:8],
+        }
+        stamp.write_text(json.dumps(record) + "\n", encoding="utf-8")
     except OSError:
         pass  # advisory - never fail the probe over it
 

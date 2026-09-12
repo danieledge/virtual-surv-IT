@@ -2146,7 +2146,11 @@ def _hold_for_reader() -> None:
     except Exception:  # noqa: BLE001
         return
     try:
-        input("       Press Enter to go back to the menu... ")
+        # To stderr by hand: input(prompt) writes to stdout, which is the alias capture
+        # pipe here (same leak tui_chrome.hold_for_reader documents, 2026-09-12).
+        sys.stderr.write("       Press Enter to go back to the menu... ")
+        sys.stderr.flush()
+        input()
     except (EOFError, KeyboardInterrupt):
         print("", file=sys.stderr)
 
@@ -5427,6 +5431,22 @@ def main() -> int:
         _progress("pre-computing the engagement probe...")
         _write_probe_cache(project_dir)
     except Exception:  # nosec B110 - probe-cache write is advisory; recompute is always the fallback
+        pass
+    # SAID, not assumed (live report with a photo, 2026-09-12). The write above is
+    # best-effort and silent by design, so when it had not produced a file the launch
+    # went ahead as if it had, and the session then spent its opening minutes on the
+    # slow in-session probe with nobody told why. One line here costs nothing and
+    # names the fallback the human is about to sit through.
+    try:
+        probe_file = _vsit_paths().local_file("engage_probe", project_dir)
+        if not probe_file.is_file():
+            print(
+                "  ! no probe cache was written for this project - the session will run "
+                "the engagement probe itself (slower on a corporate box). If this repeats, "
+                "run: virt-surv doctor",
+                file=sys.stderr,
+            )
+    except Exception:  # nosec B110 - the note is advisory; never let it cost the launch
         pass
     try:
         _progress("checking installed tools...")

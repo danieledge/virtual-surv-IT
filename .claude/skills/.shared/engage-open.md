@@ -29,8 +29,12 @@ never appears), use those values directly and skip the bootstrap fallback entire
 data, zero tool calls.
 
 **No injected block? Try the go-written probe cache next (2026-08-18, the corp fast
-path - the live probe can take minutes on corporate boxes):** Read the FILE
-`VSIT/local/engage-probe.json` (one Read call, no shell). If it exists, its
+path - the live probe can take minutes on corporate boxes):** Read the FILE under the
+**PROJECT root** (the directory this session was launched in, `${CLAUDE_PROJECT_DIR}`,
+never the plugin's own clone): `VSIT/local/engage-probe.json`, and if that path does not
+exist, `.claude/engage-probe.json` (the legacy layout; the launcher writes whichever the
+project uses). One Read call each, no shell. A live session was seen reading it under the
+plugin clone instead (2026-09-12) and finding nothing. If it exists, its
 `computed_at` is recent (same day and plausibly within the hour - the hook applies the
 exact TTL and identity fingerprint mechanically; your direct read is the fallback, so be
 conservative) and nothing suggests the branch or plugin version moved since `computed_at`,
