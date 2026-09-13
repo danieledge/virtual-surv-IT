@@ -140,3 +140,22 @@ def test_bad_stdin_fails_open(monkeypatch, capsys):
     mod = _load()
     monkeypatch.setattr("sys.stdin", io.StringIO("not json"))
     assert mod.main() == 0
+
+
+def test_docx_named_in_a_note_or_piped_head_is_not_hand_parsing(tmp_path, monkeypatch, capsys):
+    """2026-09-13: a `set-decision "...Report (.md + .html + .docx)" && ... show ... | head`
+    was blocked because .docx (in the quoted note) and `head` (on a different chained command)
+    co-occurred. The verb must operate ON the document; a note mention and a cross-command head
+    do not. Real hand-parsing stays blocked."""
+    _live_engagement(tmp_path)
+    allowed = (
+        'py es.py set-decision k "Consolidated Delivery Report (.md + .html + .docx)" '
+        "&& py es.py show --slug x 2>&1 | head -5",
+        'py es.py set-decision k "convert report.docx by hand? no" --slug x',
+    )
+    for cmd in allowed:
+        rc, _ = _run(monkeypatch, capsys, _bash(cmd), tmp_path)
+        assert rc == 0, cmd
+    for cmd in ("cat report.docx", "Get-Content spec.docx"):
+        rc, _ = _run(monkeypatch, capsys, _bash(cmd), tmp_path)
+        assert rc == 2, cmd
