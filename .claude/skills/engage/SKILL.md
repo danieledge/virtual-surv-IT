@@ -56,6 +56,11 @@ unambiguous, there is nothing to ask: banner, then straight to the work.
 `$PLUGIN_ROOT/.claude/skills/engage/references/<file>` (the probe prints `PLUGIN_ROOT=`).
 Never `$PLUGIN_ROOT/references/<file>` and never relative to the working directory - a
 live `--auto` open on 2026-09-12 spent four failed Reads guessing before it found them.
+Two locations exist in a session, the project root (your cwd) and `PLUGIN_ROOT`, and you
+were given both; nothing else is yours to enter. In particular the interpreter path on the
+probe's `PYTHON=` line says where Python lives, not where the team or the project lives:
+a plugin-mode eval on 2026-09-13 opened with `cd` into the directory above that interpreter
+and searched it for the user's file.
 
 **0a. Safety gates - two verbatim disclaimers + the consent-intent question (CLAUDE.md §5 + §7).**
 When a target exists and code/data is involved, read `references/safety-gates.md` (this skill's
@@ -396,7 +401,11 @@ and costs no console space; the STATE still lives in engagement-state.json.
 scope and why it binds every delegation not just a planned fan-out: operating guide,
 Orchestration discipline): before **any** delegation, state in one line **how many agents you
 intend to spawn and why, naming the specialist that matches the deliverable per the routing table
-in the operating guide** - never a habitual default. `rules-developer` is for detection-rule/scenario logic
+in the operating guide** - never a habitual default. **The line has a fixed shape and it is the
+FIRST line of the message that makes the dispatch call**: `🎩 Dispatching N: <names> - <why N,
+in a clause>`. A dispatch call whose message does not open with that line is the miss the
+process-discipline eval fails on (2026-09-12: a task list stood in for it and four agents went
+out with no count stated). `rules-developer` is for detection-rule/scenario logic
 specifically (*"this is a one-file rule tweak - I'll use just rules-developer + code-reviewer, not
 the full team"*); a generic script or general application code with no surveillance-domain
 deliverable at all still routes to a builder - `platform-engineer` + `code-reviewer` - never

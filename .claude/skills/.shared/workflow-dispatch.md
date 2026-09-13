@@ -15,6 +15,14 @@ passes genuinely run concurrently. Trade-off (accepted): Workflow is **always as
 the call returns a task id immediately and the result arrives later as a background task
 notification. There is no synchronous mode.
 
+## The line that comes first, whichever path runs
+
+Before the Workflow call or the first Task call of a fan-out, the message opens with the
+right-sizing line in its fixed shape: `🎩 Dispatching N: <names> - <why N, in a clause>`. It is
+the operating guide's rule made a habit of position rather than memory: a task list, a plan, or
+"dispatching both now" is not it (2026-09-12: a four-agent fan-out went out behind an implicit
+task list and the process-discipline eval failed the case on exactly that line).
+
 ## When to use it
 
 Use this path when **both** hold:

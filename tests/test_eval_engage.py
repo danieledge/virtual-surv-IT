@@ -793,16 +793,23 @@ def test_plugin_cache_copy_excludes_the_ground_truth_and_the_bulk(tmp_path):
         assert (copy / "docs" / "guide.md").is_file()
 
 
-def test_plugin_client_project_is_empty_until_a_fixture_lands(tmp_path):
+def test_plugin_client_project_holds_only_what_go_leaves_until_a_fixture_lands(tmp_path):
+    """The client project starts the way `virt-surv go` leaves a fresh one: nothing but the
+    guard's warmed interpreter cache under VSIT/local (first live run, 2026-09-13: without it
+    the prefetch hook is silent by design and the missing-injection tripwire fired on a
+    correct open). No workspace, no probe cache, no code."""
     layout = _layout(tmp_path)
     assert layout.project.is_dir()
-    assert list(layout.project.iterdir()) == []
+    assert [p.name for p in layout.project.iterdir()] == ["VSIT"]
+    cache = ee._vsit_paths().local_file("guard_interpreter", layout.project)
+    assert cache.is_file() and cache.read_text(encoding="utf-8").strip()
+    assert not any(p for p in (layout.project / "VSIT").rglob("*") if p.name.startswith("engage"))
 
     fixtures = tmp_path / "fixtures"
     fixtures.mkdir()
     (fixtures / "alert_threshold_check.py").write_text("x = 1\n", encoding="utf-8")
     ee.overlay_fixtures(fixtures, layout.project)
-    assert [p.name for p in layout.project.iterdir()] == ["alert_threshold_check.py"]
+    assert sorted(p.name for p in layout.project.iterdir()) == ["VSIT", "alert_threshold_check.py"]
 
 
 def test_plugin_layout_never_writes_outside_its_own_root(tmp_path):

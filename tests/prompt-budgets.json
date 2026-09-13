@@ -117,7 +117,7 @@
     ".claude/skills/.shared/workflow-dispatch.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 2750
+      "baseline_tokens": 3278
     },
     ".claude/skills/analyse-data/SKILL.md": {
       "tier": "ROUTE_TIME",

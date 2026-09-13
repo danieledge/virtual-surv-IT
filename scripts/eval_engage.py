@@ -584,6 +584,13 @@ def build_plugin_layout(
     cache_dir.parent.mkdir(parents=True, exist_ok=True)
     copy_plugin_tree(marketplace_dir, cache_dir, excludes=())
     project.mkdir(parents=True, exist_ok=True)
+    # The guard's interpreter cache is warmed the way `virt-surv go` warms it before EVERY
+    # session (first live run of this case, 2026-09-13): the UserPromptSubmit prefetch hook
+    # only injects the probe once that cache exists, so a layout without it produced a
+    # correct-by-design silent open and the missing-injection tripwire fired on nothing.
+    # A default install always goes through `go`, which is why the cache is part of the
+    # layout and not a variant.
+    warm_guard_interpreter(layout)
 
     stamp = _iso_now()
     layout.registry_file.parent.mkdir(parents=True, exist_ok=True)
@@ -654,6 +661,41 @@ def session_interpreter() -> str:
         if hit:
             return Path(hit).as_posix()
     return Path(sys.executable).as_posix()
+
+
+def warm_guard_interpreter(layout: PluginLayout) -> Path:
+    """Seed the client project's guard-interpreter cache with this interpreter, exactly as
+    virt_team_launcher._prewarm_guard_interpreter does at `go`: the prefetch hook reads it
+    to run the probe out of process, and stays silent without it."""
+    cache = _vsit_paths().local_file("guard_interpreter", layout.project)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(neutral_interpreter(layout).as_posix() + "\n", encoding="utf-8")
+    return cache
+
+
+def neutral_interpreter(layout: PluginLayout) -> Path:
+    """An interpreter path that names nothing about this machine's checkout.
+
+    First live run of the plugin-mode case (2026-09-13): the cache carried the dev venv's
+    python, `<dev checkout>/.venv/bin/python`, the probe printed it on its PYTHON= line, and
+    the session's first command was `cd <dev checkout>` to look for the team's docs and the
+    user's file there. A real install's interpreter is a system Python; nothing in its path
+    points at a checkout. On POSIX a symlink in the throwaway home's own bin stands in for
+    it; on Windows a symlink needs a privilege the VM may not grant and a copied python.exe
+    does not run without its DLLs, so sys.executable stays (it is a system install there).
+    """
+    if os.name == "nt":
+        return Path(sys.executable)
+    shim_dir = layout.home / ".local" / "bin"
+    shim_dir.mkdir(parents=True, exist_ok=True)
+    shim = shim_dir / "python3"
+    try:
+        if shim.is_symlink() or shim.exists():
+            shim.unlink()
+        shim.symlink_to(Path(sys.executable).resolve())
+        return shim
+    except OSError:
+        return Path(sys.executable)
 
 
 def write_probe_cache(layout: PluginLayout) -> Path:

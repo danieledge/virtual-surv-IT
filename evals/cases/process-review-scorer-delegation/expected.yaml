@@ -2,6 +2,11 @@ case: process-review-scorer-delegation
 workflow: /engage
 rubric: process-discipline
 input: scenario.md
+# Per-case wall clock (harness config, not a scoring criterion). A deep plus performance review
+# with a re-review round is four fan-outs and, on sonnet, ran 2405s on 2026-09-12 - five seconds
+# past the 2400s default - so the close never happened and the judge could not credit the
+# closing artifacts. 4800 gives the close room; the budget is the real stop.
+timeout_s: 4800
 description: >
   Behaviour case - the model-tiering rule in docs/code-review-method.md: "the review skills
   delegate [context/language detection and scoring/filtering] to the review-scorer (haiku)

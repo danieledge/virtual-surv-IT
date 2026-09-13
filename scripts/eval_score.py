@@ -562,15 +562,36 @@ def _detect_plugin_path_guess(ctx: TripwireContext) -> list[str]:
     if not plugin_root:
         return []
     results = tool_results(ctx.events)
-    errored = {r["tool_use_id"] for r in results if r["tool_use_id"] and _looks_missing(r["text"])}
+    errored = {
+        r["tool_use_id"]: r["text"]
+        for r in results
+        if r["tool_use_id"] and _looks_missing(r["text"])
+    }
+    project_root = _norm_path(ctx.project_root) if getattr(ctx, "project_root", "") else ""
     hits: list[str] = []
     for call in tool_calls(ctx.events):
         if call["name"] not in ("Read", "Bash") or call["id"] not in errored:
             continue
         for path in _call_paths(call):
-            if plugin_root in _norm_path(path):
-                hits.append(f"{call['name']} errored on a plugin-root path: {_quote(path)}")
-                break
+            if plugin_root not in _norm_path(path):
+                continue
+            if call["name"] == "Bash":
+                # A Bash command can name several paths (first live run of the plugin-mode
+                # case, 2026-09-13: one command listed the project's docs/ AND the plugin's,
+                # and only the project's was missing). The path the error names decides;
+                # a command whose error names none is a hit only if it mentions no project
+                # path either.
+                named = [
+                    _norm_path(p)
+                    for p in re.findall(r"(?:[A-Za-z]:)?[\\/][^\s:'\"`]+", errored[call["id"]])
+                ]
+                if named:
+                    if not any(plugin_root in p for p in named):
+                        continue
+                elif project_root and project_root in _norm_path(path):
+                    continue
+            hits.append(f"{call['name']} errored on a plugin-root path: {_quote(path)}")
+            break
     if hits:
         return hits
     # Fallback for a capture with no usable tool ids: an error text that itself names a path
