@@ -60,11 +60,11 @@ session's very first turn). **Go-ahead gate stays** - one
 single-select question (Proceed / Adjust / Stop).
 
 **3. Deliver lean.** Right-size out loud as ever, but capped: **2-3 agents, no parallel
-fan-outs** (typically one builder + one reviewer, or a single analyst). **The security-audit
-fold-in from step 2 is the one deliberate exception to this cap** - if the user picked "review
-+ a dedicated security audit," that is a genuine second specialist pass on top of the 2-3, not
-counted against it (the same logic as light "not lower-safety"); say so out loud when it
-applies rather than leaving the cap looking violated. Evidence tags
+fan-outs** (typically one builder + one reviewer, or a single analyst). There is no exception
+to the cap: if the user picked "review + a dedicated security audit," that audit dispatches
+two reviewers concurrently and is standard-profile work, so apply the upgrade rule below
+(`set-profile standard`, one line saying why) rather than running a fan-out under a light
+banner (2026-09-13 framework review, step 4.8). Evidence tags
 (📊/🧠) and the blocked/⛔ discipline apply unchanged. **If deliverable code is produced, the
 mandatory chain applies in full kind, light in count**: tests (project's own framework,
 command recorded) → ONE code-review pass with fixes → ONE independent QA verification cycle

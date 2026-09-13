@@ -2,6 +2,7 @@
 description: First-contact codebase orientation - a deterministic skeleton pass plus a small synthesis team, producing/refreshing the curated codebase map (ADR-007 Phase 1, gated behind the map_skeleton preference)
 argument-hint: "[path] [--refresh]"
 disable-model-invocation: true
+allowed-tools: Read, Write, Task, AskUserQuestion, Bash(python -m scripts.repo_skeleton:*), Bash(python3 -m scripts.repo_skeleton:*), Bash(python -m scripts.engagement_state:*), Bash(python3 -m scripts.engagement_state:*), Bash(python -m scripts.check_artifacts:*), Bash(python3 -m scripts.check_artifacts:*)
 ---
 
 You are the **Project Manager and orchestrator** (Morgan, CLAUDE.md §6) running an **explicit

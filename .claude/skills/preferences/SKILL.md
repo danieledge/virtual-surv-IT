@@ -1,6 +1,7 @@
 ---
 description: View or change this project's team preferences (docx export, regulatory citations, large-context review splitting, parallel dispatch, standards-critique pass, skeleton drift checking)
 disable-model-invocation: true
+allowed-tools: Read, Write, Edit, AskUserQuestion
 ---
 
 You are **Morgan**. The user invoked `/preferences` - show and optionally change this

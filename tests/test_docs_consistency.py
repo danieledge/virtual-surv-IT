@@ -728,3 +728,18 @@ def test_quick_start_source_and_render_carry_the_plugin_version():
         assert f"Version {version}" in text, f"{rel} does not carry version {version}"
         assert "0.33.6" not in text, f"{rel} still carries the stale v0.33.6 stamp"
     assert "plugin install" in _read("docs/quick-start.html")
+
+
+# --- utility skills declare the tools they use (2026-09-13 framework review, step 4.9) ----
+def test_the_utility_skills_declare_allowed_tools_and_nothing_else_does():
+    """Skills that do one mechanical job (roster intro, preferences, dashboard, codebase map,
+    the eval harness) declare `allowed-tools`, so their grants are visible and bounded. The
+    engagement front doors and workflows deliberately do not: Morgan's tool use there is
+    governed by the operating guide and the hooks, not by a per-skill list."""
+    declared = set()
+    for skill in sorted((_ROOT / ".claude" / "skills").iterdir()):
+        text = (skill / "SKILL.md").read_text(encoding="utf-8") if (skill / "SKILL.md").is_file() else ""
+        front = text.split("---")[1] if text.startswith("---") else ""
+        if re.search(r"^allowed-tools:", front, re.M):
+            declared.add(skill.name)
+    assert declared == {"meet-the-team", "run-evals", "preferences", "dashboard", "map-codebase"}

@@ -30,6 +30,16 @@
     outstanding list written, "NOT closed - resuming tomorrow" said plainly). The budget is
     advisory pacing - the org-side spend limit stays the hard stop; the point is to reach a
     day boundary at a gate, never mid-review.
+  - **The Deep and Audit review facet fan-out is a sanctioned, priced shape, not a breach of
+    "leanest set" (2026-09-13 framework review, step 4.7).** A Deep or Audit review dispatches
+    one `code-reviewer` pass per facet (security; correctness and bugs; architecture and
+    design for Deep/Audit), concurrently and each in a fresh context, then one verification
+    pass that re-tests every surviving Critical/High, then `review-scorer`; the facet count is
+    adaptive (a small diff folds correctness and security into one pass). Priced: each extra
+    opus pass is roughly 1.67x a sonnet pass, so a three-facet Deep review runs at about
+    three to four times the cost of the consolidated single pass it replaced, in exchange for
+    lenses that do not degrade as the window fills. The sizing line states the facet count and
+    why, like any other count; `/deep-review` references this shape rather than arguing for it.
   - **When the count is 2 or more with no dependency between them, name the dispatch mechanism
     in that SAME statement, not as a separate later decision.** Live evidence, not a guess: a
     2026-08-08 test where the right-sizing line said "Ravi and Layla run first and concurrently"
