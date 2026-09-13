@@ -373,3 +373,16 @@ def test_an_alias_cannot_smuggle_execution_or_a_denied_script(tmp_path):
         'P="python"\n$P /tmp/scripts/ingest.py',
     ):
         assert _code(cmd, tmp_path) == BLOCK, cmd
+
+
+def test_an_env_prefixed_command_is_not_an_assignment(tmp_path):
+    """CI on the first applied copy (2026-09-13): `FOO=bar pytest` was read as a pure
+    assignment and allowed. One shell word is an assignment; two or more is a command."""
+    for cmd in (
+        "FOO=bar pytest tests/",
+        "CST_X=1 pwsh -c 'Get-Date'",
+        "A=1 B=2 python evil.py",
+        'export FOO="bar baz" && pytest',
+    ):
+        assert _code(cmd, tmp_path) == BLOCK, cmd
+    assert _code('FOO="bar baz"\necho $FOO', tmp_path) == ALLOW
