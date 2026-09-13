@@ -77,8 +77,11 @@ Review checklist:
 - **Auditability:** every threshold/parameter has a recorded rationale and date; logic is
   traceable from alert → code → regulatory obligation.
 - **Citations grounded, not recalled (ADR-001):** for any deliverable that cites a pinpoint legal
-  reference, run `python -m scripts.check_citations <artifact>` against the regulatory register
-  (`config/regulatory-register.yaml`). The register is a **growing ledger of human-verified
+  reference, run `check_citations <artifact>` (path form under `$PLUGIN_ROOT` in an installed
+  copy). It **resolves the regulatory register itself** (`config/regulatory-register.yaml`, next
+  to the script, plus a project overlay if present) - never go looking for that file, and never
+  `find /` for it; a bundled resource travels with the plugin under `$PLUGIN_ROOT`, not the
+  filesystem. The register is a **growing ledger of human-verified
   citations, NOT a limit on what may be cited** - use your full regulatory knowledge to surface the
   obligation that applies; do **not** suppress a relevant citation just because it isn't listed. A
   pinpoint not in the register is **to-verify**: flag it 🧠 (confirm against the primary source

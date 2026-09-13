@@ -111,7 +111,7 @@ What the result gives you, and the rules attached to each:
 - **Mode.** `PLUGIN_ROOT=repo-as-project` → invoke `<python> -m scripts.<name>`; any other value →
   installed plugin: **every `<python> -m scripts.<name>` in this skill means `<python>
   "$PLUGIN_ROOT/scripts/<name>.py"`** (the module form exits 1 outside the repo, so go straight to
-  the path form), and docs, templates and skill definitions resolve under `$PLUGIN_ROOT` too. The
+  the path form), and every bundled resource - docs, templates, skill definitions, `config/` data and reference files - resolves under `$PLUGIN_ROOT` too (never `find /` for one; it travels with the plugin). The
   execution gate allow-lists team script basenames, so they run consent-free. **Remember
   `PLUGIN_ROOT` for the whole session**, and persist it once the workspace exists (`set-runtime`).
 - **Branch** (`BRANCH=`): populated only when the root is a real git working directory. A
