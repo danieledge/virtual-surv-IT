@@ -714,3 +714,17 @@ def test_readme_why_essay_unchanged():
         "README.md: the Why essay changed - it is locked by owner ruling; revert, or re-pin "
         "only with the owner's explicit instruction"
     )
+
+
+# --- the quick-start page is generated from a Markdown source at the current version ---
+def test_quick_start_source_and_render_carry_the_plugin_version():
+    """docs/quick-start.html sat at v0.33.6 for four releases with no source to regenerate it
+    from (framework review 2026-09-13, fix 5). docs/quick-start.md is now the source, rendered
+    by scripts/render_html.py; both must name the plugin.json version."""
+    plugin = json.loads(_read(".claude-plugin/plugin.json"))
+    version = plugin["version"]
+    for rel in ("docs/quick-start.md", "docs/quick-start.html"):
+        text = _read(rel)
+        assert f"Version {version}" in text, f"{rel} does not carry version {version}"
+        assert "0.33.6" not in text, f"{rel} still carries the stale v0.33.6 stamp"
+    assert "plugin install" in _read("docs/quick-start.html")

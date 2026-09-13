@@ -235,7 +235,7 @@ banner · Windows permission-rule spelling (37).
 Nine `process-plugin-mode-open` rows landed on 2026-09-12/13 with one pass. Six failed on
 the open's own path handling (`plugin-path-guess`, `listing-above-project-root`,
 `FP-MODULEFORM`, `missing-prompt-injection`); the probe now prints `REFERENCES_DIR=` and
-`SHARED_DIR=` and `engage-open.md` forbids reading outside them. The three rows a path rule
+`SHARED_DIR=` and `.claude/skills/.shared/engage-open.md` forbids reading outside them. The three rows a path rule
 does not explain, read from `evals/runs/<id>/process-plugin-mode-open/events.jsonl`:
 
 - `20260913T082312Z` (0 turns, 0 USD): the session's first and only assistant message was

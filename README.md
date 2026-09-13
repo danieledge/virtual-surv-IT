@@ -244,7 +244,6 @@ What the team gives you today, each row tied to where the claim is enforced or d
 
 ## 🚀 Quick start
 
-
 ### Prerequisites
 
 - **Python 3.9 or newer on PATH** (`python`, `python3` or the `py` launcher). The safety guards run on it; a host with no
@@ -256,48 +255,35 @@ What the team gives you today, each row tied to where the claim is enforced or d
 <table>
 <tr><td>
 
-### 🗂️ [Open the one-page Quick-start reference →](docs/quick-start.pdf)
+### Three steps
 
-The whole mental model on a single sheet: how the orchestrator and its subagents fit together,
-the four steps to your first engagement, every command with when to reach for it, and the three
-always-on safety rules. **Renders directly on GitHub** (it's a PDF, opens in the file viewer, no
-extra click) - print it, or keep it open beside your first session.
-
-*Prefer the interactive HTML?* [Open it via htmlpreview](https://htmlpreview.github.io/?https://github.com/danieledge/virtual-surv-IT/blob/dev/docs/quick-start.html)
-(the [plain repo link](docs/quick-start.html) just shows source on GitHub; a local clone opens
-fine in any browser either way).
-
-</td></tr>
-</table>
-
-### 🔌 Install: run the helper, then enable it **per project**
-
-Install once with the helper, then **enable the team only in the projects that use it**, a
-deliberate token-economy step, not an oversight (the "why" is right below).
-
-**1. Get the repo and run the install helper** (from a terminal, not inside Claude Code):
+**1. Install** (from a terminal, not inside Claude Code):
 ```bash
 git clone https://github.com/danieledge/virtual-surv-IT.git
 cd virtual-surv-IT
 python install_helper.py
 ```
+The helper checks the prerequisites, picks a release channel, clones or safely updates, and runs
+the real `claude plugin marketplace add` / `claude plugin install compliance-surveillance-team@virtual-surv-it`
+commands. `--yes` for unattended defaults; `--no-downloads` (or `CST_NO_DOWNLOADS=1`) to fetch no
+analyser binaries at all.
 
-The helper walks the whole flow: preflight (git / claude CLI / network), a persisted
-release-channel pick (**`main`** is the **stable** line; bigger, in-progress changes land first
-on **`dev`** and are promoted to `main` at a release), clone or safe update (it refuses to
-reset a dirty tree), optional `pip install -r requirements-dev.txt`, then the real
-`claude plugin marketplace add` / `claude plugin install compliance-surveillance-team@virtual-surv-it`
-commands - and it closes by listing what stays manual (per-project enablement below, the
-restart; hooks ship pre-wired). Re-runnable; `install`/`update` auto-detect
-from `~/.config/virt-surv-it/installer.json`; `--yes` for non-interactive defaults.
-
-**2. Scope the enablement to the projects that need it.** If the install enabled the plugin at
-**user** scope (check `/plugin`, or `~/.claude/settings.json` → `enabledPlugins`), disable it
-there, and instead enable it **in each project where you want the team**: from that project run
-`/plugin` and enable it *for this project*, or add to that project's `.claude/settings.json`:
+**2. Enable it per project.** From the project you want the team in, run `/plugin` and enable
+**compliance-surveillance-team** *for this project*, or add to that project's `.claude/settings.json`:
 ```json
 { "enabledPlugins": { "compliance-surveillance-team@virtual-surv-it": true } }
 ```
+Not at user scope: every enabled plugin's agent roster loads into every session on the machine.
+
+**3. Start.** Restart Claude Code in that project and type `/compliance-surveillance-team:demo` for a
+narrated engagement on synthetic data, or `/compliance-surveillance-team:engage <what you need>`,
+then reply in plain English; Morgan stays in role for the session. Recommended launch:
+`virt-surv go` from the project folder (the helper's alias step sets it up).
+
+One-page reference: [`docs/quick-start.md`](docs/quick-start.md), also rendered as
+[HTML](docs/quick-start.html) and [PDF](docs/quick-start.pdf).
+
+<details><summary><b>Why per-project, not enabled everywhere</b></summary>
 
 > **Why per-project instead of "enabled everywhere"?** Claude Code loads every enabled plugin's
 > **agent descriptions into every session's context** so it can route work to them; there is no
@@ -309,6 +295,23 @@ there, and instead enable it **in each project where you want the team**: from t
 > projects that actually use it. (The 2026-07-01 setup audit measured the old always-on posture
 > at ~2.7k tokens per session per project, hence this step.)
 
+</details>
+
+<details><summary><b>What the helper does, step by step</b></summary>
+
+The helper walks the whole flow: preflight (git / claude CLI / network), a persisted
+release-channel pick (**`main`** is the **stable** line; bigger, in-progress changes land first
+on **`dev`** and are promoted to `main` at a release), clone or safe update (it refuses to
+reset a dirty tree), optional `pip install -r requirements-dev.txt`, then the real
+`claude plugin marketplace add` / `claude plugin install compliance-surveillance-team@virtual-surv-it`
+commands - and it closes by listing what stays manual (per-project enablement below, the
+restart; hooks ship pre-wired). Re-runnable; `install`/`update` auto-detect
+from `~/.config/virt-surv-it/installer.json`; `--yes` for non-interactive defaults.
+
+</details>
+
+<details><summary><b>Fewer permission prompts (optional)</b></summary>
+
 **Fewer permission prompts (optional).** Without pre-approval, every analyser run and
 helper-script call prompts you, and each "don't ask again" saves the *literal command string*
 as a rule (on Windows that accumulates mixed-path, mixed-quote rules the validator then flags
@@ -317,6 +320,10 @@ for you: `python install_helper.py --permissions <project-dir>` - opt-in, add-on
 backs up the settings file first. (`/permissions` shows every rule and which file it came
 from. Permission rules are Claude Code's prompting layer; the team's execution *gate* is
 separate and stays human-consent-only.)
+
+</details>
+
+<details><summary><b>Fewer timeouts on slow networks or proxies (optional)</b></summary>
 
 **Fewer timeouts on slow networks/proxies (optional).** `python install_helper.py --env-tuning
 <project-dir>` upserts a curated set of Claude Code env vars into the project's
@@ -330,6 +337,10 @@ already wins over the shell on Linux and PowerShell alike), backs up the setting
 any other env var already there, or set with a different value than recommended, is corrected
 in place, and everything unrelated is left untouched.
 
+</details>
+
+<details><summary><b>Verify it works: the self-test (optional)</b></summary>
+
 **Verify it actually works (optional).** `python install_helper.py --selftest` runs a throwaway
 synthetic "review this code" engagement - real guard hooks, an analyser proven to *detect* a
 planted issue (not just stay quiet on clean input), and the full engagement-state lifecycle
@@ -339,6 +350,10 @@ no LLM/Claude Code invocation, no network. On any failure it writes one debug bu
 attached whole instead of a screenshot. Also reachable via Diagnostics → "Self-test" in the
 interactive menu, and folded into `--check-env`'s own comprehensive report - both end with a
 compact pass/fail summary.
+
+</details>
+
+<details><summary><b>Launch with virt-surv go, from anywhere (recommended)</b></summary>
 
 **Run it from anywhere - and launch with `virt-surv go` (recommended).** `python
 install_helper.py setup-alias` offers to add a `virt-surv` alias/function to whichever shell
@@ -360,6 +375,10 @@ choice - on an already-configured project it opens the same settings editor `go`
 automatically, zero prompts), and `virt-surv archive` /
 `virt-surv list-engagements` (bridges to `scripts/engagement_state.py`, scoped to that
 folder) - no need to remember the clone's full path or hunt through the menu.
+
+</details>
+
+<details><summary><b>Invoking the commands, run modes and the data guard</b></summary>
 
 **3. Restart Claude Code and launch. The recommended way is `virt-surv go`** (set up the
 alias in the optional step above) - from your project folder it shows the team settings,
@@ -409,6 +428,8 @@ project. Then just **talk to the PM**. Describe whatever you've got:
 
 > Don't have Claude Code yet? Install it from <https://claude.com/claude-code>.
 
+</details>
+
 <details>
 <summary>⌨️ <b>Manual commands</b> (if you cannot run the helper)</summary>
 
@@ -450,8 +471,6 @@ This mode is for working **on** the team (or running its repo-bound demos), not 
 install path for users - that's the helper above.
 
 </details>
-
-<sub>[↑ Back to top](#readme-top)</sub>
 
 ## 👥 Meet the team
 
