@@ -175,3 +175,7 @@ virt-surv-*-diagnostic-*.txt
 # Independent automation/workflow audit commissioned 2026-09-12 - internal assessment, same
 # treatment as the other docs/internal reviews above (report, per-lane findings, test log).
 docs/internal/independent-audit-2026-09-12/
+
+# Best-in-class framework review commissioned 2026-09-13 (report, plan to ten, rendered html) -
+# internal assessment, same treatment as the other docs/internal reviews above.
+docs/internal/framework-review-2026-09-13/

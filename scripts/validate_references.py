@@ -221,6 +221,9 @@ _SKIP_PARTS = (
     # Local-only audit workspaces (gitignored): the per-lane findings quote paths from the
     # code under review and from hypotheticals, and are a record, not the prompt surface.
     "/independent-audit-",
+    # Same treatment for the local-only framework review of 2026-09-13 (review, plan,
+    # challenge): a plan cites files it proposes, which do not exist until it is executed.
+    "/framework-review-",
 )
 
 
