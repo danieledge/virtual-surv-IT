@@ -476,5 +476,41 @@
       "loads_per_engagement": 1.0,
       "baseline_tokens": 4314
     }
+  },
+  "aggregates": {
+    "notes": "Whole-load ceilings (2026-09-13 framework review, step 4.10): the bytes a session has read before the user's first word (turn0_engage) and after the normal read triggers of a typical engagement (engaged_typical). growth_tolerance here is 0.05: these move DOWN by design (plan step 4.4) and never drift up unnoticed. Re-pinned by --pin.",
+    "growth_tolerance": 0.05,
+    "turn0_engage": {
+      "files": [
+        "CLAUDE.md",
+        ".claude/skills/engage/SKILL.md",
+        ".claude/skills/.shared/engage-open.md",
+        "docs/team-operating-guide.md"
+      ],
+      "baseline_bytes": 85567
+    },
+    "engaged_typical": {
+      "files": [
+        "CLAUDE.md",
+        ".claude/skills/engage/SKILL.md",
+        ".claude/skills/.shared/engage-open.md",
+        "docs/team-operating-guide.md",
+        "docs/team-operating-guide-orchestration.md",
+        ".claude/skills/.shared/engagement-bookends.md",
+        ".claude/skills/.shared/run-mode.md",
+        "docs/operating-guide.d/artifacts-lifecycle.md",
+        "docs/operating-guide.d/command-index.md",
+        "docs/operating-guide.d/delivery-standards.md",
+        "docs/operating-guide.d/run-mode-detail.md",
+        "docs/operating-guide.d/untrusted-content.md",
+        ".claude/skills/engage/references/review-menu.md",
+        ".claude/skills/engage/references/safety-gates.md",
+        ".claude/skills/engage/references/close-checklist.md",
+        ".claude/skills/engage/references/artifact-menu.md",
+        ".claude/skills/engage/references/target-menu.md",
+        ".claude/skills/engage/references/resume-menu.md"
+      ],
+      "baseline_bytes": 193392
+    }
   }
 }

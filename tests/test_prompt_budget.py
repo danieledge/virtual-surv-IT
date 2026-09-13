@@ -183,7 +183,42 @@ def _pin() -> dict:
         "extra_tracked": old.get("extra_tracked", []),
         "tier_budgets": tier_budgets,
         "files": files,
+        "aggregates": _repin_aggregates(old.get("aggregates", {})),
     }
+
+
+def _aggregate_bytes(files: list[str]) -> int:
+    return sum((REPO_ROOT / rel).stat().st_size for rel in files if (REPO_ROOT / rel).is_file())
+
+
+def _repin_aggregates(aggregates: dict) -> dict:
+    """Carry the whole-load ceilings forward (step 4.10), re-measuring each baseline."""
+    out = dict(aggregates)
+    for key, entry in aggregates.items():
+        if isinstance(entry, dict) and "files" in entry:
+            out[key] = {**entry, "baseline_bytes": _aggregate_bytes(entry["files"])}
+    return out
+
+
+def test_whole_load_aggregates_within_tolerance():
+    """turn0_engage: what the model has read before the user's first word. engaged_typical:
+    after the normal read triggers. Both are meant to fall (plan step 4.4); a rise past the
+    5 percent tolerance fails here until someone re-pins with a reason."""
+    budgets = _load_budgets()
+    aggregates = budgets.get("aggregates") or {}
+    tol = aggregates.get("growth_tolerance", 0.05)
+    over = []
+    for key, entry in aggregates.items():
+        if not (isinstance(entry, dict) and "files" in entry):
+            continue
+        missing = [rel for rel in entry["files"] if not (REPO_ROOT / rel).is_file()]
+        assert not missing, f"{key}: files no longer exist: {missing} (re-pin after renaming)"
+        now = _aggregate_bytes(entry["files"])
+        if now > entry["baseline_bytes"] * (1 + tol):
+            over.append(f"{key}: {now} B vs baseline {entry['baseline_bytes']} B")
+    assert not over, (
+        "instruction load grew past tolerance - slim it or re-pin with a reason: " + "; ".join(over)
+    )
 
 
 def _report(budgets: dict) -> str:
