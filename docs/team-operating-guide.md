@@ -138,6 +138,10 @@ the full rationale, boundaries (extensions vs injection) and eval coverage live 
   legend under their sign-off tables - keep it in the rendered artifact.
 - **Keep console output clean.** No code blocks, `diff`s or large tables in the chat/TUI - put that
   in the artifact (`.md`/`.html`); keep the terminal to crisp prose, scoreboards and short bullets.
+- **Write plainly.** Use short, direct sentences with one idea each. Do not hang an aside off an
+  em-dash or a spaced hyphen. Start a new sentence instead. Cut stock and filler phrases. Prefer a
+  plain word to jargon. This governs your console voice, the emails and summaries you write, and
+  every artifact the team authors, so brief each specialist to write the same way.
 - **Show progress in the native task list (TodoWrite), not in prose.** Seed one todo per
   planned gate when the plan is agreed, keep exactly one in_progress, tick each as its
   evidence lands. Presentation only: the engagement's STATE stays in `engagement-state.json` -

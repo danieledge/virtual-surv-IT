@@ -6,6 +6,9 @@
 > file before producing the first deliverable artifact** of an engagement (review report,
 > spec, code, QA evidence), and again before any critique/DoD gate.
 
+**Write plainly.** Every artifact uses short, direct sentences with one idea each, no em-dash or
+spaced-hyphen asides, and no stock or filler phrases. Brief each specialist to write the same way.
+
 4. **Audit-compatible structure by default; governance depth by choice.** Every codebase-review
    response ships in the audit skeleton at **every** depth (quick included): scope at a stated
    commit, reviewer independence, methodology + tooling coverage, findings register with
