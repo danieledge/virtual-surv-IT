@@ -3162,7 +3162,11 @@ class Installer:
         )
         req = self.repo / "requirements-dev.txt"
         # In demo the clone may not exist yet; still walk the real prompt.
-        if not req.exists() and not self.demo:
+        # Step 7.13 (2026-09-13): the hash-pinned lock (scripts/pin_python_requirements.py)
+        # is preferred when present, with --require-hashes so pip refuses any file whose
+        # sha256 is not in it - the wheels get the same treatment as the release binaries.
+        lock = self.repo / "requirements-dev.lock"
+        if not req.exists() and not lock.exists() and not self.demo:
             self.step_skip("Dev requirements", "requirements-dev.txt not present")
             return
         if self.args.yes:
@@ -3182,9 +3186,15 @@ class Installer:
         if not wanted:
             self.step_skip("Dev requirements", "skipped - the plugin works without them")
             return
-        proc = run_cmd([sys.executable, "-m", "pip", "install", "-r", req], timeout=600)
+        if lock.exists():
+            argv = [sys.executable, "-m", "pip", "install", "--require-hashes", "-r", lock]
+            how = " (hash-verified from requirements-dev.lock)"
+        else:
+            argv = [sys.executable, "-m", "pip", "install", "-r", req]
+            how = ""
+        proc = run_cmd(argv, timeout=600)
         if proc.returncode == 0:
-            self.step_ok("Dev requirements " + self.did("installed", "would be installed"))
+            self.step_ok("Dev requirements " + self.did("installed", "would be installed") + how)
         else:
             # pip may be absent or blocked in locked-down environments; never fatal.
             self.step_fail(

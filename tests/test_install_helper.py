@@ -10146,3 +10146,55 @@ def test_the_cli_accepts_no_downloads():
     assert ih.parse_args(["--no-downloads"]).no_downloads is True
     assert ih.parse_args([]).no_downloads is False
     assert ih.downloads_disabled(ih.parse_args(["--no-downloads"]))
+
+
+# -------------------------------------- 2026-09-13 framework review, step 7.13
+
+
+def test_dev_requirements_install_from_the_hash_pinned_lock_when_present(monkeypatch, tmp_path):
+    """requirements-dev.lock (scripts/pin_python_requirements.py) carries every package of the
+    closure with sha256 hashes for every file PyPI publishes; the installer passes
+    --require-hashes so pip refuses a substituted wheel. Without the lock, the old path."""
+    import install_helper as ih
+
+    seen = []
+    monkeypatch.setattr(
+        ih, "run_cmd", lambda argv, **k: seen.append(list(argv)) or _proc(returncode=0)
+    )
+    (tmp_path / "requirements-dev.txt").write_text("pytest>=8.0\n", encoding="utf-8")
+    (tmp_path / "requirements-dev.lock").write_text(
+        "pytest==9.1.1 --hash=sha256:00\n", encoding="utf-8"
+    )
+    inst = ih.Installer(_args(yes=True, pip=True), ih.Style(False), ih.marks(), subset="full")
+    inst.repo = tmp_path
+    inst.optional_pip()
+    assert seen and "--require-hashes" in seen[0]
+    assert seen[0][-1] == tmp_path / "requirements-dev.lock"
+
+    seen.clear()
+    (tmp_path / "requirements-dev.lock").unlink()
+    inst.optional_pip()
+    assert (
+        seen
+        and "--require-hashes" not in seen[0]
+        and seen[0][-1] == tmp_path / "requirements-dev.txt"
+    )
+
+
+def test_the_committed_locks_cover_every_top_level_requirement():
+    """Both lock files exist, are hash-pinned throughout, and pin every package the source
+    requirements name - a regenerated lock that silently lost one would fail here."""
+    import re
+
+    root = Path(__file__).resolve().parents[1]
+    for stem in ("requirements-dev", "requirements-review"):
+        source = (root / f"{stem}.txt").read_text(encoding="utf-8")
+        lock = (root / f"{stem}.lock").read_text(encoding="utf-8")
+        pinned = {m.group(1).lower() for m in re.finditer(r"^([A-Za-z0-9_.\-]+)==", lock, re.M)}
+        for line in source.splitlines():
+            line = line.split("#", 1)[0].strip()
+            if not line:
+                continue
+            name = re.split(r"[<>=!\[; ]", line, 1)[0].lower().replace("_", "-")
+            assert name in pinned, f"{stem}.lock does not pin {name}"
+        assert lock.count("--hash=sha256:") >= len(pinned), f"{stem}.lock has unhashed entries"
