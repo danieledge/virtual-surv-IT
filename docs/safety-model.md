@@ -31,7 +31,19 @@ guards inert, which is exactly why the OS-level backstop below matters.
 | File-read tools, **plugin install into a foreign project** | The guard hook alone | A plugin can carry hooks but not a `permissions.deny` list, so the hook is the sole file-tool control. Installers who want the belt-and-braces backstop copy the `Read`/`Grep`/`Glob` `data/raw/**` deny entries into their own project's `.claude/settings.json` ([`docs/house-rules.md`](house-rules.md)). |
 | **Bash** (shell commands) | Lexical checks over the command text, in all three guards | Lexically guarded, **not a sandbox**: there is no `Bash(...)` deny backstop, and string-matching is trivially dodged by a determined actor (indirection, variables, subshells - the bypass classes are enumerated in ADR-002). A strong default and a consent record for a cooperative agent; the real boundary for shell is OS file permissions and keeping raw data off the box. |
 | **Write/Edit** (file writes) | The consent-write gate | The model is blocked from writing or editing the consent marker, `settings*.json` and the guard hook files themselves, so a confused or prompt-injected model cannot authorise itself or rewrite its own guardrails. Hook maintenance needs the human-set `CST_ALLOW_CONFIG_EDIT=1`. The Bash channel caveat above applies to shell-driven writes. |
+| **Armed check** (is any of this on?) | `scripts/armed_check.py`, run as the installer's last step and by `--selftest` | Sends synthetic tool calls through the real launcher and dispatcher for the target project and expects the raw-data block, the execution gate (armed when the payload carries no session id, open for a dormant one) and the plugin enabled; the install ends on its one green or red line, because an inert hook looks exactly like a healthy one (2026-09-13). |
 | **Execution** (running code under review) | The code-execution gate, opened only by a human | Static by default. Execution needs the `.claude/.exec-consent` marker or `CST_ALLOW_EXEC=1`, and both are human-only: the model cannot create the marker (the consent-write gate blocks it) and the environment variable lives where the model cannot reach. The intake "yes" is intent, not the grant. The team's own vendored `scripts/` tooling is allow-listed and runs consent-free. |
+
+## Prose is judged by position, never by verb list (2026-09-13)
+
+A folder name or a runner word inside prose (an `echo` label, a `--title`, an Agent briefing,
+`cat tox.ini`) is not a read or a run. The guards exempt three positions that cannot read a
+file: `echo`/`printf` arguments whose output reaches only the console, the `--title`/`--note`
+values of the team's own state script, and the prose fields of a non-Bash tool. Everything
+else in a segment is still scanned, list-valued fields included, and seventeen read shapes an
+independent challenge constructed are pinned as still blocked. The execution gate anchors the
+runner words that are also English words or filename stems to command position, as `make` and
+`source` already were. Threat-model coverage (ADR-002) is unchanged; the decision is ADR-015.
 
 ## The honest closing line
 
