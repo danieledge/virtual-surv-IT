@@ -106,9 +106,11 @@ def main() -> int:
     # Windows runner opened with no anchor and no probe, and the only trace was a test
     # that compared empty to empty (found on the Windows VM, 2026-09-12).
     for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)  # TextIO's type omits it
         try:
-            stream.reconfigure(encoding="utf-8", errors="replace")
-        except (AttributeError, ValueError, OSError):
+            if reconfigure is not None:
+                reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
             pass
     try:
         payload_text = sys.stdin.read()

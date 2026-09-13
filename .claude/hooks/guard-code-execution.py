@@ -42,6 +42,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import sys
 
 
@@ -163,7 +164,7 @@ def _expand_aliases(segments: list) -> list:
     out = []
     for seg in segments:
         m = _ASSIGN_RE.match(seg)
-        if m and not re.search(r"\s", seg.strip().split("=", 1)[0]):
+        if m and _single_word(seg):
             value = expand(m.group(2).strip())
             if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
                 value = value[1:-1]
@@ -172,6 +173,18 @@ def _expand_aliases(segments: list) -> list:
             continue
         out.append((expand(seg), False))
     return out
+
+
+def _single_word(segment: str) -> bool:
+    """True when the segment is ONE shell word - `SS="$PY x.py --slug x"` is, and is an
+    assignment; `FOO=bar pytest` is two words, an env-prefixed COMMAND, and is judged as
+    the command it runs (CI on the first applied copy, 2026-09-13: the prefix shape was
+    being read as an assignment and let through - the test that pins it targets the live
+    copy, so it only spoke once the copy was applied)."""
+    try:
+        return len(shlex.split(segment, posix=True)) == 1
+    except ValueError:
+        return False
 
 
 # Commands/patterns that EXECUTE code. Evaluated PER SEGMENT (see _segments). Each carries why
