@@ -124,8 +124,12 @@ What the result gives you, and the rules attached to each:
   `PREV_TEAM_VERSION=` / `VERSION_CHANGED=`), **not** the bulky §2 entries. **Read a §2 section
   only when you actually rely on it**, and `git`-verify an anchor only then or at close, never as
   open-time round-trips; this keeps turn-0 context lean so a long engagement doesn't compact
-  prematurely. Note ⚠️ stale-looking entries in the opening summary; no map → one gets created at
   close.
+- **Session efficiency (keep the turn count down):** the Bash cwd **persists between calls**, so
+  `cd` at most once (or use the absolute paths the probe and the scripts already give you) rather
+  than re-`cd`-ing every command; **read a file once** and work from context rather than re-reading
+  the same file; and batch shell steps into one call where natural. For a burst of `engagement_state`
+  writes, pass `--no-render` on each and `render` once (see the close bookend).
 
 **Company extensions (ADR-009):** if (and only if) the probe printed a TEAM-EXTENSIONS block, read
 `.claude/skills/engage/references/extensions.md` (plugin mode:

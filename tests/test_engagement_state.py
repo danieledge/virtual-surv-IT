@@ -1694,3 +1694,42 @@ def test_recorded_timestamps_are_timezone_aware(tmp_path):
     # hour after midnight BST.
     opened = load_state(tmp_path)["engagement"]["opened"]
     assert opened == _dt.date.today().isoformat()
+
+
+# ------------------------------------------------- 2026-09-13: --no-render defers the render
+
+def test_no_render_defers_the_render_and_stale_is_detectable(tmp_path):
+    """A burst of mutations should be able to skip the START-HERE render and reconcile once.
+    A skipped render leaves the embedded state-hash behind the state json, which is exactly
+    what STATE-STALE-RENDER keys on, so a forgotten final render cannot pass the close gate."""
+    from scripts.engagement_state import index_path
+
+    assert main(["init", "--title", "T", "--slug", "t", "--dir", str(tmp_path)]) == 0
+    index = index_path(tmp_path)
+    assert embedded_hash(index.read_text(encoding="utf-8")) == state_hash(load_state(tmp_path))
+
+    stamp = index.stat().st_mtime_ns
+
+    # Mutate WITHOUT rendering: state advances, START-HERE is not touched.
+    assert main(["set-phase", "delivery", "--dir", str(tmp_path), "--no-render"]) == 0
+    assert load_state(tmp_path)["phase"] == "delivery"
+    assert index.stat().st_mtime_ns == stamp, "START-HERE was rewritten despite --no-render"
+    assert embedded_hash(index.read_text(encoding="utf-8")) != state_hash(load_state(tmp_path))
+
+    # A second no-render mutation: START-HERE still untouched, still stale.
+    assert main(["log-note", "parked pending sign-off", "--dir", str(tmp_path), "--no-render"]) == 0
+    assert index.stat().st_mtime_ns == stamp
+    assert embedded_hash(index.read_text(encoding="utf-8")) != state_hash(load_state(tmp_path))
+
+    # One render reconciles the whole burst.
+    assert main(["render", "--dir", str(tmp_path)]) == 0
+    assert embedded_hash(index.read_text(encoding="utf-8")) == state_hash(load_state(tmp_path))
+
+
+def test_mutation_renders_by_default(tmp_path):
+    from scripts.engagement_state import index_path
+
+    assert main(["init", "--title", "T", "--slug", "t", "--dir", str(tmp_path)]) == 0
+    index = index_path(tmp_path)
+    assert main(["set-phase", "delivery", "--dir", str(tmp_path)]) == 0
+    assert embedded_hash(index.read_text(encoding="utf-8")) == state_hash(load_state(tmp_path))

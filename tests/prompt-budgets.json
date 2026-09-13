@@ -107,7 +107,7 @@
     ".claude/skills/.shared/engagement-bookends.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 1560
+      "baseline_tokens": 1820
     },
     ".claude/skills/.shared/run-mode.md": {
       "tier": "ROUTE_TIME",

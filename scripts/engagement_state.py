@@ -1670,8 +1670,16 @@ def _state_lock(
             unlink_quietly(lock_path)
 
 
-def _write_state(artifacts_dir: Path, state: dict) -> None:
-    """Validate, then atomically write the state and re-render the human view."""
+def _write_state(artifacts_dir: Path, state: dict, render: bool = True) -> None:
+    """Validate, then atomically write the state and (by default) re-render the human view.
+
+    `render=False` writes the state only and skips the START-HERE render and the registry
+    scan (2026-09-13 efficiency work: a burst of mutations re-rendered START-HERE and
+    rescanned every sibling pack once per mutation - eval runs spent ~45% of their shell
+    calls in this churn). The caller is then expected to run `render` once at the end; if it
+    forgets, the on-disk START-HERE keeps its old state-hash marker while the state advances,
+    so `check_artifacts` reports STATE-STALE-RENDER (auto-fixed by re-render) and the close
+    gate holds - a skipped render can never reach handover unseen."""
     problems = validate_state(state)
     if problems:
         for problem in problems:
@@ -1682,6 +1690,8 @@ def _write_state(artifacts_dir: Path, state: dict) -> None:
     # `engagement-state.json.tmp`, which two writers racing the lock's reclaim path could
     # both be inside at once (S-13).
     atomic_write_json(state_path(artifacts_dir), state)
+    if not render:
+        return
     for path in render_files(artifacts_dir, known_state=state):
         print(f"wrote {path}")
     registry_root = _registry_root_for(artifacts_dir)
@@ -2014,7 +2024,7 @@ def _mutate(args: argparse.Namespace, fn) -> int:
     state = load_state(args.dir)
     _upgrade(state)
     fn(state)
-    _write_state(args.dir, state)
+    _write_state(args.dir, state, render=not getattr(args, "no_render", False))
     return 0
 
 
@@ -2386,7 +2396,7 @@ def _cmd_resolve_outstanding(args: argparse.Namespace) -> int:
         print(f"no outstanding item matches {args.substring!r}", file=sys.stderr)
         return 2
     state["outstanding"] = kept
-    _write_state(args.dir, state)
+    _write_state(args.dir, state, render=not getattr(args, "no_render", False))
     return 0
 
 
@@ -3185,6 +3195,11 @@ def main(argv: list[str] | None = None) -> int:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--dir", type=Path, default=argparse.SUPPRESS)
     common.add_argument("--slug", dest="target_slug", default=argparse.SUPPRESS)
+    # Skip the START-HERE render + registry scan on this mutation (2026-09-13). For a burst
+    # of state writes: pass it on each, then run `render` once. A forgotten final render is
+    # caught by check_artifacts' STATE-STALE-RENDER, so this only ever trades render churn
+    # for one render, never correctness. No-op on non-mutating subcommands.
+    common.add_argument("--no-render", dest="no_render", action="store_true", default=False)
 
     p = sub.add_parser("init", help="create the state file and first render")
     # Not parents=[common]: common's own --slug (dest target_slug, "which pack to operate

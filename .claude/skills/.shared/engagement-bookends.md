@@ -71,16 +71,18 @@ work-in-progress rather than artifacts appearing with no state transition to exp
 
 ```
 <python> -m scripts.engagement_state set-status closing --slug <slug>
-<python> -m scripts.engagement_state resolve-outstanding "<substring>" --slug <slug>
-<python> -m scripts.engagement_state set-team "Name (role)" "Name2 (role2)" --slug <slug>
-<python> -m scripts.engagement_state finalise-artifacts --slug <slug>
-<python> -m scripts.engagement_state set-footprint --agents N --tokens "<estimate>" --slug <slug>
+<python> -m scripts.engagement_state resolve-outstanding "<substring>" --slug <slug> --no-render
+<python> -m scripts.engagement_state set-team "Name (role)" "Name2 (role2)" --slug <slug> --no-render
+<python> -m scripts.engagement_state finalise-artifacts --slug <slug> --no-render
+<python> -m scripts.engagement_state set-footprint --agents N --tokens "<estimate>" --slug <slug> --no-render
 <python> -m scripts.check_artifacts --fix
 <python> -m scripts.engagement_state set-status closed --slug <slug>
 ```
 
-(the `--fix` mode auto-renders missing `.html` siblings and renames a mis-typed summary email to
-`.txt`).
+(`--no-render` skips the per-write START-HERE render; `check_artifacts --fix` then renders the
+whole burst once - it re-renders the stale index, auto-renders missing `.html` siblings and renames
+a mis-typed summary email to `.txt`. A forgotten render is caught by `STATE-STALE-RENDER`, so this
+trades render churn for one render, never correctness.)
 
 **Human sign-off is NOT in that sequence.** `sign-off` records only once the human has created
 `VSIT/engagements/<slug>/.human-sign-off` themselves; never create or offer to create it. Ask
