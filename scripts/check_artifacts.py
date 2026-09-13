@@ -208,6 +208,10 @@ _FINDINGS_CWORD_RE = re.compile(
 # always emits it) identifies a genuine review-shaped artifact - only those are held to this.
 _FINDINGS_SECTION_RE = re.compile(r"^## Findings\s*$", re.M)
 _DEV_GUIDANCE_HEADING_RE = re.compile(r"^## 🔵 Developer guidance\b.*$", re.M)
+# Tooling coverage (P5, 2026-09-13): output-format.md mandates a "🔬 Tooling coverage"
+# section so an analyser's status is always recorded - "osv-scanner: no manifests, not
+# applicable" rather than silently dropped. A review-shaped artifact missing it overclaims.
+_TOOLING_HEADING_RE = re.compile(r"^#{2,4} 🔬 Tooling coverage\b.*$", re.M)
 _DEV_GUIDANCE_PLACEHOLDER = "_(none provided)_"
 
 # Roster gate: an artifact must not attribute work to a persona who is not on the team, or to
@@ -2004,6 +2008,25 @@ def check(artifacts_dir: Path) -> list[str]:
                         f"FINDINGS-NO-DEV-GUIDANCE: {md} has the Developer guidance heading "
                         "but the section is empty/unfilled - constructive guidance is mandatory "
                         "even on a clean review, not just the header (docs/review/output-format.md)"
+                    )
+            tc = _TOOLING_HEADING_RE.search(text)
+            if not tc:
+                findings.append(
+                    f"FINDINGS-NO-TOOLING-COVERAGE: {md} is a review-shaped artifact but has no "
+                    "'🔬 Tooling coverage' section - which analysers ran, and which did not and "
+                    "why (e.g. 'osv-scanner: no dependency manifests, not applicable'), must be "
+                    "recorded so the review's confidence is evidenced, not assumed "
+                    "(docs/review/output-format.md)"
+                )
+            else:
+                trest = text[tc.end() :]
+                tnext = re.search(r"^#{2,4} ", trest, re.M)
+                tbody = trest[: tnext.start()] if tnext else trest
+                if not tbody.strip():
+                    findings.append(
+                        f"FINDINGS-NO-TOOLING-COVERAGE: {md} has the Tooling coverage heading but "
+                        "the section is empty - name the analysers that ran and those that did "
+                        "not (with why), never leave it blank (docs/review/output-format.md)"
                     )
         findings.extend(check_roster(text, md))
         findings.extend(check_agent_identity(text, md))

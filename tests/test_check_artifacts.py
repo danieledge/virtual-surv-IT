@@ -2805,3 +2805,42 @@ def test_fix_refuses_to_write_a_state_that_would_not_validate(tmp_path):
     assert any("COULD-NOT-FIX ghost artifact rows" in line for line in log)
     on_disk = json.loads((art / "engagement-state.json").read_text(encoding="utf-8"))
     assert len(on_disk["artifacts"]) == 2, "the invalid state was left exactly as found"
+
+
+def test_tooling_coverage_missing_fires(tmp_path):
+    """P5 (2026-09-13): a review-shaped artifact must record which analysers ran and which did
+    not, so an analyser's status (e.g. osv-scanner not applicable) is never silently dropped."""
+    from scripts.check_artifacts import check as run_check
+
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    review = art / "REVIEW-x.md"
+    review.write_text(
+        "# Review\n\n## Findings\n\n_No findings._\n\n"
+        "## 🔵 Developer guidance - improving future code\nGood coverage.\n\n"
+        "## Limitations & residual risk\n_(none stated)_\n",
+        encoding="utf-8",
+    )
+    (review.with_suffix(".html")).write_text("<p>x</p>", encoding="utf-8")
+    _index(art, listed=["REVIEW-x.md"])
+    findings = run_check(art)
+    assert any("FINDINGS-NO-TOOLING-COVERAGE" in f for f in findings)
+
+
+def test_tooling_coverage_present_passes(tmp_path):
+    from scripts.check_artifacts import check as run_check
+
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    review = art / "REVIEW-x.md"
+    review.write_text(
+        "# Review\n\n## Findings\n\n_No findings._\n\n"
+        "### 🔬 Tooling coverage\nruff, bandit ran. osv-scanner: no manifests, not applicable.\n\n"
+        "## 🔵 Developer guidance - improving future code\nGood coverage.\n\n"
+        "## Limitations & residual risk\n_(none stated)_\n",
+        encoding="utf-8",
+    )
+    (review.with_suffix(".html")).write_text("<p>x</p>", encoding="utf-8")
+    _index(art, listed=["REVIEW-x.md"])
+    findings = run_check(art)
+    assert not any("FINDINGS-NO-TOOLING-COVERAGE" in f for f in findings)
