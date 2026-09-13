@@ -146,6 +146,49 @@ def _split_paths_cell(cell: str) -> list[str]:
     return [g.strip() for g in cell.split(",") if g.strip()]
 
 
+def _read_bool_toggle(project_dir: Path, key: str, machine_key: str, default: bool) -> bool:
+    """A team-preferences boolean with the standard 3-tier precedence: the project's own
+    team-preferences.json key (present wins, even if false), else this machine's
+    installer.json default, else the built-in default. Re-derived, not imported, for the same
+    standalone-runnability reason as _read_map_skeleton_toggle (2026-09-13, close-deliverable
+    gate)."""
+    try:
+        prefs = json.loads(
+            _vsit_paths().preferences_file(project_dir).read_text(encoding="utf-8-sig")
+        )
+        if isinstance(prefs, dict) and key in prefs:
+            return bool(prefs[key])
+    except (OSError, ValueError):
+        pass
+    try:
+        import os
+
+        base = os.environ.get("XDG_CONFIG_HOME")
+        root = Path(base) if base else Path.home() / ".config"
+        cfg = json.loads((root / "virt-surv-it" / "installer.json").read_text(encoding="utf-8-sig"))
+        if isinstance(cfg, dict):
+            return bool(cfg.get(machine_key, default))
+    except (OSError, ValueError):
+        pass
+    return default
+
+
+# Close-time deliverables gated by a project SETTING: when the setting is on, closing without
+# the artifact is a defect the gate must catch (2026-09-13). The evidence room is prose-only in
+# the close checklist, so an unattended or interrupted close drops it silently. One row per
+# settings-gated deliverable; adding another (a docx pack, say) is one entry.
+_SETTING_CLOSE_DELIVERABLES = (
+    (
+        "evidence_room",
+        "default_evidence_room",
+        False,
+        "EVIDENCE-ROOM-*.html",
+        "EVIDENCE-ROOM-MISSING",
+        "render it with `python -m scripts.render_evidence_room <workspace>` before close",
+    ),
+)
+
+
 def _read_map_skeleton_toggle(project_dir: Path) -> bool:
     """map_skeleton toggle for MAP-DRIFT/MAP-DEAD-POINTER - off by default. Same 3-tier
     precedence as the docx/citations preferences (project's own team-preferences.json key,
@@ -337,7 +380,7 @@ def _required_close_action_findings(artifacts_dir: Path) -> list[str]:
 
 
 def _engagement_ledger_findings(
-    artifacts_dir: Path, _all_md: list[Path] | None = None
+    artifacts_dir: Path, _all_md: list[Path] | None = None, project_dir: Path | None = None
 ) -> list[str]:
     """Three state-level gates added by the 2026-09-12 audit, all of the same shape: a fact
     the state file already records, checked against what actually happened.
@@ -354,6 +397,12 @@ def _engagement_ledger_findings(
                             the work, so it is reported only where a human reads findings."""
     findings: list[str] = []
     es = _load_engagement_state_module()
+    project_dir = project_dir or Path.cwd()
+    setting_deliverables = [
+        (key, glob, fid, fix)
+        for key, mkey, dflt, glob, fid, fix in _SETTING_CLOSE_DELIVERABLES
+        if _read_bool_toggle(project_dir, key, mkey, dflt)
+    ]
     for pack in sorted(p for p in artifacts_dir.rglob("engagement-state.json") if p.is_file()):
         workspace = pack.parent
         if _under_archive(pack, artifacts_dir):
@@ -383,6 +432,15 @@ def _engagement_ledger_findings(
                 f"--slug {workspace.name}` (what the engagement cost is part of the close, "
                 "not an optional extra)"
             )
+        if status == "closed" and has_deliverables:
+            for _key, glob, fid, fix in setting_deliverables:
+                if not any(workspace.glob(glob)):
+                    findings.append(
+                        f"{fid}: {workspace.name} closed with the '{_key}' setting on but no "
+                        f"{glob} artifact - {fix}. A settings-required close deliverable was "
+                        "not produced (prose-only close steps are dropped by an unattended or "
+                        "interrupted close; this makes it mechanical)"
+                    )
         budget = state.get("budget") if isinstance(state.get("budget"), dict) else {}
         cap = budget.get("agents")
         dispatched = len([d for d in (state.get("dispatches") or []) if isinstance(d, dict)])
@@ -2106,7 +2164,7 @@ def check(artifacts_dir: Path) -> list[str]:
     # down.
     findings.extend(_auto_mode_findings(artifacts_dir))
     findings.extend(_required_close_action_findings(artifacts_dir))
-    findings.extend(_engagement_ledger_findings(artifacts_dir, _all_md=all_md))
+    findings.extend(_engagement_ledger_findings(artifacts_dir, _all_md=all_md, project_dir=Path.cwd()))
 
     # The START-HERE living index: created at OPEN (with the first artifact), updated on
     # every artifact write, finalised at close (docs/templates/start-here.md). It is also

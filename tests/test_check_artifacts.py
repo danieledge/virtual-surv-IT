@@ -2844,3 +2844,48 @@ def test_tooling_coverage_present_passes(tmp_path):
     _index(art, listed=["REVIEW-x.md"])
     findings = run_check(art)
     assert not any("FINDINGS-NO-TOOLING-COVERAGE" in f for f in findings)
+
+
+def _closed_pack_with_deliverable(workspace):
+    """A closed pack with a deliverable, written directly - the real close SEQUENCE gate
+    (set-team, finalise, ...) is not what these tests exercise, and _engagement_ledger_findings
+    reads the raw state JSON anyway."""
+    import json
+    import scripts.engagement_state as es
+    workspace.mkdir(parents=True, exist_ok=True)
+    es.main(["init", "--title", "Rev", "--slug", workspace.name, "--dir", str(workspace)])
+    (workspace / "REVIEW-x.md").write_text("# Review\n\n## Findings\n_none_\n", encoding="utf-8")
+    sp = es.state_path(workspace)
+    state = json.loads(sp.read_text(encoding="utf-8"))
+    state["status"] = "closed"
+    state["footprint"] = {"agents": 3, "approx_tokens": 1000}
+    sp.write_text(json.dumps(state), encoding="utf-8")
+
+
+def test_evidence_room_missing_when_setting_on_fires(tmp_path, monkeypatch):
+    """Close-deliverable gate (2026-09-13): evidence_room on but no EVIDENCE-ROOM-*.html at
+    close is flagged, so an unattended close cannot drop the pack silently."""
+    from scripts.check_artifacts import check as run_check
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "team-preferences.json").write_text('{"evidence_room": true}')
+    art = tmp_path / "VSIT" / "engagements"
+    _closed_pack_with_deliverable(art / "rev-a")
+    findings = run_check(art)
+    assert any("EVIDENCE-ROOM-MISSING" in f for f in findings), findings
+
+
+def test_evidence_room_present_or_setting_off_passes(tmp_path, monkeypatch):
+    from scripts.check_artifacts import check as run_check
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".claude").mkdir()
+    # setting OFF: no finding
+    (tmp_path / ".claude" / "team-preferences.json").write_text('{"evidence_room": false}')
+    art = tmp_path / "VSIT" / "engagements"
+    _closed_pack_with_deliverable(art / "rev-off")
+    assert not any("EVIDENCE-ROOM-MISSING" in f for f in run_check(art))
+    # setting ON and the pack present: no finding
+    (tmp_path / ".claude" / "team-preferences.json").write_text('{"evidence_room": true}')
+    _closed_pack_with_deliverable(art / "rev-on")
+    (art / "rev-on" / "EVIDENCE-ROOM-rev-on.html").write_text("<p>room</p>", encoding="utf-8")
+    assert not any("EVIDENCE-ROOM-MISSING" in f and "rev-on" in f for f in run_check(art))
