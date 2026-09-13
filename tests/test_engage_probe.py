@@ -435,6 +435,10 @@ def test_build_report_emits_all_fields_repo_as_project(tmp_path):
     )
     out = build_report("", tmp_path)
     assert "PLUGIN_ROOT=repo-as-project" in out
+    # 1.10 (framework review 2026-09-13): the two reference roots are printed absolute so the
+    # open never guesses `$PLUGIN_ROOT/references/...` (the plugin-path-guess tripwire).
+    assert f"REFERENCES_DIR={tmp_path / '.claude' / 'skills' / 'engage' / 'references'}" in out
+    assert f"SHARED_DIR={tmp_path / '.claude' / 'skills' / '.shared'}" in out
     assert "PLUGIN_VERSION=9.9.9" in out
     assert "VERSION_CHANGED=yes" in out  # no map at all - first engagement
     assert "REGULATORY_CITATIONS=on" in out  # default when no preferences file

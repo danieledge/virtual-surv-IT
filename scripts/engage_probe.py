@@ -1009,8 +1009,15 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
     extensions_block = run_extensions_show(root, project_dir, root_is_trusted)
     drift = map_drift_summary(project_dir, map_skeleton_on)
 
+    # The two directories every open reads from besides the project itself, printed as
+    # absolute paths (2026-09-13 framework review, step 1.10). Eight of nine plugin-mode eval
+    # runs that day failed on path guessing (`$PLUGIN_ROOT/references/...`, a listing above
+    # the project root, the module form from an install) - defects of the open, not of the
+    # guards. A path the probe prints is a path the session never has to reconstruct.
     lines = [
         f"PLUGIN_ROOT={pr_display}",
+        f"REFERENCES_DIR={root / '.claude' / 'skills' / 'engage' / 'references'}",
+        f"SHARED_DIR={root / '.claude' / 'skills' / '.shared'}",
         f"OS={'Windows' if sys.platform == 'win32' else 'POSIX'}",
         f"PYTHON_VERSION={sys.version.split()[0]}",
         f"PLUGIN_VERSION={plugin_version}",

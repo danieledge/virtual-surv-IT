@@ -108,6 +108,13 @@ project has its own copy, otherwise immediately after using the printed `PLUGIN_
 proceed past the open without it.
 
 What the result gives you, and the rules attached to each:
+- **Reference roots** (`REFERENCES_DIR=`, `SHARED_DIR=`): the only two directories the open
+  reads from besides the project root. Every `references/<file>` Read is
+  `<REFERENCES_DIR>/<file>` and every `.shared/<file>` Read is `<SHARED_DIR>/<file>`, the
+  printed absolute path verbatim. Never guess a path, never list a directory above the
+  project root or the plugin install to find one, never `cd` toward the interpreter (its
+  path says where Python lives, not where the team lives). Eight of nine plugin-mode eval
+  runs on 2026-09-13 failed on exactly these three moves.
 - **Mode.** `PLUGIN_ROOT=repo-as-project` → invoke `<python> -m scripts.<name>`; any other value →
   installed plugin: **every `<python> -m scripts.<name>` in this skill means `<python>
   "$PLUGIN_ROOT/scripts/<name>.py"`** (the module form exits 1 outside the repo, so go straight to
