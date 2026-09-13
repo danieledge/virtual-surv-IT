@@ -23,6 +23,13 @@ artifacts/
 # above, so the same policy applies.
 legacy-artifacts/
 
+# The VSIT/ workspace (2026-08-28 layout): engagements/ holds client-shaped deliverables and
+# local/ machine-only caches; shared/ (the codebase map) and config/ (preferences) are project
+# memory and stay committable. engagement_state init writes the same two lines into
+# VSIT/.gitignore in every project the team is used in (scripts/vsit_paths.py).
+VSIT/engagements/
+VSIT/local/
+
 # Architecture Decision Records (2026-08-13): considered internal docs, not for the public
 # GitHub remote - untracked going forward (git rm --cached). Files stay on disk so
 # cross-references and scripts/validate_references.py's "docs/adr" search dir keep working

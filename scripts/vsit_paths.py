@@ -229,3 +229,34 @@ def is_legacy_layout(project: Path | str | None = None) -> bool:
     if root.joinpath(ROOT_NAME).exists():
         return False
     return (root / "artifacts").exists() or (root / "docs" / "codebase-map.md").is_file()
+
+
+# Which parts of the workspace a project commits (2026-09-13 framework review, step 7.2).
+# `shared/` (the codebase map, ADR-003/007) and `config/` (preferences, extensions contract)
+# are project memory and travel with the repo; `engagements/` holds client-shaped deliverables
+# and `local/` machine-only caches, and neither belongs in git. The installer's migration
+# says exactly this in prose; this writes it down where git reads it, in every project the
+# team is used in, because a plugin cannot edit the host project's own .gitignore.
+WORKSPACE_IGNORE = "# Written by the compliance-surveillance team (scripts/vsit_paths.py).\n" \
+    "# shared/ and config/ are project memory: commit them. These two are not.\n" \
+    "engagements/\nlocal/\n"
+
+
+def ensure_workspace_ignore(project: Path | str | None = None) -> Path | None:
+    """Write `VSIT/.gitignore` once the new-layout root exists, unless one is already there.
+
+    Returns the path written, or None when nothing was written (no `VSIT/` yet, a file already
+    present - the project's own choice wins - or a filesystem that refuses). Never raises: an
+    ignore file is a convenience, not a control, and the engagement that triggered it must
+    not fail for its sake."""
+    try:
+        root = project_root(project) / ROOT_NAME
+        if not root.is_dir():
+            return None
+        target = root / ".gitignore"
+        if target.exists():
+            return None
+        target.write_text(WORKSPACE_IGNORE, encoding="utf-8")
+        return target
+    except OSError:
+        return None

@@ -1733,3 +1733,37 @@ def test_mutation_renders_by_default(tmp_path):
     index = index_path(tmp_path)
     assert main(["set-phase", "delivery", "--dir", str(tmp_path)]) == 0
     assert embedded_hash(index.read_text(encoding="utf-8")) == state_hash(load_state(tmp_path))
+
+
+# ------------------------------------------------ 2026-09-13 framework review, step 7.2
+def test_init_writes_a_workspace_gitignore_that_keeps_project_memory(tmp_path):
+    """The workspace ignores engagements/ and local/ in EVERY project (a plugin cannot edit
+    the host's .gitignore), while shared/ and config/ stay committable: the codebase map and
+    preferences are project memory (ADR-003/007; install_helper's migration says the same)."""
+    import subprocess
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    pack = tmp_path / "VSIT" / "engagements" / "t"
+    assert main(["init", "--title", "T", "--slug", "t", "--dir", str(pack)]) == 0
+    ignore = tmp_path / "VSIT" / ".gitignore"
+    assert ignore.is_file()
+    assert ignore.read_text(encoding="utf-8").endswith("engagements/\nlocal/\n")
+
+    def ignored(rel: str) -> bool:
+        proc = subprocess.run(
+            ["git", "-C", str(tmp_path), "check-ignore", "-q", rel], capture_output=True
+        )
+        return proc.returncode == 0
+
+    assert ignored("VSIT/engagements/t/engagement-state.json")
+    assert ignored("VSIT/local/engage-probe.json")
+    assert not ignored("VSIT/shared/map.md")
+    assert not ignored("VSIT/config/team-preferences.json")
+
+
+def test_init_leaves_an_existing_workspace_gitignore_alone(tmp_path):
+    (tmp_path / "VSIT").mkdir()
+    (tmp_path / "VSIT" / ".gitignore").write_text("*\n", encoding="utf-8")
+    pack = tmp_path / "VSIT" / "engagements" / "t"
+    assert main(["init", "--title", "T", "--slug", "t", "--dir", str(pack)]) == 0
+    assert (tmp_path / "VSIT" / ".gitignore").read_text(encoding="utf-8") == "*\n"

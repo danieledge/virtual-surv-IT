@@ -1941,6 +1941,13 @@ def _cmd_init(args: argparse.Namespace) -> int:
         # R1: the newest engagement becomes this session's ACTIVE one, on disk.
         write_active(args.dir.parent, args.slug)
         print(f"ACTIVE engagement: {args.slug} ({ACTIVE_MARKER})")
+    # Step 7.2 (2026-09-13): the workspace ignores engagements/ and local/ in every project,
+    # not only in this repo - a client project's .gitignore is not ours to edit, but a file
+    # inside our own folder is. shared/ and config/ stay committable (project memory).
+    try:
+        _vsit_paths().ensure_workspace_ignore(_project_root_for(args.dir))
+    except Exception:  # nosec B110 - the ignore file is a convenience; init must not fail for it
+        pass
     return 0
 
 
