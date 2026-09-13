@@ -371,3 +371,27 @@ def test_an_unlisted_session_is_dormant(tmp_path):
         "tool_input": {"file_path": ".claude/settings.json", "content": "{}"},
     }
     assert _run(payload, tmp_path) == ALLOW
+
+
+def test_a_marker_named_only_in_a_quoted_note_is_not_a_write(tmp_path):
+    """2026-09-13: a team `record-consent-outcome --note "...no .exec-consent marker..."` audit
+    note was blocked as writing the marker, because the guard matched the token inside the
+    quoted --note. A marker only counts as touched as a real path operand or a redirect target;
+    inside a quoted value it is descriptive data. Real writes stay blocked."""
+    _stamp(tmp_path, {"session": _SID})
+    allowed = (
+        'py engagement_state.py record-consent-outcome declined '
+        '--note "No .exec-consent marker present at open; static review only" --slug x',
+        'py engagement_state.py log-note "note: the .human-sign-off is human-only" --slug x',
+        'py engagement_state.py set-decision k "no marker" --slug x 2>&1 | head -5',
+    )
+    for cmd in allowed:
+        assert _run(_bash(cmd, sid=_SID), tmp_path) == ALLOW, cmd
+    blocked = (
+        "touch .claude/.exec-consent",
+        "echo x > .claude/.exec-consent",
+        'echo x > ".claude/.exec-consent"',
+        "touch .claude/.human-sign-off",
+    )
+    for cmd in blocked:
+        assert _run(_bash(cmd, sid=_SID), tmp_path) == BLOCK, cmd
