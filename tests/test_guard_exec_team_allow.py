@@ -538,13 +538,19 @@ def test_the_report_case_end_to_end():
     `--title "...against source code"` matched the `\\bsource\\s+\\S+` exec pattern - the
     shell `source` builtin - inside a quoted argument. Once _TEAM_ALLOW matches the segment
     the exec check is never reached, so allow-listing the team's own front door fixes the
-    reported symptom whatever the arguments happen to contain."""
+    reported symptom whatever the arguments happen to contain.
+
+    2026-09-13 (236d2cf): the `source` pattern is now anchored to command position, so the
+    prose no longer trips the exec check at all. The first assertion records that
+    improvement; the second still proves the allow-list would win even if it did."""
     segment = (
         '"C:/Python313/python.exe" "C:/Users/dev/virtual-surv-IT/scripts/engagement_state.py" '
         'init --title "Adversarial review of the alert scoring module '
         'against source code" --slug eng-001 --team-version "v0.37.0"'
     )
-    assert STAGED._EXEC_RE.search(segment), "the prose really does trip an exec pattern"
+    assert not STAGED._EXEC_RE.search(segment), (
+        "prose inside a quoted --title must not read as a shell `source` (anchored in 236d2cf)"
+    )
     assert _allowed(segment), "so the allow-list must match first"
 
 
