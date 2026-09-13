@@ -617,12 +617,25 @@ def _detect_plugin_path_guess(ctx: TripwireContext) -> list[str]:
                     continue
             hits.append(f"{call['name']} errored on a plugin-root path: {_quote(path)}")
             break
-    if hits:
+    if hits or any(call["id"] for call in tool_calls(ctx.events)):
         return hits
-    # Fallback for a capture with no usable tool ids: an error text that itself names a path
-    # under the plugin root and says the path is not there.
+    # Fallback for a capture with NO usable tool ids only (a legacy capture): an error text
+    # that itself names a missing path under the plugin root. Judged on the paths the error
+    # names, under the same rules as above - not on the whole text (rerun of
+    # process-review-scorer-delegation, 2026-09-13: a relative `ls` probe for a codebase map
+    # was flagged because a later "wrote <sandbox path>" line sat in the same result).
     for res in results:
-        if _looks_missing(res["text"]) and plugin_root in _norm_path(res["text"]):
+        if not _looks_missing(res["text"]):
+            continue
+        named = re.findall(r"(?:[A-Za-z]:)?[\\/][^\s:'\"`]+", res["text"])
+        guessed = [
+            p
+            for p in named
+            if plugin_root in _norm_path(p)
+            and not _workspace_path(p, project_root)
+            and not (same_root and not _plugin_owned_path(p))
+        ]
+        if guessed:
             hits.append(f"tool result reports a missing plugin-root path: {_quote(res['text'])}")
     return hits
 

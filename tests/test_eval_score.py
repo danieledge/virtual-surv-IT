@@ -599,6 +599,48 @@ def test_tripwire_reads_tool_calls_out_of_a_legacy_repr_capture():
     assert _fired(ctx, "plugin-path-guess")
 
 
+def test_fallback_scan_is_for_captures_without_tool_ids_and_judges_only_the_named_paths():
+    """Rerun of process-review-scorer-delegation (2026-09-13): a relative `ls` probe for a
+    codebase map errored, and the same result later said "wrote /sb/VSIT/..."; the fallback
+    matched the sandbox path in that unrelated line. With tool ids present the main scan
+    already decided; without them, only the paths the error names count."""
+    noisy = (
+        "ls: cannot access 'docs/codebase-map.md': No such file or directory\n"
+        "wrote /sb/VSIT/engagements/x/report.md"
+    )
+    with_ids = eval_score.TripwireContext(
+        events=[
+            _assistant_event("Bash", {"command": "ls docs/codebase-map.md"}),
+            _result_event(noisy),
+        ],
+        project_root="/sb",
+        plugin_root="/sb",
+    )
+    assert not _fired(with_ids, "plugin-path-guess")
+    legacy = eval_score.TripwireContext(
+        events=[
+            {
+                "type": "UserMessage",
+                "repr": f"ToolResultBlock(content=[{{'type': 'text', 'text': {noisy!r}}}], is_error=True)",
+            }
+        ],
+        project_root="/sb",
+        plugin_root="/sb",
+    )
+    assert not _fired(legacy, "plugin-path-guess")
+    legacy_guess = eval_score.TripwireContext(
+        events=[
+            {
+                "type": "UserMessage",
+                "repr": "ToolResultBlock(content=[{'type': 'text', 'text': 'cat: /plug/references/x.md: No such file or directory'}], is_error=True)",
+            }
+        ],
+        project_root="/proj",
+        plugin_root="/plug",
+    )
+    assert _fired(legacy_guess, "plugin-path-guess")
+
+
 # ---- tripwire 2: team-script-blocked
 def test_tripwire_fires_when_the_gate_blocks_a_team_script():
     blocked = (
