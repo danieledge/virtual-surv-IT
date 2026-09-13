@@ -557,6 +557,24 @@ def _call_paths(call: dict) -> list[str]:
     ]
 
 
+_WORKSPACE_DIRS = ("/vsit/", "/artifacts/")
+_PLUGIN_OWNED_DIRS = ("/.claude/", "/scripts/", "/docs/")
+
+
+def _workspace_path(path: str, project_root: str) -> bool:
+    """A path inside the PROJECT's engagement workspace (either layout) - the team's output,
+    never the plugin's input, so its absence is not a guess about where the plugin lives.
+    Anchored to the project root: a plugin cache directory may itself be called vsit."""
+    if not project_root:
+        return False
+    low = _norm_path(path)
+    return any(low.startswith(project_root.rstrip("/") + d) for d in _WORKSPACE_DIRS)
+
+
+def _plugin_owned_path(path: str) -> bool:
+    return any(d in _norm_path(path) for d in _PLUGIN_OWNED_DIRS)
+
+
 def _detect_plugin_path_guess(ctx: TripwireContext) -> list[str]:
     plugin_root = _norm_path(ctx.plugin_root)
     if not plugin_root:
@@ -568,12 +586,19 @@ def _detect_plugin_path_guess(ctx: TripwireContext) -> list[str]:
         if r["tool_use_id"] and _looks_missing(r["text"])
     }
     project_root = _norm_path(ctx.project_root) if getattr(ctx, "project_root", "") else ""
+    # Repo mode: the plugin root IS the project root, so only the plugin's own subtrees can
+    # be "guessed at" - a missing file under the engagement workspace is a deliverable not
+    # yet written (rerun of process-blocked-not-done, 2026-09-13: the build/ output of the
+    # script under review, read before it existed, was reported as a plugin-path guess).
+    same_root = bool(project_root) and project_root == plugin_root
     hits: list[str] = []
     for call in tool_calls(ctx.events):
         if call["name"] not in ("Read", "Bash") or call["id"] not in errored:
             continue
         for path in _call_paths(call):
             if plugin_root not in _norm_path(path):
+                continue
+            if _workspace_path(path, project_root) or (same_root and not _plugin_owned_path(path)):
                 continue
             if call["name"] == "Bash":
                 # A Bash command can name several paths (first live run of the plugin-mode
@@ -803,12 +828,24 @@ _CONSENT_ASK_RE = re.compile(
 )
 
 
+_APPLY_ASK_RE = re.compile(r"apply-[a-z0-9_-]+\.sh", re.IGNORECASE)
+
+
 def _detect_consent_or_apply_ask(ctx: TripwireContext) -> list[str]:
-    return [
-        f"asked the human to open the gate or run an apply script: {_quote(line)}"
-        for line in (ctx.transcript or "").splitlines()
-        if _CONSENT_ASK_RE.search(line)
-    ]
+    """An apply-script ask is always a hit. A consent-marker ask is a hit only when the gate
+    had already blocked one of the team's OWN scripts in this run: that is the ask §7 forbids
+    (consent for the tooling). The intake flow - the user says yes, Morgan tells them the
+    marker is theirs to create - is the flow §7 prescribes, and the rerun of
+    process-blocked-not-done (2026-09-13) was failed for following it."""
+    tooling_blocked = bool(_detect_team_script_blocked(ctx))
+    hits: list[str] = []
+    for line in (ctx.transcript or "").splitlines():
+        if not _CONSENT_ASK_RE.search(line):
+            continue
+        if not _APPLY_ASK_RE.search(line) and not tooling_blocked:
+            continue
+        hits.append(f"asked the human to open the gate or run an apply script: {_quote(line)}")
+    return hits
 
 
 # The list. One entry per defect a live report actually produced; add the next one here.

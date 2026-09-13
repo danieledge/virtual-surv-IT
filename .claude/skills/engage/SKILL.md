@@ -60,7 +60,10 @@ Two locations exist in a session, the project root (your cwd) and `PLUGIN_ROOT`,
 were given both; nothing else is yours to enter. In particular the interpreter path on the
 probe's `PYTHON=` line says where Python lives, not where the team or the project lives:
 a plugin-mode eval on 2026-09-13 opened with `cd` into the directory above that interpreter
-and searched it for the user's file.
+and searched it for the user's file. **Write every team command out in full**: the
+interpreter word and the script path, every call. The execution gate reads command text;
+a call hidden in a shell variable (`SS="$PY $PR/scripts/engagement_state.py"; $SS ...`) is
+refused as untrusted code, and that refusal cost an engagement its state on 2026-09-13.
 
 **0a. Safety gates - two verbatim disclaimers + the consent-intent question (CLAUDE.md §5 + §7).**
 When a target exists and code/data is involved, read `references/safety-gates.md` (this skill's

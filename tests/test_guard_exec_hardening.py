@@ -340,3 +340,36 @@ def test_the_stamp_list_is_read_only_to_its_cap(tmp_path):
     )
     assert _code("pytest tests/", tmp_path, sid="s0") == ALLOW  # aged out
     assert _code("pytest tests/", tmp_path, sid=f"s{mod._MAX_STAMPED_SESSIONS + 4}") == BLOCK
+
+
+# ------------------------------------------------- 2026-09-13: shell aliases for team commands
+
+
+def test_a_team_command_kept_in_a_shell_variable_still_runs(tmp_path):
+    """Live, plugin-mode eval 2026-09-13: the session set PY, PR and SS once and used `$SS`
+    for every state command; each was refused as untrusted code because lexically it named
+    nothing. The assignments are followed and the later segments judged as what they expand
+    to; the assignment itself runs nothing."""
+    plugin = _plugin_copy(tmp_path / "cache" / "team")
+    cmd = (
+        f'PY="{sys.executable}"\nPR="{plugin}"\n'
+        f'SS="$PY $PR/scripts/engagement_state.py --slug x"\n'
+        f'$SS set-decision fix-cycle "report only"\n$SS record-consent-outcome declined\n'
+    )
+    env = {"CLAUDE_PLUGIN_ROOT": str(plugin)}
+    assert _code(cmd, tmp_path, env_extra=env) == ALLOW
+    assert (
+        _code(f'"$PY" "{plugin}/scripts/engagement_state.py" list', tmp_path, env_extra=env)
+        == ALLOW
+    )
+
+
+def test_an_alias_cannot_smuggle_execution_or_a_denied_script(tmp_path):
+    for cmd in (
+        'T="pytest"\n$T tests/',
+        'R="python evil.py"\n$R',
+        'X="$(pytest)"\necho $X',
+        'A="bash scripts/apply-all-staged.sh"\n$A',
+        'P="python"\n$P /tmp/scripts/ingest.py',
+    ):
+        assert _code(cmd, tmp_path) == BLOCK, cmd

@@ -130,8 +130,48 @@ _PY_ANY = (
     rf"(?:\"[^\"]*{_SEP}(?:python(?:3(?:\.\d+)?)?|py)(?:\.exe)?\""
     rf"|'[^']*{_SEP}(?:python(?:3(?:\.\d+)?)?|py)(?:\.exe)?'"
     rf"|(?![\"'])\S*{_SEP}(?:python(?:3(?:\.\d+)?)?|py)(?:\.exe)?"
-    rf"|{_PY}(?:\.exe)?)"
+    rf"|{_PY}(?:\.exe)?"
+    # A shell variable standing in for the interpreter (`"$PY" "$PR/scripts/x.py"`), the
+    # shape a session settles into after the probe hands it the interpreter word (live,
+    # 2026-09-13: an engagement lost its state script to this gate for exactly that).
+    # Trust never lived in the interpreter token - the script side decides - so a variable
+    # here is no weaker than a bare `python`.
+    r"|\"?\$\{?[A-Za-z_][A-Za-z0-9_]*\}?\"?)"
 )
+
+# `NAME=value` as a whole segment: a shell alias for something used later in the same
+# command. Expanded before the later segments are judged (2026-09-13): a session wrote
+# `PY=...; PR=...; SS="$PY $PR/scripts/engagement_state.py --slug x"; $SS set-decision ...`
+# and every `$SS` segment was refused as untrusted code, because lexically it named
+# nothing. The assignment itself executes nothing (command substitution inside it is split
+# into its own segment by _segments, so `X="$(pytest)"` is still judged as `pytest`).
+_ASSIGN_RE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$", re.S)
+
+
+def _expand_aliases(segments: list) -> list:
+    """(segment, is_pure_assignment) pairs, with earlier `NAME=value` values substituted for
+    `$NAME`, `${NAME}` and `"$NAME"` in every later segment and in later values."""
+    aliases: dict = {}
+
+    def expand(text: str) -> str:
+        for name, value in aliases.items():
+            text = re.sub(
+                rf'"\${name}"|\$\{{{name}\}}|\${name}(?![A-Za-z0-9_])', lambda _m: value, text
+            )
+        return text
+
+    out = []
+    for seg in segments:
+        m = _ASSIGN_RE.match(seg)
+        if m and not re.search(r"\s", seg.strip().split("=", 1)[0]):
+            value = expand(m.group(2).strip())
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                value = value[1:-1]
+            aliases[m.group(1)] = value
+            out.append((seg, True))
+            continue
+        out.append((expand(seg), False))
+    return out
 
 
 # Commands/patterns that EXECUTE code. Evaluated PER SEGMENT (see _segments). Each carries why
@@ -860,7 +900,8 @@ def main() -> None:
     # Execution consent authorises running the code UNDER REVIEW in a sandbox; it was never a
     # grant to replace the guards or to spawn further sessions, and an execution-authorised
     # engaged session must not also be able to rewrite the gate that authorised it.
-    for seg in _segments(cmd):
+    expanded = _expand_aliases(_segments(cmd))
+    for seg, _assign in expanded:
         reason = _denied_outright(seg)
         if reason:
             _block_denied(reason, seg)
@@ -871,7 +912,9 @@ def main() -> None:
 
     # Evaluate each segment independently: allow the team's own tooling, block anything that
     # executes code. A blocked segment anywhere in the command blocks the whole command.
-    for seg in _segments(cmd):
+    for seg, assign in expanded:
+        if assign:
+            continue  # a bare assignment runs nothing; what it names is judged where it is used
         if (_TEAM_ALLOW.match(seg) and _resolves_into_plugin_scripts(seg)) or _company_allowed(seg):
             continue
         if _executes(seg):

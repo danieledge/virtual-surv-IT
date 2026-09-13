@@ -57,6 +57,7 @@ import shutil
 # Sandbox setup (rsync, git init) - every call is fixed argv, no shell, local eval harness.
 import subprocess  # nosec B404
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -458,11 +459,54 @@ def _copy_ignore(root: Path, excludes: tuple[str, ...]):
     return ignore
 
 
+def _tracked_files(source: Path) -> list[str] | None:
+    """The files git tracks under `source`, or None when it is not a git checkout (or git is
+    unavailable). A marketplace install is a git checkout: tracked files and nothing else."""
+    if not (source / ".git").exists():
+        return None
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(source), "ls-files", "-z"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if proc.returncode != 0:
+        return None
+    return [p for p in proc.stdout.split("\0") if p]
+
+
 def copy_plugin_tree(source: Path, dest: Path, excludes: tuple[str, ...] = PLUGIN_COPY_EXCLUDES):
-    """Portable, symlink-free copy of the plugin source. Returns the destination."""
-    shutil.copytree(
-        source, dest, ignore=_copy_ignore(source, excludes), symlinks=False, dirs_exist_ok=True
-    )
+    """Portable, symlink-free copy of the plugin source. Returns the destination.
+
+    From a git checkout only TRACKED files are copied (2026-09-13, third live run of the
+    plugin-mode case): a working-tree copy carried this machine's gitignored state - the
+    probe cache with its interpreter path, the guard caches, settings backups, a local audit
+    workspace - into the cache copy, none of which a marketplace install ever has. The
+    exclusion list still applies on top, for a source that is not a checkout."""
+    tracked = _tracked_files(source)
+    if tracked is None:
+        shutil.copytree(
+            source, dest, ignore=_copy_ignore(source, excludes), symlinks=False, dirs_exist_ok=True
+        )
+        return dest
+    ignore = _copy_ignore(source, excludes)
+    for rel in tracked:
+        parts = rel.split("/")
+        if any(not windows_nameable(p) for p in parts):
+            continue
+        if any(p in ignore(str(source / "/".join(parts[:i])), [p]) for i, p in enumerate(parts)):
+            continue
+        src = source / rel
+        if not src.is_file():
+            continue
+        target = dest / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, target, follow_symlinks=True)
     return dest
 
 
@@ -673,6 +717,15 @@ def warm_guard_interpreter(layout: PluginLayout) -> Path:
     return cache
 
 
+def warm_sandbox_interpreter(sandbox: Path, shim_home: Path) -> Path:
+    """Repo-mode twin of warm_guard_interpreter: the sandbox is both project and plugin, and
+    the shim lives beside it rather than in a throwaway home."""
+    cache = _vsit_paths().local_file("guard_interpreter", sandbox)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(_shim_interpreter(shim_home).as_posix() + "\n", encoding="utf-8")
+    return cache
+
+
 def neutral_interpreter(layout: PluginLayout) -> Path:
     """An interpreter path that names nothing about this machine's checkout.
 
@@ -684,9 +737,13 @@ def neutral_interpreter(layout: PluginLayout) -> Path:
     it; on Windows a symlink needs a privilege the VM may not grant and a copied python.exe
     does not run without its DLLs, so sys.executable stays (it is a system install there).
     """
+    return _shim_interpreter(layout.home)
+
+
+def _shim_interpreter(home: Path) -> Path:
     if os.name == "nt":
         return Path(sys.executable)
-    shim_dir = layout.home / ".local" / "bin"
+    shim_dir = home / ".local" / "bin"
     shim_dir.mkdir(parents=True, exist_ok=True)
     shim = shim_dir / "python3"
     try:
@@ -1680,9 +1737,18 @@ async def run_case(
         args.keep_sandbox = True
     elif mode == "plugin":
         print(f"  [{case_id}] building plugin-mode layout (throwaway HOME, cache copy)...")
+        # OUTSIDE this repository's tree, in the system temp directory (2026-09-13, third
+        # live run). Built under evals/runs/, the client project sat inside THIS checkout's
+        # git tree, so Claude Code walked up from it, found this repo's root and CLAUDE.md,
+        # and the session's first command was a Read under the dev checkout. A real client
+        # project never lives inside the plugin repository; neither does this one now. The
+        # run directory keeps every output; only the layout moves. Removed with the sandbox
+        # unless --keep-sandbox.
         layout = build_plugin_layout(
-            out_dir / "plugin", probe_cache=bool(manifest.get("probe_cache"))
+            Path(tempfile.mkdtemp(prefix=f"vsit-eval-{case_id}-")),
+            probe_cache=bool(manifest.get("probe_cache")),
         )
+        layout_notes.append(f"layout built outside the repo tree at {layout.root}")
         sandbox = layout.project
         overlay_fixtures(case_dir / "fixtures", sandbox)
         if not getattr(args, "no_inherit_auth", False):
@@ -1698,6 +1764,11 @@ async def run_case(
         sandbox = out_dir / "sandbox"
         print(f"  [{case_id}] building sandbox...")
         build_sandbox(sandbox)
+        # Same warm cache the plugin layout gets (2026-09-13, process-blocked-not-done rerun):
+        # SANDBOX_EXCLUDES leaves the copy without the interpreter cache `virt-surv go` writes,
+        # the prefetch hook stays silent on a cold cache, and every repo-mode open tripped
+        # missing-prompt-injection once the tripwire existed to notice.
+        warm_sandbox_interpreter(sandbox, out_dir / "home")
         # Optional case fixtures: a `fixtures/` tree is overlaid sandbox-relative (e.g.
         # fixtures/artifacts/x.md -> sandbox/artifacts/x.md), so a case can seed a REAL
         # drifted/partial engagement state for the session to act on. A described-only state
