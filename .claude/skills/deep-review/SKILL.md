@@ -88,7 +88,7 @@ rather than silently absorbing the cost difference.
 **Deep reads a MAP, not the repo:** widen scope beyond the diff only via a targeted
 related-file map built once up front - importers of the changed files, their imports, and
 their test files - and read only what the map names (turingmind's Phase-1C pattern). Never
-browse the codebase breadth-first from inside a review pass. **When `VSIT/shared/map.md`
+browse the codebase breadth-first from inside a review pass. When the scope is a **module or the whole repo and no fresh `VSIT/shared/map.md` exists**, build that related-file map once with `<python> -m scripts.repo_skeleton <scope-path> --no-churn` (consent-free, allow-listed; tiered tree-sitter→ast, so it still ranks files and resolves import edges without grammars) and read only what it names - ADR-007's **disposable skeleton, not the curated map, so NOT gated by the `map_skeleton` preference**; a diff- or single-file scope needs no map. Read one symbol with `repo_skeleton --slice FILE:SYMBOL` rather than a whole large file. **When `VSIT/shared/map.md`
 exists, it is that map already** (dispatched reviewers have re-crawled a mapped repo - live
 2026-08-17; incident-log #16): the dispatch brief carries the in-scope FILE LIST plus the
 map's PATH with "read it for wider context - do not enumerate the repo" - **point, never paste**
