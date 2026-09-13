@@ -1,0 +1,72 @@
+case: review-comprehensiveness
+workflow: /engage
+rubric: code-review
+input: scenario.md
+# Measures RECALL across review dimensions on one SQL proc with six planted defects (security,
+# correctness, performance, architecture). Purpose (P0, backlog #9): turn "reviews feel thin"
+# into a per-dimension recall number, so the P1/P2/P3 uplift is proven, not felt. Run this case
+# under each config (consolidated-sonnet, split-opus, split-opus+map) and compare recall.
+# Deterministic keyword recall; the review artifact/findings are the haystack. No LLM judge -
+# whether a defect was named is a fact, not a judgement call.
+judge: none
+timeout_s: 3600
+max_turns: 160
+max_budget_usd: 25
+description: >
+  Six defects are planted in sp_reconcile_daily_alerts.sql across four review dimensions: a SQL
+  injection (dynamic EXEC of a concatenated @desk), a hardcoded linked-server password, a
+  NULL/scalar-subquery correctness bug in the watchlist DELETE, a JOIN fan-out that double-counts
+  notional when an account has multiple alerts, a non-sargable date predicate (YEAR/MONTH/DAY on
+  exec_ts) that defeats any index, and hardcoded environment coupling to a [REPORTING] linked
+  server. A comprehensive Deep review names all six; a thin one names the two obvious ones and
+  misses the rest. Recall per dimension is the metric.
+
+planted:
+  - id: SEC-INJECTION
+    # Dynamic SQL: @desk concatenated into an EXEC(@sql). Table stakes - a review MUST catch it.
+    keywords: [sql injection, dynamic sql, concatenat, exec(@sql, parameteri, sp_executesql,
+               injection]
+    min_severity: critical
+    must_find: true
+
+  - id: SEC-SECRET
+    # Hardcoded linked-server password in a comment. Table stakes - MUST catch (CLAUDE.md §5).
+    keywords: [hardcoded password, hard-coded password, hardcoded credential, secret, password
+               'S3cr3t, plaintext password, credential in]
+    exclude_keywords: [no secrets, no hardcoded]
+    min_severity: critical
+    must_find: true
+
+  - id: CORRECT-FANOUT
+    # LEFT JOIN Alerts fans out executions; SUM(e.notional) double-counts per extra alert row.
+    keywords: [fan-out, fan out, fanout, double-count, double count, cartesian, duplicate rows,
+               multiplied, join.*grain, cardinality]
+    min_severity: warning
+    must_find: false
+
+  - id: CORRECT-NULL
+    # DELETE ... WHERE account_id = (scalar subquery): NULL subquery deletes nothing (silent),
+    # multiple rows error. A correctness/NULL trap.
+    keywords: [scalar subquery, subquery returns, "null", no rows, multiple rows, silently,
+               "= (select", not in vs, three-valued]
+    min_severity: warning
+    must_find: false
+
+  - id: PERF-SARGABLE
+    # YEAR()/MONTH()/DAY() on exec_ts is non-sargable - defeats any index on exec_ts.
+    keywords: [non-sargable, sargable, index, function on column, full scan, table scan,
+               range predicate, exec_ts >=]
+    min_severity: warning
+    must_find: false
+
+  - id: ARCH-COUPLING
+    # Hardcoded [REPORTING] linked server / four-part name - environment coupling, blocks
+    # deploy to another env.
+    keywords: [linked server, four-part name, hardcoded server, environment coupling,
+               "[reporting]", hardcoded database, deploy.*environment, synonym]
+    min_severity: warning
+    must_find: false
+
+pass:
+  require_all_must_find: true
+  forbid_all: true
