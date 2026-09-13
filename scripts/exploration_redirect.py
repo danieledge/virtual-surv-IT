@@ -170,19 +170,40 @@ def _line_count(path: str) -> int | None:
         return None
 
 
+# `--slice` is exact only for Python (stdlib ast); for other languages it is best-effort and
+# usually the wrong tool, and for control-flow-heavy code (SQL stored procedures, say) the whole
+# body is the review unit. So the advice is tailored by language: Python leads with --slice, other
+# code leads with the anchor/region reads and says whole-file is often right (2026-09-13, the SQL
+# review that thrashed on a --slice suggestion that did not apply).
+_PY_EXT = (".py", ".pyi")
+
+
 def _read_advice(path: str, lines: int) -> str:
-    return (
-        f"Reading {os.path.basename(path)} whole is {lines} lines. During an engagement, "
-        "reach for the cheap path first (exploration discipline, "
+    base = os.path.basename(path)
+    head = (
+        f"Reading {base} whole is {lines} lines. During an engagement, reach for the cheap "
+        "path first where it fits (exploration discipline, "
         "docs/team-operating-guide-orchestration.md):\n"
-        f"  - ONE symbol: `<python> -m scripts.repo_skeleton --slice {path}:<symbol> .` "
-        "(exact for Python, best-effort elsewhere; typically ~1% of a whole-file read)\n"
-        "  - a known anchor: Grep with -C for the surrounding window\n"
-        f"  - a known region: Read {os.path.basename(path)} with offset/limit\n"
-        "If the whole file genuinely is the answer - control flow matters, or you need "
-        "whole-file semantics - repeat this exact call and it will go through. This "
+    )
+    if os.path.splitext(path)[1].lower() in _PY_EXT:
+        body = (
+            f"  - ONE symbol: `<python> -m scripts.repo_skeleton --slice {path}:<symbol> .` "
+            "(exact for Python, ~1% of a whole-file read)\n"
+            "  - a known anchor: Grep with -C for the surrounding window\n"
+            f"  - a known region: Read {base} with offset/limit\n"
+        )
+    else:
+        body = (
+            "  - a known anchor: Grep with -C for the surrounding window\n"
+            f"  - a known region: Read {base} with offset/limit\n"
+            "  - (`--slice` is Python-only; for this file it is best-effort, not the cheap path)\n"
+        )
+    tail = (
+        "If the whole file genuinely is the answer - reviewing this code, control flow matters, "
+        "or you need whole-file semantics - repeat this exact call and it will go through. This "
         "redirect fires ONCE per file per session."
     )
+    return head + body + tail
 
 
 def _grep_advice(pattern: str) -> str:

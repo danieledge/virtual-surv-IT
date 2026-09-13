@@ -179,3 +179,16 @@ def test_it_is_dispatched_for_read_and_grep_and_fails_open():
     assert tools == {"Read", "Grep"}
     assert fail_closed is False, "advisory tier: a cost rule must never fail closed"
     assert path.name == "exploration_redirect.py"
+
+
+def test_advice_is_language_tailored():
+    """2026-09-13: --slice is exact only for Python; on a SQL file it must not be offered as
+    the cheap path, and the advice acknowledges reviewing/control-flow code is read whole."""
+    import scripts.exploration_redirect as er
+
+    py = er._read_advice("/x/foo.py", 500)
+    assert "--slice" in py and "exact for Python" in py
+
+    sql = er._read_advice("/x/proc.sql", 500)
+    assert "Python-only" in sql  # --slice flagged as not the cheap path here
+    assert "reviewing this code" in sql
