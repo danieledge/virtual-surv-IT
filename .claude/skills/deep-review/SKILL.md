@@ -65,17 +65,29 @@ pipeline below applies at Quick depth.
 **3. Run the tiered review** (CLAUDE.md §6; method `docs/code-review-method.md`; lenses
 `docs/review/lenses/`; router `docs/review/agent-router.md`):
 
-**Consolidate by default - splitting is the exception (2026-08-17 cost review).** One
-`code-reviewer` dispatch per component runs ALL selected lenses sequentially inside it (the
-router's canonical topology: the code is read into context once and every lens reuses it).
-**Security is a lens, never its own pass, whenever a code review is already running** -
-a chained `/security-audit` folds its focus into the same pass's lens set instead of
-dispatching more agents (6 passes went out where the topology prices 3, roughly doubling the
-cost - live 2026-08-16/17; incident-log #17).
-Split into per-component passes ONLY when `LARGE_CONTEXT_REVIEW_SPLIT=on`, the target
-genuinely exceeds one context, or corporate-proxy timeouts have already bitten this session
-(the split's original purpose, and it demonstrably helps there) - name which reason applies
-in the sizing line, and state the resulting pass count before dispatching.
+**Deep and Audit run parallel per-facet passes (2026-09-13 uplift, mirrors Anthropic's
+code-review pattern).** One reviewer running every lens in a single filling context is why deep
+reviews felt thin: later lenses degrade as earlier output and file reads fill the window.
+Instead, dispatch a SEPARATE `code-reviewer` pass per facet, CONCURRENTLY, each a FRESH context
+over the whole in-scope files, running only its facet's lens(es):
+- **security** - OWASP ASVS / CWE, secrets/PII (a chained `/security-audit` deepens THIS facet,
+  it never adds a pass);
+- **correctness & bugs** - logic, detection missed/false alerts, the language lens;
+- **architecture & design** - Deep/Audit only.
+**Scale the count with the change (adaptive):** a small diff folds correctness+security into one
+pass; a module-or-wider scope runs all facets. State the facet count and why in the sizing line
+before dispatching. Merge and dedupe the packs (the pipeline already merges). This reverses the
+2026-08-17 "consolidate by default" for Deep/Audit only - at ~1.67x sonnet the extra passes are
+cheap and the depth is the point. **Quick** stays consolidated in-session (references/quick.md),
+and the per-component split still applies on top when a target genuinely exceeds one context or
+corporate-proxy timeouts have bitten (`LARGE_CONTEXT_REVIEW_SPLIT`).
+
+**Verify before reporting (new precision step).** After `review-scorer` scores and filters,
+dispatch ONE verification pass that adversarially RE-TESTS each surviving Critical/High finding:
+construct the concrete failing input, trace or counterexample that proves it real, or mark it
+unconfirmed. The scorer scores what was found and never re-tests whether the claim holds; this
+is the false-positive filter the scorer + PM-challenge lacked. A finding that survives is
+confirmed 📊; one that cannot be reproduced is downgraded to 🧠 or dropped, with the reason.
 
 **Tier by evidence need (revised 2026-09-13):** **Deep now rides the reviewer's `opus`
 frontmatter by default**, same as Audit - the 2026-08-17 sonnet default was set when opus cost

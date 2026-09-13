@@ -86,24 +86,25 @@ for the §4/§5 trail.
 
 So the rote, high-volume steps run cheap and the genuine judgement pays the top tier.
 
-**Execution topology as shipped (the canonical statement).** The lens passes run **inside
-`code-reviewer`, sequentially**: one lens at a time, so each gets full attention. They are **not**
-fanned out to parallel sub-agents today. The consequence is stated rather than glossed: a single
-agent cannot be blind to its own earlier passes, so the "each lens is independent, therefore it
-catches more" property does **not** hold here - real independence would need separate agents, which
-this pipeline deliberately does not spend. Running the lenses as separate **sonnet** sub-agents
-remains an optional next step, not current behaviour. What *is* delegated today is the mechanical
-work: context detection, lens selection and scoring go to `review-scorer` (haiku).
+**Execution topology as shipped (the canonical statement, revised 2026-09-13).** At **Deep and
+Audit** depth the review fans out into **parallel per-facet `code-reviewer` passes** - security,
+correctness & bugs, and (Deep/Audit only) architecture - each a FRESH context over the whole
+in-scope files, running only its facet's lens(es), then merged and deduped. This is the real
+independence that makes parallel review catch more: separate agents are not blind to each other's
+passes, which is exactly the property a single sequential pass could not have. A **verification
+pass** then adversarially re-tests each surviving Critical/High finding - the false-positive
+filter the scorer + PM-challenge lacked. At **Quick** depth the lenses still run **sequentially
+inside one `code-reviewer`** (references/quick.md), right for a fast diff-scoped check. The
+mechanical work - context detection, lens selection, scoring - goes to `review-scorer` (haiku)
+throughout.
 
-**Consolidation is the default; splitting is the exception (2026-08-17).** The sequential-
-lenses-in-one-call topology above is not just a description, it is the cost model: one
-reading of the code serves every lens, so adding a lens costs its checklist, not a fresh
-context. Dimensions must never silently become dispatches - a live 2026-08-16/17 run sent
-deep + security + perf over a small repo as 6 subagent passes (each re-reading the code
-cold) where this topology prices 3. The legitimate reasons to split by component are: the
-`large_context_review_split` preference is on, the target genuinely exceeds one context, or
-corporate-proxy timeouts have bitten (the split's original purpose - confirmed helpful on
-proxied corporate boxes); absent those, one pass per review agent.
+**Adaptive scaling, not silent fan-out (revised 2026-09-13).** The facet count scales with the
+change: a small diff folds correctness+security into one pass; a module-or-wider scope runs all
+facets. **State the facet count and why before dispatching** - a live 2026-08-16/17 run sent 6
+passes where 3 were priced, and the fix is a STATED, right-sized count, not a ban on parallelism
+(opus is now ~1.67x sonnet, so the depth parallel passes buy is cheap). The per-COMPONENT split
+(by file/module) still applies ON TOP when `large_context_review_split` is on, the target exceeds
+one context, or corporate-proxy timeouts have bitten.
 
 **Briefs carry scope, never invite discovery (2026-08-17).** Every dispatch brief names the
 in-scope FILE LIST, and - when the project has one - `VSIT/shared/map.md`'s **path** with
