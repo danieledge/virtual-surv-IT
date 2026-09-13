@@ -693,3 +693,22 @@ def test_no_route_to_retired_agents():
         "routes to retired SME personas (use `docs/sme/<pack>.md`, read in-line, cite the pack): "
         + ", ".join(offenders)
     )
+
+
+# --- the README's Why essay is locked (owner ruling 2026-07-30) --------------------
+def test_readme_why_essay_unchanged():
+    """The "Why Virtual Surv-IT?" essay stays exactly as it is: never moved, trimmed, folded
+    or rewritten (owner ruling 2026-07-30, reaffirmed for the 2026-09-13 framework review,
+    which was allowed to add a quickstart ABOVE it and nothing inside it). The digest is
+    taken between the two headings rather than by line number, so edits above the essay
+    do not disturb it. If you changed the essay on the owner's instruction, re-pin here."""
+    import hashlib
+
+    readme = _read("README.md")
+    start = readme.index("## 🤔 Why Virtual Surv-IT?")
+    end = readme.index("## ✨ Features")
+    digest = hashlib.sha256(readme[start:end].encode("utf-8")).hexdigest()
+    assert digest == "5e44e9c37f556b6112d86242cb83028acd66dfffaa5e07b537a8e7a33a0fd6f7", (
+        "README.md: the Why essay changed - it is locked by owner ruling; revert, or re-pin "
+        "only with the owner's explicit instruction"
+    )

@@ -9,6 +9,8 @@
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 [![Quick start: one-page PDF](https://img.shields.io/badge/Quick%20start-one--page%20PDF-important)](docs/quick-start.pdf)
 
+<details><summary><b>What changed recently</b> (0.37.0 highlights; full history in the changelog)</summary>
+
 <table>
 <tr><td>
 
@@ -68,6 +70,7 @@
 
 </td></tr>
 </table>
+</details>
 
 **Virtual Surv-IT is a virtual engineering team for the software that catches financial crime and
 market abuse.** A project manager (Morgan) and **13 specialist AI agents** (plus three in-line SME
@@ -90,6 +93,14 @@ The team builds the tooling; a person signs off every step.
 > tooling. It is pre-1.0 and changes often; behaviour and interfaces may break between updates, and
 > it can get things wrong. **Review everything it produces; never rely on it as a control or as
 > regulatory advice.**
+
+> 🚀 **In one minute.** Virtual Surv-IT is a Claude Code plugin: Morgan, a PM agent, and 13 specialist agents that build,
+> review and hand over surveillance tooling, every step independently checked by a different agent before it counts as done.
+> **Three commands:** `/engage` (the front door for any job), `/demo` (a narrated engagement on synthetic data), `/meet-the-team`.
+> **Three guarantees:** the project's raw-data folder never reaches the model ([always-on guard](#-the-safety-hooks)); the code under
+> review never runs without a consent marker only a human can create; nothing is "done" until the mechanical Definition-of-Done gate says so.
+> **Install:** `git clone https://github.com/danieledge/virtual-surv-IT.git && cd virtual-surv-IT && python install_helper.py`, then enable
+> the plugin in each project that uses it (`/plugin`). Needs Python 3.9+ and, on Windows, Git Bash or WSL. Full steps: [Quick start](#-quick-start).
 
 **New to AI agents?** Start with [`docs/OVERVIEW.md`](docs/OVERVIEW.md), a plain-English tour.
 **See it work:** the [review demo](docs/demos/review-demo.md) transcript, and a full-lifecycle
@@ -233,6 +244,15 @@ What the team gives you today, each row tied to where the claim is enforced or d
 
 ## 🚀 Quick start
 
+
+### Prerequisites
+
+- **Python 3.9 or newer on PATH** (`python`, `python3` or the `py` launcher). The safety guards run on it; a host with no
+  Python leaves them inert, so the installer's preflight checks for one.
+- **A POSIX `sh` for hooks.** Present on Linux and macOS; on Windows use **Git Bash** (ships with Git for Windows) or WSL.
+  Claude Code runs every hook command through `sh`.
+- **Claude Code** with plugin support, and **git**.
+- Optional: the review analysers the installer fetches; reviews run without them and say what they could not measure.
 <table>
 <tr><td>
 
