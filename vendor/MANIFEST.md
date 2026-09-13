@@ -14,7 +14,7 @@ licence, and why each package is vendored - kept in sync by hand, same as the ot
 | olefile | 0.47 | <https://github.com/decalage2/olefile> | BSD-2-Clause | reading OLE containers (legacy `.msg`/some `.xls` paths) |
 | textual | 8.2.8 | <https://github.com/Textualize/textual> | MIT | `virt-surv go`'s full-screen launcher/installer TUI |
 | rich | 15.0.0 | <https://github.com/Textualize/rich> | MIT | textual's rendering dependency; also used directly by the launcher's rich-only rendering tier |
-| prompt_toolkit | 3.0.53 | <https://github.com/prompt-toolkit/python-prompt-toolkit> | BSD-3-Clause | the launcher's interactive prompt tier (arrow keys/mouse/in-place toggles); falls back to plain `input()` menus when absent |
+| prompt_toolkit | 3.0.53 | <https://github.com/prompt-toolkit/python-prompt-toolkit> | BSD-3-Clause | the launcher's interactive prompt tier (arrow keys/mouse/in-place toggles); falls back to plain `input()` menus when absent `contrib/telnet/` and `contrib/ssh/` are pruned at vendoring (2026-09-13): a telnet server has no place in a compliance repo and nothing here imports either. |
 | platformdirs | 4.11.5 | <https://github.com/tox-dev/platformdirs> | MIT | textual's dependency for per-OS config/cache paths |
 | wcwidth | 0.8.2 | <https://github.com/jquast/wcwidth> | MIT | prompt_toolkit's dependency for terminal cell widths |
 | typing_extensions | 4.16.0 | <https://github.com/python/typing_extensions> | PSF-2.0 | textual/pypdf's typing back-compat dependency |
@@ -23,6 +23,10 @@ licence, and why each package is vendored - kept in sync by hand, same as the ot
 | mdurl | 0.1.2 | <https://github.com/executablebooks/mdurl> | MIT | markdown-it-py's own required dependency |
 
 ## Refresh procedure
+
+Pruning rule (2026-09-13): after copying a new `prompt_toolkit`, delete `contrib/telnet/` and
+`contrib/ssh/` again; `tests/test_vendor_no_sockets.py` fails if a socket server comes back.
+
 
 Vendor refreshes are **dedicated chore commits only** - never bundled into a feature commit.
 Three historical commits mixed the two (each 39k-110k changed lines, carrying a vendor bump

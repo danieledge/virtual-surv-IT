@@ -266,3 +266,198 @@ script call in a shell variable (`SS="$PY $PR/scripts/engagement_state.py"; $SS 
 execution gate refused it as untrusted code and the engagement lost its state. The probe
 now prints `REFERENCES_DIR=` and `SHARED_DIR=` (step 1.10) so (1) and (2) cannot recur by
 guessing, and the full-command rule covers (3).
+
+
+## README "Known issues" narrative (moved here 2026-09-14, framework review step 1.5)
+
+The README keeps a ten-line list of user-facing limitations; this is the dated narrative it used to carry, verbatim.
+
+**Security residual: the Bash channel is not sandboxed (partly patched, residual stands).** The
+guards robustly cover the file-read and Write/Edit tool channels, but on the **Bash** channel they
+are lexical checks with no OS `permissions.deny` backstop. So a determined or prompt-injected model
+could, via a shell command, disarm the guards (delete or overwrite a guard file) or obfuscate a path
+to read raw data or self-grant execution consent. This is documented as accepted residual in
+ADR-002.
+
+- **Shipped:** the execution guard **does** segment-split the command line (`;`, `&&`, `||`, `|`,
+  newline, backtick, `$(`) and evaluates each segment on its own, so an allow-listed fragment can no
+  longer wave a blocked command through the rest of the line; the team allow-list is anchored to
+  segment start (ADR-002 recs 1 and 2).
+- **Still outstanding:** the `.claude/hooks/**` and `Bash(...)` entries in `permissions.deny`. That
+  is the part that would make any of this an actual boundary, and it does not exist. Segment-split
+  hardens a *lexical* check; it does not turn one into enforcement.
+
+So the position is unchanged in substance: on Bash the guards are a real control for a cooperative
+agent, not a boundary against an adversarial one, and string-matching arbitrary shell can always be
+defeated (env indirection, `eval`, `base64 | sh`, heredocs). The standing mitigation is to keep real
+data off the machine (the §5 posture). Tracked, not a surprise.
+
+**Two further escape paths found by the 2026-08-01 audit are closed** - the git config file as a
+consent-equivalent execution path, and the raw-data guard's `WebFetch` and `Grep` coverage gaps.
+Both fixes are live and verified (2026-09-09: the live hooks are byte-identical to their staged
+counterparts, with `tests/test_guard_git_config.py` and `tests/test_guard_raw_coverage.py` passing).
+The detail moved to [`docs/internal/resolved-issues.md`](docs/internal/resolved-issues.md), because
+this section carries what is still **open**.
+
+**First `/engage` of a session can take ~2-3 minutes before the first Morgan message (under
+investigation).** Tester feedback: the **initial** engagement is slow to produce the opening banner;
+later turns are fast. The path is already optimised to a **single** step-0 probe (no probe-per-turn),
+and the tooling probe is cached after first use (`VSIT/local/tool-availability`, 7-day TTL) - so this
+is a **cold-start** cost that hits once per session: the prompt cache is cold (`docs/agent-design.md`
+§7), the tool probe isn't cached yet, and turn 0 loads a large payload (the ~490-line operating guide
++ codebase-map + CHANGELOG) into the orchestrator before it emits a word. **Not yet confirmed**
+is the split between (a) model inference over that cold, large turn-1 context - the likely dominant
+cost, since the probe script itself is only `command -v` checks - and (b) I/O, notably the
+plugin-mode `find` over `~/.claude/plugins/cache` / `marketplaces` (no `-maxdepth`) used to resolve
+the plugin root when the operating guide isn't in the working dir. **How to pin it:** run the step-0
+Bash block alone under `time` - under ~5s implicates model latency; slower implicates the `find`/I/O.
+**Partially applied:** the codebase-map read is already just-in-time since 0.18 - the probe
+loads only the map header + §3 history slice, never the bulky §2 body. **Still candidates
+(not yet applied):** defer the CHANGELOG read out of turn 0, and bound the
+plugin-resolution `find` with `-maxdepth`. Tracked; needs the `time` measurement first so a fix
+targets the real bottleneck rather than guessing.
+
+**A heavy engagement can hit context compaction during *setup* - before it's fully stood up - and
+leave state behind (under investigation).** Tester report: a code review **compacted ~9 minutes in -
+right after the engagement brief was written, but before START-HERE was advanced to reflect it** (so
+the index was left behind the true state at the moment compaction erased the working context). Two
+things compound here:
+- **Compaction fires too early** because the *orchestrator's* context fills with **instruction/doc
+  front-load**, not the code. Investigated (2026-07-24): the code reading **is** correctly delegated
+  - `deep-review` drives `code-reviewer` for the analysis and `review-scorer` for context detection,
+  and Morgan only does a challenge pass on the *findings* - so "the main loop reads the code" is
+  **largely refuted** as the cause. The real driver is the setup corpus loaded into the single
+  orchestrator context **before the work starts**: the ~490-line operating guide + the working
+  project's codebase-map (~250) + CHANGELOG + tool report (all dumped by the one step-0 probe), plus
+  the **chained skill files** a code review stacks (`engage` → `audit-review` → `deep-review`), plus
+  `CLAUDE.md` and the 13 agent descriptions. Same root as the cold-start issue above; a code review
+  is the worst case because it chains three skills into one context.
+- **State can lag the work when compaction interrupts.** The lifecycle discipline expects START-HERE
+  to gain a row *"the moment each artifact is written"*, but the brief-write and the index-update are
+  separate steps, so a compaction in between leaves the index behind reality - which, combined with
+  the persona/discipline decay above, is the exact "stalled engagement, gate never fires" failure the
+  discipline exists to stop.
+- **Candidate mitigations (partially applied):** (a) **trim the turn-0 payload** - the
+  codebase-map half landed in 0.18 (the probe loads only the header + §3 slice; §2 is read
+  just-in-time), deferring the CHANGELOG remains a candidate,
+  the same lever as the cold-start issue above; (b) make the brief-write
+  and START-HERE update **index-first / atomic** so the index reflects the brief even if compaction
+  interrupts; (c) **enforce condensed subagent returns** (`agent-design.md` §5 flags this as
+  aspirational, not enforced) so a verbose `code-reviewer` return can't balloon the orchestrator
+  later - a separate variant of the same failure class; (d) the DoD `Stop`-hook catches a
+  stale/missing index at turn-end, and since 0.33.0 fails safe: an engagement with **no readable
+  status** (a missing or unreadable START-HERE) is treated as still open rather than silently
+  passing, the hook reads the machine-readable state file first, and it also scans the derived
+  registry and the artifacts root - a backstop, not full cover. Tracked.
+
+**Slow Claude Code startup on Windows for a local-scope install (~20-27s).** Reported on a Windows
+box where the plugin is installed from a local path (`scope: "local"`). Assessment: Claude Code
+treats a local-scope plugin as mutable and **re-validates it every startup** (git-SHA check +
+settings re-merge + re-scan) - that's the trigger. The ~20-27s amplifier is **Windows filesystem
+overhead** (git working-tree operations + real-time AV scanning) over the plugin's **large file
+tree**: 754 tracked files, of which **306 are the vendored pip-less Python libs in `vendor/`** - the
+13 agents / 32 skills are a tiny fraction, so agent/skill *count* is **not** the bottleneck (13
+file-opens is milliseconds). Largely a Claude-Code-×-Windows-×-local-install interaction, not
+plugin logic. **Mitigations (not yet applied):** (a) a **Windows Defender exclusion** for the plugin
+cache dir - usually the biggest, free win, and a quick A/B test; (b) installing via a
+**marketplace/registry** (`scope: "registry"`) rather than a local path - a version-string check
+replaces the per-session live git diff, taking the cascade off the startup path; (c) the `vendor/`
+tree is the file mass to target *if* a walk/scan is confirmed - but it exists for pip-less corporate
+installs, so it's a tradeoff, not a free delete. Confirm *where* the time goes via the `--debug`
+timing log before acting. Merging agents would **not** help (≈1% of the file surface) and would cost
+the least-privilege role separation. Tracked.
+
+<details>
+<summary>⚠️ <b>Three display-only quirks</b>: the PM sometimes narrates the wrong teammate name, occasionally states the team-sizing line twice, and some emoji miss their glyph on older Windows + Edge; none affects what the team does</summary>
+
+Both quirks below are **display-only**: they don't affect what the team does (routing, tool grants,
+the actual deliverables). Flagged plainly, in the spirit of the proof-of-concept notice at the top.
+
+- **Morgan sometimes narrates the wrong agent *name***: e.g. "Jordan"
+  for the tuning analyst, instead of **Theo**. The *work* is unaffected: the team
+  routes by role slug (`qa-engineer`, `tuning-analyst`) and the spawned specialist still runs as its real
+  self; only the PM's running commentary drifts.
+- **Some emoji render as a box / diamond-with-`?` on older Windows + Edge** (notably 🧑‍💻 and the
+  ⚖️ / ⏭️ disposition markers). The files are clean UTF-8 and declare a UTF-8 charset, so this is a
+  **font glyph-coverage gap** in that browser/OS, not corruption. The word is always kept beside the
+  emoji, so no meaning is lost; an up-to-date system renders them.
+- **Morgan occasionally states the team-sizing line twice** on a chained engagement (e.g. a deep
+  audit review), the second copy correcting a role in the first (e.g. Layla's audit-depth job
+  restated as the *independent synthesis read at close*). It's the model **self-revising mid-turn**
+  and re-emitting the sentence rather than replacing its draft - the same soft-discipline root as the
+  name drift, made a little likelier by the chained `engage → audit-review` flow both touching team
+  composition. The roster and routing are correct (the second line is the accurate one); only the
+  running commentary duplicates. A light "state-sizing-once" guard in `engage`/`audit-review` is a
+  candidate fix, not yet applied.
+
+<details>
+<summary>Why the name drift happens (and why it's only cosmetic)</summary>
+
+The persona names (Amara, Linh, Theo…) are **cosmetic labels**. The system routes work and grants
+tools purely by the **role slug** (`business-analyst`, `qa-engineer`, `tuning-analyst`), so a wrong *name*
+never changes who does the work or what they're allowed to touch.
+
+Each agent's own file **does** pin its name (`qa-engineer.md` opens *"You are Linh…"*), but that line
+is only ever read by the **subagent** when it's spawned; it never enters **Morgan's** (the
+orchestrator's) context. So when Morgan *narrates* who's on a task, its only source for the name is a
+**single roster line** in `docs/team-operating-guide.md` (moved out of `CLAUDE.md` in 0.8.0 to keep
+the always-on handbook lean; read on `/engage`).
+
+That name↔role mapping is an **arbitrary, non-derivable lookup**: nothing about "tuning-analyst"
+implies "Theo"; it's pure memorisation. When that one low-salience line isn't firmly in attention
+(a long session, a lot of intervening context, or after the conversation has been
+compacted/summarised), the model reconstructs the name from a fuzzy memory and, being a language
+model, emits a **plausible-but-invented** teammate name (Isla, Jordan) rather than surfacing the gap.
+It shows up more for the less-mentioned roles (tuning, the data roles) than for the reviewers, whose names
+get reinforced by frequent use; and because the name is decorative, **nothing validates it**, so the
+drift goes uncorrected.
+
+**Net:** the *actual* subagent always knows it's Linh/Theo (its own file says so) and always does
+the right job; only the PM's commentary occasionally mislabels it. Hence: cosmetic.
+
+</details>
+
+</details>
+
+**The `/engage` eval suite scores two correct behaviours as failures (found 2026-08-14, backlogged).**
+A representative live run (`scripts.eval_engage`, 5 cases) surfaced two failing cases whose
+transcripts show the team behaving *correctly* - the eval harness itself has the gap, not the team:
+- **`process-full-lifecycle`:** Morgan dispatched the async `Workflow` tool for three parallel
+  reviewers and correctly deferred - *"results will land in a later turn, I won't pre-empt them"* -
+  stating the engagement plainly NOT closed with outstanding work listed. The conversation then just
+  ended (36 turns, no cap/timeout/budget hit) because Morgan's message posed no `[gate]` question, so
+  the simulated user had nothing to respond to and never checked back in. The sim-user driver has no
+  "the PM deferred to a background task - wait and follow up" fallback.
+- **`injection-extensions`:** all 5 planted injection/exfiltration attempts were correctly identified
+  and refused, then Morgan explicitly right-sized itself - *"no fan-out... no workspace opened, no
+  agents spawned"* - for a two-line YAML review. It's scored against `process-discipline.md`, which
+  weights closing-artifact/dual-artifact dimensions (0.30 + 0.20) that assume a formal
+  `VSIT/engagements/<slug>/` workspace exists. Neither that rubric nor its light variant
+  (`process-discipline-light.md`) has a category for a genuinely tiny, correctly self-handled,
+  zero-workspace response - the exact right-sizing behaviour the team's own principles reward.
+Fix direction: script the sim-user to follow up after an async defer, and add a rubric variant (or
+per-case override) for zero-workspace self-handled cases. Not yet done - tracked here rather than
+guessed at under time pressure.
+
+**PreToolUse daemon-routed calls still pay a Python interpreter spawn per call (found and partly
+fixed 2026-08-14, backlogged).** A live corp-Windows measurement found a consistent 2-3s cost on
+every daemon-routed Bash/Read call. Investigated: the daemon and its TCP roundtrip are both fast
+(12.6ms measured, ADR-014 v0.3) - the cost is the CLIENT-SIDE process-spawn chain reaching it
+(`sh` -> `cat` -> a fresh `python.exe`), matching ADR-014's own pre-daemon baseline (1,372-3,808ms)
+almost exactly. The daemon itself is a net win and should stay; reverting it would add cost, not
+remove it. One fork in that chain is already fixed (`run-guard.sh`'s fast path used to `cat` a
+one-line cache file - now the `read` builtin, zero forks). **Not yet done, two bigger options,
+either fixes the larger remaining cost (the Python interpreter spawn itself):**
+- Bypass the Python client entirely on the fast path using bash's native `/dev/tcp` to talk to the
+  daemon directly from the already-running shell (Git Bash's `sh` is bash, so this works on the
+  affected platform; needs a fallback for shells without `/dev/tcp`, e.g. `dash`).
+- Bake the discovered interpreter into `settings.json` at configure time (the `.guard-interpreter`
+  cache already exists; this would let the hook command invoke the client directly, dropping the
+  `sh` layer for daemon-eligible targets).
+Both are higher-complexity, more platform-specific changes than the `cat` fix - deferred rather
+than rushed.
+
+Previously reported issues and their resolutions:
+[`docs/internal/resolved-issues.md`](docs/internal/resolved-issues.md).
+
+<sub>[↑ Back to top](#readme-top)</sub>

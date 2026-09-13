@@ -111,6 +111,16 @@ raw-data file block, whitespace/private-key checks, and pytest on changes to `ru
 `tests/` or `scripts/`. The Claude Code safety hooks are *not* part of CI - they run inside
 Claude Code sessions only.
 
+### Seeding your own blocked-term list
+
+The CI job above reads digests from the `DLP_BLOCKLIST` repository secret, so a fresh clone
+has no list and the local check passes vacuously. To seed one: put the terms (employer names,
+personal names, internal hostnames) one per line in `.dlp-keywords.local` at the repo root
+(git-ignored, plaintext, never leaves the machine), run
+`python scripts/dlp_guard.py --rehash` to write their digests to `.dlp-blocklist`
+(git-ignored), and paste that file's contents into the `DLP_BLOCKLIST` secret under Settings,
+Secrets and variables, Actions. The terms themselves are never printed or committed.
+
 ## Before you open a PR
 
 Run what CI runs:

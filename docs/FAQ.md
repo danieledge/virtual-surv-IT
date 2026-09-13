@@ -1,5 +1,33 @@
 # Frequently asked questions
 
+**What leaves my machine?**
+Every file the model reads goes to the model provider as prompt context; that is why the
+raw-data folder is blocked outright by an always-on guard and everything else needs your
+attestation that it carries no prohibited PII or MNPI. At install time the helper fetches the
+clone and pinned, SHA-256-verified analyser binaries from GitHub, dev requirements from PyPI
+(hash-pinned) and eslint/tsc from npm; `--no-downloads` fetches nothing. At runtime the
+team's own scripts make no network calls. The full list: [`SECURITY.md`](../SECURITY.md),
+"Data flow and network egress".
+
+**What does it cost?**
+Morgan states how many specialists a job needs and why before any fan-out, and the status
+line shows the running spend. A narrated review demo is light on tokens; a full guided build
+delivery is a real nine-agent run at roughly 4 to 8 USD (the measured number is in the
+README's token-usage section). Reading a captured demo transcript costs nothing.
+
+**What do I need installed?**
+Python 3.9 or newer on PATH (`python`, `python3` or the `py` launcher; the safety guards run
+on it), `git`, Claude Code with plugin support, and on Windows a POSIX `sh` for the hooks:
+Git Bash (ships with Git for Windows) or WSL. The review analysers are optional; a review
+runs without them and says which findings are inferred rather than measured.
+
+**Does it work on Windows?**
+Yes, with Git Bash or WSL for the hook launcher. The launcher probes `python3`, `python` and
+`py` (it recognises the Microsoft Store alias stub), pins UTF-8 for the hook streams, and
+serialises hook launches under fan-out; corporate Windows laptops with endpoint security are
+the machines most of the latency work here was measured on. Slow startup on a local-scope
+install is a known issue with a documented workaround (README, Known issues).
+
 **What can it actually do?**
 Lots! If it comes up in surveillance engineering, there's probably a specialist for it. The
 short version:

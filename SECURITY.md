@@ -52,6 +52,41 @@ what each control does and does not guarantee - is `docs/safety-model.md`:
 - "Masked" is not "anonymous" - pseudonymised data is still personal data. Prefer fully
   synthetic data for anything leaving a governed environment.
 
+## Data flow and network egress
+
+What leaves the machine, and when (2026-09-13 framework review, step 7.5):
+
+- **Every file the model reads is sent to the model provider** as prompt context. That is
+  the whole reason the raw-data guard exists and why anything else needs the user's
+  attestation that it carries no prohibited PII or MNPI (`CLAUDE.md` §5).
+- **During install only**, `python install_helper.py` reaches `github.com` for the clone and
+  for the pinned release binaries (osv-scanner, gitleaks, shfmt, shellcheck, opengrep; one
+  version and one SHA-256 per asset in `config/release-tools.json`, refused on mismatch),
+  PyPI for the optional dev requirements (hash-pinned, `requirements-dev.lock`) and npm for
+  eslint/tsc when node is present. `--no-downloads` or `CST_NO_DOWNLOADS=1` fetches nothing.
+- **At runtime the team's own scripts make no network calls.** The optional guard daemon
+  (ADR-014, off by default) listens on loopback only. `osv-scanner` is always run
+  `--offline` against a database fetched at install time; `semgrep` and `pip-audit` are not
+  used at all because they cannot be kept offline.
+- **The eval harness** (`scripts/eval_engage.py`, developer use) drives live model sessions
+  and, when the CI job is run by hand, fetches the Claude Code CLI from npm.
+
 ## Supported versions
 
-This is an evolving POC; security fixes target the latest release (see `CHANGELOG.md`).
+| Version | Supported |
+|---|---|
+| The latest release on `main` | yes: security fixes land here |
+| `dev` (pre-release) | yes: fixes land here first and are promoted at a release |
+| Older releases | no: upgrade; `python install_helper.py update` is safe and re-runnable |
+
+Any release that changes a guard hook bumps the plugin version (`scripts/release_gate.py`
+checks it), so an installed version number tells you which guards you have.
+
+## Disclosure timeline
+
+We acknowledge a private report within five working days and aim to publish a fix and an
+advisory within **90 days** of the report, sooner for anything that lets raw data reach the
+model or lets the model open its own execution gate. If a fix needs longer we will say so
+and agree a date with the reporter. Vendored dependencies (`vendor/`, inventory in
+`vendor/MANIFEST.md`) are refreshed at each release and whenever an upstream advisory
+affects a vendored version.
