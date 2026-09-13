@@ -1,5 +1,5 @@
 """UTF-8 encoding pin in the guard launcher (scripts/staged_hooks/run-guard.sh, human-
-installed via scripts/apply-guard-utf8-encoding.sh).
+installed via scripts/apply-guard-daemon.sh, which promotes run-guard.sh).
 
 Regression under test (live corporate report 2026-07-31): locked_menu_guard.py kept
 blocking a correctly-formed Fix-cycle answer ("Fix → re-review loop") with a false

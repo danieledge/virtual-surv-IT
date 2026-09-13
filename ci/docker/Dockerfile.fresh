@@ -1,0 +1,22 @@
+# A machine that has never seen this plugin: the image that tests an INSTALL, not a checkout.
+# Host-independent (2026-09-13 framework review, step 7.10): nothing here names a developer's
+# paths or mounts a developer's credentials. Credentials, when a live session is wanted, arrive
+# as ANTHROPIC_API_KEY in the environment; without one the smoke still proves the install and
+# the armed guards, which need no model.
+FROM python:3.12-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN useradd --create-home --shell /bin/bash tester
+USER tester
+WORKDIR /home/tester
+# The Claude Code CLI, pinned; the fallback takes whatever the installer serves if the pin is gone.
+ARG CLAUDE_VERSION=2.1.243
+RUN curl -fsSL https://claude.ai/install.sh | bash -s -- "${CLAUDE_VERSION}" \
+    || curl -fsSL https://claude.ai/install.sh | bash
+ENV PATH="/home/tester/.local/bin:${PATH}"
+COPY --chown=tester:tester ci/docker/entrypoint-fresh.sh /usr/local/bin/entrypoint-fresh
+USER root
+RUN chmod +x /usr/local/bin/entrypoint-fresh
+USER tester
+ENTRYPOINT ["/usr/local/bin/entrypoint-fresh"]

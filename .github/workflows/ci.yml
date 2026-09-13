@@ -253,6 +253,25 @@ jobs:
           fi
           echo "OK - no raw data files tracked."
 
+  sbom:
+    name: SBOM (CycloneDX)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (SHA-pinned, 2026-08-19 audit)
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5 (SHA-pinned)
+        with:
+          python-version: "3.12"
+      # Step 7.3 (framework review 2026-09-13): what ships (vendor/) and what a developer
+      # installs (requirements-dev.lock), as a CycloneDX 1.5 document, no network.
+      - name: Generate the SBOM
+        run: python scripts/sbom.py --out sbom.json
+      - name: Upload the SBOM
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4 (SHA-pinned)
+        with:
+          name: sbom
+          path: sbom.json
+
   eval-replay:
     name: Golden-run replay (token-free)
     runs-on: ubuntu-latest

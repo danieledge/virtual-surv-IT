@@ -63,6 +63,13 @@ gate is now mechanical, not a documented intention:
    with the SessionStart resume brief applied, this also exercises ADR-011 live.
 6. Only on `release gate: OK` - merge `dev` → `main` and push.
 
+### Release tags are signed, and every release carries its SBOM
+
+A release is a signed tag (`git tag -s v<version>`; `git tag -v v<version>` must succeed) on
+the promoted `main` commit, with CI's `sbom.json` artifact attached to the GitHub release
+(2026-09-13, plan step 7.3). `python scripts/release_gate.py` gates the promotion; the tag
+signature is the human's act and is not automated.
+
 ## Ground rules (non-negotiable)
 
 - **Never commit real data or secrets.** All examples and tests use **synthetic or masked** data

@@ -98,7 +98,6 @@ scripts` on a checkout is the authoritative inventory if this table and the tree
 | `scripts/tui_chrome.py` | Shared terminal chrome for both front doors: `virt-surv go` and `virt-surv` |
 | `scripts/questions.py` | One way to ask a person something, and one vocabulary for what they answered |
 | `scripts/brand_banner.py` | The VSIT brand banner, rendered as terminal art for both front doors |
-| `scripts/diagnose-engage-startup.sh` | Diagnoses a slow or hung `/engage` step-0 open on a specific machine |
 | `scripts/install-git-hooks.sh` | Installs the opt-in AI-review git hooks (pre-commit / pre-push) | human-only |
 
 **Eval harness** (maintainer)
@@ -127,6 +126,13 @@ scripts` on a checkout is the authoritative inventory if this table and the tree
 |---|---|
 | `scripts/release_gate.py` | The mechanical dev → main promotion gate: version/badge/CHANGELOG consistency + a current eval baseline |
 | `scripts/dashboard.py` | Local observability page: engagement inventory, DoD gate, map hygiene, consent highlight, measured token cost - run `python -m scripts.dashboard` |
-| `scripts/apply-*.sh` (28 files: `apply-all-staged`, `apply-bash-hook-dispatcher`, `apply-document-redirect`, `apply-engage-probe-prefetch`, `apply-guard-daemon`, `apply-guard-exec-allow`, `apply-guard-findings-pack-write`, `apply-guard-git-config`, `apply-guard-interpreter-cache`, `apply-guard-raw-coverage`, `apply-guard-raw-segment-fix`, `apply-guard-raw-webfetch-wiring`, `apply-guard-utf8-encoding`, `apply-hooks`, `apply-locked-menu-guard`, `apply-module-redirect`, `apply-outstanding`, `apply-post-edit-lint`, `apply-project-anchor`, `apply-prompt-hook-dispatcher`, `apply-raw-data-present-cache`, `apply-remove-stale-tool-allowlist`, `apply-run-guard-lock`, `apply-session-brief`, `apply-statusline`, `apply-stop-hook-dispatcher`, `apply-subagent-budget`, `apply-todo-panel-nudge`) | Each re-wires one staged, model-edited hook (or the optional statusline) into the tracked hook files after a hand-edit; the consent-write gate blocks the model from running these itself (§7). Shipped releases come pre-wired - end users never need these. Never run by an agent, per this project's own house rules. |
+| `scripts/armed_check.py` | Proves the guards fire in a project: synthetic tool calls through the real launcher and dispatcher expecting the raw-data block, the execution gate and the plugin enabled; the installer's last step and `--selftest` print its one line (2026-09-13) |
+| `scripts/prune_eval_runs.py` | The eval-run retention rule as a command: keeps cited and recent runs, trims sandboxes from the rest, purges old uncited runs; dry run by default, `--apply` deletes |
+| `scripts/keep_golden_run.py` | Copies one passing eval run's scoring inputs and workspace subset into `evals/golden-runs/` for CI's token-free replay; refuses a run the current scorer would fail |
+| `scripts/pin_release_tools.py` | Regenerates `config/release-tools.json`, the pinned version and SHA-256 per asset for every binary the installer downloads, from the publisher's release API; human-run at release time, `--check` reports drift |
+| `scripts/pin_python_requirements.py` | Regenerates the hash-pinned `requirements-*.lock` files (every file PyPI publishes per pinned version, resolved per platform and unioned); human-run at release time |
+| `scripts/sbom.py` | A CycloneDX 1.5 SBOM from `vendor/MANIFEST.md` and `requirements-dev.lock`; CI uploads it as an artifact and a release attaches it |
+| `scripts/check_pdf_links.py` | Refuses a tracked PDF whose link annotations point at the author's local filesystem; a CI step |
+| `scripts/apply-*.sh` (22 files: `apply-all-staged`, `apply-bash-hook-dispatcher`, `apply-document-redirect`, `apply-engage-probe-prefetch`, `apply-guard-daemon`, `apply-guard-exec-allow`, `apply-guard-findings-pack-write`, `apply-guard-git-config`, `apply-guard-interpreter-cache`, `apply-guard-raw-coverage`, `apply-hooks`, `apply-locked-menu-guard`, `apply-module-redirect`, `apply-outstanding`, `apply-post-edit-lint`, `apply-project-anchor`, `apply-prompt-hook-dispatcher`, `apply-session-brief`, `apply-statusline`, `apply-stop-hook-dispatcher`, `apply-subagent-budget`, `apply-todo-panel-nudge`) | Each re-wires one staged, model-edited hook (or the optional statusline) into the tracked hook files after a hand-edit; the consent-write gate blocks the model from running these itself (§7). Shipped releases come pre-wired - end users never need these. Never run by an agent, per this project's own house rules. |
 
 <sub>[↑ Back to top](#readme-top)</sub>

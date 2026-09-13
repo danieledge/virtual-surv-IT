@@ -133,6 +133,8 @@ docs/internal/plan-temporal-data-lens-2026-08-24.md
 # Deliberately not shipped - a container definition that assumes one developer's box is worse
 # than none, because it looks portable and is not.
 docker/
+# ...but the host-independent CI copy is tracked (2026-09-13, plan step 7.10).
+!ci/docker/
 
 # Rendered demo output (2026-08-29): every file here is generated from its .md sibling by
 # scripts/render_html.py, so tracking it version-controls build output. The .md is the

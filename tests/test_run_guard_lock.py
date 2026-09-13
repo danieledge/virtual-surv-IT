@@ -1,5 +1,5 @@
 """Serialization lock in the guard launcher (scripts/staged_hooks/run-guard.sh, human-
-installed via scripts/apply-run-guard-lock.sh).
+installed via scripts/apply-guard-daemon.sh, which promotes run-guard.sh).
 
 Regression under test (live corporate report, 2026-08-10): a Workflow-tool fan-out fires
 several subagents' tool calls within the same instant, each independently spawning this
