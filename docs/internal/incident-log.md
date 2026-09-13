@@ -253,3 +253,16 @@ Consequence for the scorer: `session_error` conflates a cap hit (`error_max_turn
 `error_max_budget_usd`) with a real session failure. Plan step 3.9 adds `capped` as a
 distinct outcome and the `skill-not-registered` tripwire, so a budget or registration
 problem is never read as a defect of the team.
+
+
+## 2026-09-12/13: the three open-path incidents the engage skill used to narrate inline
+
+Moved here from `.claude/skills/engage/SKILL.md` (step 4.4); the rules stayed, the stories
+did not. (1) 2026-09-12: a live `--auto` open spent four failed Reads guessing
+`$PLUGIN_ROOT/references/<file>` before finding `$PLUGIN_ROOT/.claude/skills/engage/references/`.
+(2) 2026-09-13: a plugin-mode eval opened with `cd` into the directory above the probe's
+interpreter path and searched it for the user's file. (3) 2026-09-13: a session hid the state
+script call in a shell variable (`SS="$PY $PR/scripts/engagement_state.py"; $SS ...`); the
+execution gate refused it as untrusted code and the engagement lost its state. The probe
+now prints `REFERENCES_DIR=` and `SHARED_DIR=` (step 1.10) so (1) and (2) cannot recur by
+guessing, and the full-command rule covers (3).

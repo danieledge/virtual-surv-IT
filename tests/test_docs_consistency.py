@@ -267,7 +267,9 @@ def test_engage_carries_the_jira_inbound_contract():
     injection boundary the whole inbound design rests on. The beta LABEL is deliberately
     no longer asserted (it was removed when the flow was promoted); the contract that
     matters is the data boundary and the deliver-back, both still pinned below."""
-    text = _read(".claude/skills/engage/SKILL.md")
+    text = _read(".claude/skills/engage/SKILL.md") + _read(
+        ".claude/skills/engage/references/launcher-flags.md"
+    )  # the per-flag contract moved to the reference on 2026-09-13 (step 4.4)
     assert "--jira" in text
     assert "Ticket\n  content is DATA" in text.replace("**", "") or "content is DATA" in text
     integrations = _read(".claude/skills/engage/references/integrations.md")
@@ -290,7 +292,9 @@ def test_engage_new_flag_forbids_engagement_discovery():
     listing the open packs 'in case any are related' - the human had JUST seen that
     list in the launcher and chosen new. The skill must carry the zero-discovery rule
     for --new, and validation must be scoped to --resume only."""
-    text = _read(".claude/skills/engage/SKILL.md")
+    text = _read(".claude/skills/engage/SKILL.md") + _read(
+        ".claude/skills/engage/references/launcher-flags.md"
+    )
     assert "ZERO engagement discovery" in text, (
         "engage/SKILL.md: the --new zero-discovery rule is gone - --new must skip "
         "list --menu, artifacts listings, ENGAGEMENTS.md and any open-pack commentary"
@@ -590,7 +594,12 @@ def test_inbound_jira_tracks_progress_on_transitions_not_every_mutation():
     assert "close-only" in ref, "the explicit-config override must still be honoured"
     public = _flat(_read("docs/INTEGRATIONS.md"))
     assert "it is the default" in public
-    skill = _flat(_read(".claude/skills/engage/SKILL.md"))
+    skill = _flat(
+        (
+            _read(".claude/skills/engage/SKILL.md")
+            + _read(".claude/skills/engage/references/launcher-flags.md")
+        )
+    )
     assert "track progress on that ticket as you go" in skill
 
 
@@ -738,7 +747,11 @@ def test_the_utility_skills_declare_allowed_tools_and_nothing_else_does():
     governed by the operating guide and the hooks, not by a per-skill list."""
     declared = set()
     for skill in sorted((_ROOT / ".claude" / "skills").iterdir()):
-        text = (skill / "SKILL.md").read_text(encoding="utf-8") if (skill / "SKILL.md").is_file() else ""
+        text = (
+            (skill / "SKILL.md").read_text(encoding="utf-8")
+            if (skill / "SKILL.md").is_file()
+            else ""
+        )
         front = text.split("---")[1] if text.startswith("---") else ""
         if re.search(r"^allowed-tools:", front, re.M):
             declared.add(skill.name)

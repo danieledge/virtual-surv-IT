@@ -93,7 +93,7 @@ def build_table(tags: dict[str, str]) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--tag", action="append", default=[], help="tool=vX.Y.Z, repeatable")
-    parser.add_argument("--out", type=Path, default=ih._RELEASE_PINS_PATH)
+    parser.add_argument("--out", type=Path, default=REPO / "config" / "release-tools.json")
     parser.add_argument(
         "--check", action="store_true", help="compare, write nothing, exit 1 on drift"
     )

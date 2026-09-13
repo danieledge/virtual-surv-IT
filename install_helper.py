@@ -9885,14 +9885,22 @@ _OSV_RELEASE_BASE = "https://github.com/google/osv-scanner/releases/download/"
 # whose digest does not match, so two installs a week apart land the same bytes and a
 # reviewer can read what those bytes were. No table entry means no download: "latest" is
 # never a fallback. `--no-downloads` / CST_NO_DOWNLOADS=1 turns every fetch off.
-_RELEASE_PINS_PATH = Path(__file__).resolve().parent / "config" / "release-tools.json"
+_RELEASE_PINS_NAME = "release-tools.json"
+
+
+def _release_pins_path() -> Path:
+    """The tracked pin table inside the REAL clone - via clone_asset, never __file__ (the
+    installer re-execs from a bare temp copy; see clone_asset's docstring)."""
+    return clone_asset("config", _RELEASE_PINS_NAME)
+
+
 _NO_DOWNLOADS_ENV = "CST_NO_DOWNLOADS"
 
 
 def load_release_pins(path: Optional[Path] = None) -> dict:
     """The pin table, or {} when it is missing or unreadable (then nothing downloads)."""
     try:
-        data = json.loads((path or _RELEASE_PINS_PATH).read_text(encoding="utf-8"))
+        data = json.loads((path or _release_pins_path()).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
     return data if isinstance(data, dict) else {}
@@ -10357,7 +10365,7 @@ def install_release_tool(
         print(
             style.dim(
                 f"  {warn} could not download {spec.name}: no pinned release in "
-                f"{_RELEASE_PINS_PATH.name} (regenerate it with scripts/pin_release_tools.py)"
+                f"{_RELEASE_PINS_NAME} (regenerate it with scripts/pin_release_tools.py)"
             )
         )
         _release_manual_route(style, spec, "", target)
