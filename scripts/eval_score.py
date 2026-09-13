@@ -715,9 +715,36 @@ _TEAM_INVOKE_RE = re.compile(
     r"\b(?:" + "|".join(re.escape(n) for n in TEAM_SCRIPT_NAMES) + r")(?:\.py|\b)"
 )
 _EXPLORE_VERBS = frozenset(
-    {"echo", "cat", "find", "ls", "ll", "dir", "grep", "rg", "egrep", "head", "tail", "wc",
-     "sort", "uniq", "type", "more", "less", "pwd", "tree", "stat", "file", "cut", "awk",
-     "sed", "printf", "get-childitem", "gci", "get-content"}
+    {
+        "echo",
+        "cat",
+        "find",
+        "ls",
+        "ll",
+        "dir",
+        "grep",
+        "rg",
+        "egrep",
+        "head",
+        "tail",
+        "wc",
+        "sort",
+        "uniq",
+        "type",
+        "more",
+        "less",
+        "pwd",
+        "tree",
+        "stat",
+        "file",
+        "cut",
+        "awk",
+        "sed",
+        "printf",
+        "get-childitem",
+        "gci",
+        "get-content",
+    }
 )
 
 
@@ -739,7 +766,9 @@ def _is_pure_exploration(command: str) -> bool:
     for seg in segs:
         first = seg.split()[0].lower() if seg.split() else ""
         # a redirect target that is a protected file is a real write, never exploration
-        if ">" in seg and re.search(r">>?\s*\S*(\.exec-consent|\.human-sign-off|settings\.json)", seg):
+        if ">" in seg and re.search(
+            r">>?\s*\S*(\.exec-consent|\.human-sign-off|settings\.json)", seg
+        ):
             return False
         if first not in _EXPLORE_VERBS:
             # a bare `git status`/`git log`/`git diff` is read-only exploration too
@@ -941,7 +970,90 @@ def _detect_consent_or_apply_ask(ctx: TripwireContext) -> list[str]:
 
 
 # The list. One entry per defect a live report actually produced; add the next one here.
+# ---- tripwires 7-9 (2026-09-13 framework review, step 3.9) ----------------------------
+# The review's own dispatch was blocked for a briefing that merely named the raw folder; the
+# duplicated prefetch hook injected the probe block twice per /engage; and one plugin-mode
+# run's only assistant message was "Unknown command: /engage". None was caught by a tripwire.
+_DISPATCH_TOOLS = frozenset({"task", "agent"})
+_ANY_GUARD_BLOCK_MARKERS = _GUARD_BLOCK_MARKERS + ("targets raw, un-masked data", "blocked (")
+
+
+def _detect_benign_agent_prompt_blocked(ctx: TripwireContext) -> list[str]:
+    """An Agent/Task dispatch blocked by any guard. A briefing is prose in a position that
+    cannot read a file (the subagent's own reads pass through the same hooks), so a block
+    here is always the framework fighting the team."""
+    blocked = {
+        r["tool_use_id"]: r["text"]
+        for r in tool_results(ctx.events)
+        if r["tool_use_id"] and any(m in _norm(r["text"]) for m in _ANY_GUARD_BLOCK_MARKERS)
+    }
+    return [
+        f"a guard blocked an Agent dispatch ({call['name']}): {_quote(blocked[call['id']])}"
+        for call in tool_calls(ctx.events)
+        if _norm(call["name"]) in _DISPATCH_TOOLS and call["id"] in blocked
+    ]
+
+
+def _detect_duplicate_probe_injection(ctx: TripwireContext) -> list[str]:
+    """Two <engage-probe-result> blocks injected before one assistant turn: the prefetch hook
+    is wired twice (a dispatcher entry plus its own top-level entry, live 2026-09-13)."""
+    hits: list[str] = []
+    seen = 0
+    for event in ctx.events or []:
+        hook = event.get("hook")
+        if isinstance(hook, dict):
+            if _norm(hook.get("event")) == "userpromptsubmit" and "<engage-probe-result>" in str(
+                hook.get("output") or ""
+            ):
+                seen += 1
+            continue
+        if str(event.get("type") or "") == "AssistantMessage":
+            if seen >= 2:
+                hits.append(
+                    f"{seen} <engage-probe-result> blocks were injected before one assistant turn - the prefetch hook is wired twice"
+                )
+            seen = 0
+    if seen >= 2:
+        hits.append(
+            f"{seen} <engage-probe-result> blocks were injected before one assistant turn - the prefetch hook is wired twice"
+        )
+    return hits
+
+
+def _detect_skill_not_registered(ctx: TripwireContext) -> list[str]:
+    """The slash command never resolved ("Unknown command: /engage"): the harness launched the
+    session before the plugin's skills were visible - a harness defect, never a team one, and
+    a run that must not be read as recall 0 (live 2026-09-13T082312Z)."""
+    corpus = "\n".join(
+        [ctx.transcript or ""] + [json.dumps(e, default=str) for e in (ctx.events or [])]
+    )
+    low = _norm(corpus)
+    marker = "unknown command: /"
+    if marker not in low:
+        return []
+    at = low.index(marker)
+    return [f"the slash command never resolved: {_quote(corpus[at : at + 60])}"]
+
+
 TRIPWIRES: tuple[Tripwire, ...] = (
+    Tripwire(
+        id="benign-agent-prompt-blocked",
+        description=(
+            "a guard blocked an Agent/Task dispatch - a briefing cannot read a file, so this "
+            "is always a false block of the team's own traffic"
+        ),
+        detect=_detect_benign_agent_prompt_blocked,
+    ),
+    Tripwire(
+        id="duplicate-probe-injection",
+        description="two <engage-probe-result> blocks reached one turn - the prefetch hook is wired twice",
+        detect=_detect_duplicate_probe_injection,
+    ),
+    Tripwire(
+        id="skill-not-registered",
+        description="the slash command never resolved (Unknown command) - the harness launched before the plugin's skills were visible",
+        detect=_detect_skill_not_registered,
+    ),
     Tripwire(
         id="plugin-path-guess",
         description=(

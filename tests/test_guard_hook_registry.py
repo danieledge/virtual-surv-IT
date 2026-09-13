@@ -98,3 +98,48 @@ def test_an_ordinary_team_script_is_still_writable():
     build agents write tooling there all the time."""
     for name in ("ingest", "render_html", "engagement_state"):
         assert not _blocks(f"scripts/{name}.py"), name
+
+
+# ------------------------------------------------ 2026-09-13 framework review, step 3.5
+# A write-protected SAFETY hook that imports a model-writable module is protected in name
+# only: the body it runs can be rewritten one file over. Every local module a guard or the
+# guard dispatcher imports must itself be in guard-consent-writes' _HOOK_SCRIPT_NAMES.
+_SAFETY_HOOKS = (
+    REPO / ".claude" / "hooks" / "guard-raw-data.py",
+    REPO / ".claude" / "hooks" / "guard-code-execution.py",
+    REPO / ".claude" / "hooks" / "guard-consent-writes.py",
+    REPO / ".claude" / "hooks" / "guard-findings-pack-write.py",
+    REPO / "scripts" / "bash_hook_dispatcher.py",
+)
+
+
+def _protected_names() -> set[str]:
+    src = (REPO / ".claude" / "hooks" / "guard-consent-writes.py").read_text(encoding="utf-8")
+    m = re.search(r"_HOOK_SCRIPT_NAMES = \((.*?)\n\)", src, re.S)
+    assert m, "guard-consent-writes.py: _HOOK_SCRIPT_NAMES not found"
+    body = "".join(re.findall(r'"([^"]*)"', m.group(1)))
+    return set(re.findall(r"[A-Za-z0-9_]+", body.replace("(?:", "")))
+
+
+def _local_imports(path: Path) -> set[str]:
+    """Names imported (`import x`, `from x import y`) that resolve to a scripts/ module."""
+    import ast
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names |= {alias.name.split(".")[0] for alias in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            names.add(node.module.split(".")[0])
+    return {n for n in names if (REPO / "scripts" / f"{n}.py").is_file()}
+
+
+@pytest.mark.parametrize("hook", _SAFETY_HOOKS, ids=lambda p: p.name)
+def test_every_module_a_safety_hook_imports_is_itself_protected(hook):
+    unprotected = sorted(_local_imports(hook) - _protected_names())
+    assert not unprotected, (
+        f"{hook.name} imports model-writable scripts/ module(s) {unprotected}; add them to "
+        "_HOOK_SCRIPT_NAMES in guard-consent-writes.py (staged, human applies) or the "
+        "protection is in name only"
+    )

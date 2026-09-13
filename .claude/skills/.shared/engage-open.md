@@ -108,6 +108,10 @@ project has its own copy, otherwise immediately after using the printed `PLUGIN_
 proceed past the open without it.
 
 What the result gives you, and the rules attached to each:
+- **Double registration** (`DOUBLE_HOOKS=1`): the plugin is installed and this project IS the
+  team repo, so both hook registrations fire and every guard runs twice per tool call. Say so
+  in one banner line and suggest disabling the plugin for this project (`/plugin`) or opening
+  the work from another project; never disable a hook yourself.
 - **Reference roots** (`REFERENCES_DIR=`, `SHARED_DIR=`): the only two directories the open
   reads from besides the project root. Every `references/<file>` Read is
   `<REFERENCES_DIR>/<file>` and every `.shared/<file>` Read is `<SHARED_DIR>/<file>`, the

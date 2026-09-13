@@ -1014,8 +1014,14 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
     # runs that day failed on path guessing (`$PLUGIN_ROOT/references/...`, a listing above
     # the project root, the module form from an install) - defects of the open, not of the
     # guards. A path the probe prints is a path the session never has to reconstruct.
+    # DOUBLE_HOOKS (2026-09-13 framework review, step 3.8): the plugin is installed AND this
+    # project is the team repo itself, so both hook registrations fire and every guard runs
+    # twice per tool call. Not a safety problem (the same checks, twice) but a real cost on
+    # the corporate boxes every other latency fix here exists for; the open tells the user.
+    double_hooks = bool(plugin_root_arg) and _looks_like_team_repo(project_dir)
     lines = [
         f"PLUGIN_ROOT={pr_display}",
+        f"DOUBLE_HOOKS={'1' if double_hooks else '0'}",
         f"REFERENCES_DIR={root / '.claude' / 'skills' / 'engage' / 'references'}",
         f"SHARED_DIR={root / '.claude' / 'skills' / '.shared'}",
         f"OS={'Windows' if sys.platform == 'win32' else 'POSIX'}",

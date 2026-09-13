@@ -2601,6 +2601,13 @@ def run_outcome(result: dict) -> str:
     Kept separate from `passed`, which stays a strict boolean, so nothing downstream that
     already reads `passed` changes meaning.
     """
+    # CAPPED (2026-09-13 framework review, step 3.9): a run the harness's own turn or spend
+    # cap ended (error_max_turns, error_max_budget_usd) produced real, partial output; it is
+    # neither a dead session nor a bad answer, and reading it as either misled the 2026-09-13
+    # plugin-mode record. Kept out of the scorable set like unscorable, counted on its own.
+    error = str(result.get("error") or "")
+    if error.startswith("error_max_") or result.get("spend_capped"):
+        return "capped"
     if result.get("timed_out") or result.get("session_error"):
         return "unscorable"
     return "pass" if result.get("passed") else "fail"
@@ -2616,10 +2623,13 @@ def summarise_results(rows: list[dict]) -> dict:
     and those runs cost ~3x a healthy one while producing a median of 4 turns).
     """
     total = len(rows)
-    unscorable = [r for r in rows if (r.get("outcome") or run_outcome(r)) == "unscorable"]
-    scorable = [r for r in rows if (r.get("outcome") or run_outcome(r)) != "unscorable"]
+    outcomes = {id(r): (r.get("outcome") or run_outcome(r)) for r in rows}
+    unscorable = [r for r in rows if outcomes[id(r)] == "unscorable"]
+    capped = [r for r in rows if outcomes[id(r)] == "capped"]
+    scorable = [r for r in rows if outcomes[id(r)] not in ("unscorable", "capped")]
     passed = [r for r in scorable if r.get("passed")]
     return {
+        "capped": len(capped),
         "total": total,
         "scorable": len(scorable),
         "unscorable": len(unscorable),

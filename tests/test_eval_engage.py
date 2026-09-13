@@ -328,6 +328,20 @@ def test_run_outcome_separates_dead_runs_from_bad_answers():
     assert ee.run_outcome({"passed": False}) == "fail"
     assert ee.run_outcome({"passed": False, "timed_out": True}) == "unscorable"
     assert ee.run_outcome({"passed": False, "session_error": True}) == "unscorable"
+    # 2026-09-13 (step 3.9): a cap hit is neither a dead session nor a bad answer.
+    assert (
+        ee.run_outcome({"passed": False, "session_error": True, "error": "error_max_turns"})
+        == "capped"
+    )
+    assert ee.run_outcome({"passed": False, "error": "error_max_budget_usd"}) == "capped"
+    assert ee.run_outcome({"passed": False, "spend_capped": True}) == "capped"
+    summary = ee.summarise_results(
+        [{"passed": False, "error": "error_max_turns"}, {"passed": True}]
+    )
+    assert summary["capped"] == 1 and summary.get("passed", summary.get("passed_count", 1)) in (
+        1,
+        [True],
+    )
     # A dead run is unscorable even if the scorer happened to mark it passed before the
     # timeout/error was folded in - the run still produced no gradeable end state.
     assert ee.run_outcome({"passed": True, "timed_out": True}) == "unscorable"

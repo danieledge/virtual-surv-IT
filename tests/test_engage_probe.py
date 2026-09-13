@@ -1357,3 +1357,31 @@ def test_the_skill_tells_the_model_not_to_search(tmp_path):
     text = (root / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8")
     assert "REQUEST_PENDING=" in text, "the skill must name the field the probe emits"
     assert "do not go looking for it" in text
+
+
+# ------------------------------------------------ 2026-09-13 framework review, step 3.8
+
+
+def test_double_registration_is_reported_when_the_plugin_is_installed_and_the_project_is_the_repo(
+    tmp_path,
+):
+    """Plugin installed + repo opened as the project = both hook registrations fire and every
+    guard runs twice per call. The probe names it; the open tells the user."""
+    (tmp_path / ".claude-plugin").mkdir()
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text('{"version": "9.9.9"}', encoding="utf-8")
+    (tmp_path / "CHANGELOG.md").write_text("## [9.9.9] - x\n\n- a\n", encoding="utf-8")
+    assert "DOUBLE_HOOKS=0" in build_report("", tmp_path)  # repo-as-project alone: one registration
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "team-operating-guide.md").write_text("# guide\n", encoding="utf-8")
+    (tmp_path / ".claude" / "hooks").mkdir(parents=True)
+    (tmp_path / ".claude" / "hooks" / "run-guard.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    plugin = tmp_path / "cache" / "plugin"
+    (plugin / ".claude-plugin").mkdir(parents=True)
+    (plugin / ".claude-plugin" / "plugin.json").write_text('{"version": "9.9.9"}', encoding="utf-8")
+    # Now make the project the team repo itself (the manifest names the team) with the
+    # plugin ALSO installed: both registrations fire.
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text(
+        '{"name": "compliance-surveillance-team", "version": "9.9.9"}', encoding="utf-8"
+    )
+    assert "DOUBLE_HOOKS=1" in build_report(str(plugin), tmp_path)
+    assert "DOUBLE_HOOKS=0" in build_report("", tmp_path), "repo-as-project alone is one registration"
