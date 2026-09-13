@@ -1353,8 +1353,18 @@ def test_the_skill_tells_the_model_not_to_search(tmp_path):
     """The probe field only helps if the instruction points at it. Fragments, not
     sentences: the source is hard-wrapped."""
     root = Path(__file__).resolve().parents[1]
-    text = (root / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8") + (
-        REPO / ".claude" / "skills" / "engage" / "references" / "launcher-flags.md"
+    text = (
+        (root / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8")
+        + (REPO / ".claude" / "skills" / "engage" / "references" / "launcher-flags.md").read_text(
+            encoding="utf-8"
+        )  # the flag contract moved to the reference on 2026-09-13 (step 4.4)
+    ) + (
+        Path(__file__).resolve().parents[1]
+        / ".claude"
+        / "skills"
+        / "engage"
+        / "references"
+        / "launcher-flags.md"
     ).read_text(
         encoding="utf-8"
     )  # the flag contract moved to the reference on 2026-09-13 (step 4.4)
