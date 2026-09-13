@@ -44,7 +44,7 @@ def _run(monkeypatch, capsys, payload: dict, project: Path) -> tuple[int, str]:
 def _repo_as_project(project: Path) -> None:
     """Minimal fixture: docs/team-operating-guide.md makes find_plugin_root short-circuit
     to PLUGIN_ROOT="" (repo-as-project) without ever touching the real machine's actual
-    ~/.claude/plugins/ - this dev machine genuinely has the plugin installed, so leaving
+    ~/.claude/plugins/ - this dev machine has the plugin installed, so leaving
     that path live would make the test's outcome depend on whatever happens to be on disk."""
     (project / "docs").mkdir(parents=True, exist_ok=True)
     (project / "docs" / "team-operating-guide.md").write_text("# ops guide\n", encoding="utf-8")
@@ -499,7 +499,7 @@ def _no_org_extensions(monkeypatch, tmp_path) -> None:
     """Point the ORG tier at an empty directory.
 
     The hook checks `~/.config/virt-surv-it/team-extensions.md` as well as the project
-    tiers, and the machine running these tests may genuinely have one - a test whose
+    tiers, and the machine running these tests may have one - a test whose
     outcome depends on the developer's own config is not a test."""
     empty = tmp_path / "xdg-empty"
     empty.mkdir(exist_ok=True)

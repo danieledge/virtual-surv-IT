@@ -27,7 +27,7 @@ guards inert, which is exactly why the OS-level backstop below matters.
 
 | Channel | Control | Confidence statement |
 |---|---|---|
-| File-read tools (`Read`/`Grep`/`Glob`), **repo opened as project** | The raw-data guard hook, backed by the OS-level `permissions.deny` entries in `.claude/settings.json` | The strongest channel: the hook fires and the deny list backs it, so the block on `data/raw/` genuinely holds even if the hook is inert. |
+| File-read tools (`Read`/`Grep`/`Glob`), **repo opened as project** | The raw-data guard hook, backed by the OS-level `permissions.deny` entries in `.claude/settings.json` | The strongest channel: the hook fires and the deny list backs it, so the block on `data/raw/` holds even if the hook is inert. |
 | File-read tools, **plugin install into a foreign project** | The guard hook alone | A plugin can carry hooks but not a `permissions.deny` list, so the hook is the sole file-tool control. Installers who want the belt-and-braces backstop copy the `Read`/`Grep`/`Glob` `data/raw/**` deny entries into their own project's `.claude/settings.json` ([`docs/house-rules.md`](house-rules.md)). |
 | **Bash** (shell commands) | Lexical checks over the command text, in all three guards | Lexically guarded, **not a sandbox**: there is no `Bash(...)` deny backstop, and string-matching is trivially dodged by a determined actor (indirection, variables, subshells - the bypass classes are enumerated in ADR-002). A strong default and a consent record for a cooperative agent; the real boundary for shell is OS file permissions and keeping raw data off the box. |
 | **Write/Edit** (file writes) | The consent-write gate | The model is blocked from writing or editing the consent marker, `settings*.json` and the guard hook files themselves, so a confused or prompt-injected model cannot authorise itself or rewrite its own guardrails. Hook maintenance needs the human-set `CST_ALLOW_CONFIG_EDIT=1`. The Bash channel caveat above applies to shell-driven writes. |
@@ -45,7 +45,7 @@ independent challenge constructed are pinned as still blocked. The execution gat
 runner words that are also English words or filename stems to command position, as `make` and
 `source` already were. Threat-model coverage (ADR-002) is unchanged; the decision is ADR-015.
 
-## The honest closing line
+## Closing line
 
 The guards are a real control for a **cooperative** agent, not a boundary against an
 **adversarial** one (README known issues; ADR-002 records this as accepted residual, with

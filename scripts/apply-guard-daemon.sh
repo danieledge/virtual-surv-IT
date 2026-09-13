@@ -2,7 +2,7 @@
 # ADR-014 (docs/adr/ADR-014-persistent-guard-daemon.md) - persistent guard daemon,
 # promoted from the design spike (docs/internal/adr-014-spike/) after live validation on
 # the actual reporting Windows box, 2026-08-12: 8/8 smoke-test checks passed, including
-# genuinely concurrent request safety and staleness detection (see ADR-014 v0.3).
+# concurrent request safety and staleness detection (see ADR-014 v0.3).
 #
 # Installs THREE staged files together - they only make sense as one unit:
 #   - .claude/hooks/run-guard.sh          (updated: daemon-aware, opt-in, see below)
@@ -47,7 +47,7 @@
 # CONCURRENCY (found live while building the spike, not anticipated in ADR-014's original
 # text): bash_hook_dispatcher.main() reads sys.stdin/writes sys.stderr directly -
 # process-global state. Dispatch is serialized behind a lock inside the daemon even though
-# its TCP server accepts concurrent connections - live-tested, 10 genuinely concurrent mixed
+# its TCP server accepts concurrent connections - live-tested, 10 concurrent mixed
 # requests, zero cross-talk.
 #
 # KNOWN LIMITATION, DELIBERATE FOR THIS PASS: daemon-path calls still go through
@@ -60,7 +60,7 @@
 #
 # NOT covered by live validation yet: idle-timeout actually firing (needs a manual 60s+
 # wait, deliberately excluded from the automated smoke test), and whether the Windows
-# detached-spawn (DETACHED_PROCESS | CREATE_NO_WINDOW) stays genuinely invisible in a real
+# detached-spawn (DETACHED_PROCESS | CREATE_NO_WINDOW) stays invisible in a real
 # Claude Code hook invocation (only checked via the smoke test's own daemon start, not via
 # a real PreToolUse call).
 #

@@ -99,7 +99,7 @@ import json
 # 37.7ms import - paid by every `python -m scripts.engagement_state ...` call, which is
 # most of them, while only a handful of subcommands hash anything. A DLL load is also one
 # of the more AV-expensive import shapes on Windows. argparse (14.7ms, the largest single
-# import here) stays at module level - every CLI invocation genuinely needs it.
+# import here) stays at module level - every CLI invocation needs it.
 import os
 import random
 import pathlib
@@ -234,7 +234,7 @@ def _default_artifacts_dir() -> Path:
     # unrelated directory name one level up) resolved to /home/user/artifacts as the
     # "artifacts root" - outside the project entirely, and every engagement pack wrote
     # there. The walk is only safe, and only needed, for the cwd FALLBACK case this
-    # comment already documents (a session that has genuinely cd'd inside an existing
+    # comment already documents (a session that has cd'd inside an existing
     # artifacts/<slug>/ workspace of the CURRENT project) - CLAUDE_PROJECT_DIR being
     # set means that ambiguity doesn't exist; trust it directly.
     if root:
@@ -375,7 +375,7 @@ def clear_active(root: Path, slug: str | None = None) -> None:
 # session's id here, read from the CLAUDE_CODE_SESSION_ID env var Claude Code exposes to
 # Bash tool commands; the persona anchor and the DoD stop gate arm only when their own
 # hook payload's session_id matches the stamp, so a session that never drove the team
-# stays genuinely dormant (user decision: fully silent - open engagements still surface
+# stays dormant (user decision: fully silent - open engagements still surface
 # at every front door: the /engage resume menu, virt-surv go, and the statusline).
 # An absent env var (a human running the CLI from a plain terminal, or an older Claude
 # Code) leaves any existing stamp untouched: session ids are unique, so a stale stamp
@@ -383,7 +383,7 @@ def clear_active(root: Path, slug: str | None = None) -> None:
 TEAM_SESSION_MARKER = ".team-session.json"
 
 
-# How many acting sessions the stamp remembers. Two Claude sessions genuinely can be
+# How many acting sessions the stamp remembers. Two Claude sessions can be
 # engaged in one project at once (H-13, 2026-09-12 audit): the single-id stamp meant the
 # second /engage silently DISARMED the first mid-engagement, because arming is
 # "my session id == the one stamped". A short ring of recent ids arms both without letting
@@ -889,7 +889,7 @@ def _registry_root_for(pack_dir: Path) -> Path | None:
 
     2026-08-14 Fable-model audit finding (C3): this used to compute `pack_dir.parent`
     and treat it uniformly as "the artifacts root" - correct for a WORKSPACE pack
-    (pack_dir = artifacts/<slug>/, parent = artifacts/, genuinely the registry-worthy
+    (pack_dir = artifacts/<slug>/, parent = artifacts/, the registry-worthy
     level) but wrong for a FLAT pack, where pack_dir IS the artifacts root itself
     (artifacts/engagement-state.json directly) and pack_dir.parent is the PROJECT
     ROOT one level too high. workspace_states(project_root) then found artifacts/
@@ -1506,7 +1506,7 @@ def _pid_is_alive(pid: int) -> bool:
     writers end up inside one critical section, so the answer is load-bearing.
 
     POSIX: signal 0 probes without delivering. Windows: OpenProcess + GetExitCodeProcess via
-    ctypes (no fcntl, no tasklist spawn). When we genuinely cannot tell, the caller has
+    ctypes (no fcntl, no tasklist spawn). When we cannot tell, the caller has
     already waited out the full stale TTL, so "cannot tell" resolves to not-alive: the
     conservative window is the TTL itself, and a lock older than that with an unprobeable
     holder must not jam the pack forever."""
@@ -1592,7 +1592,7 @@ def _state_lock(
     deadline = time.time() + wait_seconds
     # The backstop on "the deadline restarts whenever the lock changes hands": a pack being
     # hammered hard enough that this waiter never wins still has to fail eventually rather
-    # than spin forever. Sized off the stale TTL, so a genuinely stuck holder is reclaimed
+    # than spin forever. Sized off the stale TTL, so a stuck holder is reclaimed
     # (above) well before this fires.
     hard_deadline = time.time() + wait_seconds + stale_seconds
     held_by = None  # (inode, token) of the holder we are currently waiting behind
@@ -1642,7 +1642,7 @@ def _state_lock(
         if now >= deadline or now >= hard_deadline:
             raise SystemExit(
                 f"another engagement_state process holds the lock on {artifacts_dir} "
-                f"(age {age:.1f}s) - if it's genuinely dead, delete {lock_path} by hand"
+                f"(age {age:.1f}s) - if it's dead, delete {lock_path} by hand"
             )
         time.sleep(_LOCK_RETRY_BASE_SECONDS + random.random() * _LOCK_RETRY_JITTER_SECONDS)  # nosec B311 - jitter for lock-retry backoff timing, not a cryptographic use of randomness
     try:
@@ -3128,7 +3128,7 @@ def _cmd_migrate(args: argparse.Namespace) -> int:
 # gated through _state_lock in main()'s dispatch below. _cmd_init/_cmd_archive lock the
 # ROOT they resolve args.dir to (they can create/touch more than one pack), which is a
 # coarser-grained but still-correct simplification: one mutation at a time per root, not
-# per pack. Deliberately excludes genuinely read-only commands (_cmd_validate, _cmd_show,
+# per pack. Deliberately excludes read-only commands (_cmd_validate, _cmd_show,
 # _cmd_list), _cmd_render (rewrites the human view/registry, never engagement-state.json
 # itself - _write_state's atomic os.replace already makes concurrent reads of that file
 # safe without a lock), and _cmd_set_active/_cmd_clear_active/_cmd_unarchive/_cmd_migrate

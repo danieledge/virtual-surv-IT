@@ -22,7 +22,7 @@ Dormancy-exact, two gates, in order:
    other prompt in every other session costs nothing, same contract as
    `persona_anchor.py`'s own dormancy gate.
 2. The project's `.guard-interpreter` cache must already be warm. A cold cache means
-   this is a genuinely first-ever run in this project - the exact case the live Bash
+   this is a first-ever run in this project - the exact case the live Bash
    heredoc's own three-way interpreter trial (`python3`/`python`/`py`, Windows-aware)
    exists to handle, and reimplementing that here would be new, untested surface for a
    case that only happens once per project. This hook declines instead: no injected

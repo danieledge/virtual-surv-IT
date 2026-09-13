@@ -332,7 +332,7 @@ def test_close_gate_trusts_the_state_file_over_a_stale_index(tmp_path):
     art = tmp_path / "artifacts"
     assert es_main(["--dir", str(art), "init", "--title", "T", "--slug", "t"]) == 0
     state = json.loads((art / "engagement-state.json").read_text(encoding="utf-8"))
-    assert state["status"] == "in_progress"  # genuinely open - authoritative
+    assert state["status"] == "in_progress"  # open - authoritative
 
     # Index hand-edited/stale: falsely reads as closed.
     index_path = art / "START-HERE.md"
@@ -341,7 +341,7 @@ def test_close_gate_trusts_the_state_file_over_a_stale_index(tmp_path):
     index_path.write_text(text, encoding="utf-8")
     assert _index_status(text) == "closed"  # confirms the fixture actually reads as closed
 
-    # An early summary email - only legitimate once genuinely closed.
+    # An early summary email - only legitimate once closed.
     _touch(art / "engagement-summary-x.txt", "Hi,\n\nDone.\n")
 
     findings = check(art)
@@ -909,7 +909,7 @@ def test_map_drift_fires_when_never_fingerprinted(tmp_path):
 
 def test_map_drift_corrupt_sidecar_surfaces_its_own_finding_not_never_fingerprinted(tmp_path):
     """M6 (2026-08 Fable audit): a PRESENT-but-corrupt fingerprints sidecar used to be
-    caught by the same `except (OSError, ValueError)` as a genuinely MISSING one, both
+    caught by the same `except (OSError, ValueError)` as a MISSING one, both
     collapsing to `entries = {}` - so a corrupt sidecar produced the exact same
     "never fingerprinted" MAP-DRIFT text as no sidecar at all, hiding the real problem
     (the sidecar itself is broken) behind a misleading diagnosis."""
@@ -1103,7 +1103,7 @@ def test_multiple_entry_anchors_mixed_resolve_correctly(tmp_path):
     assert len(stale) == 2  # rows 3 and 4 only - rows 1 (header) and 2 both resolve fine
     assert any(bogus[:9] in f for f in stale)  # the short-form bogus entry
     assert any(bogus in f for f in stale)  # the full-length bogus entry
-    assert not any(sha[:9] in f for f in stale)  # the two genuinely-resolving entries are clean
+    assert not any(sha[:9] in f for f in stale)  # the two resolving entries are clean
 
 
 def test_batch_resolve_shas_handles_mix_in_one_call(tmp_path):
@@ -2226,7 +2226,7 @@ def test_archived_rtm_is_not_checked(tmp_path):
 # __file__-relative FALLBACK (taken in plugin mode, where no `scripts` package resolves) used
 # to re-parse and re-exec the whole file on every call. These tests force the fallback branch
 # by intercepting __import__ itself for the exact `from scripts import X` call (poisoning
-# sys.modules alone is NOT reliable here: once a real prior test has genuinely imported
+# sys.modules alone is NOT reliable here: once a real prior test has imported
 # scripts.engagement_state, CPython caches it as an attribute on the `scripts` package
 # object too, and `from scripts import X` can resolve via that attribute without ever
 # consulting sys.modules again - order-dependent and exactly the kind of flake this test
@@ -2852,6 +2852,7 @@ def _closed_pack_with_deliverable(workspace):
     reads the raw state JSON anyway."""
     import json
     import scripts.engagement_state as es
+
     workspace.mkdir(parents=True, exist_ok=True)
     es.main(["init", "--title", "Rev", "--slug", workspace.name, "--dir", str(workspace)])
     (workspace / "REVIEW-x.md").write_text("# Review\n\n## Findings\n_none_\n", encoding="utf-8")
@@ -2866,6 +2867,7 @@ def test_evidence_room_missing_when_setting_on_fires(tmp_path, monkeypatch):
     """Close-deliverable gate (2026-09-13): evidence_room on but no EVIDENCE-ROOM-*.html at
     close is flagged, so an unattended close cannot drop the pack silently."""
     from scripts.check_artifacts import check as run_check
+
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".claude").mkdir()
     (tmp_path / ".claude" / "team-preferences.json").write_text('{"evidence_room": true}')
@@ -2877,6 +2879,7 @@ def test_evidence_room_missing_when_setting_on_fires(tmp_path, monkeypatch):
 
 def test_evidence_room_present_or_setting_off_passes(tmp_path, monkeypatch):
     from scripts.check_artifacts import check as run_check
+
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".claude").mkdir()
     # setting OFF: no finding

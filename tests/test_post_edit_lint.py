@@ -62,7 +62,7 @@ def test_py_compile_check_never_spawns_a_subprocess(tmp_path, monkeypatch, capsy
     """2026-08-03 perf audit: py_compile runs in-process now (py_compile.compile()), not
     via `python -m py_compile` as a subprocess - every Write/Edit of a .py file during a
     live engagement used to pay a full process-spawn cost for a syntax check alone. Forcing
-    subprocess.run to raise proves the syntax-error path truly never shells out - if it
+    subprocess.run to raise proves the syntax-error path never shells out - if it
     still did, this test would fail with the forced exception instead of asserting cleanly."""
     _live(tmp_path)
     bad = tmp_path / "rule.py"

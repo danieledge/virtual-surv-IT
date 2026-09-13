@@ -50,7 +50,7 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent
 
 # ORDER IS THE CONTRACT: this is the order the two separate hook entries ran in, and it is
 # the order their output appeared in the prompt. Adding a hook here means appending, not
-# inserting, unless the injected context genuinely needs to lead.
+# inserting, unless the injected context needs to lead.
 _PROMPT_HOOKS = (
     ("persona_anchor", _SCRIPTS_DIR / "persona_anchor.py"),
     ("engage_probe_prefetch", _SCRIPTS_DIR / "engage_probe_prefetch.py"),

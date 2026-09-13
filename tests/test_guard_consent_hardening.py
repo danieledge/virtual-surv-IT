@@ -380,7 +380,7 @@ def test_a_marker_named_only_in_a_quoted_note_is_not_a_write(tmp_path):
     inside a quoted value it is descriptive data. Real writes stay blocked."""
     _stamp(tmp_path, {"session": _SID})
     allowed = (
-        'py engagement_state.py record-consent-outcome declined '
+        "py engagement_state.py record-consent-outcome declined "
         '--note "No .exec-consent marker present at open; static review only" --slug x',
         'py engagement_state.py log-note "note: the .human-sign-off is human-only" --slug x',
         'py engagement_state.py set-decision k "no marker" --slug x 2>&1 | head -5',

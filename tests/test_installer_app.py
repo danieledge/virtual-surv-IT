@@ -500,7 +500,7 @@ def test_a_phone_width_terminal_gets_one_column(monkeypatch):
     assert tui_chrome.is_narrow() is True
     monkeypatch.setattr(tui_chrome, "term_columns", lambda default=80: 100)
     assert tui_chrome.is_narrow() is False
-    # 34 + divider + 26 + two borders = 63, so 64 is the first width that genuinely fits.
+    # 34 + divider + 26 + two borders = 63, so 64 is the first width that fits.
     monkeypatch.setattr(tui_chrome, "term_columns", lambda default=80: tui_chrome.NARROW_COLUMNS)
     assert tui_chrome.is_narrow() is False
 

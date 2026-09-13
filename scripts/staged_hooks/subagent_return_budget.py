@@ -50,7 +50,7 @@ report. If this hook is observed to never fire in live use, the extraction shape
 are the first thing to check against an actual captured payload.
 
 Advisory by design: NOT a safety guard, fails open on every error path, silent outside a
-live engagement (dormancy invariant) and on any subagent whose task genuinely needs a
+live engagement (dormancy invariant) and on any subagent whose task needs a
 longer return (a completed handover pack summary, for instance) - it nudges once per
 over-budget return, it does not block or retry.
 

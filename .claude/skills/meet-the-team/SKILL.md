@@ -50,7 +50,7 @@ tests, but never edit live detection code; findings hand back to a builder):
 - **Layla** (`compliance-reviewer`) - auditability, the alert→logic→obligation trail, the Definition of Done.
 - **Yuki** (`data-quality-reviewer`) - independently checks the data is complete and that nothing in
   scope is going unmonitored (a missing feed = undetected abuse).
-- **Viktor** (`model-validator`) - independently challenges any model. Genuinely free to tell `ml-engineer`
+- **Viktor** (`model-validator`) - independently challenges any model. Free to tell `ml-engineer`
   it's wrong - that's the point of keeping them separate.
 
 **⚙️ Behind the scenes:**

@@ -77,7 +77,7 @@ The resulting boundary is clean enough to state in one line:
 ## How the two concepts are stored: three files, named by LIFECYCLE
 
 Two concepts, three files - and the third is an implementation detail OF the tree, not a
-third concept. They split because they have genuinely different lifecycles and one of them
+third concept. They split because they have different lifecycles and one of them
 cannot be shared:
 
 | | Artefact | Lifecycle |
@@ -112,7 +112,7 @@ delete, which to hand-edit, or which to expect in a diff.
 **Could it be two?** Only by folding the derived data into the committed markdown, which
 reintroduces exactly what makes derived data dangerous: a generated block someone can
 hand-edit, and a merge conflict on every regeneration. One file would look tidier and be
-worse. Three tiers whose names explain themselves is the honest floor.
+worse. Three tiers whose names explain themselves is the sensible floor.
 
 The derived file is **not new**. It is today's `codebase-map.fingerprints.json`, extended in
 place and eventually renamed for what it becomes. It already has exactly the right shape:
@@ -203,7 +203,7 @@ never a launch.
 3. `--slice` uses stored symbol ranges when present, so a slice becomes a read of known
    lines rather than a parse.
 
-## Honesty rules, non-negotiable
+## Evidence rules, non-negotiable
 
 The tier label already travels with skeleton output. Stored memory must not launder it.
 

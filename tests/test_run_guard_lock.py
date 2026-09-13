@@ -147,7 +147,7 @@ def test_stale_lock_is_reclaimed_quickly_not_waited_out(proj):
 
     The threshold moved from 10s to 120s on 2026-09-12 (audit H-20): 10s sat four lines below
     this launcher's own recorded measurement of 25-90s cold starts under fan-out contention,
-    so a genuinely working holder was declared abandoned and its lock removed - and its own
+    so a working holder was declared abandoned and its lock removed - and its own
     EXIT trap then deleted whichever other process's lock directory existed by then. Age is
     the backstop for a pid-less stamp now; the pid test below is the primary signal.
     """

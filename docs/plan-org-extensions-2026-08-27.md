@@ -92,7 +92,7 @@ additive-only: they cannot add a condition the DoD gate enforces. So an org can 
 always write a Confluence page" and the team will always offer it - but a run that skips it
 still closes green.
 
-Two honest options:
+Two workable options:
 
 - **(a) Keep it an offer.** Zero risk, and consistent with "extensions never gate". The org's
   step is prompted every time; compliance comes from people, not the tool.

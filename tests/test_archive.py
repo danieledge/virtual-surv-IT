@@ -227,7 +227,7 @@ def test_edited_deliverable_invalidates_fingerprint(tmp_path, capsys):
     )
     ca_main(["check_artifacts", str(root)])
     out = capsys.readouterr().out
-    assert "skipped via fingerprint" not in out  # the pack was genuinely re-scanned
+    assert "skipped via fingerprint" not in out  # the pack was re-scanned
 
 
 def test_fingerprint_ignores_state_and_renders(tmp_path):

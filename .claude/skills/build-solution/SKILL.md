@@ -63,7 +63,7 @@ Run the **orchestrator-workers** pattern, agile and iterative:
    Criticals, then a separate call for the Mediums, with no re-review in between and no stated
    reason for the gap) is pure overhead - each call re-spins a subagent and reloads context for
    findings the builder could have fixed together (2026-08-04 eval trace: `process-full-lifecycle`
-   did exactly this). A NEW fix call is warranted when a **re-review** surfaces genuinely new
+   did exactly this). A NEW fix call is warranted when a **re-review** surfaces new
    findings, not to stagger one review's own findings by severity. **A fix that changes
    externally visible behaviour (a new failure mode, changed output, changed permissions)
    includes updating the FSD/README/docstrings in the SAME fix call** - docs currency is a

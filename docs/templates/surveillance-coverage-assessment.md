@@ -65,7 +65,7 @@ Severity scale (undetected-abuse exposure, not remediation effort):
 Missing/dead feeds → `platform-engineer`; partial/quality issues → `data-analyst`; missing
 scenarios → `business-analyst` / `rules-developer`.
 
-**Dead-feed detection** - "no alerts" is ambiguous: it can mean the population is genuinely quiet
+**Dead-feed detection** - "no alerts" is ambiguous: it can mean the population is quiet
 OR a feed has silently failed (the MW79 trap). Distinguish these using at least one of:
 - **Synthetic canary alert** - inject a synthetic record that must always trigger an alert; confirm
   receipt per scheduled run. Absence of the canary alert = feed or scenario failure.

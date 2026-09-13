@@ -840,7 +840,7 @@ class RequestApp(TierApp):
 
 
 def _is_binary(value) -> bool:
-    """Whether a settings value is genuinely on/off, rather than one of several states.
+    """Whether a settings value is on/off, rather than one of several states.
 
     Named rather than inlined because the answer decides which MARK a row gets, and a row
     marked "off" that is actually set to "auto" is a lie the user acts on. Only the head of

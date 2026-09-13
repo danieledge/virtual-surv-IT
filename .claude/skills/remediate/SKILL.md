@@ -44,7 +44,7 @@ session, never the Skill tool (`.claude/skills/.shared/run-mode.md`).
    (CLAUDE.md §7) - without it, perf claims stay 🧠 inferred. **Do not
    defer fixable work** - keep going until everything that *can* be safely fixed *is* fixed
    (Critical → Warning → Medium → the worthwhile 🔵 style items). The only things left unfixed
-   are those that genuinely need a **human decision** (a design call, a risky change, missing
+   are those that need a **human decision** (a design call, a risky change, missing
    domain input) - mark those **🔴 Open (needs human developer review)** with the reason, **not**
    "⏭️ deferred to a later sprint". Deferral is a last resort with an explicit tracking
    reference and a reason it can't be done now - never a way to punt work you could have done.

@@ -393,7 +393,7 @@ def check_menu_shape_reuse(questions: list) -> str | None:
                     f"locked-menu drift: the question headed {header!r} carries exactly the "
                     f"locked {canonical_header!r} option set ({sorted(labels)!r}) under a "
                     "different header. Ask the locked menu as specified, with its own header "
-                    "(engage/references/), or ask a genuinely different question - renaming "
+                    "(engage/references/), or ask a different question - renaming "
                     "the header does not make it a new menu."
                 )
     return None

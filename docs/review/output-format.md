@@ -153,7 +153,7 @@ guidance block under the exact heading `## 🔵 Developer guidance - improving f
 developer-friendly guidance on the *original coding style overall* (patterns, structure,
 naming, testing/docs habits) and how the author could improve next time. **Scale it to the change:** 2-4 points for a substantial review,
 but a single plain sentence is fine on a trivial diff - don't manufacture filler. If the code is
-genuinely strong, say so and name what's done well. The point is the developer always leaves with
+strong, say so and name what's done well. The point is the developer always leaves with
 something to learn, not just a pass/fail.
 
 **No code in scope? Say so - never invent developer notes.** "Mandatory" here means the
@@ -167,7 +167,7 @@ noise dressed as diligence, it invites a reader to act on invented guidance, and
 exactly the "assume every task is a detection rule" habit the handbook warns against
 (2026-08-21 live report: an analysis engagement produced developer notes for work that
 involved no code). If there IS code but the review found nothing to say about its style,
-that is the "genuinely strong" case above - a different answer, written differently.
+that is the "strong" case above - a different answer, written differently.
 
 ### 🧑‍💻 Prompting guidance - *only when AI-assisted / "vibe-coded" AND findings were raised*
 Include this section **only if** (a) the author said at intake the code was AI-generated/vibe-coded,

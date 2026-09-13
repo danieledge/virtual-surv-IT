@@ -20,7 +20,7 @@ become the console noise the task-list feature exists to avoid) - after the mark
 appears, silent for the rest of the engagement, including through close.
 
 Deliberately narrow, matching dod_stop_gate.py's low-noise design:
-  * fires only while a pack is genuinely gated (open/closing; the flat pack's pre-0.31
+  * fires only while a pack is gated (open/closing; the flat pack's pre-0.31
     open/blocked/closing semantics) AND `phase` has reached "delivery" or "close" - the
     point the operating guide names ("the moment the plan is agreed");
   * nudges once per stop cycle (the Stop hook's `stop_hook_active` flag, same loop-safety

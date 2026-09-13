@@ -7,7 +7,7 @@ auditor) would flag, filter the noise, and **always show what was filtered** so 
 trustworthy and defensible.
 
 **Filtering vs conciseness - these are not the same lever, and only one applies per agent.**
-`code-reviewer` and `performance-reviewer` findings are scored and genuinely **filtered** below
+`code-reviewer` and `performance-reviewer` findings are scored and **filtered** below
 threshold (via `review-scorer`) - safe, because neither reviewer's findings are in the
 never-filter regulated list below. `compliance-reviewer` and `model-validator` findings are, by
 what those two agents exist to find, overwhelmingly **in** that list - so they are never routed

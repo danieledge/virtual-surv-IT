@@ -172,7 +172,7 @@ def test_scoped_agent_cannot_edit_the_rendered_report_directly():
 
 
 def test_scoped_agent_cannot_write_a_findings_looking_path_in_the_wrong_directory():
-    """The shape must be genuinely under artifacts/.../data/, not just contain the
+    """The shape must be under artifacts/.../data/, not just contain the
     filename pattern anywhere in a path."""
     assert _blocks("Write", {"file_path": "data/findings-x.jsonl"}, "compliance-reviewer")
     assert _blocks(

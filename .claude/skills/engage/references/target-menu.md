@@ -42,6 +42,6 @@ question's automatic **Other**, never an invented option.
   uncommitted here" and re-ask the same menu - never invent scope to have something to do.
 - **Whole working directory** inherits map-first scoping (`deep-review` step 3): the
   inventory comes from `VSIT/shared/map.md` or `git ls-files`, never a breadth-first
-  crawl, and the sizing line prices the whole-repo pass honestly before the gate.
+  crawl, and the sizing line prices the whole-repo pass plainly before the gate.
 - The chosen target is restated in the priced review-menu message ("Target: whole working
   directory, ~120 files") - corrections happen there, not on a new screen.

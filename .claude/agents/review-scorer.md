@@ -53,7 +53,7 @@ step 1 is exempt from that budget** (2026-08-12): it gets forwarded verbatim int
 `code-reviewer`'s/`compliance-reviewer`'s own dispatch briefs so they can skip re-deriving it
 themselves - a list truncated to fit a narrative-summary budget would silently hand them an
 incomplete file set. **Always state the total file count alongside the list** (e.g. "N files:"
-before the list, or "showing first K of N" if you genuinely can't fit all N even here), so a
+before the list, or "showing first K of N" if you can't fit all N even here), so a
 mismatch between the stated count and the list length is immediately visible to whoever reads
 it, not a truncation nobody notices. **Tag outputs 📊 observed (counted/derived from the diff or
 rubric) / 🧠 inferred** (CLAUDE.md §6) - flag any count you could not derive mechanically.

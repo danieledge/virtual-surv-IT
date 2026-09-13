@@ -85,7 +85,7 @@ def test_client_loads_and_reads_port_without_importing_guard_daemon_at_all(tmp_p
     sys.path.insert hack) and executed its WHOLE module - a real TCP server
     implementation (socketserver/threading/secrets/io) - just to reach a 10-line file
     read. Deliberately does NOT call _load_guard_daemon first (unlike every other test
-    in this file): loading the client with "guard_daemon" genuinely absent from
+    in this file): loading the client with "guard_daemon" absent from
     sys.modules must still succeed, and its own inlined read_port_and_token must still
     work correctly - proving the two are no longer coupled at import time."""
     assert "guard_daemon" not in sys.modules  # nothing pre-loaded it - the point of this test
@@ -186,7 +186,7 @@ def _send_raw_request(port: int, token: str, request: dict) -> dict:
 
 def _start_real_daemon(gd, module_root, state_root, idle_timeout=5):
     """Starts a real daemon thread with module_root (where target scripts are
-    imported from - REPO_ROOT, so every real target script genuinely exists) kept
+    imported from - REPO_ROOT, so every real target script exists) kept
     SEPARATE from state_root (where the port file lands - always a throwaway
     tmp_path in these tests, never REPO_ROOT's own real .claude/ directory, which
     this session's own real daemon may already be using - writing there would risk
@@ -223,7 +223,7 @@ def test_daemon_dispatches_to_the_named_target_not_always_bash_hook_dispatcher(
     """The actual point of the whole extension: two DIFFERENT targets in the same
     request set must each get answered by their OWN script, not silently both
     dispatched to bash_hook_dispatcher. Uses REPO_ROOT (this real repo) as
-    module_root so every real target script genuinely exists to import."""
+    module_root so every real target script exists to import."""
     gd = _load_guard_daemon(monkeypatch)
     port, token = _start_real_daemon(gd, REPO_ROOT, tmp_path)
 
@@ -287,7 +287,7 @@ def test_daemon_captures_stdout_for_stop_hook_dispatcher(tmp_path, monkeypatch):
 
 
 def test_daemon_unknown_target_fails_open_via_daemon_stale_signal(tmp_path, monkeypatch):
-    """A genuinely unknown target (protocol mismatch, typo, anything) must never
+    """A unknown target (protocol mismatch, typo, anything) must never
     crash the daemon or hang the connection - it reuses the existing daemon_stale
     signal, which the client already treats as "cold-start this call safely"."""
     gd = _load_guard_daemon(monkeypatch)
@@ -540,7 +540,7 @@ def test_read_start_backoff_fails_open_on_corrupt_marker(tmp_path, monkeypatch):
 
 
 def test_main_clears_backoff_marker_when_daemon_answers_successfully(tmp_path, monkeypatch):
-    """The only signal this client ever gets that a start attempt genuinely worked:
+    """The only signal this client ever gets that a start attempt worked:
     _try_daemon returning a real response. That must wipe any recorded streak so a
     LATER failure starts counting from zero again."""
     client = _load_guard_daemon_client(monkeypatch)
@@ -770,7 +770,7 @@ def test_launcher_passes_the_correct_target_name_for_each_daemon_servable_script
 @pytestmark_sh
 def test_launcher_self_locates_when_claude_plugin_root_is_unset(tmp_path):
     """The exact reported live scenario: CLAUDE_PLUGIN_ROOT is completely UNSET in this
-    process (not just pointing somewhere unexpected - genuinely absent, as when Claude
+    process (not just pointing somewhere unexpected - absent, as when Claude
     Code's hook templating substitutes it correctly into the command line but doesn't
     also export it into the spawned process's environment). Without self-location, $_root
     falls back to CLAUDE_PROJECT_DIR, and DAEMON_CLIENT resolves to

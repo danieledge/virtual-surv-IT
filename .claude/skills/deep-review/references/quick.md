@@ -28,7 +28,7 @@ rule above.
 2. **Lenses inline** - the router's selected lenses (`docs/review/agent-router.md`) read and
    applied sequentially over that one scope.
 3. **Score in-context** against `docs/code-review-method.md`'s rubric and present with the
-   honest label **"quick-tier: self-scored, no independent scorer at this depth"**. Never
+   self-scored label **"quick-tier: self-scored, no independent scorer at this depth"**. Never
    filter regulated findings (secrets, PII/raw data §5, undocumented thresholds / broken
    traceability §4).
 4. **🔴/🟠 to the console** (clean scoreboard, no dumps); artifact only if asked.

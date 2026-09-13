@@ -40,7 +40,7 @@ actually work under `file://`, not just `npm run dev`). Tell them, 🎩 voice, n
 
 If `npm install`/`npm run dashboard` fails (no network for the first install, a broken local
 Node), say plainly what failed and stop - do NOT fall through to step 3. It's disabled (see
-step 1's reasoning); a failed build gets reported honestly, not silently papered over with an
+step 1's reasoning); a failed build gets reported as such, not silently papered over with an
 unverified fallback.
 
 **3. Fallback - DISABLED (plain Python-only HTML).** `<python> -m scripts.dashboard --out

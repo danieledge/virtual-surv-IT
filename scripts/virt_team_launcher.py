@@ -2170,8 +2170,7 @@ def _hold_for_reader() -> None:
     fault was found across the installer's menus on 2026-09-11 and fixed the same way.
 
     ONE implementation now (2026-09-12 audit, L-28): tui_chrome.hold_for_reader, shared with
-    the installer's pause. The stream to test is passed in because the two callers genuinely
-    differ and neither had recorded why - `virt-surv go` runs inside `$(...)`, so ITS stdout
+    the installer's pause. The stream to test is passed in because the two callers differ and neither had recorded why - `virt-surv go` runs inside `$(...)`, so ITS stdout
     is the alias capture pipe and is never a tty; STDERR is the stream this launcher actually
     draws on, so stderr is the one to ask. A bare clone with no tui_chrome falls back to the
     old inline pause rather than losing the read-receipt."""
@@ -4392,7 +4391,7 @@ def _offer_update_if_behind() -> None:
     which already knows how to pull, refresh the marketplace copy and restart nothing it
     should not.
 
-    Silent unless there is genuinely something to say. Never blocks: no upstream, no refs,
+    Silent unless there is something to say. Never blocks: no upstream, no refs,
     no network, not a tty - all mean "say nothing and get on with the launch"."""
     try:
         clone = _clone_root()
@@ -4574,7 +4573,7 @@ def _tool_inventory_line(project_dir: Path) -> str:
     thing that runs fifteen `which` calls, and never the thing that fails a launch.
 
     Returns "" when there is no cache yet, which is honest: the first `go` in a project
-    genuinely does not know, and inventing a number would be worse than a blank row."""
+    does not know, and inventing a number would be worse than a blank row."""
     try:
         cache = _vsit_paths().local_file("tool_availability", project_dir)
         if not cache.is_file():

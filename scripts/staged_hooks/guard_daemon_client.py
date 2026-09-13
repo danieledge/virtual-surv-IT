@@ -20,7 +20,7 @@ the full rationale. `module_root` locates the real target scripts (plugin-shippe
 CLAUDE_PLUGIN_ROOT-first). `state_root` locates this project's port file
 (CLAUDE_PROJECT_DIR only). Passing only module_root keeps today's project-mode
 behaviour (they default to each other) - only plugin-install mode, where the two
-genuinely differ, needs both.
+differ, needs both.
 
 2026-08-14 multi-target extension: a THIRD argument names which target script this
 call is for (defaults to "bash_hook_dispatcher" for a caller that predates this -
@@ -286,7 +286,7 @@ def _record_start_attempt(state_root, streak_count: int) -> None:
 
 def _clear_start_backoff(state_root) -> None:
     """Called once a daemon actually answers a request - the one signal this client
-    ever gets that a start attempt genuinely worked. Wipes the streak so the next
+    ever gets that a start attempt worked. Wipes the streak so the next
     failure (if the daemon later dies) starts counting from zero again, not from
     wherever an old streak left off."""
     try:

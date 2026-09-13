@@ -14,7 +14,7 @@ process-spawn overhead - so a guard's OWN hooks.json entry no longer exists to c
 directly. Its registration now lives in the dispatcher's own _CHECKS table instead,
 which tests/test_bash_hook_dispatcher.py covers in far more depth (fidelity against the
 real guards, matcher scope, per-guard crash-policy preservation). The checks here stay
-focused on what's still genuinely THIS file's job: config-file drift and confirming the
+focused on what's still THIS file's job: config-file drift and confirming the
 dispatcher itself is reachable and portable.
 """
 

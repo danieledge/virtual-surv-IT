@@ -14,7 +14,7 @@ the close machinery (roughly $3-8); plus the perf pass if chosen (~$0.5-1). **Ex
 engagement ALL-IN at roughly 2x the pass figure** - orchestration, scoring, the challenge and
 artifacts ride on top - and more when caches run cold (5-minute TTL boxes). Budget status:
 <DAILY/HEADROOM line when a budget is recorded>." Scale the figures to the target's size
-honestly; the pass price and the all-in are both stated so neither is mistaken for the other -
+plainly; the pass price and the all-in are both stated so neither is mistaken for the other -
 order-of-magnitude is the point, not a quote. **Size mechanically, output a NUMBER, never a
 listing** (live 2026-08-17: a sizing `find` dumped 217 paths into the transcript, and the
 count included caches, VSIT/engagements/ and `.claude/` internals - junk that overstates the

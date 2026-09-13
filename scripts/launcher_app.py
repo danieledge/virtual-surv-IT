@@ -1706,7 +1706,7 @@ _PREFLIGHT_KEYS = "Space/Enter toggle · Ctrl-D or F2 START unattended · Esc/q 
 
 
 _PREFLIGHT_CAPS = (0, 10, 25, 35, 50, 100)
-# Four rungs, because the choice at a ceiling is genuinely two different choices and
+# Four rungs, because the choice at a ceiling is two different choices and
 # collapsing them loses one (owner, 2026-08-25: "we can either say continue and notify or
 # choose a hard cap, why don't we keep flexibility"). park/light/continue are ADVISORY -
 # the ceiling is a threshold the run reports against and can pass. "stop" is ENFORCED,
@@ -1946,7 +1946,7 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
                 "  It works the ticket end to\n  end and never asks you a\n  question.\n\n"
                 "  Questions it WOULD have\n  asked become recorded\n  assumptions, listed in the\n"
                 "  report and posted to the\n  ticket for you to check.\n\n"
-                "  If scope is genuinely\n  unclear, or something it\n  needs is missing, it PARKS\n"
+                "  If scope is\n  unclear, or something it\n  needs is missing, it PARKS\n"
                 "  the work and says why - it\n  does not guess.\n\n",
             )
         )

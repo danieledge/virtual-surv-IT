@@ -97,6 +97,6 @@ flavour. Never dead-end. *(Short of tokens? A captured review run lives at
 longer a committed Build reference run: the old one was captured pre-0.16 and was removed on
 2026-08-29 rather than left standing as a record of behaviour the team no longer has.)*
 
-> Narrate what genuinely happened (real agent outputs, real guard blocks, real
+> Narrate what happened (real agent outputs, real guard blocks, real
 > eval scores) - never fake a step for effect. If an analyser is missing or a finding is inferred,
 > say so. The demo's value is that it's *real*, just on safe data.

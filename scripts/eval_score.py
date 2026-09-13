@@ -197,7 +197,7 @@ def _keyword_re(keyword: str) -> re.Pattern | None:
     inside "said", "fix" inside "prefix". That is the same class of gaming-by-phrasing the
     scorer's own comments already record being patched twice.
 
-    Anchored on the LEFT only, and deliberately so. The manifests genuinely rely on
+    Anchored on the LEFT only, and deliberately so. The manifests rely on
     open-ended right-hand matching for inflections (a keyword like "traceab" is written to
     catch "traceability" and "traceable"), so a full `\b...\b` would silently drop real
     matches and change existing case results - the opposite of the requirement. A left

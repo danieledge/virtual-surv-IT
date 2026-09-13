@@ -47,7 +47,7 @@
     call attempted at all - the exact failure this rule exists to prevent. The SAME day, a
     right-sizing line that explicitly said "...dispatched together via the Workflow tool (this
     session's default parallel-dispatch path)" as part of stating the plan actually did dispatch
-    via Workflow, 8 agents, genuinely concurrent. The only difference between the two was
+    via Workflow, 8 agents, concurrent. The only difference between the two was
     whether the mechanism was named inside the commitment itself. So the right-sizing line for
     2+ independent agents is not "N specialists, dispatched concurrently" - it is "N specialists,
     dispatched via the Workflow tool" (default path) or "N specialists, dispatched as N Task

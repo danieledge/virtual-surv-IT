@@ -129,7 +129,7 @@ def test_stop_gate_fires_on_project_engagement_when_cwd_elsewhere(tmp_path, monk
     assert decision["decision"] == "block" and "DoD backstop" in decision["reason"]
 
 
-# --- session scoping: a session that never engaged stays genuinely dormant ----------------
+# --- session scoping: a session that never engaged stays dormant ----------------
 
 
 def test_persona_silent_in_session_that_never_engaged(tmp_path, monkeypatch, capsys):

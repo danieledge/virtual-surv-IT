@@ -74,6 +74,6 @@ structure can no longer be altered by the value.
 - Every factual claim is **cited** (file:line, config key, commit, TSD §) and **tagged** 📊/🧠.
 - **Cause is present** even when it is an informed reconstruction - and says so.
 - **Impact is in the domain's terms** (false negatives, alert volume, audit exposure), tagged
-  🧠 when projected, honest about magnitude.
+  🧠 when projected, explicit about magnitude.
 - The fix/action is **concrete and routed** - a diff or a named change type, never "improve this".
 - No unglossed jargon; nothing depends on having been in the session.

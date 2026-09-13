@@ -738,7 +738,7 @@ def test_the_go_banner_reports_what_the_probe_found(tmp_path):
 
 
 def test_no_cache_yet_says_nothing_rather_than_guessing(tmp_path):
-    """The first `go` in a project genuinely does not know. Inventing a number would be
+    """The first `go` in a project does not know. Inventing a number would be
     worse than a blank row."""
     import scripts.virt_team_launcher as vtl
 

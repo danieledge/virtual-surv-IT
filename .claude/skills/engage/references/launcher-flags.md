@@ -56,7 +56,7 @@ first prompt. When present, this is the answer - **do not ask the question at al
 - **`--resume <slug>` → validate the slug first** (`RESUME_MENU`/`list --menu`, same as
   below) rather than trusting it blindly: the wrapper's view could be stale (another session
   closed or archived it in the seconds between the wrapper computing the menu and this
-  session starting). Genuinely in `open` → resume it, skip straight to the "one ACTIVE
+  session starting). In `open` → resume it, skip straight to the "one ACTIVE
   engagement" and "state file is the record" rules below. Not in `open` (or `open` empty) →
   fall back to the normal flow below and ask, same as if no flag had been given - **never
   silently proceed on stale data, and never error out unhelpfully either.**

@@ -39,7 +39,7 @@ The segments, their precise membership rule (so a record lands in exactly one), 
 
 ## 3. Per-segment behaviour profile
 The distribution of the signal metric per segment - this is what makes a per-segment threshold
-defensible. Use robust stats (median/IQR), not just the mean.
+defensible. Use resistant statistics (median/IQR), not just the mean.
 
 | Segment | Metric | Median | IQR / spread | P90 | P95 | P99 | Basis |
 |---|---|---|---|---|---|---|---|

@@ -147,7 +147,7 @@ def test_cache_hit_bypasses_the_probe_loop_entirely(tmp_path):
     assert proc.returncode == 0
     # The bare shell-level fallback (interpreter never found at all) is the STATIC string
     # "😴 Morgan dormant" with no separators - indistinguishable in isolation from the
-    # python heredoc's OWN "😴 Morgan dormant" engagement-status text (there is genuinely no
+    # python heredoc's OWN "😴 Morgan dormant" engagement-status text (there is no
     # open engagement in this fixture). What only the successful python render can produce
     # is the " | "-joined model/cost/preferences tail, proving the interpreter actually ran.
     assert " | " in proc.stdout

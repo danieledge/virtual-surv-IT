@@ -7,8 +7,8 @@ keep contributions consistent with the project's own standards.
 ## Licence & contribution terms
 
 The project is licensed under **GNU AGPL-3.0-only** (see [`LICENSE`](LICENSE)). By submitting a
-contribution you agree it is provided under that same licence (inbound = outbound), and — so the
-maintainer can continue to offer a **commercial dual licence** — you grant the maintainer
+contribution you agree it is provided under that same licence (inbound = outbound), and - so the
+maintainer can continue to offer a **commercial dual licence** - you grant the maintainer
 (the sole copyright holder) the right to license your contribution under other terms as part of
 the project. Don't contribute code you don't have the right to license this way. A formal CLA may
 be introduced later; until then, opening a PR constitutes that agreement.
@@ -29,7 +29,7 @@ gate is now mechanical, not a documented intention:
 1. On `dev`, run the **golden-slice `/run-evals`** (a representative ~10-15 of the 52 golden cases) in a
    Claude Code session on this repo.
 2. Record the result as **`evals/eval-baseline-<version>.md`** (date · cases run · pass/fail ·
-   notes; `Scope: full` — or `Scope: deterministic-only` for a patch release with no prompt
+   notes; `Scope: full` - or `Scope: deterministic-only` for a patch release with no prompt
    changes, which used pytest + the deterministic scorer only). Commit it.
    **The baseline MUST carry exactly one machine-readable ` ```eval-verdict ` block** (format
    documented in [`evals/README.md`](evals/README.md); each run drafts one into its `report.md`,

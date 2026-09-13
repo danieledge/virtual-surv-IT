@@ -46,7 +46,10 @@ def test_every_copy_reads_a_stamp_file_identically(tmp_path, label):
     stamp.write_text(content if isinstance(content, str) else json.dumps(content), encoding="utf-8")
     answers = {name: _load(path)._stamped_session_ids(str(stamp)) for name, path in _FILES.items()}
     assert len(set(answers.values())) == 1, f"the copies disagree on a {label} stamp: {answers}"
-    missing = {name: _load(path)._stamped_session_ids(str(tmp_path / "absent.json")) for name, path in _FILES.items()}
+    missing = {
+        name: _load(path)._stamped_session_ids(str(tmp_path / "absent.json"))
+        for name, path in _FILES.items()
+    }
     assert set(missing.values()) == {()}
 
 
@@ -69,7 +72,9 @@ def test_the_polarity_difference_is_deliberate_and_stated():
     """Safety gates return True on a missing session id; advisory redirects return False."""
     for label in ("guard-code-execution.py", "guard-consent-writes.py"):
         src = _FILES[label].read_text(encoding="utf-8")
-        assert "if not sid:\n        return True" in src, f"{label}: a safety gate fails toward ARMED"
+        assert "if not sid:\n        return True" in src, (
+            f"{label}: a safety gate fails toward ARMED"
+        )
     for label in ("enumeration_redirect.py", "exploration_redirect.py"):
         src = _FILES[label].read_text(encoding="utf-8")
         assert "if not sid:\n        return False" in src, f"{label}: an advisory hook stays silent"

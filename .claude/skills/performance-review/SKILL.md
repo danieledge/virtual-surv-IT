@@ -76,7 +76,7 @@ tool-uses in this ONE response, before reading any of their results:
    benchmark that would confirm it**. If you couldn't measure, say so in tooling coverage rather
    than upgrading a guess to a fact.
 5. **Score & filter** *(delegate to `review-scorer`, haiku - after `performance-reviewer`'s pack
-   exists: the scorer pass is the one genuinely sequential step, same as `/deep-review`)* - apply
+   exists: the scorer pass is the one sequential step, same as `/deep-review`)* - apply
    `docs/code-review-method.md`'s confidence rubric to the pack's candidate findings and produce
    the `Found N · Reported R · Filtered F` counts. Performance findings are not in the never-filter
    regulated list, so this is genuine filtering (unlike compliance/model-validation packs) - trim

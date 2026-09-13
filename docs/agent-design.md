@@ -88,7 +88,7 @@ re-checked by another specialist or by the PM's own challenge pass can safely ru
 of the orchestrator's own tier; a specialist that is the **final, independent word with no
 downstream re-check** must be opus itself, since nothing else catches its mistakes. Reserve opus for
 judgment that is **(a) the final, independent word with no downstream re-check**, **(b) deep/subtle
-enough that a miss is costly and hard to catch**, or **(c) genuinely novel design**. Everything
+enough that a miss is costly and hard to catch**, or **(c) novel design**. Everything
 evidenced and re-checkable → **sonnet**. Purely mechanical → **haiku**.
 
 | Agent | Tier | Why this tier |
@@ -98,7 +98,7 @@ evidenced and re-checkable → **sonnet**. Purely mechanical → **haiku**.
 | `code-reviewer` | **opus** | Subtle cross-language **security** judgement analysers miss; high blast radius. **Depth-tiered at dispatch (revised 2026-09-13)**: Audit AND Deep now both ride this opus frontmatter (opus is ~1.67x sonnet, not 5x, so depth is cheap insurance; the sonnet default was retired). A `sonnet` opt-out is priced at the review menu for cost-pinched estates; Quick runs in-session and never spawns it at all. |
 | `ml-engineer` | **opus** | Novel ML/NLP **design**; subtle failure modes (leakage, overfitting) are cheaper to avoid than to catch and re-do. |
 | `business-analyst` | sonnet | Structured elicitation/spec work; re-checked against the SME packs, by reviewers and the PM. |
-| `rules-developer` | sonnet | Detection code + tests, built **from a spec validated against the `docs/sme/` packs** and independently reviewed (code + compliance) before merge - two checks up front that `ml-engineer`'s *novel* design lacks (its validation is post-build). **A specific engagement may escalate to opus for genuinely novel/complex scenario logic** where a subtle miss is as costly as a model error; the tier is per-engagement, the default sonnet. |
+| `rules-developer` | sonnet | Detection code + tests, built **from a spec validated against the `docs/sme/` packs** and independently reviewed (code + compliance) before merge - two checks up front that `ml-engineer`'s *novel* design lacks (its validation is post-build). **A specific engagement may escalate to opus for novel/complex scenario logic** where a subtle miss is as costly as a model error; the tier is per-engagement, the default sonnet. |
 | `data-analyst` | sonnet | Evidenced exploratory analysis/MI; figures are checkable. |
 | `tuning-analyst` | sonnet | Threshold calibration backed by **evidence** (ATL/BTL, dry-run) and re-checked by `model-validator`/PM. |
 | `platform-engineer` | sonnet | Well-trodden pipeline/ETL/infra patterns. |
@@ -116,8 +116,7 @@ against the Opus 4.1-era ~5x premium ($15/$75 vs $3/$15 per million tokens). Opu
 $5/$25 - a **1.67x** ratio - so the retier-down lever saves far less than the intuition it was
 written under (roughly $1-2 per full review cycle), and the opus tier on the four final-word roles
 is now cheap insurance. Prefer keeping the tiers and spending the cost effort on right-sizing and
-caching (README §Token usage) instead; the retier lever remains documented for genuinely
-cost-pinched estates.
+caching (README §Token usage) instead; the retier lever remains documented for cost-pinched estates.
 
 **Verification-pass audit note (Opus 5, same date).** Anthropic's Opus 5 guidance is that the
 model self-verifies well enough that redundant verification scaffolding is pure cost. In THIS

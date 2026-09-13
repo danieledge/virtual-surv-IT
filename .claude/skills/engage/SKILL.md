@@ -116,7 +116,7 @@ section above and not here, where the asking happens.
 
 With the target known: show both disclaimers (text) at startup, then ask in a **single
 `AskUserQuestion` call**, including **only** the questions whose gate is met:
-- **Work-type** (header `Work type`) - *only if the classification is genuinely ambiguous after
+- **Work-type** (header `Work type`) - *only if the classification is ambiguous after
   reading the request* (step 1). `/engage review this script` needs no "problem / review /
   build?" menu - classify it yourself, state the classification in one line, and let the user
   correct it. Don't manufacture the question when the answer is in the request. When the
@@ -169,11 +169,11 @@ in your banner line and target its workspace in every state command (`--slug <sl
   the full engagement machinery at 8x the baseline cost of what was a two-question chat answer
   (token audit 2026-08-03). It is fine to ask "want this written up as a tracked artifact?" as a
   single low-key option - never a menu of escalation paths. Only open a workspace (step 4) if the
-  user's own reply genuinely asks for one. **Known, accepted trade-off**: this path leaves no
+  user's own reply asks for one. **Known, accepted trade-off**: this path leaves no
   persisted record - no `engagement-state.json`, no registry entry, nothing `ENGAGEMENTS.md`
-  would ever list. That is deliberate for a genuinely throwaway question (§4's traceability spine
+  would ever list. That is deliberate for a throwaway question (§4's traceability spine
   governs *detection logic*, not every chat reply). If the answer is itself a substantive
-  finding worth an audit trail, that is exactly the "genuinely asks for one" case - open the
+  finding worth an audit trail, that is exactly the "asks for one" case - open the
   workspace;
 - an *alert-absence / detection-gap ask* - "why did this not alert?", "no alerts from X",
   "alert volumes dropped" → read `.claude/skills/why-no-alert/SKILL.md` and follow it:
@@ -228,10 +228,10 @@ of truth - the review skill must NOT re-ask it.** The **scope** (what's changed 
 target) is not a question: it is stated in the priced message beside the menu and corrected in
 one word - see `references/review-menu.md`.
 
-**2. Clarify only if genuinely needed - no ceremony.** Don't ask a standalone "any other
+**2. Clarify only if needed - no ceremony.** Don't ask a standalone "any other
 clarifications?" round by default. **Fold** any remaining material unknown (jurisdiction, success
 criteria) **into the batched calls above**, or ask a single targeted question **only if**
-something material is genuinely missing. Never assume scope, jurisdiction, data availability or
+something material is missing. Never assume scope, jurisdiction, data availability or
 success criteria - but don't manufacture a question to fill a step. **Regulatory citations are a
 PROJECT-WIDE preference** (`VSIT/config/preferences.json` `regulatory_citations`, on unless
 explicitly `false`), not something to ask per engagement: set once via the installer's "Project
@@ -248,8 +248,7 @@ single-select: **Apply the fixes** · **Show me the diff first** · **Don't chan
 the user has already answered.
 
 **3. Package by default - the packaging question is retired (2026-08-17 user decision).** A SINGLE-deliverable engagement skips the wrapper entirely: the deliverable carries the closing block and IS the delivery (bookends §Single-deliverable close) - never invent a wrapper or exec summary around one finished artifact.
-(Skip this step entirely for the direct-answer path in step 1 unless the user has genuinely
-asked for a tracked deliverable.) Packaging is **one consolidated Delivery Report**
+(Skip this step entirely for the direct-answer path in step 1 unless the user has asked for a tracked deliverable.) Packaging is **one consolidated Delivery Report**
 (`docs/templates/delivery-report.md`) holding every section - every real engagement chose it,
 so it is **no longer asked**: state it in the brief ("Output: Consolidated Delivery Report
 (.md + .html)") and let the go-ahead gate's "Adjust something first", or the user asking for
@@ -276,7 +275,7 @@ its HTML, then `add-artifact`.** The brief cannot exist before `init`; what must
 registering it before writing it - that leaves
 `added_before_file_existed: true` on the entry, which the DoD backstop correctly flags as
 STALE-INDEX if the file is still missing whenever a turn ends (live 2026-08-12; incident-log
-#22). If you genuinely must register before the write for some reason, finish the write in the
+#22). If you must register before the write for some reason, finish the write in the
 SAME turn and re-run `add-artifact` on the same path afterward to clear the flag - never leave
 it stuck.
 From here on the state file is

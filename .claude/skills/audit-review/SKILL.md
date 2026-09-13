@@ -4,7 +4,7 @@ argument-hint: <path/glob of code to review, or a commit range>
 disable-model-invocation: true
 ---
 
-Under the PM (CLAUDE.md §6), review for robustness and whether it would **stand up to audit
+Under the PM (CLAUDE.md §6), review for soundness and whether it would **stand up to audit
 and regulatory scrutiny**: **$ARGUMENTS**
 
 **If no target was given, first ask the user where the code is** (path/glob, repo/branch,
@@ -76,7 +76,7 @@ Run an **evaluator-optimizer loop**:
    🔵 style & form lane, a tooling-coverage section, **and - MANDATORY - a `## 🔵 Developer
    guidance - improving future code` section** (2-4 points, even on a clean pass;
    `check_artifacts` mechanically flags it missing/empty as `FINDINGS-NO-DEV-GUIDANCE`, but
-   verify it's genuinely there before presenting, don't rely on the gate). Use the standalone
+   verify it's there before presenting, don't rely on the gate). Use the standalone
    clean review artifact by default; fold into the consolidated `delivery-report.md` only when
    audit is part of a larger handover.
 

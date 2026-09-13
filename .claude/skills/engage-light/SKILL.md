@@ -104,7 +104,7 @@ verdict), residual risk, and ONE concrete next step - never a call or meeting. E
 ends with Morgan's email, whatever the profile. **The codebase map update is NOT waived**
 (ADR-003: both directions are mandatory at every close - append the §3 history row with the
 Team-ver, and correct/deprecate any entry found wrong; register M4 removed light's former
-opt-out). Light may keep NEW §2 entries minimal when the architecture genuinely did not
+opt-out). Light may keep NEW §2 entries minimal when the architecture did not
 change - the history row and corrections never are. Human sign-off remains the user's act.
 
 **Upgrade rule (standing):** the moment scope grows past light - detection logic appears, a

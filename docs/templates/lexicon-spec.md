@@ -66,7 +66,7 @@ synthetic/masked sample. This prevents the lexicon from being set by intuition r
 
 **ATL (Above-The-Line) - precision among flagged messages:**
 - Sample N messages flagged at the candidate threshold.
-- Label each: true positive (risk conduct genuinely present) or false positive (benign hit).
+- Label each: true positive (risk conduct present) or false positive (benign hit).
 - Record precision = TP / (TP + FP) per term and in aggregate.
 
 **BTL (Below-The-Line) - coverage just below the threshold:**

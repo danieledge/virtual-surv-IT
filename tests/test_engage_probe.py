@@ -1094,7 +1094,7 @@ def test_resolve_root_trusts_repo_as_project_when_manifest_names_the_team(tmp_pa
 
 def test_resolve_root_does_not_trust_an_unverified_foreign_project(tmp_path):
     """2026-08-14 Fable-model audit finding (C1): no --plugin-root AND the project
-    does not look like the team repo - resolution genuinely failed. root still falls
+    does not look like the team repo - resolution failed. root still falls
     back to project_dir (nothing better available for display/version reads), but
     trusted must be False - this is the exact condition run_tool_probe/
     run_extensions_show must refuse to execute anything under root for."""
@@ -1125,8 +1125,7 @@ def test_run_tool_probe_never_executes_an_untrusted_roots_script(tmp_path):
 
 
 def test_run_tool_probe_still_works_normally_when_root_is_trusted(tmp_path):
-    """Confirms the fix didn't just make this function always refuse - a genuinely
-    trusted root (the default, matching every pre-existing caller) still probes."""
+    """Confirms the fix didn't just make this function always refuse - a trusted root (the default, matching every pre-existing caller) still probes."""
     import scripts.engage_probe as ep
 
     scripts_dir = tmp_path / "scripts"
@@ -1141,7 +1140,7 @@ def test_run_tool_probe_still_works_normally_when_root_is_trusted(tmp_path):
 
 def test_run_extensions_show_never_executes_an_untrusted_roots_script(tmp_path):
     """Same fix, same shape, for extensions.py - a planted scripts/extensions.py must
-    never run when root_is_trusted is False, even though the project genuinely has a
+    never run when root_is_trusted is False, even though the project has a
     docs/team-extensions.md (the only gate that currently exists on this path)."""
     import scripts.engage_probe as ep
 
@@ -1354,7 +1353,11 @@ def test_the_skill_tells_the_model_not_to_search(tmp_path):
     """The probe field only helps if the instruction points at it. Fragments, not
     sentences: the source is hard-wrapped."""
     root = Path(__file__).resolve().parents[1]
-    text = (root / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8")
+    text = (root / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8") + (
+        REPO / ".claude" / "skills" / "engage" / "references" / "launcher-flags.md"
+    ).read_text(
+        encoding="utf-8"
+    )  # the flag contract moved to the reference on 2026-09-13 (step 4.4)
     assert "REQUEST_PENDING=" in text, "the skill must name the field the probe emits"
     assert "do not go looking for it" in text
 
@@ -1368,7 +1371,9 @@ def test_double_registration_is_reported_when_the_plugin_is_installed_and_the_pr
     """Plugin installed + repo opened as the project = both hook registrations fire and every
     guard runs twice per call. The probe names it; the open tells the user."""
     (tmp_path / ".claude-plugin").mkdir()
-    (tmp_path / ".claude-plugin" / "plugin.json").write_text('{"version": "9.9.9"}', encoding="utf-8")
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text(
+        '{"version": "9.9.9"}', encoding="utf-8"
+    )
     (tmp_path / "CHANGELOG.md").write_text("## [9.9.9] - x\n\n- a\n", encoding="utf-8")
     assert "DOUBLE_HOOKS=0" in build_report("", tmp_path)  # repo-as-project alone: one registration
     (tmp_path / "docs").mkdir()
@@ -1384,4 +1389,6 @@ def test_double_registration_is_reported_when_the_plugin_is_installed_and_the_pr
         '{"name": "compliance-surveillance-team", "version": "9.9.9"}', encoding="utf-8"
     )
     assert "DOUBLE_HOOKS=1" in build_report(str(plugin), tmp_path)
-    assert "DOUBLE_HOOKS=0" in build_report("", tmp_path), "repo-as-project alone is one registration"
+    assert "DOUBLE_HOOKS=0" in build_report("", tmp_path), (
+        "repo-as-project alone is one registration"
+    )

@@ -58,7 +58,7 @@ command name.
 - **Construct questions for sense and logic** - get the structure right or the menu is nonsense:
   - **Single-select** for mutually-exclusive / nested choices - review **depth** (Quick ⊂ Deep ⊂
     Audit → exactly one), **breadth** (diff/files/module/repo), **mode** (change vs audit), any yes/no.
-  - **Multi-select** for genuinely independent picks - **dimensions** (bugs+security+…), the
+  - **Multi-select** for independent picks - **dimensions** (bugs+security+…), the
     **artifact menu**, **jurisdictions**, **outcome add-ons** (fixes + handover).
   - **One axis per question** - never merge independent axes into one list (don't put depth *and*
     performance in one multi-select).
@@ -225,7 +225,7 @@ input, a pasted body in N briefs is N times orchestrator output tokens.
 
 **The cost ladder (the team's stated cost model).** Independence is bought deliberately,
 never by habit: **Level 0** - a direct question gets a chat answer, no engagement machinery.
-**Level 1 (Quick)** - one bounded task in one context, self-scored, honest label. **Level 2
+**Level 1 (Quick)** - one bounded task in one context, self-scored label. **Level 2
 (Deep)** - one specialist context + independent mechanical scoring + the PM's challenge.
 **Level 3 (Audit)** - multiple independent judgements, bought only where defensibility
 requires them. Match the level to the ask; never silently escalate.

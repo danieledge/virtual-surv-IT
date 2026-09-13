@@ -373,7 +373,7 @@ def chooser_screen(
         # looks like a rendering fault rather than a narrow screen. A shortened legend
         # still names the marks; a clipped one names nothing (independent TUI review,
         # 2026-08-31).
-        # Shortened only when it genuinely does not fit. A two-column safety margin made
+        # Shortened only when it does not fit. A two-column safety margin made
         # this degrade at 80 columns, where the full legend fits exactly - and a legend
         # that shortens on a terminal with room for it is its own small defect.
         width = chrome.term_columns()

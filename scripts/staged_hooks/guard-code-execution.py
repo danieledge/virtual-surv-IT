@@ -26,7 +26,7 @@ gate is consent-recording + a safety net, not a sandbox.
 FAIL-OPEN RESIDUAL RISK (Bash): string-matching arbitrary shell is advisory only - obscure
 constructs can bypass any lexical check (indirection, subshells, eval). This is a strong
 default, not a perfect sandbox. The real assurance is: static-by-default behaviour, the
-consent/disclaimer at intake, this gate, and the user keeping genuinely dangerous code out of
+consent/disclaimer at intake, this gate, and the user keeping dangerous code out of
 the review. See CLAUDE.md §7 and docs/house-rules.md.
 
 Protocol: read the PreToolUse JSON on stdin; exit 2 to block (stderr is fed to the model);
@@ -592,7 +592,7 @@ def _block(cmd: str, segment: str | None = None) -> None:
             'entries) by running `python -c "...json.load..."` instead of just reading the '
             "file - it is already text you can Read and count directly, no execution needed "
             "(docs/team-operating-guide.md's findings-count-verification guidance). If you "
-            "genuinely need the interpreter's own path or version, use `python --version` or "
+            "need the interpreter's own path or version, use `python --version` or "
             "`python -V` instead - never `-c`.\n"
         )
     sys.stderr.write(
@@ -747,7 +747,7 @@ def _resolves_into_plugin_scripts(seg: str) -> bool:
     create the file itself.
 
     The whitelist still exists for the one case it was added for and the only case that
-    genuinely cannot be resolved: a path carrying an UNEXPANDED shell/CMD variable
+    cannot be resolved: a path carrying an UNEXPANDED shell/CMD variable
     (`"$CLAUDE_SKILL_DIR/../../../scripts/render_html.py"`,
     `"%CLAUDE_PLUGIN_ROOT%\\scripts\\render_html.py"`). A path with nothing to expand IS
     resolvable, so it is resolved, and it must land inside the plugin's own scripts

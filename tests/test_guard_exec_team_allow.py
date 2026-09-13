@@ -44,7 +44,7 @@ def _allowed(seg: str) -> bool:
 # for consent to run a front-door script". A basename missing from _TEAM_SCRIPT_NAMES means a
 # consent prompt for the team's own tooling.
 #
-# Deliberately NOT auto-derived from a glob over scripts/: that would let a genuinely new tool
+# Deliberately NOT auto-derived from a glob over scripts/: that would let a new tool
 # silently allow-list itself, which is the opposite of the intent. The list is curated, and this
 # test is the reminder to curate it.
 _FRONT_DOOR_SCRIPTS = (
@@ -240,7 +240,7 @@ def test_double_quoted_substitution_still_trips_the_exec_net():
 
 
 def test_single_quoted_dollar_paren_correctly_stays_literal():
-    """Single quotes genuinely suppress substitution in real bash - `echo '$(pytest)'`
+    """Single quotes suppress substitution in real bash - `echo '$(pytest)'`
     prints the literal text and never runs pytest. Confirms the fix didn't overcorrect
     into treating $(/backtick as a boundary inside SINGLE quotes too."""
     segs = STAGED._segments("echo '$(pytest)'")
@@ -249,7 +249,7 @@ def test_single_quoted_dollar_paren_correctly_stays_literal():
 
 def test_ordinary_delimiters_still_stay_literal_inside_double_quotes():
     """The fix must be scoped to command substitution ONLY - ;/&&/||/|/newline are still
-    genuinely literal text inside double quotes in real bash (this is the exact false-
+    literal text inside double quotes in real bash (this is the exact false-
     positive test_guard_hardening's own 2026-08-03 fix protects), so this must not regress."""
     cmd = 'git commit -m "close as-is; no real source data exists"'
     segs = STAGED._segments(cmd)

@@ -23,7 +23,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# Robust in both invocation modes: `python -m scripts.render_findings` (package context) AND
+# Works in both invocation modes: `python -m scripts.render_findings` (package context) AND
 # `python <path>/scripts/render_findings.py` (direct path, e.g. from check_artifacts --fix or an
 # installed plugin) - the latter puts scripts/ on sys.path[0], so the sibling import resolves.
 try:

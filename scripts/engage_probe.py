@@ -129,7 +129,7 @@ def resolve_root(plugin_root: str, project_dir: Path) -> tuple[Path, str, bool]:
     than tool-probe's own candidate ordering).
 
     root_is_trusted is False exactly when plugin_root arrived empty AND project_dir does
-    not genuinely look like the team repo - the true "we don't actually know where the
+    not look like the team repo - the true "we don't actually know where the
     plugin is" case. Callers that execute anything found under `root` (run_tool_probe,
     run_extensions_show) must refuse to trust root-derived paths when this is False,
     never silently execute a guess. root still gets set to project_dir even when
@@ -590,14 +590,14 @@ def run_tool_probe(root: Path, project_dir: Path, root_is_trusted: bool = True) 
     test for this function passed root == project_dir, so the divergent (actually
     security-relevant) case had zero coverage.
 
-    Fix: when root and project_dir genuinely differ (plugin mode against a foreign
+    Fix: when root and project_dir differ (plugin mode against a foreign
     project - the only case this distinction can matter), ONLY the plugin's own
     trusted copy is ever considered; the project's copy is not even looked at, let
     alone executed. When they're the same directory (project/dogfood mode), behaviour
     is unchanged - there is no trust boundary to cross when reviewing this repo
     against itself. root_is_trusted (from resolve_root's own trust bit, see its
     docstring) must ALSO hold before the project's own copy is ever considered - a
-    root that only equals project_dir because resolution genuinely failed (not because
+    root that only equals project_dir because resolution failed (not because
     this really is dogfood mode) must not be treated as safe either; defaults True for
     any caller that hasn't been updated to pass it (this function's own project-mode
     tests, which never exercise the divergent case at all)."""
@@ -606,7 +606,7 @@ def run_tool_probe(root: Path, project_dir: Path, root_is_trusted: bool = True) 
         return cached
     if not root_is_trusted:
         # root came from a FAILED resolution (resolve_root's fallback), which means it
-        # equals project_dir despite not being genuinely verified - "only check root's
+        # equals project_dir despite not being verified - "only check root's
         # copy" would silently check the untrusted project's copy anyway under a
         # different variable name. Nothing under either root is safe to execute here;
         # refuse the probe entirely rather than guess.
@@ -652,13 +652,13 @@ def run_tool_probe(root: Path, project_dir: Path, root_is_trusted: bool = True) 
 def run_extensions_show(root: Path, project_dir: Path, root_is_trusted: bool = True) -> str:
     """2026-08-14 Fable-model audit finding (C1), same class as run_tool_probe just
     above: this always executes `root / "scripts" / "extensions.py"` - fine when root
-    is genuinely the plugin's own directory, but if resolve_root's own resolution
+    is the plugin's own directory, but if resolve_root's own resolution
     failed (see its docstring), root silently became project_dir, and this would
     execute the FOREIGN, untrusted project's own extensions.py, triggered by nothing
     more than the project containing docs/team-extensions.md. root_is_trusted (from
     resolve_root's own trust bit) gates the execution branch - untrusted root falls
     back to the safe, non-executing "just read the markdown" path instead, same as
-    the script-genuinely-absent case already does."""
+    the script-absent case already does."""
     if not (project_dir / "docs" / "team-extensions.md").is_file():
         return ""
     ext = root / "scripts" / "extensions.py" if root_is_trusted else None
@@ -783,7 +783,7 @@ def resolve_preferences(project_dir: Path) -> dict:
     # autonomous_default (2026-08-25, owner: "i dont understand why we wouldnt have an auto
     # param then"). The kill switch above defaults to ON, so turning "auto mode on" changed
     # nothing observable - a setting that reads as an enabler but only ever removes an
-    # option is a genuinely confusing shape, and this is the enabler it implied.
+    # option is a confusing shape, and this is the enabler it implied.
     #
     # It ARMS the unattended toggle for new work, so the run you were going to start
     # unattended starts that way without reaching for Ctrl-T every time. It does NOT skip

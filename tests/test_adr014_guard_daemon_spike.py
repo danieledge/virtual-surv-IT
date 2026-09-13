@@ -3,8 +3,7 @@
 NOT testing production code - guard_daemon.py / guard_daemon_client.py are a spike,
 not wired into any live hook path (.claude/hooks/run-guard.sh is untouched by their
 existence). These tests cover the pure-logic pieces (mtime comparison, port-file
-read/write, client fallback decisions) with real isolation. The genuinely
-execution-dependent behaviour - does a real daemon process actually start, serve
+read/write, client fallback decisions) with real isolation. The execution-dependent behaviour - does a real daemon process actually start, serve
 concurrent connections correctly, detect staleness, and idle-timeout in practice -
 is NOT covered here; that needs a live run, not a mock, and is what
 docs/internal/adr-014-spike/smoke_test.sh is for. Written but not executed by the

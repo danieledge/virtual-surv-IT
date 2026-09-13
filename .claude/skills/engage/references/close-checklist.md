@@ -26,7 +26,7 @@ until human verification confirms the page shows the cited provision. **Do not a
 question at the close** - verification is the user's act at their own pace; when they later say
 "mark X verified", update the overlay register with today's `verified_on` (the three checks are in
 the register header). Never record verified without that explicit user statement; never present
-to-verify as a failure - it is the honest state.
+to-verify as a failure - it is the true state.
 
 ## The mechanical gate output is a FIX-LIST, not a report (DoD "the gate is a fix-list")
 
@@ -72,7 +72,7 @@ comments), and verify each against the FINAL state:
 - **Late-cycle changes propagated** - anything changed after a document's last revision (a later
   fix cycle, a re-review, a struck or replaced citation, a superseded requirement) is reconciled
   into that document, or the document's version history says why not. No mechanical check exists
-  for this - it requires understanding what changed and why, genuinely a judgement call.
+  for this - it requires understanding what changed and why, a judgement call.
 - **Struck citations** - any obligation/citation recorded as withdrawn or corrected anywhere in
   the pack must be swept from EVERY other file, including source docstrings. No mechanical check
   exists for this either - nothing in the codebase currently marks a citation as "struck" in a

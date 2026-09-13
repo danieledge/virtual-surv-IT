@@ -24,7 +24,7 @@ detection code, one tunes it, and one signs it off.
 And "the systems" means more than detection rules. The same team builds the **data
 pipelines** that feed surveillance, **scripts** that transform or reconcile data (in Python,
 Scala, Java, PowerShell or Bash), **reporting**, **tooling** - or simply **reviews** existing
-code to check it's robust and would survive an audit. A detection rule is just the worked
+code to check it is sound and would survive an audit. A detection rule is just the worked
 example in this repo.
 
 This repository is the **setup for that virtual engineering team** - the job descriptions,

@@ -328,8 +328,8 @@ State current as of 2026-09-12, after the audit-remediation pass.
 | Signed off | HARD | `engagement_state sign-off` requires the human-created `<pack>/.human-sign-off`; `guard-consent-writes.py` blocks the model from creating that filename. |
 
 **What is still ADVISORY, said plainly.** That a brief exists; that tests were actually run and
-passed; that the QA reviewer was genuinely independent and its evidence survived; that a review
-pass genuinely ran at the stated depth; that the standards critique, the compliance routing, the
+passed; that the QA reviewer was independent and its evidence survived; that a review
+pass ran at the stated depth; that the standards critique, the compliance routing, the
 independent synthesis read and the close-time reconciliation sweep happened; and that any of the
 prose in any artifact is true. Those rest on the model following its instructions and on the
 human reading the pack. The mechanical gates check SHAPE, TIMING and INTERNAL CONSISTENCY - they
@@ -341,7 +341,7 @@ The **Tested** and **Independently QA'd** items require *running* code, but exec
 default** (§7) and only a **human** can grant it (creating `.claude/.exec-consent` or setting
 `CST_ALLOW_EXEC=1` - the model is blocked from writing either, so the intake "yes" is *intent, not
 the grant*). If consent is not granted for an engagement that ships code, those two items **cannot
-be met** - and the gate must say so honestly rather than deadlock or overstate "done":
+be met** - and the gate must say so plainly rather than deadlock or overstate "done":
 
 - `qa-engineer` still **authors** the full test plan and test code, but the run is blocked - the QA
   verdict is **🧠 inferred (tests written, not executed)**, never a pass.
@@ -352,7 +352,7 @@ be met** - and the gate must say so honestly rather than deadlock or overstate "
   "independently QA'd". Close every such engagement by offering the one action that lifts it: the
   user grants consent, the team runs the complete suite, and the verdict upgrades.
 
-This is the honest way out of the static-only default; it is **not** a licence to skip QA when
+This is the legitimate way out of the static-only default; it is **not** a licence to skip QA when
 consent **is** available (operating guide §4a - deliverable code ships with tests and an
 independent QA pass, no workflow exempt).
 

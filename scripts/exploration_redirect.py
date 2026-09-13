@@ -22,7 +22,7 @@ WHAT IT DOES
 
 REDIRECTED ONCE, NOT BLOCKED. Each distinct target gets exactly one redirect per session;
 repeating the call goes straight through. Sometimes the full read IS right - that review's
-own retrospective recorded one scorer that "genuinely needed a full read - that one was
+own retrospective recorded one scorer that "needed a full read - that one was
 well spent" - so the mechanism must cost a deliberate choice one turn, never make it
 impossible.
 A rule that blocks correct work gets switched off, and then protects nothing.
@@ -199,7 +199,7 @@ def _read_advice(path: str, lines: int) -> str:
             "  - (`--slice` is Python-only; for this file it is best-effort, not the cheap path)\n"
         )
     tail = (
-        "If the whole file genuinely is the answer - reviewing this code, control flow matters, "
+        "If the whole file is the answer - reviewing this code, control flow matters, "
         "or you need whole-file semantics - repeat this exact call and it will go through. This "
         "redirect fires ONCE per file per session."
     )

@@ -87,8 +87,7 @@ def test_add_artifact_heals_absolute_path_inside_the_pack(tmp_path):
 
 
 def test_add_artifact_keeps_honestly_missing_path_and_flag(tmp_path, capsys):
-    """Healing only rewrites when the healed form actually resolves - a genuinely
-    missing file keeps its given path and its added_before_file_existed flag (the R8
+    """Healing only rewrites when the healed form actually resolves - a missing file keeps its given path and its added_before_file_existed flag (the R8
     crash-recovery contract is unchanged)."""
     ws = _init(tmp_path)
     rc = es_main(["--dir", str(ws), "add-artifact", "artifacts/pack/nope.md", "--title", "N"])

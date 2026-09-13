@@ -9,7 +9,7 @@ instruction to go and re-read the disk state it now has. This hook closes that s
 (ADR-011; the natural mirror of ADR-004's capture-at-end proposal).
 
 Dormancy-exact by construction: it emits output ONLY when a pack under the project's
-`artifacts/` is genuinely live (state in_progress/blocked/closing, index sniff fallback).
+`artifacts/` is live (state in_progress/blocked/closing, index sniff fallback).
 A session that never engaged the team gets zero added context, in every project the plugin
 is installed into. Fails open (exit 0, no output) on any internal error.
 

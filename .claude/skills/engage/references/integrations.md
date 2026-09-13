@@ -100,7 +100,7 @@ every artifact, and AI identity stated as in all outward text.
 "<phase|status>"`) so a resumed or compacted session continues rather than replaying the
 engagement - the same duplicate problem `jira-issue` already solves for issue creation.
 
-**Cost, stated honestly:** every outward call carries the harness's own MCP permission
+**Cost, stated plainly:** every outward call carries the harness's own MCP permission
 prompt, so live tracking means roughly 4-8 prompts across an engagement. Mention that when
 the mode is stated at the open; never present it as free. A failed or absent tool never
 blocks the engagement: one line, record it as outstanding, carry on.
@@ -110,7 +110,7 @@ the summary-email text as a comment, **attach the delivery report and key artifa
 same attach-or-say-where terms as the inbound flow (2026-08-21 - a bare summary left the
 same work reaching a ticket in full or in outline depending only on how it started), and
 transition the issue to the done-state (name the transition; if the tools expose none, comment only). A ⛔ parked
-or PARTIAL close posts the honest status instead; never transition to done on a
+or PARTIAL close posts the actual status instead; never transition to done on a
 partial.
 
 ## Inbound: `--jira <url-or-key>` on the opening command
@@ -165,7 +165,7 @@ becomes the engagement request, human-approved by the pick itself. Rules:
   holding it. The harness's own MCP
   permission prompts still apply on top - expect them; they are the platform's gate,
   not a question from the team. Status transitions remain human-only, and a ⛔ parked
-  or PARTIAL close posts the honest status instead - never a done-transition, and
+  or PARTIAL close posts the actual status instead - never a done-transition, and
   never a comment that reads as delivered.
 
 ## PR comments: `pr-comments:on(EXPERIMENTAL,...)`

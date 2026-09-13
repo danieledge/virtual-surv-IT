@@ -121,8 +121,7 @@ retry the exact block. **Second live report, same shape, different field (2026-0
 that had reason to doubt whether its `PLUGIN_VERSION=` was current (a resumed session, or general
 uncertainty about install freshness) reached for `python -c "import importlib.metadata;
 print('PLUGIN_VERSION=' + importlib.metadata.version('compliance-surveillance-team'))"` instead of
-either trusting the value the probe already printed this open, or - if a fresh read is genuinely
-warranted - just reading `.claude-plugin/plugin.json`'s own `"version"` field directly (a plain
+either trusting the value the probe already printed this open, or - if a fresh read is warranted - just reading `.claude-plugin/plugin.json`'s own `"version"` field directly (a plain
 file read, no execution at all; this is exactly what `read_plugin_version()` in
 `scripts/engage_probe.py` itself does). **The pattern generalises: whatever field you're tempted to
 re-verify - interpreter path, plugin version, branch, anything else the probe already printed -
@@ -132,7 +131,7 @@ harmless it looks. `python -c` is **always** blocked by the execution guard, unc
 CLAUDE.md §7 - and it will fire on a hand-typed diagnostic exactly as readily as on anything else.
 It is not a false positive to work around; it is the same gate `/engage`'s own probe block is
 deliberately written to never trigger (the heredoc form above exists *specifically* so this class
-of command never has to run). If you genuinely need the interpreter's own path or version outside
+of command never has to run). If you need the interpreter's own path or version outside
 what `INTERPRETER=`/`PYTHON_VERSION=` already gave you, `python --version` or `python -V` are not
 `-c` and are not blocked - use one of those, never a `-c` one-liner, however small.
 

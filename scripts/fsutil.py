@@ -33,7 +33,7 @@ from typing import Any
 # How hard to try again when Windows says "file in use". Sixteen attempts with a backoff
 # that starts at 20ms and caps at 250ms, about 2.5s in all: eight threads replacing the
 # same target on the Windows runner exhausted the first version's four tries in 150ms
-# (test_fsutil, 2026-09-12), while a genuinely locked file still fails within seconds
+# (test_fsutil, 2026-09-12), while a locked file still fails within seconds
 # rather than hanging a CLI command.
 _RETRY_ATTEMPTS = 16
 _RETRY_SLEEP_SECONDS = 0.02

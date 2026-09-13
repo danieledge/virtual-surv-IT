@@ -46,7 +46,7 @@ def sections() -> list[tuple[str, str]]:
             "Working with me",
             "Describe whatever you have got in plain English - a problem to solve, code "
             "to review, something to build, data to analyse. I classify it, ask what I "
-            "genuinely need to know (batched, one screen), tell you how many specialists "
+            "need to know (batched, one screen), tell you how many specialists "
             "I intend to use and roughly what it will cost, and wait for your go-ahead. "
             "Then I run the work in small stages and come back to you at each gate. You "
             "invoke the team once per piece of work; after that, just reply normally.",

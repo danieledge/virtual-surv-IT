@@ -38,7 +38,7 @@ is the common, valid default - not an error). Resolve the seven known preference
   ADR-007 Phase 1. Unlike `large_context_review_split`, this one also has a machine-wide
   default (installer.json `default_map_skeleton`) - same 3-tier precedence as docx/citations.
 - `guard_daemon` (bool, **on by convention for any project set up via `/preferences` or
-  the installer's configure flow, off if the key is genuinely absent**): whether
+  the installer's configure flow, off if the key is absent**): whether
   `run-guard.sh`'s PreToolUse guards route through the persistent ADR-014 daemon instead
   of a fresh interpreter per call. Not a shell-level default - `run-guard.sh` matches the
   literal string `"guard_daemon": true` in this file, so an absent key means off, not on;

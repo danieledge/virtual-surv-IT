@@ -946,7 +946,7 @@ def test_once_a_screen_has_drawn_no_older_tier_may_open():
 
     THE CAUSE IS THE THIRD ANSWER, one layer above where scripts/questions.py fixed it. A
     tier returns None for "I could not draw this", and the dispatcher tries the tier below.
-    That is right when the tier genuinely could not draw, and very wrong when the tier DID
+    That is right when the tier could not draw, and very wrong when the tier DID
     draw and the human answered: the reply to "I am finished with this screen" becomes the
     older renderer opening on top of it.
 

@@ -113,7 +113,7 @@ def large_genuine_session(seed: int = 1) -> list[OrderEvent]:
         events.append(_new(ts, oid, side, TYPICAL_QTY))
         events.append(_fill(ts + rng.randint(200, 500), oid, side, TYPICAL_QTY))
 
-    # Outsized order that genuinely executes in full (fill_ratio = 1.0).
+    # Outsized order that executes in full (fill_ratio = 1.0).
     ts += 1000
     events.append(_new(ts, "BIG_FILLED", Side.BUY, TYPICAL_QTY * 8))
     events.append(_fill(ts + 600, "BIG_FILLED", Side.BUY, TYPICAL_QTY * 8))

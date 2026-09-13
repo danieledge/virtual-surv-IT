@@ -43,10 +43,10 @@ Write a scope line into the brief - **breadth and mode must agree** ("Deep · Co
 uncommitted diff, 12 files · change · origin: mixed", or "Deep · Core + quality · whole repo ·
 audit · origin: mixed"; the old example paired whole-repo with change-focused, which is the
 self-filtering combination above). **Add a second line naming what is NOT covered** when the
-scope genuinely excludes something ("Not in scope: 180 unchanged files; pre-existing findings
+scope excludes something ("Not in scope: 180 unchanged files; pre-existing findings
 filtered per `docs/code-review-method.md`") - a count, never a file listing. The go-ahead gate
 is where the user adjusts it. **Ask a scope question ONLY
-when genuinely ambiguous** (conflicting signals about compliance-sensitivity, an unclear
+when ambiguous** (conflicting signals about compliance-sensitivity, an unclear
 target) - one question, not a screen of axes. Invoked **directly** (not via `engage`): the
 review menu never ran, so ask ONE batched call first - Fix-cycle + Origin (+ jurisdiction if
 📋 is in scope) - then derive the rest exactly as above.
@@ -59,7 +59,7 @@ and states what's applicable vs not.
 **Quick runs in-session - no fan-out (2026-08-17 cost decision).** When the chosen depth is
 **Quick**, read `references/quick.md` (this skill's folder; plugin mode under `$PLUGIN_ROOT`)
 and follow it INSTEAD of everything below - it is the complete Quick recipe (in-session,
-diff-scoped, analysers + inline lenses, self-scored with the honest label). None of the
+diff-scoped, analysers + inline lenses, self-scored, labelled as such). None of the
 pipeline below applies at Quick depth.
 
 **3. Run the tiered review** (CLAUDE.md §6; method `docs/code-review-method.md`; lenses
@@ -79,7 +79,7 @@ pass; a module-or-wider scope runs all facets. State the facet count and why in 
 before dispatching. Merge and dedupe the packs (the pipeline already merges). This reverses the
 2026-08-17 "consolidate by default" for Deep/Audit only - at ~1.67x sonnet the extra passes are
 cheap and the depth is the point. **Quick** stays consolidated in-session (references/quick.md),
-and the per-component split still applies on top when a target genuinely exceeds one context or
+and the per-component split still applies on top when a target exceeds one context or
 corporate-proxy timeouts have bitten (`LARGE_CONTEXT_REVIEW_SPLIT`).
 
 **Verify before reporting (new precision step).** After `review-scorer` scores and filters,
@@ -168,7 +168,7 @@ the target directories with `git ls-files <dir>` - never a whole-repo walk.
    independent passes = N Task tool-uses in this turn, not N turns.
 4. **Score & filter** *(delegate to `review-scorer`, haiku)* - apply the scoring rubric and
    produce the Found/Reported/Filtered counts (`docs/code-review-method.md`). This is the one
-   genuinely sequential step in the fan-out (it depends on the packs existing), and it runs
+   sequential step in the fan-out (it depends on the packs existing), and it runs
    **even if a pass returned self-scored counts** - the reviewer applying the rubric to its own
    findings is not a substitute. Once the scorer's numbers are applied, **you (Morgan) record
    the pass in each pack's envelope `scoring` field** ("scored by review-scorer: Found N ·
@@ -199,7 +199,7 @@ the target directories with `git ls-files <dir>` - never a whole-repo walk.
      code documents its rationale or the value is a by-design contract (a column cap set to the
      expected schema width, a threshold carrying a rationale + tuning date per §4). If it's
      intentional, don't raise it - drop the finding unless the rationale itself is wrong or the
-     bound is genuinely silent/undocumented. Distinguish a *silent-truncation bug* (no rationale, no
+     bound is silent/undocumented. Distinguish a *silent-truncation bug* (no rationale, no
      reconciliation, unbounded loss) from an *intended limit* (documented, expected).
 
 **4. Present - findings pack → rendered report → scoreboard** (`docs/review/output-format.md`):

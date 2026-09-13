@@ -35,7 +35,7 @@ def test_single_open_engagement_is_the_default(tmp_path, monkeypatch):
 
 def test_default_follows_the_active_marker_not_just_recency(tmp_path, monkeypatch):
     """The live defect this closes: the menu/default must reflect which engagement is
-    genuinely ACTIVE, not silently pick something else."""
+    ACTIVE, not silently pick something else."""
     _init_workspaced(monkeypatch, tmp_path, "first")
     _init_workspaced(monkeypatch, tmp_path, "second")
     menu = resume_menu(_vsit.engagements_dir(tmp_path))

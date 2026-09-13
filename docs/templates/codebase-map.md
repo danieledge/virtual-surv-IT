@@ -56,7 +56,7 @@ One short paragraph: purpose, tech stack, entry points, how it is built/run/test
 > (`rules.py:22`)"; "detection groups by (trader, qty, price) then pairs within a 5s window".
 >
 > **What does NOT belong here** (engagement activity - it goes to §3 history + the review
-> artifacts): ✅ *"thresholds are hardcoded in `rules.py:22`"* (a fact) — ❌ *"we reviewed the
+> artifacts): ✅ *"thresholds are hardcoded in `rules.py:22`"* (a fact) - ❌ *"we reviewed the
 > thresholds and reported a 🟠 finding this engagement"* (activity). Do **not** carry finding
 > IDs, severities, review dispositions ("reported/open/fixed"), or "what we did this time"
 > into an entry. A finding that gets fixed leaves the map; the durable fact it revealed (e.g.

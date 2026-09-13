@@ -110,7 +110,7 @@ at 5M rows: ~Z saved"), split **coded/measured (facts) vs projected (🧠)** so 
 
 **Scoring and filtering are `review-scorer`'s (Pip's) whenever the caller has it in the loop.**
 Performance findings are not in `docs/code-review-method.md`'s never-filter list, so they are
-genuinely scored and filtered - but you cannot call another agent yourself (subagents don't hand
+scored and filtered - but you cannot call another agent yourself (subagents don't hand
 off directly): write every candidate finding to the pack, and the caller delegates
 `review-scorer` over it once it exists, then trims what scores below threshold. Self-score
 against the same rubric only when you were invoked with no scorer in the loop, and say so in the

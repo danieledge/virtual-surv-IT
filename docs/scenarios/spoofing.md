@@ -67,7 +67,7 @@ All thresholds live in `SpoofingThresholds`; none are hard-coded inline (§4).
 | `max_spoof_lifetime_ms` | 2000 | Genuine resting liquidity persists; spoofs are pulled fast | 2026-06-18 |
 | `max_fill_ratio` | 0.10 | Non-bona-fide orders are not meant to trade | 2026-06-18 |
 | `opposite_exec_window_ms` | 3000 | Benefiting execution must be close in time to the spoof | 2026-06-18 |
-| `min_orders_for_baseline` | 4 | Minimum **genuine** orders for a robust trader-level median; below this, sizing falls back to the instrument's genuine median | 2026-06-18 (gate); 2026-06-29 (now applied to the genuine subset) |
+| `min_orders_for_baseline` | 4 | Minimum **genuine** orders for a stable trader-level median; below this, sizing falls back to the instrument's genuine median | 2026-06-18 (gate); 2026-06-29 (now applied to the genuine subset) |
 
 Thresholds are injectable so `data-analyst` can recalibrate and evidence the
 volume/coverage trade-off without touching detection logic.

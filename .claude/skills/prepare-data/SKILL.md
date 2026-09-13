@@ -35,7 +35,7 @@ Establish via the question tool (batched in one call), and **wait for answers**:
   - **Already masked / already synthetic** → skip to validation (§5) / straight to analysis.
 
 ## 2. Recommend the safe default
-Unless real-data fidelity genuinely matters, **recommend synthetic.** State the trade-off
+Unless real-data fidelity matters, **recommend synthetic.** State the trade-off
 plainly so the user chooses with eyes open, then proceed with their decision.
 
 ## 3. Synthetic path (automatable)

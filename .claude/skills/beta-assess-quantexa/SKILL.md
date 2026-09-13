@@ -66,7 +66,7 @@ and UI config.
   5. **Potential impact if unaddressed:** the consequence in the domain's terms - missed
      detections / false negatives, alert-volume or tuning effects, scorecard/alerting
      behaviour changes, audit or regulatory exposure, operational cost - tagged 🧠 when
-     projected rather than observed, and honest about magnitude uncertainty;
+     projected rather than observed, and explicit about magnitude uncertainty;
   6. **Recommended action:** concrete and routed (code change / config change / TSD
      correction / client decision needed).
   This is the audit profession's **5 C's** (criteria / condition / cause / consequence /

@@ -577,7 +577,7 @@ def _windows_alive(pid: int) -> bool:
         finally:
             kernel32.CloseHandle(handle)
     except Exception:
-        return True  # genuinely cannot tell - never report a live process as gone
+        return True  # cannot tell - never report a live process as gone
 
 
 def stop_and_wait(record: dict, timeout: float = 45.0, poll: float = 1.0) -> bool:

@@ -5,7 +5,7 @@ ADR-014 (docs/adr/ADR-014-persistent-guard-daemon.md). Preference-gated
 (.claude/team-preferences.json `guard_daemon`, no machine-wide tier - same pattern
 as `standards_critique`; on by default for any project set up via `/preferences`
 or the installer's configure flow - see that skill's own docstring for the exact
-"off if the key is genuinely absent" mechanics). run-guard.sh only ever talks to
+"off if the key is absent" mechanics). run-guard.sh only ever talks to
 this when the preference resolves true AND the target script is one of the
 daemon-servable set (_TARGET_MODULE_NAMES below - originally bash_hook_
 dispatcher.py alone, extended 2026-08-14 to the four other hook scripts this
@@ -16,7 +16,7 @@ byte-for-byte what it was before this file existed.
 
 Promoted from the design spike (docs/internal/adr-014-spike/) after live
 validation on the actual reporting Windows box, 2026-08-12: 8/8 smoke-test
-checks passed, including genuinely concurrent request safety and staleness
+checks passed, including concurrent request safety and staleness
 detection. This file adds the one thing the spike deliberately left open
 (ADR-014 question 3, attack surface) - see "Attack surface" below - everything
 else is the validated spike design, not a rewrite.
@@ -32,8 +32,7 @@ coordination pattern .guard-interpreter/.guard-lock already use).
 2026-08-13 fix (same bug class run-guard.sh's own $_root/$_project_root split
 already fixed elsewhere - live audit caught one instance the earlier fix missed):
 this module now takes TWO roots, not one. `module_root` is where the real
-scripts.bash_hook_dispatcher and the guard-*.py files actually live - genuinely
-CLAUDE_PLUGIN_ROOT-first in plugin-install mode, since those are files the plugin
+scripts.bash_hook_dispatcher and the guard-*.py files actually live - CLAUDE_PLUGIN_ROOT-first in plugin-install mode, since those are files the plugin
 ships, not the consuming project. `state_root` is where per-project daemon state
 (the port file) belongs - CLAUDE_PROJECT_DIR only, same reasoning as
 run-guard.sh's own $_project_root: there is no correct case where one project's
@@ -52,11 +51,11 @@ Concurrency (found live while building the spike, not anticipated in ADR-014's
 original text): bash_hook_dispatcher.main() reads sys.stdin and writes
 sys.stderr directly - process-global state. A naive threaded daemon serving
 concurrent requests could let one request's payload leak into another's guard
-evaluation mid-dispatch - genuinely dangerous for a security boundary, not just
+evaluation mid-dispatch - dangerous for a security boundary, not just
 a correctness nitpick. Dispatch is therefore serialized behind a single lock
 even though the TCP server itself accepts concurrent connections; requests
 queue for the lock rather than running the guard logic in parallel. Live-tested
-on the spike, 2026-08-12: 10 genuinely concurrent mixed requests, zero cross-talk.
+on the spike, 2026-08-12: 10 concurrent mixed requests, zero cross-talk.
 
 Staleness (ADR-014 question 2, confirmed live 2026-08-12): checked per request
 via mtime comparison against the guard files loaded at startup. On detected
@@ -205,7 +204,7 @@ def _guard_module_paths(repo_root: Path) -> list:
     they're each imported ONCE at startup, same reasoning as bash_hook_dispatcher.py
     itself), check_artifacts.py (persona_anchor.py's own _load_checker caches it at
     module level in its fallback path - restarting the whole daemon on a live edit is
-    simpler and more robust than bespoke per-hook cache invalidation, and correctly
+    simpler and more reliable than bespoke per-hook cache invalidation, and correctly
     resets that cache to None too since a restart is a fresh process), and this
     daemon's own file (a daemon-code change should also trigger a restart, not just a
     guard change). Deliberately excludes dod_stop_gate.py and todo_panel_nudge.py -
@@ -299,7 +298,7 @@ class _Handler(socketserver.StreamRequestHandler):
             return
 
         if target not in server.dispatcher_modules:
-            # A genuinely unknown target (protocol mismatch, or a typo somewhere
+            # A unknown target (protocol mismatch, or a typo somewhere
             # upstream) - reuse the existing daemon_stale signal rather than invent a
             # new one: the client already treats it as "cold-start THIS call, start a
             # fresh daemon for next time", which is exactly the safe degraded

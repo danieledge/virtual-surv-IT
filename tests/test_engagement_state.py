@@ -561,7 +561,7 @@ def test_default_artifacts_dir_cwd_fallback_finds_nearest_enclosing_workspace(
     tmp_path, monkeypatch
 ):
     """The ORIGINAL 2026-07-30 fix, still correct: with no CLAUDE_PROJECT_DIR, a
-    session that has genuinely cd'd inside an existing artifacts/<slug>/ workspace
+    session that has cd'd inside an existing artifacts/<slug>/ workspace
     must resolve to that same artifacts/ dir, not nest a new one underneath it."""
     from scripts.engagement_state import _default_artifacts_dir
 
@@ -840,7 +840,7 @@ def test_multiple_workspaces_require_slug_without_active_marker(tmp_path, monkey
 
 
 def test_standalone_flat_pack_writes_no_registry_anywhere(tmp_path, monkeypatch):
-    """2026-08-14 Fable-model audit finding (C3): a genuinely standalone flat pack (no
+    """2026-08-14 Fable-model audit finding (C3): a standalone flat pack (no
     sibling workspaces at all) used to have _registry_root_for misidentify the pack
     itself as a "sibling workspace" of the PROJECT ROOT (tmp_path here), writing
     engagements.json/ENGAGEMENTS.md/.html into the user's own git-tracked project

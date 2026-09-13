@@ -117,7 +117,7 @@ def _run_with_env(project_dir: Path, extra_env: dict, path_prefix: Path | None =
 
 def _fake_interpreter_bin_dir(tmp_path: Path) -> Path:
     """python3/python/py all copies of the REAL interpreter, so every candidate the
-    launcher tries genuinely passes the version check and can exec the guard for real -
+    launcher tries passes the version check and can exec the guard for real -
     which of the three gets cached then reveals the probe ORDER, not just correctness."""
     import shutil as _shutil
 
@@ -246,7 +246,7 @@ def test_guard_daemon_preference_resolves_under_project_dir_not_plugin_root(tmp_
 # frequency code path in the whole guard system, partly to this fast path forking `cat` just
 # to read one cached line. `read` is a builtin - same result, zero forks. These tests prove
 # the fix is behaviourally identical (still reads and uses the cached interpreter correctly)
-# AND that the fork is genuinely gone (a `cat` shadowed onto PATH must never be invoked).
+# AND that the fork is gone (a `cat` shadowed onto PATH must never be invoked).
 
 DAEMON_TARGET = "bash_hook_dispatcher.py"  # one of run-guard.sh's six daemon-servable basenames
 

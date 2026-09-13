@@ -67,7 +67,7 @@ is compared to a peer group or market benchmark (not just an absolute threshold)
 group definition (e.g. same desk / same instrument class / same liquidity band over the same
 window) and the comparator method (e.g. z-score relative to peer median, percentile rank within
 cohort). Absolute thresholds alone miss relative manipulation; peer-relative signals are more
-robust and more defensible.
+sound and more defensible.
 
 | Signal metric | Absolute threshold | Peer group definition | Comparator method | Alert condition |
 |---|---|---|---|---|

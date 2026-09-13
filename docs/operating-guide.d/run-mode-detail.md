@@ -18,8 +18,7 @@ and then in the platform-aware order `run-guard.sh` itself uses: an existing
 own file when present, else `$PLUGIN_ROOT/docs/...` (the root the step-0 probe printed).
 **A template or handbook doc absent from the WORKING repo is never a blocker and never a
 reason to refuse a deliverable** - resolve the plugin copy, and every delegation brief
-carries the resolved absolute paths (engage step 5). If a bundled doc is genuinely
-unreachable, produce the deliverable to the documented structure anyway and FLAG that the
+carries the resolved absolute paths (engage step 5). If a bundled doc is unreachable, produce the deliverable to the documented structure anyway and FLAG that the
 template was unavailable (live failure 2026-07-28: an FSD was refused "because there is no
 FSD document" in a plugin install - the template was in the plugin all along).
 
@@ -67,5 +66,5 @@ skipped. The Python helper scripts need only `<python>`, never bash:
     the upstream data) - never guessed, never transcribed by eye. Assume the corporate
     environment allows NO new installs: the vendored converter is the toolchain.
 - **Never silently skip a deliverable step** because a script seems unreachable: resolve the
-  path per the above, and if something genuinely can't run in this mode, say so in the close and
+  path per the above, and if something can't run in this mode, say so in the close and
   in the summary email.

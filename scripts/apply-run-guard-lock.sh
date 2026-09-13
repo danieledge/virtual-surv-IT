@@ -17,7 +17,7 @@
 #   ~50-100ms hook latency into 2,000-8,000ms across the board. An mkdir-based lock (atomic,
 #   portable - no flock dependency) now queues concurrent launches instead of letting them
 #   all spawn simultaneously. Total process-creation work is unchanged; it stops happening in
-#   one contended burst. Live-tested: 5 truly concurrent calls now show zero overlap in their
+#   one contended burst. Live-tested: 5 concurrent calls now show zero overlap in their
 #   execution windows (previously all 5 would spawn at once).
 #
 # TWO FAILURE MODES HANDLED EXPLICITLY (this gates every tool call in the session - a bug

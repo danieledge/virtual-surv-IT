@@ -129,7 +129,7 @@ _NOVCS_VALUE_RE = re.compile(r"(?i)\bAnchor\b[\s`'·:*]*no[\s-]?vcs\b")
 _NOVCS_CELL_RE = re.compile(r"(?i)^[\s`']*no[\s-]?vcs[\s`']*$")
 # Staleness budget (register M3): how many commits the header anchor may trail HEAD before
 # the map must be re-verified. Default 50 - roughly a small project's sprint of commits, so
-# a map refreshed each engagement never trips it while a genuinely abandoned map does
+# a map refreshed each engagement never trips it while a abandoned map does
 # (chosen 2026-07-29 with the M3 fix; override per map with a `Staleness-budget` header
 # field and a stated rationale - CLAUDE.md §4, no unexplained thresholds).
 _MAP_STALENESS_BUDGET = 50
@@ -1152,7 +1152,7 @@ def _check_map_drift(
     sidecar itself is looked up.
 
     M6 (2026-08 Fable audit): MISSING and CORRUPT sidecars used to collapse to the same
-    `entries = {}` fallback - a genuinely absent sidecar (nothing fingerprinted yet, one
+    `entries = {}` fallback - a absent sidecar (nothing fingerprinted yet, one
     MAP-DRIFT "never fingerprinted" per row is the right answer) and a PRESENT-but-corrupt
     one (a real integrity problem - drift cannot be judged at all, and every row reporting
     "never fingerprinted" is actively misleading about why) read identically to a human
@@ -1170,7 +1170,7 @@ def _check_map_drift(
     try:
         raw = sidecar_path.read_text(encoding="utf-8")
     except OSError:
-        pass  # genuinely no sidecar yet - the per-row "never fingerprinted" fallback is correct
+        pass  # no sidecar yet - the per-row "never fingerprinted" fallback is correct
     else:
         try:
             sidecar = json.loads(raw)
@@ -1553,7 +1553,7 @@ def check_findings_packs(artifacts_dir: Path) -> list[str]:
     return findings
 
 
-# Kinds whose findings are genuinely scored and filtered by review-scorer
+# Kinds whose findings are scored and filtered by review-scorer
 # (docs/code-review-method.md): compliance/model-validation are never score-filtered, and
 # the scorer's dedup pass over those is optional - so they are exempt from PACK-UNSCORED.
 _SCORED_PACK_KINDS = {"review", "security-audit", "performance"}
@@ -1568,7 +1568,7 @@ def check_findings_scoring(artifacts_dir: Path) -> list[str]:
     strengthenings of the same rule - the pipeline step exists only in instructions the
     orchestrator does not reliably follow, and nothing on disk evidenced whether it ran.
     This makes the evidence mechanical: a pack of a scored kind (review / security-audit /
-    performance - docs/code-review-method.md: those findings are genuinely filtered, and
+    performance - docs/code-review-method.md: those findings are filtered, and
     the scorer still runs even after self-scoring) that carries findings must record the
     scorer pass in its envelope `scoring` field. By construction never a wrong accusation:
     a pack that WAS scored but not recorded has a real provenance gap, and the fix is to
@@ -2164,7 +2164,9 @@ def check(artifacts_dir: Path) -> list[str]:
     # down.
     findings.extend(_auto_mode_findings(artifacts_dir))
     findings.extend(_required_close_action_findings(artifacts_dir))
-    findings.extend(_engagement_ledger_findings(artifacts_dir, _all_md=all_md, project_dir=Path.cwd()))
+    findings.extend(
+        _engagement_ledger_findings(artifacts_dir, _all_md=all_md, project_dir=Path.cwd())
+    )
 
     # The START-HERE living index: created at OPEN (with the first artifact), updated on
     # every artifact write, finalised at close (docs/templates/start-here.md). It is also

@@ -72,7 +72,7 @@ is also why the pattern transfers: swap the surveillance domain knowledge for an
 domain and the harness (dormancy, gates, segregation, evidence, evals) carries over.
 
 **What's the difference between "measured" and "inferred"? I keep seeing 📊 and 🧠 tags.**
-It's the team's honesty system, and probably the single most useful thing to understand.
+It's the team's evidence system, and probably the single most useful thing to understand.
 📊 **observed/measured** means the team actually ran or counted something and the evidence
 exists on disk: a test run, a line count, a diff. You can go look. 🧠 **inferred** means it's
 a reasoned conclusion, not a measurement: "this loop is probably slow at your volumes" from
@@ -83,7 +83,7 @@ dress up as a fact, and it's enforced: a "measured" claim whose evidence file go
 downgraded to inferred at close.
 
 **Does it hallucinate?**
-LLMs can, so the honest answer is: the system is built assuming it will try, and is designed
+LLMs can, so the plain answer is: the system is built assuming it will try, and is designed
 to catch it. Every data claim needs an evidence tag (above). Citations run through a
 mechanical gate that flags anything unverified rather than letting the model invent a
 plausible-looking URL. A mechanical checker verifies claimed files actually exist on disk,
@@ -110,7 +110,7 @@ calls the analysers directly, and says so.
 By design: review is static by default, because running code under review is a real risk.
 Execution needs consent that only you can grant, by creating a marker file the model is
 physically blocked from writing (a hook enforces it, and the model can't edit the hook
-either). Until then, anything that would need a run stays honestly tagged 🧠 inferred.
+either). Until then, anything that would need a run stays tagged 🧠 inferred.
 Granting it is one command, run by you - always with the **absolute project path**, so a
 terminal sitting in another directory can't create the marker in the wrong place:
 

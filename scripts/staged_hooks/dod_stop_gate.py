@@ -24,7 +24,7 @@ fired, so no DoD gate ever ran" failure class the operating guide keeps patching
     artifacts -> `--fix` -> `set-status closed`), NEVER to delete close deliverables.
 
 Deliberately low-noise and non-blocking:
-  * fires **only** while a pack is genuinely gated (workspaces: open/closing - a ⛔ BLOCKED
+  * fires **only** while a pack is gated (workspaces: open/closing - a ⛔ BLOCKED
     workspace is truthfully parked and stays silent; the flat pack keeps its pre-0.31
     semantics: open/blocked/closing arm it). A dormant session, or a folder with no readable
     engagement state, stays silent;
@@ -56,7 +56,7 @@ finding set forever. Two changes, both structural rather than a firmer instructi
     suppression is therefore honoured only by the finding set changing, which is the same
     thing as a fresh run reporting them resolved. A claimed-but-stale marker is called out in
     the block text rather than being quietly ignored.
-  * That alone would nudge forever on something genuinely unfixable, so the gate counts its
+  * That alone would nudge forever on something unfixable, so the gate counts its
     own blocks (`dod-gate-block:<hash>` notes it writes itself, never the model) and gives up
     after `_BLOCK_CEILING` of them PER ENGAGEMENT: it degrades to a plain stderr warning so the
     turn can end, and records `DOD-GATE-EXHAUSTED:<hash>` so a gate that went quiet is
@@ -155,7 +155,7 @@ def _already_nudged(pack: Path, findings_hash: str) -> bool:
 
 
 # W-6: how many times this gate may re-block ONE ENGAGEMENT before it gives up and degrades
-# to a warning. Three is enough to be unmissable and few enough that a genuinely stuck session
+# to a warning. Three is enough to be unmissable and few enough that a stuck session
 # can still end its turn; the DOD-GATE-EXHAUSTED note is what keeps the give-up from being
 # invisible - a gate going quiet has to leave a record, or it is indistinguishable from a gate
 # that was satisfied.
@@ -298,7 +298,7 @@ def _reason(
             "delivery-report/summary-email flagged before close means a close is UNDERWAY or was "
             "interrupted - resume and FINISH it (`set-status closing`, complete the close "
             "artifacts, `check_artifacts --fix`, `set-status closed`); NEVER delete completed "
-            "close deliverables to satisfy the gate. If the engagement is genuinely still "
+            "close deliverables to satisfy the gate. If the engagement is still "
             'blocked, end the turn saying so plainly ("NOT closed - outstanding: ...") rather '
             "than stopping silently. **If the user's own most recent message clearly asked for "
             "something else - new/different work, not this engagement** - proceed with THAT "
@@ -597,7 +597,7 @@ def main() -> int:
     # honoured only by the finding set changing (a different hash never matches in the
     # first place), which is the same thing as "a fresh run reports them resolved".
     #
-    # That alone would nudge forever on a genuinely unfixable finding, so the gate counts
+    # That alone would nudge forever on a unfixable finding, so the gate counts
     # its own blocks and gives up after _BLOCK_CEILING of them - degrading to a plain
     # stderr warning that lets the turn end, and recording DOD-GATE-EXHAUSTED so the
     # give-up is in the engagement's own record rather than silent. Both the counting and

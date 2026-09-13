@@ -39,7 +39,7 @@ def test_benign_session_produces_no_alert():
 
 
 def test_large_but_genuine_orders_not_flagged():
-    """False-positive control: outsized orders that genuinely fill or rest must not alert."""
+    """False-positive control: outsized orders that fill or rest must not alert."""
     assert detect_spoofing(large_genuine_session(seed=3)) == []
 
 

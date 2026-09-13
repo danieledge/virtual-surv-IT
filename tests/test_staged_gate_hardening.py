@@ -258,7 +258,7 @@ def test_nudge_says_finish_the_close_never_delete(tmp_path, monkeypatch, capsys)
 #
 # 2026-09-12 (W-6): the suppression half of that was self-serve. `dod-nudged:<hash>` is a
 # deterministic hash of the findings the nudge itself prints, so recording it required none
-# of the work it claimed, and the gate then stayed silent on a genuinely unresolved finding
+# of the work it claimed, and the gate then stayed silent on a unresolved finding
 # set forever. The findings come from a check_artifacts run that just happened, so a marker
 # on the CURRENT hash means the findings are STILL open - the marker no longer silences the
 # gate, and the block text calls the stale claim out. The ceiling (3 blocks per engagement,
@@ -318,7 +318,7 @@ def test_a_new_finding_re_arms_the_nudge_even_with_an_old_marker_present(
     old_marker = _re.search(r'log-note "(dod-nudged:[0-9a-f]+)"', old_reason).group(1)
     assert es_main(["--dir", str(ws), "log-note", old_marker]) == 0
 
-    # A second, genuinely NEW defect appears - the finding set (and therefore its hash) is
+    # A second, NEW defect appears - the finding set (and therefore its hash) is
     # now different, so the gate must nudge again even though an (unrelated, now-stale)
     # marker already sits in the log.
     (ws / "review-pass-2.md").write_text("# more interim\n", encoding="utf-8")

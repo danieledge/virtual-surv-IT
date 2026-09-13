@@ -92,7 +92,7 @@ before the passes - "When invoked" step 2) and uses the shared `docs/review/outp
 | SQL | `sqlfluff lint` | - | - |
 | Bash | `shfmt -d` | - | - |
 | Any | - | - | `gitleaks`, `osv-scanner --offline` (dependency vulns), `opengrep scan --sarif --config <local-rules>` (SAST: SQL/Java/Scala/JS/Python security patterns, offline; SARIF via `convert_sarif`) |
-| *— best-effort below, not individually configurable —* | | | |
+| * - best-effort below, not individually configurable - * | | | |
 | TypeScript | `eslint` | `tsc --noEmit` | `eslint` |
 | Scala | `scalafmt --test`, `scalafix` (non-semantic rules only) | - | - |
 | Java | `checkstyle`, `pmd` (standalone CLI only - see note) | - | - |
@@ -194,7 +194,7 @@ When invoked:
    exceptions.** 2-4 constructive points on the author's coding style and what to improve in
    future work (or what's done well, if it's strong), even on a clean pass. **The review is
    incomplete without this heading** - `check_artifacts` mechanically flags it missing/empty
-   as `FINDINGS-NO-DEV-GUIDANCE`, but verify it's genuinely in the artifact before finishing,
+   as `FINDINGS-NO-DEV-GUIDANCE`, but verify it's in the artifact before finishing,
    don't rely on the gate.
 7. The orchestrator (**Morgan**) then independently challenges and may **downgrade** findings -
    **and samples the filtered / below-threshold set to promote any false negative**

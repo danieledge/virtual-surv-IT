@@ -740,7 +740,7 @@ def statusline_command(repo: Path, bash: str = "bash") -> str:
 # here, anchored to the end of the string, rather than a bare "statusline.sh" substring
 # (found in review, 2026-08-13: that could false-positive on any unrelated script merely
 # named *statusline.sh, e.g. "my-statusline.sh" or "notstatusline.sh", silently overwriting
-# a genuinely foreign statusLine instead of showing the conflict prompt).
+# a foreign statusLine instead of showing the conflict prompt).
 _OUR_STATUSLINE_COMMAND_RE = re.compile(r'[/\\]scripts[/\\]statusline\.sh"$')
 
 
@@ -748,7 +748,7 @@ def merge_statusline(settings: dict, command: str):
     """Set statusLine in a settings dict. Returns (settings, verdict):
     'added' (none existed), 'already' (identical command present, nothing to do),
     'ours-moved' (OUR statusline.sh at another path - e.g. an old clone location -
-    updated in place without a scare prompt), or 'conflict' (a genuinely foreign
+    updated in place without a scare prompt), or 'conflict' (a foreign
     statusLine - the caller must show it to the user and get explicit confirmation)."""
     current = settings.get("statusLine")
     if isinstance(current, dict) and current.get("command") == command:
@@ -2730,8 +2730,7 @@ class Installer:
         # touches one - so users hit "you have uncommitted changes" having written nothing,
         # and an update refused over edits that were never theirs. Discarding them first
         # also means there is nothing here for a later stash pop to conflict on, which is
-        # exactly where these files would have collided. Anything the user genuinely
-        # changed is still stashed and restored below.
+        # exactly where these files would have collided. Anything the user # changed is still stashed and restored below.
         reset = [p for p in _SELF_OWNED_CONFIG if (Path(repo) / p).exists()]
         if reset:
             proc = run_cmd(["git", "-C", repo, "checkout", "--", *reset])
@@ -3122,7 +3121,7 @@ class Installer:
         the LLM-gateway beta-fields workaround, docx, and Morgan's model, all wired or
         skipped per their own sensible default with zero further questions) or "manually
         configure" (walk through each one individually, exactly as this installer did
-        before). "Go with defaults" genuinely means that now - only this machine's own
+        before). "Go with defaults" means that now - only this machine's own
         defaults (machine_defaults_offer) stay a deliberate ask either way, since that
         changes what every FUTURE project inherits, not just this one. --yes always
         implies the fast path (a scripted/CI run can't answer an interactive question),
@@ -3484,7 +3483,7 @@ class Installer:
         ~15 languages and a regex approximation - and on a Java/Scala/SQL estate, which is
         what this team reviews, that is most of the value.
 
-        WHY FAILURE IS NOT AN ERROR. It genuinely cannot be installed everywhere - this
+        WHY FAILURE IS NOT AN ERROR. It cannot be installed everywhere - this
         project's own dev box refuses it under PEP 668 (externally-managed environment), and
         elsewhere it will be no network, no pip, or a DLL the policy will not load. Every one
         of those is fine: the tier is a SOFT probe, so the plugin behaves exactly as it did
@@ -3790,7 +3789,7 @@ class Installer:
         if not self.demo:
             # Live report, 2026-08-12: the claude CLI call below is fully blocking (up to
             # a 300s timeout) with nothing printed between this line and the eventual
-            # result - on a slow network or corporate proxy this can genuinely take real
+            # result - on a slow network or corporate proxy this can take real
             # time, and with zero visual feedback in between it reads as hung rather than
             # working. One dim line to set the expectation; a real progress indicator
             # would need run_cmd to stream rather than fully capture output, a bigger
@@ -4041,7 +4040,7 @@ class Installer:
         self.step_intro("An optional status line: the team's state and session cost at a glance.")
         bash = find_bash()
         if sys.platform == "win32" and not bash:
-            # The wired command runs bash; with Git Bash truly absent it would be a
+            # The wired command runs bash; with Git Bash absent it would be a
             # broken setting. Honest skip instead of wiring it.
             self.step_skip(
                 "Status line",
@@ -4858,7 +4857,7 @@ class Installer:
         purpose - say so up front."""
         self.step_intro(
             "Measures real hook latency: repeated interpreter cold starts, the real "
-            "guard-launcher end to end, and a genuinely concurrent fan-out simulation - "
+            "guard-launcher end to end, and a concurrent fan-out simulation - "
             "the evidence docs/adr/ADR-014 calls for before deciding whether a persistent "
             "guard daemon is worth building. Slower than the other checks (repeated + "
             "concurrent measurement) - always writes the full numbers to a file, pass or "
@@ -5278,7 +5277,7 @@ def warn_if_untrusted(project_dir: Path, style: Style, mark_map: dict) -> None:
     setting it from here would answer that question on the user's behalf without them ever
     seeing it. So this reports and points; it does not decide."""
     if workspace_is_trusted(project_dir) is not False:
-        return  # trusted, or genuinely unknown - do not cry wolf
+        return  # trusted, or unknown - do not cry wolf
     warn = mark_map.get("warn") or "!"
     print("")
     print(
@@ -6453,7 +6452,7 @@ def run_configure(
         style=style,
     )
     # EIGHT blocking confirms used to run here, unconditionally, during a first install.
-    # Two of them are genuinely first-run decisions - what the team produces, and whether
+    # Two of them are first-run decisions - what the team produces, and whether
     # it cites obligations. The other six have sensible defaults, are per-project tuning
     # rather than setup, and are all editable at any time from `virt-surv go` -> [c],
     # which is a grid showing every value at once rather than a fixed interrogation with
@@ -7827,7 +7826,7 @@ def run_fix_bashrc(
     print(
         style.yellow(
             "  ! this guards EVERYTHING below it for non-interactive shells - if this file "
-            "sets PATH/env vars a Bash tool call genuinely needs (not just interactive "
+            "sets PATH/env vars a Bash tool call needs (not just interactive "
             "conveniences), narrow the guard by hand afterwards (see the comment in the "
             "snippet above)"
         )
@@ -7837,7 +7836,7 @@ def run_fix_bashrc(
         return 0
     # default=assume_yes (not a hardcoded False): an explicit --yes IS the consent for a
     # flag the user named on purpose, so it should proceed, not silently decline via
-    # confirm()'s assume_yes-shortcuts-to-default path. A genuinely interactive session
+    # confirm()'s assume_yes-shortcuts-to-default path. A interactive session
     # (assume_yes=False, real TTY) still shows the prompt and defaults to declining if the
     # user just presses Enter - the write is consequential enough to want an explicit yes.
     if not _agreed(
@@ -8414,7 +8413,7 @@ def probe_analyser_output(tmpdir: Path, runner=None, only=None):
         # live-caught (fable UX review, 2026-08-05): a tool that crashed at startup
         # (e.g. ModuleNotFoundError, a short traceback under the 200-byte NOISY
         # threshold) was reported "OK: clean", the exact opposite of true. Every tool
-        # here is expected to exit 0 on a genuinely clean, well-formatted trivial file -
+        # here is expected to exit 0 on a clean, well-formatted trivial file -
         # nonzero is always anomalous (a crash, a misconfiguration, a version mismatch,
         # or a false positive on our own fixture), never a legitimate "clean" result.
         if name == "osv-scanner":
@@ -9169,7 +9168,7 @@ def _resolve_sh() -> Optional[str]:
     checks it opportunistically (several plausible shapes: the env var pointing straight
     at sh.exe, at bash.exe/git-bash.exe with sh.exe alongside it, or at the containing
     directory) rather than assuming one exact convention. Falls through to shutil.which
-    (works everywhere sh genuinely is on PATH), then common Windows Git-Bash install
+    (works everywhere sh is on PATH), then common Windows Git-Bash install
     locations as a last resort. Returns None if nothing resolves - the caller SKIPs, same
     as before, never guesses at a shell that might not actually be there."""
     override = os.environ.get("CLAUDE_CODE_GIT_BASH_PATH")
@@ -9248,7 +9247,7 @@ def _trend_verdict(good_bare: list) -> tuple:
 
 
 def _measure_concurrent(argv_fn, n: int, timeout: float = 30.0) -> tuple:
-    """n GENUINELY concurrent invocations (ThreadPoolExecutor, not a loop - the same
+    """n concurrent invocations (ThreadPoolExecutor, not a loop - the same
     technique tests/test_run_guard_lock.py::test_concurrent_calls_are_actually_serialized
     already uses) - reproduces the actual reported Workflow-fan-out symptom on demand
     instead of waiting for it to happen organically in a real session. Returns (per-call
@@ -9275,7 +9274,7 @@ def run_hook_latency_diagnostic(
 ) -> int:
     """Standalone diagnostic (--check-hook-latency / Diagnostics menu option 5): measures
     real PreToolUse hook latency on THIS machine - repeated bare interpreter cold starts,
-    the real guard-launcher end to end, and a genuinely concurrent fan-out simulation -
+    the real guard-launcher end to end, and a concurrent fan-out simulation -
     feeding the ADR-014 daemon decision with actual numbers instead of guesswork. Slower
     than the other diagnostics on purpose (repeated + concurrent measurement, not a single
     pass) - ALWAYS writes its full numbers to a timestamped file, pass or fail, since the
@@ -9357,7 +9356,7 @@ def run_hook_latency_diagnostic(
                 "interpreter start-up alone)",
             )
 
-        print(style.dim("\n  Concurrent fan-out simulation (8 genuinely concurrent calls):"))
+        print(style.dim("\n  Concurrent fan-out simulation (8 concurrent calls):"))
         fanout_samples, fanout_total = _measure_concurrent(
             lambda: (
                 [sh_path, str(launcher), str(dispatcher)],
@@ -12157,7 +12156,7 @@ def _dispatch_folder_subcommand(argv: list) -> Optional[int]:
     # ("make sure the install helper and virt-surv has a strapline from the Morgan
     # persona"): the interactive menu already opens with print_banner()'s box + Morgan's
     # intro line, but these folder-scoped 'virt-surv <subcommand>' calls went straight
-    # into the action with no persona touch at all - a genuinely different, quieter
+    # into the action with no persona touch at all - a different, quieter
     # surface that the fast alias path exists specifically to keep quick, so the full
     # banner box would be too heavy here.
     hat = "🎩 " if _can_encode("🎩") else ""
@@ -12432,7 +12431,7 @@ def _main(argv=None) -> int:
         # live-caught (fable UX review, 2026-08-05): running Configure (which really
         # enabled the plugin and wrote files) then quitting printed exactly that,
         # readable as "your configuration was discarded". Never set for the one-shot
-        # "demo" preview or a session-wide --demo run, both of which genuinely write
+        # "demo" preview or a session-wide --demo run, both of which write
         # nothing regardless of which action was picked.
         did_anything = False
         # The worst status any action in this loop returned. The three actions that report

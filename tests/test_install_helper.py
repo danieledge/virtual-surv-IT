@@ -177,7 +177,7 @@ def test_install_mode_offers_the_manual_clone_as_default(monkeypatch, tmp_path, 
 def test_install_mode_still_defaults_to_default_clone_dir_when_not_a_clone(
     monkeypatch, tmp_path, capsys
 ):
-    """A genuinely fresh install (script run standalone, not from inside a clone) must
+    """A fresh install (script run standalone, not from inside a clone) must
     keep offering DEFAULT_CLONE_DIR - the manual-clone fix must not change this case."""
     import install_helper as ih
 
@@ -1454,7 +1454,7 @@ def test_menu_quit_after_real_action_does_not_claim_nothing_changed(monkeypatch,
 def test_menu_quit_after_readonly_diagnostic_still_says_nothing_changed(
     monkeypatch, tmp_path, capsys
 ):
-    """A read-only diagnostic (Diagnostics -> Check for updates) genuinely changes
+    """A read-only diagnostic (Diagnostics -> Check for updates) changes
     nothing - the reassurance must still be accurate after running one."""
     import install_helper as ih
 
@@ -1977,7 +1977,7 @@ def test_statusline_step_skips_without_bash_on_windows(monkeypatch, tmp_path, ca
     # well-known install dirs -> a registry PATH re-read - the last stage is real,
     # intentional behaviour that survives Git for Windows' PATH gap, not something to
     # fake out here). Mocking shutil.which alone leaves that registry fallback live, so
-    # on a box where it genuinely finds a bash.exe (e.g. a real PortableGit install) this
+    # on a box where it finds a bash.exe (e.g. a real PortableGit install) this
     # test's "bash absent" premise silently breaks. Mock find_bash directly instead,
     # matching the pattern used elsewhere in this file for the same reason.
     monkeypatch.setattr(ih, "find_bash", lambda: None)
@@ -2005,8 +2005,7 @@ def test_full_plan_includes_alias_setup_and_machine_defaults_offer(monkeypatch, 
     model)" as part of this run, but build_plan never actually called enable_step for
     subset="full" - the promise was never wired up. Fixed by adding it between alias
     setup and machine defaults, matching quick_setup_choice's own listed order.
-    2026-08-15 user request: removed again - per-project enablement stays a genuinely
-    separate step ('virt-surv configure'/'engage'/'onboard'), not bundled into the
+    2026-08-15 user request: removed again - per-project enablement stays a separate step ('virt-surv configure'/'engage'/'onboard'), not bundled into the
     machine-level full install. quick_setup_choice's own promised-steps text was updated
     in the same change so it stops promising something this flow no longer does - the
     same class of drift the 2026-08-12 fix above closed, just in reverse this time."""
@@ -2226,7 +2225,7 @@ def test_run_go_demo_never_launches(tmp_path, monkeypatch, capsys):
 
     monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: None)
     # No repo -> scripts_dir falls back to THIS repo's own scripts/ (install_helper.py's
-    # real __file__), which genuinely has virt_team_launcher.py - forcing no interpreter
+    # real __file__), which has virt_team_launcher.py - forcing no interpreter
     # keeps this test isolated from a real subprocess spawn against that real script.
     monkeypatch.setattr(ih, "_check_interpreters", lambda names: ([], ""))
     monkeypatch.setattr(ih, "detect_or_configure_claude_launch_command", lambda *a, **k: "claude")
@@ -5411,7 +5410,7 @@ def test_setup_alias_defaults_to_no_when_no_real_clone_found(tmp_path, monkeypat
 
 
 def test_setup_alias_idempotent_skip(tmp_path, monkeypatch, capsys):
-    """A genuinely current alias - the EXACT line this run would write, already present
+    """A current alias - the EXACT line this run would write, already present
     (here: written by a first run moments earlier) - is skipped, not duplicated.
     Staleness is exact-line now, not any structural signature: see _ALIAS_VERSION's
     comment for the two shape-signature failures, and the 2026-08-16 launch-command
@@ -5682,7 +5681,7 @@ def test_verify_alias_line_posix_success():
 
 
 def test_verify_alias_line_posix_catches_bad_syntax():
-    """expand_aliases quirk aside, a genuinely broken line (unbalanced quote) must be
+    """expand_aliases quirk aside, a broken line (unbalanced quote) must be
     caught, not silently reported as working."""
     import install_helper as ih
 
@@ -6213,7 +6212,7 @@ def test_choose_submenu_divider_row_not_selectable_and_not_counted_in_error_rang
 
     # "" (the divider row's own key) is never a valid answer, matching every other
     # invalid input - but empty input is ALSO how "back" is spelled (a bare Enter), so
-    # use a genuinely out-of-range answer ("9") to exercise the retry/error path
+    # use a out-of-range answer ("9") to exercise the retry/error path
     # without also exiting the menu.
     answers = iter(["9", "1"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
@@ -7187,7 +7186,7 @@ def test_selftest_probe_bandit_crash_distinct_from_missed(monkeypatch, tmp_path)
 
 def test_selftest_probe_bandit_ran_but_missed_the_issue(monkeypatch, tmp_path):
     """Exit 0 (bandit's own "clean" outcome) with the planted issue absent means bandit
-    genuinely ran and missed it - a real config problem, not a crash."""
+    ran and missed it - a real config problem, not a crash."""
     import install_helper as ih
 
     monkeypatch.setattr(
@@ -7527,7 +7526,7 @@ def test_run_adr014_smoke_test_returns_none_when_spike_absent(tmp_path, monkeypa
     other diagnostic in this file. tmp_path must actually satisfy looks_like_repo()
     (.git + .claude-plugin/plugin.json) - otherwise _resolve_repo_root rejects it as a
     candidate entirely and falls through to its own __file__-parent fallback, which is
-    unconditionally a real repo (THIS checkout) with the spike genuinely present -
+    unconditionally a real repo (THIS checkout) with the spike present -
     silently testing the wrong repo instead of skipping. _isolate_home also needed:
     without it, the load_config(...).get("repo_path") candidate in between can still
     point at this machine's real clone if it has ever been configured here."""
@@ -8187,7 +8186,7 @@ def test_list_headlines_skips_a_placeholder_section_but_keeps_a_bare_release():
     # A release heading with no body at all is still news - it says what it is.
     bare = "## [0.37.0] - d - Real release\n\n## [0.36.0] - d - Local\n"
     assert list_headlines_between(bare, "0.36.0") == ["[0.37.0] - d - Real release"]
-    # A truly empty, undescribed section is not.
+    # A empty, undescribed section is not.
     assert list_headlines_between("## [Unreleased]\n\n## [0.1.0] - d - x\n", None) == [
         "[0.1.0] - d - x"
     ]
@@ -8663,7 +8662,7 @@ def test_a_first_install_asks_two_preference_questions_not_eight(tmp_path, monke
     """Owner decision, 2026-08-28: shrink the wizard.
 
     Eight blocking confirms ran here unconditionally during a first install, one of them
-    three lines long quoting millisecond benchmarks. Two are genuinely first-run decisions
+    three lines long quoting millisecond benchmarks. Two are first-run decisions
     - what the team produces, and whether it cites obligations. The rest are per-project
     tuning with sensible defaults, editable at any time from a grid that shows every value
     at once instead of a fixed interrogation with no way to skip forward or go back.
@@ -8909,7 +8908,7 @@ def test_code_intelligence_runs_inside_the_interface():
             f"{streaming} output IS the deliverable - a bounded pane would hide it"
         )
 
-    # The one step it runs must genuinely ask nothing, or the allow-list is a lie.
+    # The one step it runs must ask nothing, or the allow-list is a lie.
     step = inspect.getsource(ih.Installer.code_intel_step)
     for prompt in ("ask(", "confirm(", "input("):
         assert prompt not in step, f"code_intel_step must not {prompt} inside a screen"

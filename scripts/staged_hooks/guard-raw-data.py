@@ -396,7 +396,7 @@ def _search_file_operands(command: str) -> list[str] | None:
             # data/raw/patterns.txt .` and `grep --file=data/raw/p.txt .` both passed,
             # because grep opens that file to read the patterns out of it. Same for the
             # include/exclude/glob filters, which can name a raw path just as directly.
-            # Only -e/--regexp genuinely carry a pattern rather than a path.
+            # Only -e/--regexp carry a pattern rather than a path.
             if base in _FLAGS_WITH_PATH_VALUE:
                 if "=" in tok:
                     value, step = tok.split("=", 1)[1], 1

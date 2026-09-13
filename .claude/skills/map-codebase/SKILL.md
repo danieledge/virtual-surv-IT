@@ -53,7 +53,7 @@ routing). Open the state:
 then `add-artifact engagement-brief.md --title "..."`. **Go-ahead gate stays** - one
 single-select question (Proceed / Adjust / Stop) - stating the mechanical pass is free (no
 LLM cost) and the planned synthesis-agent count (step 5) up front, so the gate's cost estimate
-is honest before any spend happens.
+is accurate before any spend happens.
 
 **4. Mechanical pass - always first, always cheap.** Run:
 `<python> -m scripts.repo_skeleton <path> --mermaid` (omit `--mermaid` on a huge non-Python
@@ -87,7 +87,7 @@ justify the pass.
   the root map, entry IDs for citation, an optional per-entry `Paths` glob.
 - **Root map** (`VSIT/shared/map.md`, from `docs/templates/codebase-map.md` if it doesn't
   exist yet): update the Index section with a load-trigger line per area file ("read this
-  when: ..."), and keep §2 to what genuinely belongs at the root (cross-cutting facts, or a
+  when: ..."), and keep §2 to what belongs at the root (cross-cutting facts, or a
   project small enough that no area file is warranted at all - an empty
   `VSIT/shared/map.d/` is a legitimate outcome for a well-documented or small repo, per
   ADR-007's own framing).

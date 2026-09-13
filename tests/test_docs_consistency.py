@@ -245,7 +245,7 @@ def test_write_brd_batches_clarifying_questions():
 
 def test_review_target_is_derived_or_batched_never_a_solo_turn():
     """Review-target batching (2026-08-17): the target is derived (diff / named path)
-    and, when genuinely unknown, asked inside the 0a intake batch - never its own
+    and, when unknown, asked inside the 0a intake batch - never its own
     screen or turn."""
     engage = _read(".claude/skills/engage/SKILL.md")
     assert "Review target" in engage and "`Target`" in engage, (
@@ -755,4 +755,11 @@ def test_the_utility_skills_declare_allowed_tools_and_nothing_else_does():
         front = text.split("---")[1] if text.startswith("---") else ""
         if re.search(r"^allowed-tools:", front, re.M):
             declared.add(skill.name)
-    assert declared == {"meet-the-team", "run-evals", "preferences", "dashboard", "map-codebase", "team"}
+    assert declared == {
+        "meet-the-team",
+        "run-evals",
+        "preferences",
+        "dashboard",
+        "map-codebase",
+        "team",
+    }

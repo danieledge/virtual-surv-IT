@@ -60,7 +60,7 @@ def _run(script: Path, payload: dict, project: Path) -> subprocess.CompletedProc
 
 
 def _ws(project: Path, slug: str) -> Path:
-    """A genuinely valid, real engagement workspace (via the real engagement_state CLI -
+    """A valid, real engagement workspace (via the real engagement_state CLI -
     a hand-written minimal engagement-state.json is missing required fields like
     engagement.slug, which itself trips dod_stop_gate's STATE-INVALID finding and would
     silently contaminate every fixture below with an unintended extra finding)."""

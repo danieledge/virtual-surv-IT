@@ -123,7 +123,7 @@ _ALLOWED_ATTRS: dict = {
 }
 
 # Allowed URI schemes in href/src attributes. `data:` is included so images can be embedded
-# inline (base64) and the artifact stays truly self-contained; bleach cannot scope a protocol
+# inline (base64) and the artifact stays self-contained; bleach cannot scope a protocol
 # to a tag/mediatype, so a `data:` URI in an <a href> is also permitted (low risk for a
 # locally-opened artifact, and javascript:/vbscript: remain blocked).
 _ALLOWED_PROTOCOLS = frozenset({"http", "https", "mailto", "data"})
