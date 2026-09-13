@@ -4,7 +4,7 @@ description: >
   When the team is engaged, use for INDEPENDENT assurance of the data feeding surveillance -
   completeness, accuracy, timeliness, reconciliation and coverage (is every in-scope instrument,
   venue, account and comms channel actually monitored?). Advises; the build agents remediate.
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, Write, Edit
 model: sonnet
 ---
 
@@ -59,13 +59,18 @@ Output, organised by priority:
 
 For each: the gap, its **regulatory/detection implication** (what abuse could be missed),
 how you'd evidence it, and the remediation owner. **Tag every finding 📊 observed (confirmed in the
-feed/data) / 🧠 inferred** (CLAUDE.md §6). Return a distilled summary to the orchestrator - verdict
-and headline gaps: you hold no Write, so **the PM authors the artifact from your return** and
-anything you omit is lost. Budget ~30 lines of *prose*; a **structured payload** (the coverage
-matrix, a reconciliation table) is the deliverable itself and is **exempt from that budget - but
-uncapped means uncapped in COUNT of distinct gaps, not in verbosity per gap**
-(`docs/code-review-method.md` §Conciseness for the never-filtered reviewers - the same discipline,
-applied here even though your payload isn't a findings pack). Never drop a real gap to save
+feed/data) / 🧠 inferred** (CLAUDE.md §6). **Write the coverage matrix and every gap as a
+findings pack, never as prose in your return** (2026-09-13): the file is
+`VSIT/engagements/<slug>/data/findings-coverage-<slug>.jsonl` (legacy layout:
+`artifacts/<slug>/data/...`), shape per `docs/review/findings-schema.json` with `kind:
+coverage` and a slug prefixed `coverage-`; your Write and Edit grants reach that path and
+nothing else (`guard-findings-pack-write.py`). The report is rendered from the pack by
+`check_artifacts --fix` (`COVERAGE-<slug>.md`), and a coverage pack is never scored or
+filtered: a missed venue is a gap, not a low-confidence finding. Then return a distilled
+summary to the orchestrator - verdict, headline gaps, the pack path - in ~30 lines of prose;
+the pack carries the detail, so nothing is lost to the budget. In the pack, **consolidate**
+the same underlying gap found at several feeds/channels into ONE row citing them all, and
+keep each row's implication and evidence to a sentence or two. Never drop a real gap to save
 space. Do: **consolidate** the same underlying gap found at several feeds/channels into ONE row
 citing them all, instead of repeating the same implication/evidence prose per site; keep each
 row's implication and evidence to a sentence or two, not a restated paragraph.

@@ -93,7 +93,7 @@ and the **deliverable → owner routing table** all live there.
   state the assumption. Applies to every agent and to the PM summarising their work.
 - **Advisory agents** (`model-validator`, `code-reviewer`, `performance-reviewer`,
   `compliance-reviewer`, `data-quality-reviewer`) hold no general Edit; build agents implement.
-  Four hold Write+Edit scoped to their own findings-pack JSONL only, mechanically enforced
+  Five hold Write+Edit scoped to their own findings-pack JSONL only, mechanically enforced
   (`guard-findings-pack-write.py`) - grant mechanics: `docs/agent-design.md`. **Route by
   deliverable type, not habit** (table in the operating guide).
 

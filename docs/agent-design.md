@@ -156,7 +156,7 @@ separate SecOps agent - folded into `code-reviewer` + `platform-engineer`).
 | Best-practice item | Status | How |
 |---|---|---|
 | Frontmatter complete (name·description·tools·model) | ✅ | All 13. |
-| `tools:` least-privilege; advisors hold no general Edit | ✅ | Verified - zero advisors hold an unscoped Edit. (6 hold `Bash` for analysers/diffs, execution-gated §7; 4 hold `Write` and `Edit`, both scoped to their own findings-pack path only, mechanically enforced by `guard-findings-pack-write.py` - "no general Edit, Write+Edit scoped", not strictly "read-only".) |
+| `tools:` least-privilege; advisors hold no general Edit | ✅ | Verified - zero advisors hold an unscoped Edit. (6 hold `Bash` for analysers/diffs, execution-gated §7; 5 hold `Write` and `Edit` (the data-quality reviewer since 2026-09-13), both scoped to their own findings-pack path only, mechanically enforced by `guard-findings-pack-write.py` - "no general Edit, Write+Edit scoped", not strictly "read-only".) |
 | Description = clear when-to-use trigger | ✅ | Standardised "When the team is engaged, use for…"; overlaps removed. |
 | Model tiering (not all-one-tier; documented) | ✅ | §2 above; 4/8/1 split (opus/sonnet/haiku), 13 total - checked against `.claude/agents/*.md` frontmatter by `tests/test_docs_consistency.py::test_agent_model_tiers_match_agent_design_table`. |
 | Reasonable agent count / no routing collisions | ✅ | §4; one historical overlap fixed. |

@@ -36,7 +36,13 @@ REPO = Path(__file__).resolve().parents[1]
 STAGED_PATH = REPO / "scripts" / "staged_hooks" / "guard-findings-pack-write.py"
 LIVE_PATH = REPO / ".claude" / "hooks" / "guard-findings-pack-write.py"
 
-_SCOPED_AGENTS = ("code-reviewer", "compliance-reviewer", "model-validator", "performance-reviewer")
+_SCOPED_AGENTS = (
+    "code-reviewer",
+    "compliance-reviewer",
+    "model-validator",
+    "performance-reviewer",
+    "data-quality-reviewer",  # 2026-09-13, framework review step 4.6
+)
 
 
 def _run(payload: dict) -> int:

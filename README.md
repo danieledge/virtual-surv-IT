@@ -604,7 +604,7 @@ the specialists.
 - **Cannot declare an engagement done.** The Definition-of-Done gate runs a mechanical checklist
   at close and refuses on any finding; "done" is what the tooling verifies, not what Morgan says.
 - **Cannot let an advisory agent touch code.** Reviewers cannot mutate the code under review:
-  the four pack-writing reviewers hold Write/Edit scoped (mechanically enforced) to each one's
+  the five pack-writing reviewers hold Write/Edit scoped (mechanically enforced) to each one's
   own findings-pack file and nothing else; a fix routes back through Morgan to a builder.
 - **Cannot ship code without independent QA.** If execution consent is withheld, the close stays
   marked partial and says so; it is never silently upgraded to a pass.
@@ -837,7 +837,7 @@ A *hook* is a small script Claude Code runs automatically **right before** it us
 can **allow** or **block** that action. This plugin ships three safety guards - the raw-data
 wall **always on**, the execution gate and the consent guard's settings tier **armed only in
 sessions that invoked the team** (2026-08-17; the marker/hook/git-exec-config protections in
-them stay always-on) - plus a fourth always-on guard scoping the four reviewer agents' Write/Edit
+them stay always-on) - plus a fourth always-on guard scoping the five reviewer agents' Write/Edit
 to their own findings-pack file, five engagement-scoped lifecycle hooks and three further
 cost/UX redirect hooks (see the Claude Code features table; the lifecycle hooks no-op in dormant
 sessions and fail open, and so do the redirects - detail on the redirects is in
@@ -1078,7 +1078,7 @@ scripts` on a checkout is the authoritative inventory if this table and the tree
 | `.claude/hooks/guard-raw-data.py` | Blocks Read/Grep/Glob/Bash tool calls that target `data/raw/` | always on |
 | `.claude/hooks/guard-code-execution.py` | Blocks execution of the code under review unless a human has opened the consent gate | team-invoked sessions |
 | `.claude/hooks/guard-consent-writes.py` | Blocks model writes of the consent marker, `settings*.json` and the hook files themselves | always on |
-| `.claude/hooks/guard-findings-pack-write.py` | Scopes the four advisory reviewer agents' Write/Edit to their own findings-pack JSONL only | always on |
+| `.claude/hooks/guard-findings-pack-write.py` | Scopes the five advisory reviewer agents' Write/Edit to their own findings-pack JSONL only | always on |
 | `.claude/hooks/run-guard.sh` | The guard launcher: probes `python3` → `python` → `py` and fails closed on a crash | always on |
 | `scripts/bash_hook_dispatcher.py` | Runs the PreToolUse checks above (plus the redirects below) in one process instead of several | always on |
 | `scripts/guard_daemon.py` | Persistent guard daemon - eliminates per-call interpreter cold start (ADR-014) | always on, default transport |

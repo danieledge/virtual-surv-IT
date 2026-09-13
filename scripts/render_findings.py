@@ -43,6 +43,10 @@ _KIND = {
     "review": ("REVIEW", "Review report"),
     "security-audit": ("SECURITY-AUDIT", "Security audit"),
     "performance": ("PERF", "Performance review"),
+    # 2026-09-13 (step 4.6): the data-quality reviewer's coverage matrix as a pack. Never
+    # scored or filtered (check_artifacts._SCORED_PACK_KINDS excludes it): a missed venue is
+    # a gap, not a low-confidence finding.
+    "coverage": ("COVERAGE", "Data-quality and coverage review"),
 }
 
 

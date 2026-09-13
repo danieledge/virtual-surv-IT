@@ -10,7 +10,7 @@
     "slug": { "type": "string", "description": "kebab-case id; drives the artifact filename" },
     "kind": {
       "type": "string",
-      "enum": ["review", "security-audit", "performance", "compliance", "model-validation"],
+      "enum": ["review", "security-audit", "performance", "compliance", "model-validation", "coverage"],
       "description": "which review kind - drives the rendered artifact's prefix (REVIEW- / SECURITY-AUDIT- / PERF-) and title. Defaults to 'review' if omitted. 'compliance' and 'model-validation' have no prefix mapping in render_findings/check_artifacts yet, so they fall back to REVIEW-<slug>.md: give those packs a slug prefixed 'compliance-' / 'model-validation-' so they cannot collide with a code-review pack of the same engagement."
     },
     "title": { "type": "string" },
