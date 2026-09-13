@@ -290,10 +290,13 @@ by type (CLAUDE.md §6).
 you haven't been given, **ask for it before anything else** and wait:
 - **Code to review / remediate / build on** → ask *where it is*: a path or glob, a git
   repo/branch, a commit range, or paste it. Confirm the files exist (e.g. `git status`, list the
-  path) before reviewing. **Do not invent or assume a target.**
+  path) before reviewing. **Do not invent or assume a target.** A file the request names
+  by name lives in the project: look for it with Glob under the project root (your cwd),
+  and if it is not there, that is a question for the user, never a search of the machine
+  (no `find /`, no listing above the project - live 2026-09-13, plugin-mode eval).
 - A **spec/BRD/FSD**, **data location**, or other artifact → ask for the path or paste.
 - **Any input that is a document file (PDF / DOCX / XLSX / XLS / CSV)** → convert it FIRST:
-  `<python> -m scripts.convert_file <file>` (consent-free; `--layout` for table/column-shaped
+  `<python> <PLUGIN_ROOT>/scripts/convert_file.py <file>` (consent-free; the path form works from an installed copy, the module form does not; `--layout` for table/column-shaped
   PDFs). Never read the binary bytes, never hand-parse or PowerShell it. If the report says pages
   are scanned/MISSING, ask the user (question tool) for a text-bearing original - do not guess.
 

@@ -37,6 +37,12 @@ from rules.spoofing import (
 )
 
 
+# The usage line names the form that works from an installed copy as well as this repo:
+# the module form (`python -m scripts.<name>`) exits 1 outside the repo, and a session
+# that saw it in a usage message repeated it (plugin-mode eval, 2026-09-13).
+_PROG = f"python {__import__('pathlib').Path(__file__).resolve()}"
+
+
 def _load_events(args):
     if args.file:
         from scripts.gen_synthetic import record_to_event
@@ -286,7 +292,7 @@ def _print_markdown(result: dict) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
-        prog="python -m scripts.explain_rule",
+        prog=_PROG,
         description="Per-condition why/why-not trace for the spoofing rule (synthetic/masked data only).",
     )
     src = ap.add_mutually_exclusive_group(required=True)

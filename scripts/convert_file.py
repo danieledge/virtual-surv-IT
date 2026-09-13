@@ -65,6 +65,12 @@ import zipfile
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+# The usage line names the form that works from an installed copy as well as this repo:
+# the module form (`python -m scripts.<name>`) exits 1 outside the repo, and a session
+# that saw it in a usage message repeated it (plugin-mode eval, 2026-09-13).
+_PROG = f"python {__import__('pathlib').Path(__file__).resolve()}"
+
+
 TOOL_VERSION = "1.0.0"
 
 # ---------------------------------------------------------------------------
@@ -963,7 +969,7 @@ def main(argv: list[str] | None = None) -> int:
         except (AttributeError, ValueError, OSError):
             pass
     parser = argparse.ArgumentParser(
-        prog="python -m scripts.convert_file",
+        prog=_PROG,
         description="Reliable file conversion with schema validation and an evidence report. "
         "Tabular (xlsx/xlsm/xls/csv/tsv) -> csv/jsonl; documents (pdf/docx) -> md/txt.",
     )

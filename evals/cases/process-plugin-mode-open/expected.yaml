@@ -10,7 +10,7 @@ rubric: process-discipline-probe
 judge: none
 input: scenario.md
 # A short open plus a two-function review; no build, no QA chain, no close ceremony.
-timeout_s: 1800
+timeout_s: 3600  # 2026-09-13: a full open with eight gates and a review ran past 1800
 description: >
   The install-shape case. Everything else in the corpus runs repo-as-project, where the plugin
   root and the project root are the same directory and the hooks come from this repo's

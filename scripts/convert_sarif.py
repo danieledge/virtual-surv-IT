@@ -34,6 +34,12 @@ try:
 except ImportError:  # pragma: no cover - direct-path invocation
     from findings_pack_io import write_pack  # type: ignore[no-redef]
 
+# The usage line names the form that works from an installed copy as well as this repo:
+# the module form (`python -m scripts.<name>`) exits 1 outside the repo, and a session
+# that saw it in a usage message repeated it (plugin-mode eval, 2026-09-13).
+_PROG = f"python {__import__('pathlib').Path(__file__).resolve()}"
+
+
 _DEFAULT_SEV = {"error": "critical", "warning": "warning", "note": "style", "none": "style"}
 
 
@@ -135,7 +141,7 @@ def convert(
 
 def main(argv: list[str] | None = None) -> int:
     _force_utf8_output()
-    ap = argparse.ArgumentParser(prog="python -m scripts.convert_sarif")
+    ap = argparse.ArgumentParser(prog=_PROG)
     ap.add_argument("sarif", type=Path)
     ap.add_argument("--slug", required=True)
     ap.add_argument("--scope", required=True)

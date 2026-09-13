@@ -114,6 +114,12 @@ except ImportError:  # standalone run from a bare clone: scripts/ may not be on 
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from fsutil import atomic_write_json, atomic_write_text, unlink_quietly
 
+# The usage line names the form that works from an installed copy as well as this repo:
+# the module form (`python -m scripts.<name>`) exits 1 outside the repo, and a session
+# that saw it in a usage message repeated it (plugin-mode eval, 2026-09-13).
+_PROG = f"python {__import__('pathlib').Path(__file__).resolve()}"
+
+
 STATE_FILENAME = "engagement-state.json"
 INDEX_FILENAME = "START-HERE.md"
 SCHEMA_VERSION = 2
@@ -3150,7 +3156,7 @@ _MUTATING_CMDS = {
 def main(argv: list[str] | None = None) -> int:
     _force_utf8_output()
     parser = argparse.ArgumentParser(
-        prog="python -m scripts.engagement_state",
+        prog=_PROG,
         description="Authoritative machine-readable engagement state (ADR-006).",
     )
     parser.add_argument(

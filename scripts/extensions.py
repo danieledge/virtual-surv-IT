@@ -58,6 +58,12 @@ import shutil
 import sys
 from pathlib import Path
 
+# The usage line names the form that works from an installed copy as well as this repo:
+# the module form (`python -m scripts.<name>`) exits 1 outside the repo, and a session
+# that saw it in a usage message repeated it (plugin-mode eval, 2026-09-13).
+_PROG = f"python {__import__('pathlib').Path(__file__).resolve()}"
+
+
 _SECTIONS = ("Standing instructions", "Close actions", "Analyser registry", "Integrations")
 # C9 (2026-08 audit): \n and \r were missing from the blocked set - in an actual shell,
 # a bare newline separates statements exactly like `;` does, so "safe" argv split on
@@ -561,7 +567,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     _force_utf8_output()
-    ap = argparse.ArgumentParser(prog="python -m scripts.extensions")
+    ap = argparse.ArgumentParser(prog=_PROG)
     ap.add_argument("--file", type=Path, default=None)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("show").set_defaults(fn=_cmd_show)
