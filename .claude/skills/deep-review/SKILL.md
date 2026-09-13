@@ -77,13 +77,13 @@ genuinely exceeds one context, or corporate-proxy timeouts have already bitten t
 (the split's original purpose, and it demonstrably helps there) - name which reason applies
 in the sizing line, and state the resulting pass count before dispatching.
 
-**Tier by evidence need (2026-08-17 decision):** **Deep defaults to `model: sonnet`** on the
-dispatch (its findings are independently scored and PM-challenged, and the pack is not the
-final audit word), with an **opus opt-in stated in the priced menu line** for
-high-stakes-but-not-audit work; **Audit always dispatches opus** - there the pack IS the
-evidence and the final specialist word (agent-design §2's rationale). If the dispatch path in
-use cannot override the agent's frontmatter model, say so and proceed on the frontmatter tier
-rather than silently absorbing the cost difference.
+**Tier by evidence need (revised 2026-09-13):** **Deep now rides the reviewer's `opus`
+frontmatter by default**, same as Audit - the 2026-08-17 sonnet default was set when opus cost
+5x sonnet; at the current ~1.67x the depth opus buys is cheap insurance, and the scored +
+PM-challenged backstops catch false positives, not the comprehensiveness a thinner tier misses
+(agent-design §2). A **`sonnet` opt-out stays in the priced menu line** for cost-pinched
+estates. **Audit always dispatches opus.** If the dispatch path in use cannot override the
+agent's frontmatter model, that is now the desired tier anyway - proceed on the frontmatter.
 
 **Deep reads a MAP, not the repo:** widen scope beyond the diff only via a targeted
 related-file map built once up front - importers of the changed files, their imports, and
