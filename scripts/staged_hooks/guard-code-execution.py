@@ -212,15 +212,20 @@ _EXEC_PATTERNS = [
     r"\bnode\s+\S+\.[mc]?js\b|\btsx\s+\S|\bts-node\b",  # run JS/TS file
     r"\bgo\s+test\b|\bgo\s+run\b",  # Go
     r"\bdotnet\s+(run|test)\b",  # .NET
-    r"\bmvn\b|\bgradle\b|\./gradlew\b",  # JVM build/test (executes)
-    r"\bjava\s+(?!-version\b|--version\b|-help\b|--help\b|-h\b)(-jar\b|-cp\b|\S+\b)",  # run Java
+    # mvn/gradle/java anchored to command position (step 3.4): `grep plugins build.gradle` and a
+    # commit message with the word java are not builds. Wrappers are peeled by _strip_wrappers.
+    r"^(?:\w+=\S+\s+)*(?:mvn|gradle)\b|\./gradlew\b",  # JVM build/test (executes)
+    r"^(?:\w+=\S+\s+)*java\s+(?!-version\b|--version\b|-help\b|--help\b|-h\b)(-jar\b|-cp\b|\S+\b)",  # run Java
     r"\bruby\s+\S+\.rb\b|\bperl\s+\S+\.pl\b|\bRscript\b",  # run Ruby/Perl/R scripts
     # Task runners / build tools that execute project code. `make` is anchored to the segment
     # start: as a bare \b pattern it blocked any text containing the word (e.g. a commit
     # message "docs: make the case" inside a heredoc line becomes its own segment).
-    r"\buv\s+run\b|\bpoetry\s+run\b|\bpipenv\s+run\b|\btox\b|\bnox\b|^make\b|\bdocker\s+run\b",
+    # tox/nox anchored like make (2026-09-13 framework review, step 3.4): as bare \b words
+    # they blocked `cat tox.ini`, a READ of a config file, in engaged sessions.
+    r"\buv\s+run\b|\bpoetry\s+run\b|\bpipenv\s+run\b|^(?:\w+=\S+\s+)*(?:tox|nox)\b|^make\b|\bdocker\s+run\b",
     r"\bcargo\s+(?:run|test|bench)\b|\bswift\s+(?:run|test)\b|\bbundle\s+exec\b",  # rec 12
-    r"\bjest\b|\bvitest\b|\bphp\s+\S+\.php\b|\bjulia\s+\S+\.jl\b|\blua\s+\S+\.lua\b",  # rec 12
+    # jest/vitest anchored (step 3.4): `cat jest.config.js` is a read, not a test run.
+    r"^(?:\w+=\S+\s+)*(?:jest|vitest)\b|\bphp\s+\S+\.php\b|\bjulia\s+\S+\.jl\b|\blua\s+\S+\.lua\b",  # rec 12
     r"(^|\s)\./\S+",  # executing a file by path (./foo, ./x.sh)
     # `source`/`.` executes a script, but ONLY as a command word - anchored to the segment
     # start or a separator so a descriptive echo string does not trip it (live 2026-09-13:
@@ -267,6 +272,15 @@ _WRAPPER_PREFIX_RE = re.compile(
     r"|nohup"
     r"|nice(?:\s+-n\s+\S+)?"
     r"|timeout(?:\s+-\S+)*\s+\S+"
+    # 2026-09-13 framework review, step 3.12: six more prefixes that change nothing about
+    # WHAT runs. `time pytest -q`, `watch pytest`, `strace -f pytest`, `perf stat pytest`,
+    # `ionice -c 3 pytest` and `chronic pytest` all ran unblocked in an engaged session.
+    r"|time"
+    r"|chronic"
+    r"|watch(?:\s+-\w\s*\S+|\s+--\S+)*"
+    r"|strace(?:\s+-\S+)*"
+    r"|perf\s+stat(?:\s+-\S+)*"
+    r"|ionice(?:\s+-\w\s*\S+)*"
     r"|\w+=\S+"
     r")\s+",
     re.IGNORECASE,

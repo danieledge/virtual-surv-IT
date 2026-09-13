@@ -400,3 +400,54 @@ def test_source_in_a_descriptive_echo_is_not_sourcing(tmp_path):
         assert _code(cmd, tmp_path) == ALLOW, cmd
     for cmd in ("source ~/.bashrc", ". ./env.sh", 'echo hi; source evil.sh'):
         assert _code(cmd, tmp_path) == BLOCK, cmd
+
+
+# ----------------------------------- 2026-09-13 framework review, steps 3.4 and 3.12
+
+
+@pytest.mark.parametrize(
+    "cmd",
+    [
+        "cat tox.ini",
+        "cat jest.config.js",
+        "grep -n plugins build.gradle",
+        "git commit -m 'docs: java lang note'",
+        "ls -la nox",
+        "time ls -la",
+        "watch date",
+    ],
+)
+def test_reads_and_prose_naming_a_runner_are_allowed(tmp_path, cmd):
+    """`\\btox\\b`, `\\bjest\\b`, `\\bmvn\\b`, `\\bgradle\\b` and `\\bjava\\s+\\S+` matched a
+    FILENAME or a commit message in engaged sessions (independent challenge of the 2026-09-13
+    plan, measured via _executes()). Anchored to command position like `make` and `pytest`."""
+    assert _code(cmd, tmp_path) == ALLOW
+
+
+@pytest.mark.parametrize(
+    "cmd",
+    [
+        "tox -e py",
+        "nox -s tests",
+        "jest",
+        "vitest run",
+        "mvn test",
+        "gradle build",
+        "java -jar app.jar",
+        "sudo tox -e py",
+        "PYTHONPATH=. jest",
+        "time pytest -q",
+        "watch pytest",
+        "watch -n 5 pytest",
+        "strace -f pytest",
+        "perf stat pytest -q",
+        "ionice -c 3 pytest",
+        "chronic pytest",
+        "time sudo tox",
+    ],
+)
+def test_runners_and_wrapped_runners_stay_blocked(tmp_path, cmd):
+    """The anchored runners still block as commands, and six more wrapper prefixes (step
+    3.12: time, watch, strace, perf stat, ionice, chronic) are peeled before the anchor is
+    applied - each ran `pytest` unblocked before."""
+    assert _code(cmd, tmp_path) == BLOCK

@@ -237,3 +237,46 @@ def test_every_staged_file_is_mapped_to_an_apply_script():
             dangling.append(match)
     assert not missing, f"staged file(s) with no apply_for() mapping: {missing}"
     assert not dangling, f"apply_for() points at non-existent script(s): {dangling}"
+
+
+# ---------------------------------------------- 2026-09-13 framework review, step 3.2
+def _load_module(path: Path):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(path.stem, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _dispatcher_registered_scripts() -> dict[str, str]:
+    """basename -> dispatcher, for every script one of the three dispatchers already runs."""
+    out: dict[str, str] = {}
+    for rel, attr in (
+        ("scripts/bash_hook_dispatcher.py", "_CHECKS"),
+        ("scripts/prompt_hook_dispatcher.py", "_PROMPT_HOOKS"),
+        ("scripts/stop_hook_dispatcher.py", "_CHECKS"),
+    ):
+        for entry in getattr(_load_module(REPO / rel), attr):
+            out[Path(entry[1]).name] = rel
+    return out
+
+
+def test_no_script_wired_both_in_dispatcher_and_top_level():
+    """A script a dispatcher already runs must not ALSO carry its own top-level hook entry:
+    that runs it twice per event (one extra sh + Python spawn per prompt) and, for a context
+    injector, injects its block twice. Found live 2026-09-13: engage_probe_prefetch.py was
+    wired both ways because apply-all.sh ran apply-engage-probe-prefetch.sh (which appends
+    unconditionally) after the dispatcher had subsumed it (5fc5174 re-added what 7d2898a
+    removed). The fix is a human edit of both JSON files; this test stays red until then."""
+    registered = _dispatcher_registered_scripts()
+    offenders = []
+    for cfg in ("hooks/hooks.json", ".claude/settings.json"):
+        for event, entries in _all_hooks(REPO / cfg).items():
+            for entry in entries:
+                for hook in entry.get("hooks", []):
+                    cmd = hook.get("command", "")
+                    for name, dispatcher in registered.items():
+                        if name in cmd:
+                            offenders.append(f"{cfg}:{event}: {name} (already run by {dispatcher})")
+    assert not offenders, "hook wired twice - " + "; ".join(offenders)

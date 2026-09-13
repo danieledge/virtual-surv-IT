@@ -13,6 +13,7 @@ byte-identical to the live guard's).
 from __future__ import annotations
 
 import importlib.util
+import re
 from pathlib import Path
 
 import pytest
@@ -156,6 +157,20 @@ def test_quote_smuggling_does_not_wave_through():
     assert LIVE._TEAM_ALLOW.match(cmd) is None  # the hole stays closed in the live guard
 
 
+_ANCHORED_2026_09_13 = {
+    r"\buv\s+run\b|\bpoetry\s+run\b|\bpipenv\s+run\b|\btox\b|\bnox\b|^make\b|\bdocker\s+run\b": (
+        r"\buv\s+run\b|\bpoetry\s+run\b|\bpipenv\s+run\b|^(?:\w+=\S+\s+)*(?:tox|nox)\b|^make\b|\bdocker\s+run\b"
+    ),
+    r"\bmvn\b|\bgradle\b|\./gradlew\b": r"^(?:\w+=\S+\s+)*(?:mvn|gradle)\b|\./gradlew\b",
+    r"\bjava\s+(?!-version\b|--version\b|-help\b|--help\b|-h\b)(-jar\b|-cp\b|\S+\b)": (
+        r"^(?:\w+=\S+\s+)*java\s+(?!-version\b|--version\b|-help\b|--help\b|-h\b)(-jar\b|-cp\b|\S+\b)"
+    ),
+    r"\bjest\b|\bvitest\b|\bphp\s+\S+\.php\b|\bjulia\s+\S+\.jl\b|\blua\s+\S+\.lua\b": (
+        r"^(?:\w+=\S+\s+)*(?:jest|vitest)\b|\bphp\s+\S+\.php\b|\bjulia\s+\S+\.jl\b|\blua\s+\S+\.lua\b"
+    ),
+}
+
+
 def test_exec_patterns_never_shrink_against_the_live_guard():
     """The execution net may only ever GROW while a fix is staged.
 
@@ -166,7 +181,12 @@ def test_exec_patterns_never_shrink_against_the_live_guard():
     actually worth pinning is that nothing the live guard blocks stops being blocked, so
     the staged list must be a superset, never a rewrite."""
     missing = [p for p in LIVE._EXEC_PATTERNS if p not in STAGED._EXEC_PATTERNS]
-    assert not missing, f"staged guard dropped live exec patterns: {missing}"
+    # 2026-09-13 (framework review, step 3.4): four patterns were ANCHORED to command
+    # position, the same treatment `make` got in 0.4 and `source` in 236d2cf. Each live
+    # pattern may be absent only if its anchored form is present; the runner forms are
+    # proven still blocked in tests/test_guard_exec_hardening.py.
+    unexplained = [p for p in missing if _ANCHORED_2026_09_13.get(p) not in STAGED._EXEC_PATTERNS]
+    assert not unexplained, f"staged guard dropped live exec patterns: {unexplained}"
     assert STAGED._SEGMENT_DELIMS == LIVE._SEGMENT_DELIMS
 
 
@@ -557,5 +577,25 @@ def test_the_report_case_end_to_end():
 def test_widening_the_interpreter_did_not_touch_the_exec_patterns():
     """_PY_ANY is for the allow-list only. If it ever leaks into _EXEC_PATTERNS the change
     stops being additive, and this file's own 'nothing else loosened' guarantee is void."""
-    assert not [p for p in LIVE._EXEC_PATTERNS if p not in STAGED._EXEC_PATTERNS]
+    missing = [p for p in LIVE._EXEC_PATTERNS if p not in STAGED._EXEC_PATTERNS]
+    assert not [p for p in missing if _ANCHORED_2026_09_13.get(p) not in STAGED._EXEC_PATTERNS]
     assert not any("_PY_ANY" in p for p in STAGED._EXEC_PATTERNS)
+
+
+# ------------------------------------------- 2026-09-13 framework review, step 3.4 (pin)
+_COMMAND_ANCHORED = re.compile(r"^(?:\^|\(\?<!|\(\^\|\\s\)|\(\?:\^)")
+
+
+def test_unanchored_exec_pattern_count_is_pinned():
+    """A report, not a rewrite. 21 of the 35 execution patterns start with a bare `\\b` rather
+    than a command-position anchor; every one of those names an interpreter with a flag
+    form (`-m`, `-c`, `<<`, `<`, `.py`) or a runner word that is not an English word or a
+    filename stem, so none has matched prose in the recorded incidents. The count is pinned
+    so a NEW bare-`\\b` alternative is a deliberate choice, made here, not a drift: `make`
+    (0.4), `source` (236d2cf) and tox/jest/mvn/gradle/java (step 3.4) were all bare once."""
+    unanchored = [p for p in STAGED._EXEC_PATTERNS if not _COMMAND_ANCHORED.match(p)]
+    assert len(unanchored) == 21, (
+        "the set of command-unanchored exec patterns changed - anchor the new one to command "
+        "position (see _ANCHORED_2026_09_13) or re-pin here with the reason: "
+        + "; ".join(unanchored)
+    )

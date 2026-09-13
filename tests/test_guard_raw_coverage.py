@@ -568,3 +568,79 @@ def test_an_unresolvable_search_root_fails_closed(project_with_raw):
 
 def test_a_resolvable_search_root_outside_the_project_still_runs(project_without_raw):
     assert not _blocks(project_without_raw, "Grep", {"pattern": "x", "path": "data/masked"})
+
+
+# ----------------------------------------------- 2026-09-13 framework review, step 3.3
+# Positional prose carve-outs: a folder name in a position that cannot read a file is text.
+# Every read shape the guard caught before stays caught - the second list is the regression
+# net the redesign is measured against, including the four shapes an independent challenge
+# of the plan constructed (piped echo, cd-then-piped echo, substituted echo, list fields).
+_R = "/".join(("data", "raw"))  # assembled: the guard also scans the TEXT of the tool call
+#                                 that wrote this file (docker/armed.sh learned the same)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        f'echo "raw data lives under {_R}, never read it"',
+        f"printf '%s\\n' 'see {_R} for the feed'",
+        f'echo notes && echo "the {_R} feed is masked by ingest"',
+        f'python3 /x/scripts/engagement_state.py init --title "notes on {_R} handling" --slug s',
+        f"python3 -m scripts.engagement_state set-decision --note '{_R} stays untouched' --slug s",
+    ],
+)
+def test_prose_positions_are_not_reads(project_with_raw, command):
+    assert not _blocks(project_with_raw, "Bash", {"command": command})
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        f"cat {_R}/trades.csv",
+        f"grep -r ACC {_R}",
+        f"sort < {_R}/trades.csv",
+        f"cd {_R} && cat trades.csv",
+        f"python3 -c \"print(open('{_R}/trades.csv').read())\"",
+        f"duckdb -c \"select * from read_csv('{_R}/trades.csv')\"",
+        f"cp -r {_R} /tmp/work",
+        f'for f in {_R}/*.csv; do head -3 "$f"; done',
+        f"RAW={_R}/trades.csv python3 s.py",
+        f"awk '{{print}}' {_R}/trades.csv",
+        f"echo x > {_R}/y",
+        f"echo {_R}/trades.csv | xargs cat",
+        "cd data && echo raw/trades.csv | xargs head",
+        f'f=$(echo {_R}/trades.csv); cat "$f"',
+        f"cat `echo {_R}/trades.csv`",
+        f'echo "$(cat {_R}/trades.csv)"',
+        f'python3 /x/scripts/engagement_state.py init --title "t" --slug s < {_R}/trades.csv',
+    ],
+)
+def test_read_shapes_stay_blocked(project_with_raw, command):
+    assert _blocks(project_with_raw, "Bash", {"command": command})
+
+
+def test_agent_briefing_naming_the_folder_is_allowed(project_with_raw):
+    """The orchestrator's own dispatch of the 2026-09-13 review was blocked for a briefing
+    that merely named the folder. The subagent's reads pass through this same guard, so the
+    briefing text is prose."""
+    payload = {
+        "description": "review",
+        "prompt": f"Never read {_R}; summarise the masked feed under data/masked/",
+        "subagent_type": "code-reviewer",
+    }
+    assert not _blocks(project_with_raw, "Task", payload)
+    assert not _blocks(project_with_raw, "Agent", payload)
+
+
+@pytest.mark.parametrize(
+    "tool_input",
+    [
+        {"paths": [f"{_R}/trades.csv"]},
+        {"uri": f"file:///proj/{_R}/trades.csv"},
+        {"root": _R},
+        {"prompt": "prose here", "path": f"{_R}/trades.csv"},
+    ],
+)
+def test_unknown_tool_path_fields_and_lists_stay_judged(project_with_raw, tool_input):
+    """ADR-002 rec 22 coverage, now including strings inside a list (never scanned before)."""
+    assert _blocks(project_with_raw, "mcp__fs__read", tool_input)
