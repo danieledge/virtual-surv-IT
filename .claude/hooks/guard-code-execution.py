@@ -222,7 +222,10 @@ _EXEC_PATTERNS = [
     r"\bcargo\s+(?:run|test|bench)\b|\bswift\s+(?:run|test)\b|\bbundle\s+exec\b",  # rec 12
     r"\bjest\b|\bvitest\b|\bphp\s+\S+\.php\b|\bjulia\s+\S+\.jl\b|\blua\s+\S+\.lua\b",  # rec 12
     r"(^|\s)\./\S+",  # executing a file by path (./foo, ./x.sh)
-    r"\bsource\s+\S+|(^|\s)\.\s+\S+\.(?:sh|bash)\b",  # sourcing a script
+    # `source`/`.` executes a script, but ONLY as a command word - anchored to the segment
+    # start or a separator so a descriptive echo string does not trip it (live 2026-09-13:
+    # `echo "=== source files ==="` in a review's file listing was blocked as sourcing).
+    r"(?:^|[;&|(]|\bthen\b|\bdo\b)\s*source\s+\S+|(?:^|[;&|(]|^\s*)\.\s+\S+\.(?:sh|bash)\b",  # sourcing a script
     # shell -c, or running a script file. The lookbehind stops the trailing "sh" of a FILENAME
     # (run-guard.sh) matching as the shell command when followed by another *.sh argument
     # (`shellcheck run-guard.sh install.sh` was blocked as if it were `sh install.sh`).

@@ -1,38 +1,42 @@
 #!/usr/bin/env bash
-# SUPERSEDED - document_input_redirect is already registered in
-# scripts/bash_hook_dispatcher.py's own _CHECKS table (the 2026-07-31 P4 consolidation
-# that collapsed five separate Bash-matching hooks, this one included, into ONE process
-# per call). This script predates that consolidation and was never updated afterwards -
-# every time it (or scripts/apply-outstanding.sh, which runs it automatically) ran, it
-# silently RE-WIRED a standalone "Read|Bash" PreToolUse entry for
-# scripts/document_input_redirect.py on top of the dispatcher's own entry, duplicating
-# the check on every matching tool call and spawning an extra cold-start process per
-# call the P4 consolidation exists specifically to avoid. Caught twice: once by a
-# 2026-08-13 Fable-model audit (reverted by hand), and again the same day when a later
-# apply-outstanding.sh run silently reintroduced it - this script was the actual root
-# cause both times, never fixed at the source until now.
+# Promote the STAGED document_input_redirect check to its live location.
 #
-# Kept as a thin redirect (not deleted outright) in case anything still references this
-# filename directly - deleting a named, documented human-run script out from under a
-# stale doc link is worse than a clear pointer. scripts/document_input_redirect.py
-# itself is unaffected and still current; only THIS script's wiring behaviour is retired.
+# HISTORY. document_input_redirect's WIRING is consolidated into
+# scripts/bash_hook_dispatcher.py's own _CHECKS table (the 2026-07-31 P4 consolidation that
+# collapsed five separate Bash-matching hooks, this one included, into ONE process per call).
+# This script used to ALSO re-wire a standalone "Read|Bash" PreToolUse entry on top of the
+# dispatcher's, duplicating the check and spawning an extra cold-start process per call - a
+# bug caught twice (2026-08-13). So it was turned into a no-op.
 #
-# Exits 0 (not 1): a redirect that makes no changes is a legitimate, expected outcome -
-# scripts/apply-outstanding.sh loops over every apply-*.sh unconditionally and relies on
-# each one being a safe, always-succeeds no-op when there's nothing for it to do;
-# exiting nonzero here would abort that whole batch under set -e for a script whose only
-# job now is explaining why it does nothing.
+# But turning it into a no-op threw out the file promotion with the wiring: the live check
+# still lives in scripts/document_input_redirect.py, the dispatcher imports and runs it, and a
+# staged fix to scripts/staged_hooks/document_input_redirect.py never reached it - the
+# staged/live sync test then failed with no working apply path (2026-09-13, the day a real fix
+# to this check could not be applied). This script now does the one thing an apply script must:
+# copy the staged file to the live location. It deliberately does NOT add any hook wiring - the
+# dispatcher already covers that, and re-adding it is the original bug.
 #
 #   Usage:  bash scripts/apply-document-redirect.sh
 set -euo pipefail
-echo "apply-document-redirect.sh is superseded - nothing to apply."
+here="$(cd "$(dirname "$0")/.." && pwd)"
+staged="$here/scripts/staged_hooks/document_input_redirect.py"
+live="$here/scripts/document_input_redirect.py"
+
+if [ ! -f "$staged" ]; then
+	echo "no staged copy at $staged - nothing to apply." >&2
+	exit 0
+fi
+if cmp -s "$staged" "$live"; then
+	echo "document_input_redirect.py already in sync - nothing to apply."
+	exit 0
+fi
+cp "$staged" "$live"
+echo "installed: $live updated from the staged copy."
 echo ""
-echo "document_input_redirect is already covered by scripts/bash_hook_dispatcher.py's own"
-echo "consolidated dispatch (its _CHECKS table) - the single PreToolUse entry already wired"
-echo "for Read|Grep|Glob|Write|Edit|MultiEdit|NotebookEdit|NotebookRead|WebFetch|Bash runs"
-echo "it, along with every other consolidated check, in ONE process per call. A standalone"
-echo "entry for this script alone would only duplicate that check and cost an extra"
-echo "cold-start process per matching call - exactly what the P4 consolidation exists to"
-echo "avoid. If a standalone entry exists in hooks/hooks.json or .claude/settings.json,"
-echo "remove it (git checkout, or a targeted edit) rather than running this script."
-exit 0
+echo "WIRING UNCHANGED: document_input_redirect runs through scripts/bash_hook_dispatcher.py's"
+echo "own _CHECKS table (P4 consolidation). This script copies the FILE only and adds no"
+echo "standalone hook entry - re-adding one duplicates the check per call. If a standalone entry"
+echo "exists in hooks/hooks.json or .claude/settings.json, remove it (git checkout)."
+echo ""
+echo "Now commit the change (both files ship together):"
+echo "  git add scripts/document_input_redirect.py scripts/staged_hooks/document_input_redirect.py"

@@ -570,6 +570,28 @@ def _exec_consent_present() -> bool:
     return os.path.isfile(os.path.join(root, ".claude", _MARKER))
 
 
+def _blank_quoted(text: str) -> str:
+    """Replace the CONTENTS of '...' and "..." with spaces, keeping the quote characters and the
+    length so separators and operands OUTSIDE quotes are unchanged. A token seen only after this
+    blanking sat inside a quoted argument - descriptive DATA (a --note message), not a path
+    operand. Same principle as _strip_heredoc_bodies, applied to inline quotes."""
+    out: list[str] = []
+    quote: str | None = None
+    for ch in text:
+        if quote is not None:
+            if ch == quote:
+                quote = None
+                out.append(ch)
+            else:
+                out.append(" ")
+        elif ch in ("'", '"'):
+            quote = ch
+            out.append(ch)
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
 def _protected(text: str, engaged: bool, staging_locked: bool = False) -> bool:
     """Two tiers (2026-08-17, user decision). ALWAYS protected, every session: the
     consent marker (grant integrity - a dormant session could otherwise pre-forge it
@@ -587,9 +609,20 @@ def _protected(text: str, engaged: bool, staging_locked: bool = False) -> bool:
     the session is BOTH engaged and already holding execution consent (see
     _STAGING_PATH_RE for why that pair, and not either alone)."""
     norm = _norm(text)
+    # A marker/sign-off token counts as TOUCHED only when it is a real path operand - present
+    # once the quoted-string CONTENTS are blanked - or the actual target of a redirect. Inside
+    # a quoted --note/--decision value it is descriptive DATA, not a write (live 2026-09-13: a
+    # team `record-consent-outcome --note "...no .exec-consent marker..."` audit note was blocked
+    # as writing the marker). `_REDIRECT_INTO_PROTECTED` still catches a quoted redirect target.
+    unq = _norm(_blank_quoted(text))
+    redirect_hit = bool(_REDIRECT_INTO_PROTECTED.search(norm))
+
+    def _touches(token: str) -> bool:
+        return token in unq or redirect_hit
+
     always = (
-        _MARKER in norm
-        or _SIGN_OFF in norm
+        _touches(_MARKER)
+        or _touches(_SIGN_OFF)
         or bool(_STAMP_RE.search(norm))
         or bool(_PRECOMMIT_RE.search(norm))
         or bool(_GIT_CONFIG_RE.search(norm))
