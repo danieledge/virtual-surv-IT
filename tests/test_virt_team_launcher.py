@@ -2063,3 +2063,26 @@ def test_the_day_to_day_guide_starts_nothing_and_falls_back_to_plain_text(
     err = capsys.readouterr().err
     assert "VSIT/engagements/" in err
     assert "artifacts/" not in err, "the plain tier still points at the pre-VSIT workspace"
+
+
+def test_launch_command_applies_explicit_morgan_model(tmp_path, monkeypatch):
+    """2026-09-13: the Morgan model setting must apply on the interactive launch too, not just
+    headless - it did not, so the status bar showed a model the session was not running. Only an
+    explicit, well-formed model forces --model; an unset one keeps the CLI default; garbage is
+    rejected; a user command that already pins a model is left alone."""
+    v = _load()
+
+    monkeypatch.setattr(v, "_configured_launch_command", lambda: "claude")
+    # explicit model -> forced
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "settings.json").write_text('{"model": "opus"}')
+    assert v._launch_command_with_model(tmp_path) == "claude --model opus"
+    (tmp_path / ".claude" / "settings.json").write_text('{"model": "claude-sonnet-5"}')
+    assert v._launch_command_with_model(tmp_path) == "claude --model claude-sonnet-5"
+    # garbage value rejected
+    (tmp_path / ".claude" / "settings.json").write_text('{"model": "x [1m evil"}')
+    assert v._launch_command_with_model(tmp_path) == "claude"
+    # a launch command that already pins a model is not touched
+    monkeypatch.setattr(v, "_configured_launch_command", lambda: "cc --model opus")
+    (tmp_path / ".claude" / "settings.json").write_text('{"model": "sonnet"}')
+    assert v._launch_command_with_model(tmp_path) == "cc --model opus"

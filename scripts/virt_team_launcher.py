@@ -4992,6 +4992,50 @@ def _headless_model(project_dir: Path) -> str:
     return _DEFAULT_ORCHESTRATOR_MODEL
 
 
+# A model token safe to splice into the launch command: a plain model alias or id, never a
+# value carrying whitespace, shell metacharacters or ANSI (a stray settings file once held a
+# control-coded value; rejecting it keeps garbage out of the launch line).
+_MODEL_TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{1,64}$")
+
+
+def _configured_orchestrator_model(project_dir: Path):
+    """The Morgan model EXPLICITLY set (this project's, else this machine's user default), or
+    None when unset. Unlike `_headless_model`, it does NOT fall back to a default: an
+    interactive session with no configured model keeps the CLI's own default, and only an
+    explicit, well-formed choice forces `--model`."""
+    for settings in (
+        project_dir / ".claude" / "settings.json",
+        Path.home() / ".claude" / "settings.json",
+    ):
+        try:
+            data = json.loads(settings.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            continue
+        model = data.get("model") if isinstance(data, dict) else None
+        if isinstance(model, str) and _MODEL_TOKEN_RE.match(model.strip()):
+            return model.strip()
+    return None
+
+
+def _launch_command_with_model(project_dir: Path) -> str:
+    """The configured launch command with `--model <orchestrator model>` appended, so the
+    Morgan model setting applies on the INTERACTIVE launch too, not only headless.
+
+    WHY (2026-09-13, owner report): the status bar showed `morgan:claude-sonnet-5` while the
+    session ran a different model, because the interactive launch never passed `--model` - it
+    relied on the CLI reading settings.json, which silently falls back when the configured
+    model is unavailable. The headless path has always passed `--model`; this gives the
+    interactive/windowed and alias paths the same, so an explicitly set model is applied the
+    same way everywhere and a fallback surfaces instead of hiding. Only an EXPLICIT setting
+    forces it (an unset model keeps the CLI default), and never when the user's own launch
+    command already pins a model."""
+    base = _configured_launch_command()
+    if "--model" in base.split():
+        return base
+    model = _configured_orchestrator_model(project_dir)
+    return f"{base} --model {model}" if model else base
+
+
 def _headless_allow_rules(allow_web: bool = False) -> tuple:
     """What an unattended run is permitted to do, beyond writing files.
 
@@ -5239,7 +5283,7 @@ def _launch_in_window(project_dir: Path, decision: str, slug: str = "") -> bool:
     # session identically (owner, 2026-08-25: "claude should be launched using the same
     # method as virt surv go does"). Anything else is a second way to start a session, and a
     # second way to get it wrong.
-    command = _configured_launch_command().split() or ["claude"]
+    command = _launch_command_with_model(project_dir).split() or ["claude"]
     # Hand the child the std handles this process was STARTED with. On Windows the
     # prompt_toolkit tier may have pointed STD_OUTPUT_HANDLE at the console, and a child
     # spawned after that inherits the console rather than the alias capture pipe (L-17).
@@ -5308,7 +5352,7 @@ def main() -> int:
         # "cannot be found" line landed on stderr here (first green-CI attempt after the
         # 2026-09-12 audit, runners ship no CLI), and the wrapper's own launch failure
         # already says the same thing to the same person.
-        print(_configured_launch_command())
+        print(_launch_command_with_model(Path.cwd()))
         return 0
     # Preflight the things that are true before any action is chosen. The wrapper check
     # used to run ONLY on the Esc path, so someone whose shell holds a pre-v7 function
