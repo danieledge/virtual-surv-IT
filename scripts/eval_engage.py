@@ -1069,6 +1069,12 @@ class SessionCapture:
     is_error: bool = False
     timed_out: bool = False
     error: str | None = None
+    # The CLI's own stderr, line by line (2026-09-13). The SDK surfaces a dead CLI as
+    # "Command failed with exit code 1 ... Check stderr output for details" and nothing else;
+    # a rerun of process-blocked-not-done died that way at the spend cap and was read as a
+    # crash for an hour. Written to cli-stderr.log beside the transcript.
+    cli_stderr: list[str] = field(default_factory=list)
+    spend_capped: bool = False
     # Per-message usage (2026-08-06, --target-path diagnostic mode): the final ResultMessage's
     # total_cost_usd/num_turns is enough for pass/fail scoring, but diagnosing WHERE token/time
     # budget goes needs per-turn granularity. One entry per AssistantMessage/ResultMessage that
@@ -1285,6 +1291,7 @@ async def run_engage_session(
         can_use_tool=can_use_tool,
         max_turns=max_turns,
         max_budget_usd=max_budget,
+        stderr=cap.cli_stderr.append,
         # Per-case env (expected.yaml `session_env:`) lets a golden case exercise
         # human-side environment mechanisms (e.g. CST_COMPANY_ALLOW) - the harness is the
         # human here, same standing as the consent-marker creation (ADR-002).
@@ -1827,7 +1834,8 @@ async def run_case(
     cap = SessionCapture()
     started = time.monotonic()
     timeout_s = case_timeout(manifest, args.timeout)
-    budget_note = f", ${args.max_budget}" if args.max_budget else ""
+    max_budget = case_budget(manifest, args.max_budget)
+    budget_note = f", ${max_budget}" if max_budget else ""
     clock_note = f", {timeout_s}s wall clock" if timeout_s > 0 else ", no wall clock"
     print(
         f"  [{case_id}] running live /engage session "
@@ -1842,7 +1850,7 @@ async def run_case(
                 persona,
                 args.sim_model,
                 args.max_turns,
-                args.max_budget,
+                max_budget,
                 sim_log,
                 workflow_cmd=workflow_cmd,
                 team_model=args.team_model,
@@ -1863,11 +1871,13 @@ async def run_case(
         print(f"  [{case_id}] TIMED OUT after {timeout_s}s - scoring what exists", file=sys.stderr)
     except Exception as exc:  # session died - score whatever it left behind, report the error
         cap.is_error = True
-        cap.error = f"{type(exc).__name__}: {exc}"
+        cap.error = describe_session_death(exc, cap, max_budget)
         print(f"  [{case_id}] SESSION ERROR: {cap.error}", file=sys.stderr)
     finally:
         drop_workspace_trust(sandbox, trust_configs)
     duration = time.monotonic() - started
+    if cap.cli_stderr:
+        (out_dir / "cli-stderr.log").write_text("".join(cap.cli_stderr), encoding="utf-8")
 
     transcript = "".join(cap.transcript)
     (out_dir / "transcript.md").write_text(transcript, encoding="utf-8")
@@ -1901,6 +1911,7 @@ async def run_case(
             "num_turns": cap.num_turns,
             "timed_out": cap.timed_out,
             "session_error": cap.is_error,
+            "spend_capped": cap.spend_capped,
             "error": cap.error,
             "duration_s": round(duration, 1),
             "mode": mode,
@@ -2416,6 +2427,47 @@ def case_timeout(manifest: dict, cli_timeout: int | None) -> int:
     except (TypeError, ValueError):
         return DEFAULT_TIMEOUT_S
     return value if value >= 0 else DEFAULT_TIMEOUT_S
+
+
+def case_budget(manifest: dict, cli_budget: float | None) -> float | None:
+    """Resolve the spend cap for one case: CLI override, else the manifest's
+    `max_budget_usd`, else none - the same precedence as case_timeout, for the same reason.
+    Added 2026-09-13 after process-blocked-not-done, a five-turn case whenever the session
+    holds the blocked state, ran the whole build once the simulated user unblocked it and
+    died at a $5 cap set for the cheaper path."""
+    if cli_budget is not None:
+        return cli_budget
+    declared = manifest.get("max_budget_usd")
+    if declared is None:
+        return None
+    try:
+        value = float(declared)
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
+def describe_session_death(
+    exc: BaseException, cap: "SessionCapture", max_budget: float | None
+) -> str:
+    """The SDK's own message for a dead CLI says only "check stderr"; say what the stderr
+    and the spend actually show. A session whose recorded cost sits at the cap died of the
+    cap - that is a budget to raise, not a defect to chase."""
+    text = f"{type(exc).__name__}: {exc}"
+    tail = [line.strip() for line in cap.cli_stderr if line.strip()][-5:]
+    at_cap = bool(max_budget) and cap.cost_usd is not None and cap.cost_usd >= 0.95 * max_budget
+    said_budget = any("budget" in line.lower() for line in tail)
+    if at_cap or said_budget:
+        cap.spend_capped = True
+        spent = f"${cap.cost_usd:.2f}" if cap.cost_usd is not None else "an unrecorded amount"
+        text = (
+            f"spend cap reached ({spent} against a ${max_budget} cap) - the session was stopped "
+            f"mid-engagement, not by a defect; raise --max-budget or the case's max_budget_usd. "
+            f"SDK said: {text}"
+        )
+    if tail:
+        text += " | cli stderr: " + " / ".join(tail)
+    return text
 
 
 def run_outcome(result: dict) -> str:

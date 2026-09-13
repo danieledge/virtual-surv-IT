@@ -1077,3 +1077,26 @@ def test_tripwire_context_falls_back_to_the_sandbox_without_run_meta(tmp_path):
     assert ctx.project_root == str(tmp_path / "sandbox")
     assert ctx.plugin_root == str(tmp_path / "sandbox")  # repo-as-project: the two are one
     assert ctx.expects_engaged_open is True
+
+
+# ------------------------------------------------- 2026-09-13: a session dead at the spend cap
+
+
+def test_case_budget_precedence_matches_case_timeout():
+    assert ee.case_budget({"max_budget_usd": 20}, None) == 20.0
+    assert ee.case_budget({"max_budget_usd": 20}, 5.0) == 5.0
+    assert ee.case_budget({}, None) is None
+    assert ee.case_budget({"max_budget_usd": "lots"}, None) is None
+    assert ee.case_budget({"max_budget_usd": 0}, None) is None
+
+
+def test_a_session_that_died_at_the_cap_is_described_as_capped_not_crashed():
+    """Rerun of process-blocked-not-done: the SDK said only 'Command failed with exit code 1
+    ... Check stderr output for details' and the cost sat at $5.02 against a $5 cap."""
+    cap = ee.SessionCapture(cost_usd=5.02, cli_stderr=["something unrelated\n"])
+    text = ee.describe_session_death(RuntimeError("Command failed with exit code 1"), cap, 5.0)
+    assert cap.spend_capped and text.startswith("spend cap reached ($5.02 against a $5.0 cap)")
+    assert "cli stderr: something unrelated" in text
+    plain = ee.SessionCapture(cost_usd=0.4)
+    text = ee.describe_session_death(RuntimeError("stream dropped"), plain, 5.0)
+    assert not plain.spend_capped and text == "RuntimeError: stream dropped"

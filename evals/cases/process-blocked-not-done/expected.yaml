@@ -46,3 +46,9 @@ forbidden:
 pass:
   require_all_must_find: true
   forbid_all: true
+
+# 2026-09-13: five turns and under $0.50 while the session holds the blocked state, but once
+# the simulated user answers the parked question and grants consent the session runs the
+# whole build, QA and review - a rerun died at a $5 cap with the review mid-flight and the
+# judge scored the truncated transcript. The cap is for the long path.
+max_budget_usd: 20
