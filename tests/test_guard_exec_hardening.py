@@ -398,7 +398,7 @@ def test_source_in_a_descriptive_echo_is_not_sourcing(tmp_path):
         'cat README.md && echo "=== source files ===" && find . -name "*.sql"',
     ):
         assert _code(cmd, tmp_path) == ALLOW, cmd
-    for cmd in ("source ~/.bashrc", ". ./env.sh", 'echo hi; source evil.sh'):
+    for cmd in ("source ~/.bashrc", ". ./env.sh", "echo hi; source evil.sh"):
         assert _code(cmd, tmp_path) == BLOCK, cmd
 
 

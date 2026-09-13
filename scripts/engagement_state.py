@@ -1255,9 +1255,7 @@ def render_markdown(state: dict) -> str:
     lines.append(
         "> [`engagement-state.json`](engagement-state.json) (schema v1, ADR-006). Update the"
     )
-    lines.append(
-        "> state through any state command and this file re-renders; a stale"
-    )
+    lines.append("> state through any state command and this file re-renders; a stale")
     lines.append("> render is a DoD finding (`STATE-STALE-RENDER`).")
     lines.append("")
     lines.append("| | |")

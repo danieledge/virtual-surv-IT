@@ -1,0 +1,107 @@
+{
+  "generated": "2026-09-13",
+  "source": "GitHub release API asset digests (publisher-reported sha256)",
+  "tools": {
+    "gitleaks": {
+      "assets": {
+        "gitleaks_8.30.1_checksums.txt": "061476c21adaf5441516f96f185c1a4706a83cd6329b9b38762271b3d4a52fae",
+        "gitleaks_8.30.1_darwin_arm64.tar.gz": "b40ab0ae55c505963e365f271a8d3846efbc170aa17f2607f13df610a9aeb6a5",
+        "gitleaks_8.30.1_darwin_x64.tar.gz": "dfe101a4db2255fc85120ac7f3d25e4342c3c20cf749f2c20a18081af1952709",
+        "gitleaks_8.30.1_linux_arm64.tar.gz": "e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080",
+        "gitleaks_8.30.1_linux_armv6.tar.gz": "5c2a4ee657a27614e10352bed2b8f1018ef9b05fc6c037cf737776bbe1255766",
+        "gitleaks_8.30.1_linux_armv7.tar.gz": "8d39f0d94ba0d774b2282187656fb039a2d82893ec1fd6be7d7121aae759a57d",
+        "gitleaks_8.30.1_linux_x32.tar.gz": "a87ba11adab22b4d6c6ea28b2da60f09154d5c2fdb44d4b07015d1e0433daecb",
+        "gitleaks_8.30.1_linux_x64.tar.gz": "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
+        "gitleaks_8.30.1_windows_arm64.zip": "b95f5e4f5c425cedca7ee203d9afd29597e692c4924a12ed42f970537c72cc0f",
+        "gitleaks_8.30.1_windows_x32.zip": "190ad53db301eec3e90afe3a1a75270768b8ebf89e731345e19421c32c1ae1a1",
+        "gitleaks_8.30.1_windows_x64.zip": "d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e"
+      },
+      "tag": "v8.30.1",
+      "unpublished": [],
+      "version": "8.30.1"
+    },
+    "opengrep": {
+      "assets": {
+        "opengrep-core_linux_aarch64.tar.gz": "116c1609876ab9e2a09fad8267b1bd3ee3311806506016186cd0691f23d94db5",
+        "opengrep-core_linux_x86.tar.gz": "2a8a6c2f87541b9af04a3902eae6e17e5a87865f05b0eaf3955a5ae0e47ad432",
+        "opengrep-core_osx_aarch64.tar.gz": "c5666ba7cec84ed60e101b84f9d489ba3d4320e35f258ec9a078ebc3ef3152b3",
+        "opengrep-core_osx_x86.tar.gz": "9c382b3f7979963edf05e085e943b3c850470bd5ca114b67e3f40514c99b56b8",
+        "opengrep-core_windows_x86.zip": "d21382af5eb1a99c637af08abc1e45ff0d35f7e749c66f12534207479abc780f",
+        "opengrep_manylinux_aarch64": "a5d5a4a58ba5d46ff51e921663da1c2bba38f4b03987f4aeec87f16c6ad3ecae",
+        "opengrep_manylinux_aarch64.cert": "d89ff9a719325a32d626823377ccd22fbbac90aee9984251db3989d321bd012e",
+        "opengrep_manylinux_aarch64.sig": "2c36b808ac1d6f7d4419c6e3a041b6dc90bc594003ff354b2462e1cb69f4ad8d",
+        "opengrep_manylinux_x86": "35779bdd72e92129c8df2a77f0c55e8c08356801ea92591ef32108d6b28d564c",
+        "opengrep_manylinux_x86.cert": "fdc42bb20c8a797b5766434abb17cefbdea9dc6d6ed902d6ef46b0db1d3820f5",
+        "opengrep_manylinux_x86.sig": "dbbfc4d3155d225211504ed5a8ab74d48a5d79afa38a6a03587b205d55ad2937",
+        "opengrep_musllinux_aarch64": "937d0f35fc05af8877f5f34e04465f2466a8da3c33c2a0d510b8a896383354ef",
+        "opengrep_musllinux_aarch64.cert": "d3428ce0b7e9272c0ef4ddd184ac05c11e95e4af9e964d0f0ef2c0b9d6dec691",
+        "opengrep_musllinux_aarch64.sig": "530bcf711f983c78102d239030ae504008d84760cd6fa0a2eaebd0eb25a050b5",
+        "opengrep_musllinux_x86": "ee21fa70714531e1eccbcb50993a871e198fb0f4ade254ef7636c433304fe4bd",
+        "opengrep_musllinux_x86.cert": "6428d3c0640c91b457437e123a251c277c6b00284a9ea4aa2826f506c6be3794",
+        "opengrep_musllinux_x86.sig": "9f50f310cfa711e42a246e8a1ce28a84f3b03a7855aaedc9dbdbc93de213b11a",
+        "opengrep_osx_arm64": "0f5bc3dec09d995c61331a4017b856ede508f90d95b018d95f1dc6166be89fdd",
+        "opengrep_osx_arm64.cert": "8e5143a709bfa8820be9c4af712cb563544a83b48c18fc7db4f8803e8c30ce97",
+        "opengrep_osx_arm64.sig": "90061bd86da92abbaa92a32b5285d5c5be35fb6f91a70cea87665ea0e0009c0b",
+        "opengrep_osx_x86": "650772a849a2986880982b7dea0371f96a75d354de95f94e8c1a2e6f8f6262d1",
+        "opengrep_osx_x86.cert": "1076dd07bc9d4c6bcf496cedb721c1530ea581ef9be3295ef505a72f51917551",
+        "opengrep_osx_x86.sig": "abb476d72d73483d08bcfdf596643122cacf906ee20b0d978bc967ca73c282de",
+        "opengrep_windows_x86.exe": "b5cf4f8fe9f44e030aab2d579d96bd395c139db1f1ba66633676ff4d5ebc7c39",
+        "opengrep_windows_x86.exe.cert": "36e4a1e60b84a770bade2c48cce84ca1c7bf0e37edae25400cea073016102bf1",
+        "opengrep_windows_x86.exe.sig": "8f65a552235ba480fa191045f2ec5f1ae8f9c1a107288455ec49408bb5249283"
+      },
+      "tag": "v1.30.0",
+      "unpublished": [],
+      "version": "1.30.0"
+    },
+    "osv-scanner": {
+      "assets": {
+        "multiple.intoto.jsonl": "664273601759eb6540f35bfdbfa6ff083026c09e2e9bb7ad3cded795967dd462",
+        "osv-scanner_SHA256SUMS": "40120ab7d670199f6663d76f9806b6d11ab3c402df808e5cc4e13c5cb0643356",
+        "osv-scanner_darwin_amd64": "9f89beb6c3d784893cb1cae0a3d56c529bfe91075418c2f9440c45b79654198b",
+        "osv-scanner_darwin_arm64": "75c44d6332f892a1e56286f4105a98ed751ae28d215ca0a8b65cc00d84103054",
+        "osv-scanner_linux_amd64": "f9f25499a2c8cc367b3af45df2ea7eeca7fbccceab9c35079968f4b3652194be",
+        "osv-scanner_linux_arm64": "3d0f5aa5a6baa8eb32bcef247388e149ef6030a6634ccae6fa0d62681fb27a6d",
+        "osv-scanner_windows_amd64.exe": "25e42f5ef6711fd8c0fb45390972205891dd44c6bd02ac93f0f63e8e98d9bfb6",
+        "osv-scanner_windows_arm64.exe": "33feb0b210a3e5ea7b338c719defc899f8833d990cdd297bcad4ff1a2586ec8b"
+      },
+      "tag": "v2.5.1",
+      "unpublished": [],
+      "version": "2.5.1"
+    },
+    "shellcheck": {
+      "assets": {
+        "shellcheck-v0.11.0.darwin.aarch64.tar.gz": "339b930feb1ea764467013cc1f72d09cd6b869ebf1013296ba9055ab2ffbd26f",
+        "shellcheck-v0.11.0.darwin.aarch64.tar.xz": "56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79",
+        "shellcheck-v0.11.0.darwin.x86_64.tar.gz": "c2c15e08df0e8fbc374c335b230a7ee958c313fa5714817a59aa59f1aa594f51",
+        "shellcheck-v0.11.0.darwin.x86_64.tar.xz": "3c89db4edcab7cf1c27bff178882e0f6f27f7afdf54e859fa041fca10febe4c6",
+        "shellcheck-v0.11.0.linux.aarch64.tar.gz": "68a8133197a50beb8803f8d42f9908d1af1c5540d4bb05fdfca8c1fa47decefc",
+        "shellcheck-v0.11.0.linux.aarch64.tar.xz": "12b331c1d2db6b9eb13cfca64306b1b157a86eb69db83023e261eaa7e7c14588",
+        "shellcheck-v0.11.0.linux.armv6hf.tar.gz": "89f29e76e881122416eb95947f812b1496ff9a46d1e1676abe1e3f3f903b0f46",
+        "shellcheck-v0.11.0.linux.armv6hf.tar.xz": "8afc50b302d5feeac9381ea114d563f0150d061520042b254d6eb715797c8223",
+        "shellcheck-v0.11.0.linux.riscv64.tar.gz": "a70e86454e9ae1a328aeafe62629d04ffea93b99138bfe1203083e2621b5ca4f",
+        "shellcheck-v0.11.0.linux.riscv64.tar.xz": "693c987777e7b524dd311d9b8c704885a39c889c9804bb1ef1fd29b48567b0b3",
+        "shellcheck-v0.11.0.linux.x86_64.tar.gz": "b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6",
+        "shellcheck-v0.11.0.linux.x86_64.tar.xz": "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198",
+        "shellcheck-v0.11.0.zip": "8a4e35ab0b331c85d73567b12f2a444df187f483e5079ceffa6bda1faa2e740e"
+      },
+      "tag": "v0.11.0",
+      "unpublished": [],
+      "version": "0.11.0"
+    },
+    "shfmt": {
+      "assets": {
+        "shfmt_v3.14.1_darwin_amd64": "d33eee0da0f92835b3562e9767a05cee7e4eaeef47daa03bfd09da17b4b590a6",
+        "shfmt_v3.14.1_darwin_arm64": "b7c872db63553ccffc7253aba3ed7d4885a27d83f1ba567b1138c6315a5847e5",
+        "shfmt_v3.14.1_linux_386": "aad6f0bd6285910c152091ba58b5509aa88eb8a2a81a2d72cf2048a8a78c27f4",
+        "shfmt_v3.14.1_linux_amd64": "76e77641faa025814b77f153b29796b8e6fa2fca03e0c76a691608b86c7ea7bf",
+        "shfmt_v3.14.1_linux_arm": "ede6c4adefeda196d963906daa7c1f20094e6def7a98bcb9f4c74079babf1eca",
+        "shfmt_v3.14.1_linux_arm64": "5f2db09dae91fca848f7adbdd014632e921a383863a2ad7e0450ad3aba0c6489",
+        "shfmt_v3.14.1_windows_386.exe": "b6f171113e7359f44d5ffdc93a90b93a7d405aa8847129a6982e10fe4d356f1e",
+        "shfmt_v3.14.1_windows_amd64.exe": "13629ce28442ca80b6b5a819f7574ab39e1c28c6e26734ca816c9714e04851df"
+      },
+      "tag": "v3.14.1",
+      "unpublished": [],
+      "version": "3.14.1"
+    }
+  }
+}

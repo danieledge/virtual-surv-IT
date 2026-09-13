@@ -237,9 +237,11 @@ def is_legacy_layout(project: Path | str | None = None) -> bool:
 # and `local/` machine-only caches, and neither belongs in git. The installer's migration
 # says exactly this in prose; this writes it down where git reads it, in every project the
 # team is used in, because a plugin cannot edit the host project's own .gitignore.
-WORKSPACE_IGNORE = "# Written by the compliance-surveillance team (scripts/vsit_paths.py).\n" \
-    "# shared/ and config/ are project memory: commit them. These two are not.\n" \
+WORKSPACE_IGNORE = (
+    "# Written by the compliance-surveillance team (scripts/vsit_paths.py).\n"
+    "# shared/ and config/ are project memory: commit them. These two are not.\n"
     "engagements/\nlocal/\n"
+)
 
 
 def ensure_workspace_ignore(project: Path | str | None = None) -> Path | None:

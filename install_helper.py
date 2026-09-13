@@ -2419,6 +2419,7 @@ class Installer:
         self.marks = mark_map
         self.subset = subset
         self.demo = bool(getattr(args, "demo", False))
+        self.no_downloads = downloads_disabled(args)
         self.tracker = StepTracker()
         self.cfg_path = config_path()
         self.cfg = load_config(self.cfg_path)
@@ -3131,9 +3132,13 @@ class Installer:
             return
         self.step_intro(
             "A few more optional bits follow: dev requirements, the status line, the "
-            "'virt-surv' shell alias, and this machine's default settings. Enabling the "
-            "plugin for a specific project is a separate step - 'virt-surv configure' "
-            "(or 'engage'/'onboard' for zero-prompt setup) from inside that project."
+            "'virt-surv' shell alias, and this machine's default settings. The optional "
+            "analyser steps download pinned, SHA-256-verified release binaries (osv-scanner, "
+            "gitleaks, shfmt, shellcheck, opengrep) into ~/.local/bin and add that folder "
+            "to your shell profile's PATH; pass --no-downloads (or set CST_NO_DOWNLOADS=1) "
+            "to fetch nothing. Enabling the plugin for a specific project is a separate "
+            "step - 'virt-surv configure' (or 'engage'/'onboard' for zero-prompt setup) "
+            "from inside that project."
         )
         self.quick_defaults = confirm(
             "  Go with the recommended defaults for all of these (fast, recommended), "
@@ -3257,11 +3262,18 @@ class Installer:
         SOFT, like the database and like code intelligence: no network, a proxy or an
         unknown CPU all leave the run exactly as it was.
         """
+        if self.no_downloads:
+            self.step_skip(
+                "osv-scanner",
+                "downloads disabled (--no-downloads / CST_NO_DOWNLOADS=1) - nothing fetched",
+            )
+            return
         self.step_intro(
             "The dependency scanner (osv-scanner) is a single downloaded binary. Without "
             "it the dependency-vulnerability findings are never produced at all - and an "
             "empty finding class reads like good news, which is the worst shape a gap can "
-            "take. I fetch the official release from "
+            "take. I fetch the pinned official release (version and SHA-256 recorded in "
+            "config/release-tools.json, verified before install) from "
             f"{_OSV_RELEASE_BASE.rstrip('/')}, put it in {osv_bin_dir()}, and put that "
             "folder on your PATH if it is not there already."
         )
@@ -3315,6 +3327,12 @@ class Installer:
         SOFT, like the scanner and code intelligence. Every tool here is optional; the step
         reports what happened per tool and never fails the install.
         """
+        if self.no_downloads:
+            self.step_skip(
+                "language analysers",
+                "downloads disabled (--no-downloads / CST_NO_DOWNLOADS=1) - nothing fetched",
+            )
+            return
         self.step_intro(
             "The language-specific analysers. Each one is used only when the reviewed code "
             "has that language, so a missing one costs measured findings there - the review "
@@ -3412,6 +3430,12 @@ class Installer:
         normal - the scanner then behaves exactly as it did before and the rest of the run
         is unaffected. This reports the outcome and moves on; it must never fail an install.
         """
+        if self.no_downloads:
+            self.step_skip(
+                "vulnerability database",
+                "downloads disabled (--no-downloads / CST_NO_DOWNLOADS=1) - nothing fetched",
+            )
+            return
         self.step_intro(
             "The dependency scanner reads a local vulnerability database so it never has "
             "to reach the network mid-review. The database is downloaded once, separately "
@@ -3458,6 +3482,12 @@ class Installer:
         reports the outcome and moves on. It must never fail an install, and it must never
         leave a user thinking something is broken when nothing is.
         """
+        if self.no_downloads:
+            self.step_skip(
+                "code intelligence",
+                "downloads disabled (--no-downloads / CST_NO_DOWNLOADS=1) - nothing fetched",
+            )
+            return
         self.step_intro(
             "Optional code-intelligence extras (tree-sitter). With them, codebase "
             "orientation gets exact symbols and line ranges for Java, Scala, C#, SQL, "
@@ -9794,13 +9824,59 @@ def run_relocate_to_vsit(style: Style, mark_map: dict) -> int:
 # It stays SOFT everywhere - no network, a refusing proxy, an unknown CPU are all normal,
 # and the run carries on exactly as it did before.
 
-# Still its own name because the osv-scanner step's intro prints it: osv-scanner's assets
-# carry no version, so this "latest" redirect is a real download URL, not a landing page.
-_OSV_RELEASE_BASE = "https://github.com/google/osv-scanner/releases/latest/download/"
+# Still its own name because the osv-scanner step's intro prints it. Every download is now
+# by TAG (below), so this is the tagged download base, not a "latest" redirect.
+_OSV_RELEASE_BASE = "https://github.com/google/osv-scanner/releases/download/"
 
-# For the three whose asset names DO carry the version, which therefore cannot be built
-# until the version is known. One small JSON read answers it.
-_GITHUB_LATEST_API = "https://api.github.com/repos/{repo}/releases/latest"
+# PINNED RELEASES (2026-09-13 framework review, step 7.1). Every binary this file downloads
+# is named in config/release-tools.json - one version and one SHA-256 per asset, taken from
+# the publisher's own release-API digests by scripts/pin_release_tools.py (human-run, at
+# release time). The installer downloads exactly the pinned asset by tag and refuses a file
+# whose digest does not match, so two installs a week apart land the same bytes and a
+# reviewer can read what those bytes were. No table entry means no download: "latest" is
+# never a fallback. `--no-downloads` / CST_NO_DOWNLOADS=1 turns every fetch off.
+_RELEASE_PINS_PATH = Path(__file__).resolve().parent / "config" / "release-tools.json"
+_NO_DOWNLOADS_ENV = "CST_NO_DOWNLOADS"
+
+
+def load_release_pins(path: Optional[Path] = None) -> dict:
+    """The pin table, or {} when it is missing or unreadable (then nothing downloads)."""
+    try:
+        data = json.loads((path or _RELEASE_PINS_PATH).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def pinned_release(spec: "ReleaseTool", pins: Optional[dict] = None) -> tuple:
+    """(version, {asset name: sha256}) for one tool, or ("", {}) when it is not pinned."""
+    table = pins if pins is not None else load_release_pins()
+    row = (table.get("tools") or {}).get(spec.name) or {}
+    version = str(row.get("version") or "")
+    assets = row.get("assets") or {}
+    if not version or not isinstance(assets, dict):
+        return "", {}
+    return version, {str(k): str(v) for k, v in assets.items()}
+
+
+def downloads_disabled(args=None) -> bool:
+    """`--no-downloads` on the command line, or CST_NO_DOWNLOADS=1 in the environment: the
+    installer performs no network fetch of a binary, a database, a wheel or an npm package,
+    and says so at each step. The human-only environment route mirrors CST_ALLOW_EXEC."""
+    if args is not None and getattr(args, "no_downloads", False):
+        return True
+    return os.environ.get(_NO_DOWNLOADS_ENV, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _sha256_of(path: Path) -> str:
+    import hashlib
+
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
 
 # sys.platform -> the name these projects build under. Anything else has no asset, which is
 # a clean "cannot", not an error.
@@ -9845,8 +9921,8 @@ def _release_platform_arch(
 
 
 def _osv_asset(plat: str, arch: str, version: str) -> str:
-    """osv-scanner_linux_amd64, osv-scanner_windows_amd64.exe - no version in the name,
-    which is what lets it use the /releases/latest/download/ redirect."""
+    """osv-scanner_linux_amd64, osv-scanner_windows_amd64.exe - no version in the name;
+    the download is still by pinned tag (step 7.1)."""
     return f"osv-scanner_{plat}_{arch}" + (".exe" if plat == "windows" else "")
 
 
@@ -9887,7 +9963,7 @@ def _shellcheck_asset(plat: str, arch: str, version: str) -> str:
 
 def _opengrep_asset(plat: str, arch: str, version: str) -> str:
     """The self-contained OpenGrep binary (NOT opengrep-core, the OCaml build): a bare
-    executable with no version in the name, so the /releases/latest/download/ redirect works.
+    executable with no version in the name; the download is still by pinned tag (step 7.1).
     opengrep_manylinux_x86 / _aarch64, opengrep_osx_x86 / _arm64, opengrep_windows_x86.exe
     (Windows publishes x86 only). OpenGrep is the LGPL community fork of Semgrep with fully
     open rules; adopted 2026-09-13 for the SQL/Java/Scala security-analyser gap."""
@@ -10065,14 +10141,12 @@ def ensure_dir_on_path(style: Style, directory: Path, demo: bool = False) -> lis
 
 def _release_page(spec: "ReleaseTool") -> str:
     """The human page for a tool, used when there is no asset URL to name."""
-    return f"https://github.com/{spec.repo}/releases/latest"
+    return f"https://github.com/{spec.repo}/releases"
 
 
 def _release_download_url(spec: "ReleaseTool", asset: str, version: str) -> str:
-    """The direct URL for one asset. Versioned projects tag their download paths; the
-    unversioned one uses github's /latest/download/ redirect."""
-    if not spec.versioned:
-        return f"https://github.com/{spec.repo}/releases/latest/download/{asset}"
+    """The direct URL for one asset at one pinned tag. Every project is fetched by tag now,
+    whether or not its asset names carry the version (step 7.1: "latest" is never fetched)."""
     return f"https://github.com/{spec.repo}/releases/download/v{version}/{asset}"
 
 
@@ -10080,36 +10154,6 @@ def _release_manual_route(style: Style, spec: "ReleaseTool", url: str, target: P
     """What to do by hand. Named once so every way this can fail says the same thing."""
     print(style.dim(f"    Fetch it on a connected machine: {url or _release_page(spec)}"))
     print(style.dim(f"    then put it at {target} (chmod 755 on macOS/Linux)."))
-
-
-def latest_release_version(repo: str, timeout: int = 30) -> str:
-    """The newest published version of `repo`, with no leading "v", or "" when it cannot be
-    resolved.
-
-    WHY THE API AT ALL. github's /releases/latest/download/<asset> only works when the
-    asset name is stable, and gitleaks, shfmt and shellcheck all stamp the version into the
-    file name - so the name cannot be built until the version is known. One JSON read
-    answers it, through the same default opener (and therefore the same HTTPS_PROXY) every
-    other fetch in this file uses.
-
-    NEVER RAISES. No network, a proxy that refuses, a rate-limited API and a body that is
-    not JSON are all the same normal answer here: "", which the caller turns into one dim
-    line and a manual route.
-    """
-    import urllib.request  # stdlib; honours HTTPS_PROXY through the default opener
-
-    request = urllib.request.Request(
-        _GITHUB_LATEST_API.format(repo=repo),
-        headers={"Accept": "application/vnd.github+json", "User-Agent": "virt-surv-installer"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec B310 - fixed https:// literal above
-            payload = json.loads(response.read().decode("utf-8", "replace"))
-    except Exception:  # noqa: BLE001 - every failure here is a normal state
-        return ""
-    if not isinstance(payload, dict):
-        return ""
-    return str(payload.get("tag_name") or payload.get("name") or "").strip().lstrip("vV")
 
 
 # The archive shapes the four tools ship in. A name that matches none of these is a bare
@@ -10183,7 +10227,11 @@ def _extract_release_binary(archive: Path, binary: str, target: Path, suffix: st
 
 
 def install_release_tool(
-    spec: "ReleaseTool", style: Style, mark_map: dict, demo: bool = False
+    spec: "ReleaseTool",
+    style: Style,
+    mark_map: dict,
+    demo: bool = False,
+    pins: Optional[dict] = None,
 ) -> Optional[Path]:
     """Download one release binary into ~/.local/bin. Returns its path, or None.
 
@@ -10201,6 +10249,12 @@ def install_release_tool(
     FINISHES USABLE. A binary in a folder nothing searches is not an installed tool, so the
     directory goes on PATH - this process first, so the steps that follow can see it, then
     the shell profile for every future terminal.
+
+    PINNED AND VERIFIED (2026-09-13, step 7.1). The version and the asset's SHA-256 come
+    from config/release-tools.json; the download is by tag and the bytes are hashed before
+    anything is extracted or renamed into place. A missing pin or a digest mismatch is a
+    refusal with the manual route named, never a fallback to "latest". `--no-downloads` or
+    CST_NO_DOWNLOADS=1 skips the fetch entirely.
 
     SOFT BY CONTRACT. Every failure - no network, a proxy that refuses, an unknown CPU, a
     read-only home, an archive with no binary in it - prints one line naming the manual
@@ -10230,27 +10284,34 @@ def install_release_tool(
         print(style.dim(f"  {warn} no {spec.name} build for {sys.platform}/{_platform.machine()}"))
         _release_manual_route(style, spec, "", target)
         return None
+    version, digests = pinned_release(spec, pins)
     if demo:
-        # The version is deliberately NOT resolved here: a dry run reaches the network for
-        # nothing at all, so the URL is shown in the shape it will take.
-        shape = _release_download_url(spec, spec.asset(plat, arch, "<latest>"), "<latest>")
+        # A dry run reaches the network for nothing at all; the URL is shown in the shape it
+        # will take, at the pinned version when the table has one.
+        shown = version or "<pinned>"
+        shape = _release_download_url(spec, spec.asset(plat, arch, shown), shown)
         print(style.dim(f"    would download {shape}"))
         print(style.dim(f"    would install it at {target} (demo - nothing written)"))
         if not _on_path(release_bin_dir()):
             ensure_dir_on_path(style, release_bin_dir(), demo=True)
         return None
-    version = ""
-    if spec.versioned:
-        version = latest_release_version(spec.repo)
-        if not version:
-            print(
-                style.dim(
-                    f"  {warn} could not download {spec.name}: the latest release could not "
-                    "be resolved"
-                )
+    if downloads_disabled():
+        print(
+            style.dim(
+                f"  {warn} {spec.name} not downloaded: downloads are disabled (--no-downloads / {_NO_DOWNLOADS_ENV}=1)"
             )
-            _release_manual_route(style, spec, "", target)
-            return None
+        )
+        _release_manual_route(style, spec, "", target)
+        return None
+    if not version:
+        print(
+            style.dim(
+                f"  {warn} could not download {spec.name}: no pinned release in "
+                f"{_RELEASE_PINS_PATH.name} (regenerate it with scripts/pin_release_tools.py)"
+            )
+        )
+        _release_manual_route(style, spec, "", target)
+        return None
     asset = spec.asset(plat, arch, version)
     if not asset:
         import platform as _platform
@@ -10258,8 +10319,13 @@ def install_release_tool(
         print(style.dim(f"  {warn} no {spec.name} build for {sys.platform}/{_platform.machine()}"))
         _release_manual_route(style, spec, "", target)
         return None
+    expected = digests.get(asset, "")
+    if not expected:
+        print(style.dim(f"  {warn} could not download {spec.name}: no pinned digest for {asset}"))
+        _release_manual_route(style, spec, "", target)
+        return None
     url = _release_download_url(spec, asset, version)
-    print(style.dim(f"  Downloading {url}"))
+    print(style.dim(f"  Downloading {url} (v{version}, sha256 {expected[:12]}...)"))
     import urllib.request  # stdlib; honours HTTPS_PROXY through the default opener
 
     tmp_path = None
@@ -10274,6 +10340,15 @@ def install_release_tool(
             tmp_path = Path(tmp_name)
             with os.fdopen(handle, "wb") as out:
                 shutil.copyfileobj(response, out)
+        # VERIFY BEFORE ANYTHING ELSE TOUCHES IT: the digest is of the bytes as published,
+        # before extraction, before chmod, before the rename that would make shutil.which
+        # find it. A mismatch is a refusal, and the temp file is removed in `finally`.
+        actual = _sha256_of(tmp_path)
+        if actual != expected:
+            raise RuntimeError(
+                f"digest mismatch for {asset} (expected sha256 {expected[:12]}..., got "
+                f"{actual[:12]}...) - refused, nothing installed"
+            )
         suffix = _archive_suffix(asset)
         if suffix:
             archive_path, tmp_path = tmp_path, None
@@ -11421,6 +11496,12 @@ def parse_args(argv=None) -> argparse.Namespace:
     )
     parser.add_argument("--repo", help="path to the clone (overrides the saved location)")
     parser.add_argument("--yes", action="store_true", help="non-interactive, safe defaults")
+    parser.add_argument(
+        "--no-downloads",
+        action="store_true",
+        help="fetch nothing from the network (no release binaries, database, wheels or npm "
+        "packages); CST_NO_DOWNLOADS=1 in the environment does the same",
+    )
     parser.add_argument(
         "--pip",
         action="store_true",

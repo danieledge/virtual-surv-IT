@@ -1698,6 +1698,7 @@ def test_recorded_timestamps_are_timezone_aware(tmp_path):
 
 # ------------------------------------------------- 2026-09-13: --no-render defers the render
 
+
 def test_no_render_defers_the_render_and_stale_is_detectable(tmp_path):
     """A burst of mutations should be able to skip the START-HERE render and reconcile once.
     A skipped render leaves the embedded state-hash behind the state json, which is exactly

@@ -9388,6 +9388,7 @@ def test_a_blocked_download_is_reported_and_does_not_raise(monkeypatch, tmp_path
     def _refuse(*a, **k):
         raise OSError("proxy refused the connection")
 
+    _pin_bytes(monkeypatch, "osv-scanner", "2.5.1", b"never fetched")
     monkeypatch.setattr("urllib.request.urlopen", _refuse)
 
     assert ih.install_osv_scanner(ih.Style(False), ih.marks()) is None  # no raise
@@ -9410,6 +9411,23 @@ class _Response(io.BytesIO):
         return False
 
 
+def _pin_bytes(monkeypatch, tool: str, version: str, data: bytes) -> str:
+    """Pin `tool` at `version` with the sha256 of `data` for THIS machine's asset name, the
+    way config/release-tools.json would (step 7.1). Returns the asset name."""
+    import hashlib
+
+    import install_helper as ih
+
+    spec = ih._RELEASE_TOOLS[tool]
+    plat, arch = ih._release_platform_arch()
+    asset = spec.asset(plat, arch, version)
+    table = {
+        "tools": {tool: {"version": version, "assets": {asset: hashlib.sha256(data).hexdigest()}}}
+    }
+    monkeypatch.setattr(ih, "load_release_pins", lambda path=None: table)
+    return asset
+
+
 def test_a_successful_download_is_verified_and_put_on_PATH(monkeypatch, tmp_path, capsys):
     """A file at the right path is not an installed tool: it has to RUN, and it has to be
     FINDABLE. The owner's rule (2026-09-12) is that the user does nothing by hand, so the
@@ -9423,6 +9441,7 @@ def test_a_successful_download_is_verified_and_put_on_PATH(monkeypatch, tmp_path
     rc.write_text("# mine\n", encoding="utf-8")
     monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
     monkeypatch.setenv("PATH", "/usr/bin")
+    _pin_bytes(monkeypatch, "osv-scanner", "2.5.1", b"#!/bin/true\n")
     monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: _Response(b"#!/bin/true\n"))
     monkeypatch.setattr(ih, "run_cmd", lambda argv, **k: _proc(returncode=0, stdout="v2.0.0"))
 
@@ -9735,40 +9754,44 @@ def test_each_tool_names_its_own_asset_per_platform(tool, platform_name, machine
     assert (spec.asset(plat, arch, version) if plat else "") == want
 
 
-def test_the_download_url_is_tagged_only_for_the_tools_that_need_it():
-    """osv-scanner's assets carry no version, so it can use the /latest/download/ redirect;
-    the other three stamp the version into the file name, so their URL needs the tag."""
+def test_every_download_url_is_tagged_never_latest():
+    """Step 7.1: every tool is fetched by its PINNED tag, including the two whose asset names
+    carry no version (osv-scanner, opengrep) and used to ride the /latest/download/ redirect.
+    "latest" no longer appears anywhere in the installer's source."""
+    import inspect
+
     import install_helper as ih
 
     osv = ih._RELEASE_TOOLS["osv-scanner"]
-    assert ih._release_download_url(osv, "osv-scanner_linux_amd64", "") == (
-        ih._OSV_RELEASE_BASE + "osv-scanner_linux_amd64"
+    assert ih._release_download_url(osv, "osv-scanner_linux_amd64", "2.5.1") == (
+        ih._OSV_RELEASE_BASE + "v2.5.1/osv-scanner_linux_amd64"
     )
+    assert "releases/latest" not in inspect.getsource(ih)
     shfmt = ih._RELEASE_TOOLS["shfmt"]
     assert ih._release_download_url(shfmt, "shfmt_v3.12.0_linux_amd64", "3.12.0") == (
         "https://github.com/mvdan/sh/releases/download/v3.12.0/shfmt_v3.12.0_linux_amd64"
     )
 
 
-def test_the_latest_version_is_read_from_the_release_json(monkeypatch):
-    """One small JSON read, because the asset name cannot be built without the version. A
-    rate-limited API, a proxy, or a body that is not JSON are all the same normal answer -
-    "", which the caller turns into one dim line and a manual route."""
+def test_the_pinned_release_is_read_from_the_table_and_absent_means_no_download():
+    """The version and digests come from config/release-tools.json (step 7.1). A tool with no
+    row, a malformed row, or no table at all is ("", {}) - which the installer turns into a
+    refusal with the manual route, never into a fetch of whatever is newest."""
     import install_helper as ih
 
-    monkeypatch.setattr(
-        "urllib.request.urlopen", lambda *a, **k: _Response(b'{"tag_name": "v8.28.0"}')
+    spec = ih._RELEASE_TOOLS["gitleaks"]
+    table = {"tools": {"gitleaks": {"version": "8.30.1", "assets": {"a.tar.gz": "0" * 64}}}}
+    assert ih.pinned_release(spec, table) == ("8.30.1", {"a.tar.gz": "0" * 64})
+    assert ih.pinned_release(spec, {}) == ("", {})
+    assert ih.pinned_release(spec, {"tools": {"gitleaks": {"version": "", "assets": {}}}}) == (
+        "",
+        {},
     )
-    assert ih.latest_release_version("gitleaks/gitleaks") == "8.28.0"
-
-    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: _Response(b"<html>nope</html>"))
-    assert ih.latest_release_version("gitleaks/gitleaks") == ""
-
-    def _refuse(*a, **k):
-        raise OSError("proxy refused the connection")
-
-    monkeypatch.setattr("urllib.request.urlopen", _refuse)
-    assert ih.latest_release_version("gitleaks/gitleaks") == ""
+    assert ih.pinned_release(spec, {"tools": {"gitleaks": {"version": "1", "assets": "x"}}}) == (
+        "",
+        {},
+    )
+    assert ih.load_release_pins(Path("/nonexistent/release-tools.json")) == {}
 
 
 def _tar_fixture(path: Path, members: dict, mode: str) -> Path:
@@ -9838,7 +9861,7 @@ def test_an_archive_download_is_extracted_verified_and_put_on_PATH(monkeypatch, 
     archive = _tar_fixture(
         tmp_path / "src.tar.gz", {"README.md": b"read me", "gitleaks": b"BINARY"}, "w:gz"
     )
-    monkeypatch.setattr(ih, "latest_release_version", lambda repo, **k: "8.28.0")
+    _pin_bytes(monkeypatch, "gitleaks", "8.28.0", archive.read_bytes())
     monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: _Response(archive.read_bytes()))
     seen = []
     monkeypatch.setattr(
@@ -9878,7 +9901,7 @@ def test_a_tar_xz_download_is_opened_as_xz_not_guessed_from_the_temp_file(
         {"shellcheck-v0.11.0/LICENSE": b"licence", "shellcheck-v0.11.0/shellcheck": b"BINARY"},
         "w:xz",
     )
-    monkeypatch.setattr(ih, "latest_release_version", lambda repo, **k: "0.11.0")
+    _pin_bytes(monkeypatch, "shellcheck", "0.11.0", archive.read_bytes())
     monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: _Response(archive.read_bytes()))
     monkeypatch.setattr(ih, "run_cmd", lambda argv, **k: _proc(returncode=0, stdout="0.11.0"))
 
@@ -9897,14 +9920,14 @@ def test_a_blocked_release_download_is_reported_and_returns(monkeypatch, tmp_pat
     monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
 
     # Failure one: the version cannot even be resolved, so there is no URL to try.
-    monkeypatch.setattr(ih, "latest_release_version", lambda repo, **k: "")
+    monkeypatch.setattr(ih, "load_release_pins", lambda path=None: {})  # nothing pinned
     assert ih.install_release_tool(ih._RELEASE_TOOLS["shfmt"], ih.Style(False), ih.marks()) is None
     out = capsys.readouterr().out
     assert "could not download shfmt" in out
     assert "github.com/mvdan/sh/releases" in out
 
     # Failure two: the version resolves and the download itself is refused.
-    monkeypatch.setattr(ih, "latest_release_version", lambda repo, **k: "3.12.0")
+    _pin_bytes(monkeypatch, "shfmt", "3.12.0", b"never fetched")
 
     def _refuse(*a, **k):
         raise OSError("proxy refused the connection")
@@ -9927,11 +9950,6 @@ def test_the_release_demo_path_writes_nothing_and_opens_no_socket(monkeypatch, t
     monkeypatch.setattr(
         "urllib.request.urlopen",
         lambda *a, **k: (_ for _ in ()).throw(AssertionError("demo must not open the network")),
-    )
-    monkeypatch.setattr(
-        ih,
-        "latest_release_version",
-        lambda *a, **k: (_ for _ in ()).throw(AssertionError("demo must not look up a version")),
     )
 
     for tool in ("gitleaks", "shfmt", "shellcheck"):
@@ -10040,3 +10058,91 @@ def test_the_analyser_step_sits_right_after_the_scanner_in_both_flows():
         scanner = next(i for i, t in enumerate(titles) if t.startswith("Dependency scanner"))
         analysers = next(i for i, t in enumerate(titles) if t.startswith("Language analysers"))
         assert analysers == scanner + 1, f"{subset}: {titles}"
+
+
+# --------------------------------------- 2026-09-13 framework review, step 7.1
+
+
+def test_a_digest_mismatch_is_refused_and_leaves_nothing_behind(monkeypatch, tmp_path, capsys):
+    """The one property a bank's reviewer asks for: bytes that do not match the pinned
+    sha256 are never chmod-ed, never renamed into ~/.local/bin, and the run says why."""
+    import install_helper as ih
+
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+    _pin_bytes(monkeypatch, "osv-scanner", "2.5.1", b"#!/bin/true\n")
+    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: _Response(b"#!/bin/false\n"))
+
+    assert ih.install_osv_scanner(ih.Style(False), ih.marks()) is None
+    out = capsys.readouterr().out
+    assert "digest mismatch" in out and "refused" in out
+    assert not ih.osv_bin_path().exists()
+    assert (
+        not list((tmp_path / ".local" / "bin").glob(".osv-scanner-*"))
+        if (tmp_path / ".local" / "bin").exists()
+        else True
+    )
+
+
+def test_no_downloads_performs_no_fetch_at_all(monkeypatch, tmp_path, capsys):
+    """CST_NO_DOWNLOADS=1 (or --no-downloads) means no urlopen, no file, one line saying so
+    and the manual route - the kill switch a locked-down or air-gapped estate needs."""
+    import install_helper as ih
+
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+    _pin_bytes(monkeypatch, "osv-scanner", "2.5.1", b"#!/bin/true\n")
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("no fetch may happen")),
+    )
+    monkeypatch.setenv("CST_NO_DOWNLOADS", "1")
+    assert ih.install_osv_scanner(ih.Style(False), ih.marks()) is None
+    out = capsys.readouterr().out
+    assert "downloads are disabled" in out and "github.com/google/osv-scanner/releases" in out
+    assert not (tmp_path / ".local" / "bin").exists()
+
+
+def test_the_no_downloads_flag_skips_every_fetching_step(monkeypatch, capsys):
+    import install_helper as ih
+
+    monkeypatch.delenv("CST_NO_DOWNLOADS", raising=False)
+    args = _args(yes=True, no_downloads=True)
+    inst = ih.Installer(args, ih.Style(False), ih.marks(), subset="full")
+    assert inst.no_downloads
+    calls = []
+    monkeypatch.setattr(ih, "install_osv_scanner", lambda *a, **k: calls.append("osv"))
+    monkeypatch.setattr(ih, "install_release_tool", lambda *a, **k: calls.append("tool"))
+    inst.osv_scanner_step()
+    inst.language_analysers_step()
+    inst.vuln_db_step()
+    inst.code_intel_step()
+    assert calls == [], "a fetching step ran with downloads disabled"
+    assert capsys.readouterr().out.count("downloads disabled") == 4
+
+
+def test_yes_still_downloads_by_owner_ruling(monkeypatch, capsys):
+    """--yes is the fast path, not the quiet-refusal path: the owner ruled (2026-09-12) that
+    the download step asks nothing and behaves like every other tool the installer sets up.
+    Only --no-downloads / CST_NO_DOWNLOADS turns it off."""
+    import install_helper as ih
+
+    monkeypatch.delenv("CST_NO_DOWNLOADS", raising=False)
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    calls = []
+    monkeypatch.setattr(ih, "install_osv_scanner", lambda *a, **k: calls.append("osv") or None)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
+    assert not inst.no_downloads
+    inst.osv_scanner_step()
+    assert calls == ["osv"]
+    assert "pinned official release" in capsys.readouterr().out
+
+
+def test_the_cli_accepts_no_downloads():
+    import install_helper as ih
+
+    assert ih.parse_args(["--no-downloads"]).no_downloads is True
+    assert ih.parse_args([]).no_downloads is False
+    assert ih.downloads_disabled(ih.parse_args(["--no-downloads"]))

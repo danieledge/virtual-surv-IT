@@ -687,7 +687,9 @@ def test_no_route_to_retired_agents():
     offenders = []
     for path in sorted((_ROOT / ".claude").rglob("*.md")):
         for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if "*-sme" in line or re.search(r"\b(?:tm|trade-surveillance|comms-surveillance)-sme\b", line):
+            if "*-sme" in line or re.search(
+                r"\b(?:tm|trade-surveillance|comms-surveillance)-sme\b", line
+            ):
                 offenders.append(f"{path.relative_to(_ROOT)}:{n}")
     assert not offenders, (
         "routes to retired SME personas (use `docs/sme/<pack>.md`, read in-line, cite the pack): "
