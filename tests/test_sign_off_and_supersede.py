@@ -139,7 +139,11 @@ def test_redo_starts_new_work_and_never_touches_the_old_pack(tmp_path):
 
 
 def test_the_skill_forbids_reopening_and_places_the_link_on_the_new_pack():
-    skill = (REPO_ROOT / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8")
+    skill = (REPO_ROOT / ".claude" / "skills" / "engage" / "SKILL.md").read_text(
+        encoding="utf-8"
+    ) + (
+        REPO_ROOT / ".claude" / "skills" / "engage" / "references" / "launcher-flags.md"
+    ).read_text(encoding="utf-8")
     assert "--supersedes" in skill
     assert "Never reopen or edit the" in skill and "superseded pack" in skill
     assert "not yours to give" in skill, "the skill must say sign-off is not the agent's"

@@ -417,7 +417,9 @@ def test_a_jira_engagement_is_told_to_read_the_comment_thread():
     from pathlib import Path
 
     repo = Path(__file__).resolve().parents[1]
-    skill = (repo / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8")
+    skill = (repo / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8") + (
+        repo / ".claude" / "skills" / "engage" / "references" / "launcher-flags.md"
+    ).read_text(encoding="utf-8")
     ref = (repo / ".claude" / "skills" / "engage" / "references" / "integrations.md").read_text(
         encoding="utf-8"
     )

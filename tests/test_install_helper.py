@@ -8409,9 +8409,10 @@ def test_the_skill_no_longer_tells_the_session_to_delete_the_handoff():
     in the allow-list - so the attempt was simply refused, twice, in one live run. Creating
     the workspace consumes that file and the launcher clears any leftover, so the deletion
     was a doomed action the mechanism had already handled."""
-    skill = (
-        Path(__file__).resolve().parents[1] / ".claude" / "skills" / "engage" / "SKILL.md"
-    ).read_text(encoding="utf-8")
+    root = Path(__file__).resolve().parents[1] / ".claude" / "skills" / "engage"
+    skill = (root / "SKILL.md").read_text(encoding="utf-8") + (
+        root / "references" / "launcher-flags.md"
+    ).read_text(encoding="utf-8")  # the flag contract moved to the reference on 2026-09-13
     # The BULLET, not the first mention - `--request-pending` also appears in the --auto
     # bullet above it, and splitting on the first hit reads the wrong block entirely.
     block = skill.split("- **`--request-pending`", 1)[1].split("\n- **", 1)[0]

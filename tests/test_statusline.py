@@ -251,3 +251,38 @@ def test_invalid_cached_entry_falls_back_to_the_probe_loop(tmp_path):
     cached = (cache_dir / ".guard-interpreter").read_text(encoding="utf-8").strip()
     assert cached != "nonexistent-interpreter-xyz"
     assert shutil.which(cached, path=_default_path()) is not None
+
+
+# ------------------------------------------------ 2026-09-13 framework review, step 8.4
+def _pack_with_budget(project_dir: Path, ceiling: float) -> None:
+    pack = project_dir / "VSIT" / "engagements" / "eng-1"
+    pack.mkdir(parents=True)
+    (pack / "engagement-state.json").write_text(
+        json.dumps(
+            {"status": "in_progress", "phase": "build", "budget": {"engagement_usd": ceiling}}
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_cost_meter_shows_spend_against_the_engagement_ceiling(tmp_path):
+    _pack_with_budget(tmp_path, 20)
+    payload = _basic_payload(tmp_path)
+    payload["cost"] = {"total_cost_usd": 4.5}
+    out = _run(tmp_path, payload).stdout
+    assert "$4.50 / $20 (22%)" in out and "⚠️" not in out
+
+
+def test_cost_meter_warns_from_eighty_percent(tmp_path):
+    _pack_with_budget(tmp_path, 20)
+    payload = _basic_payload(tmp_path)
+    payload["cost"] = {"total_cost_usd": 17}
+    out = _run(tmp_path, payload).stdout
+    assert "⚠️ $17.00 / $20 (85%)" in out
+
+
+def test_cost_alone_when_no_ceiling_is_recorded(tmp_path):
+    payload = _basic_payload(tmp_path)
+    payload["cost"] = {"total_cost_usd": 1.25}
+    out = _run(tmp_path, payload).stdout
+    assert "$1.25" in out and "/ $" not in out

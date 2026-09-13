@@ -181,7 +181,7 @@ _SETTING_CLOSE_DELIVERABLES = (
     (
         "evidence_room",
         "default_evidence_room",
-        False,
+        True,  # on by default since 2026-09-13 (step 8.5): a close without the room is a defect
         "EVIDENCE-ROOM-*.html",
         "EVIDENCE-ROOM-MISSING",
         "render it with `python -m scripts.render_evidence_room <workspace>` before close",

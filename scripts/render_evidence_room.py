@@ -25,7 +25,7 @@ each load-bearing:
   work is contested (CLAUDE.md §8, and the repo already refuses "SR 11-7 compliant"), so
   a confident readiness percentage would be a claim this tool cannot support.
 
-Gated per project: `"evidence_room": true` in the working project's
+Rendered at every close unless the working project opts out with `"evidence_room": false` in its
 .claude/team-preferences.json (off by default, no machine tier - whether a project wants
 an auditor-facing pack is a fact about that project's governance). `--force` renders
 anyway, for a one-off in a project that hasn't opted in.
@@ -416,11 +416,14 @@ def render(workspace: Path, force: bool = False) -> tuple[int, str]:
         # sits under it) rather than assuming a cwd.
         project = workspace.parent.parent if workspace.parent.name == "artifacts" else workspace
         prefs = _read_json(_vsit_paths().preferences_file(project)) or {}
-        if not (isinstance(prefs, dict) and prefs.get("evidence_room") is True):
+        # ON BY DEFAULT since 2026-09-13 (framework review, step 8.5): the room is the
+        # auditor-facing deliverable, so every close renders it unless the project opted out
+        # with '"evidence_room": false'.
+        if isinstance(prefs, dict) and prefs.get("evidence_room", True) is False:
             return 0, (
-                "evidence room is off for this project - enable it with "
-                "'\"evidence_room\": true' in .claude/team-preferences.json "
-                "(virt-surv go, [c]), or pass --force for a one-off"
+                "evidence room is off for this project ('\"evidence_room\": false' in "
+                ".claude/team-preferences.json; remove it or set true to render at close), "
+                "or pass --force for a one-off"
             )
     findings, envelope = load_findings(workspace)
     out = (

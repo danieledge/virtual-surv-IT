@@ -40,7 +40,8 @@ def _workspace(tmp_path: Path, *, opted_in=True, state=None, files=(), findings=
     ws.mkdir(parents=True)
     (project / ".claude").mkdir(parents=True, exist_ok=True)
     (project / ".claude" / "team-preferences.json").write_text(
-        json.dumps({"evidence_room": True} if opted_in else {}), encoding="utf-8"
+        json.dumps({"evidence_room": True} if opted_in else {"evidence_room": False}),
+        encoding="utf-8",
     )
     (ws / "engagement-state.json").write_text(
         json.dumps(state if state is not None else _STATE), encoding="utf-8"
@@ -292,3 +293,11 @@ def test_build_html_needs_no_optional_dependency(tmp_path):
     ws = _workspace(tmp_path)
     page = build_html(ws, _STATE, [], {})
     assert page.startswith("<!doctype html>") and page.rstrip().endswith("</html>")
+
+
+def test_an_absent_setting_renders_by_default(tmp_path):
+    """On by default since 2026-09-13 (step 8.5): a project that never set the key gets the room."""
+    ws = _workspace(tmp_path, opted_in=True)
+    (ws.parent.parent / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+    code, message = render(ws)
+    assert code == 0 and list(ws.glob("EVIDENCE-ROOM-*.html")), message

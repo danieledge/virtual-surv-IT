@@ -2892,3 +2892,18 @@ def test_evidence_room_present_or_setting_off_passes(tmp_path, monkeypatch):
     _closed_pack_with_deliverable(art / "rev-on")
     (art / "rev-on" / "EVIDENCE-ROOM-rev-on.html").write_text("<p>room</p>", encoding="utf-8")
     assert not any("EVIDENCE-ROOM-MISSING" in f and "rev-on" in f for f in run_check(art))
+
+
+def test_evidence_room_missing_fires_when_no_setting_is_recorded(tmp_path, monkeypatch):
+    """On by default since 2026-09-13 (step 8.5): a project that never set evidence_room still
+    owes the room at close; only an explicit false opts out."""
+    from scripts.check_artifacts import check as run_check
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))  # no machine default in play
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+    art = tmp_path / "VSIT" / "engagements"
+    _closed_pack_with_deliverable(art / "rev-default")
+    findings = run_check(art)
+    assert any("EVIDENCE-ROOM-MISSING" in f for f in findings), findings

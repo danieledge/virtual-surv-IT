@@ -109,6 +109,7 @@ _RUNTIME_PARTS = (
     ".request-pending.txt",
     _MARKER,
     "dashboard.html",
+    "sbom.json",  # CI-generated (scripts/sbom.py), attached to a release, never tracked
     "scst-dashboard.html",
     "dashboard-data.json",
     ".guard-interpreter",
@@ -229,6 +230,9 @@ _SKIP_PARTS = (
     # transcript. CHANGELOG.md itself was never scanned; its history keeps that treatment.
     "/releases/archive-",
     "/releases/unreleased-notes-",
+    # docs/internal/ is local-only (gitignored) and holds dated reviews, briefings and working
+    # plans that cite scripts and files as they were on the day; CI never sees the folder.
+    "/docs/internal/",
 )
 
 

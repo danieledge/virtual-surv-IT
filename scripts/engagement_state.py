@@ -2197,6 +2197,25 @@ def _cmd_set_status(args: argparse.Namespace) -> int:
         )
         clear_active(args.dir.parent, args.dir.name)
         return 0
+    # Step 8.5 (2026-09-13 framework review): the evidence room is the auditor-facing
+    # deliverable and is rendered at EVERY close by default. It is derived, never authored, so
+    # the close produces it itself rather than refusing for its absence; a project that opted
+    # out ("evidence_room": false) gets no file and no finding. Any failure here is reported
+    # and left to the gate, which then names the missing room.
+    try:
+        toggle = getattr(ca, "_read_bool_toggle", None)
+        wants_room = (
+            toggle(_project_root_for(args.dir), "evidence_room", "default_evidence_room", True)
+            if toggle
+            else False
+        )
+        if wants_room and not list(args.dir.glob("EVIDENCE-ROOM-*.html")):
+            rer = _load_sibling_module("render_evidence_room")
+            if rer is not None:
+                _code, message = rer.render(args.dir)
+                print(f"evidence room at close: {message}", file=sys.stderr)
+    except Exception as exc:  # noqa: BLE001 - the gate below reports a missing room
+        print(f"note: evidence room not rendered at close ({exc})", file=sys.stderr)
     try:
         gate_findings = ca.check(args.dir)
     except Exception as exc:

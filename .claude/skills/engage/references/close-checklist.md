@@ -112,12 +112,14 @@ Then, and only then:
 Until the marker exists, the truthful close state is **PARTIAL with "human sign-off"
 outstanding** - say that plainly rather than implying the pack is signed.
 
-## Evidence Room (only when the project opted in)
+## Evidence Room (every close, unless the project opted out)
 
-Projects that set `"evidence_room": true` get one self-contained HTML pack assembling the
-evidence this engagement already produced (completeness checklist, traceability, findings
-register, decisions, residual risk, SHA-256 manifest). Run it **after the delivery report and
-summary email exist, before `finalise-artifacts`** so its manifest covers the finished pack:
+Every close renders one self-contained HTML pack assembling the evidence this engagement
+already produced (completeness checklist, traceability, findings register, decisions, residual
+risk, SHA-256 manifest); it is the auditor-facing deliverable and the first thing the closing
+turn links (2026-09-13, on by default). A project opts out with `"evidence_room": false`.
+Run it **after the delivery report and summary email exist, before `finalise-artifacts`** so
+its manifest covers the finished pack:
 
 ```
 <python> -m scripts.render_evidence_room VSIT/engagements/<slug>
@@ -125,9 +127,9 @@ summary email exist, before `finalise-artifacts`** so its manifest covers the fi
 
 Allow-listed, so no consent prompt. It is **derived, never authored** - do not hand-write or
 "improve" its contents; if it shows a gap, the gap is real and belongs in the close, not
-papered over. A project that hasn't opted in gets a one-line "off for this project" message
-and **no file**: that is a normal outcome, not a failure to fix, and it is never rendered with
-`--force` on the user's behalf. When it does render, list it like any other artifact
+papered over. A project that opted out gets a one-line "off for this project" message and
+**no file**: that is a normal outcome, not a failure to fix, and it is never rendered with
+`--force` on the user's behalf. When it renders, list it like any other artifact
 (`add-artifact EVIDENCE-ROOM-<slug>.html --title "Evidence Room"`) so the index and the close
 gate see it. For a `--jira`-sourced engagement it is the natural attachment for the
 deliver-back comment (integrations reference, inbound section).

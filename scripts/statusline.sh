@@ -72,9 +72,15 @@ model = (data.get("model") or {}).get("display_name") or ""
 cost = (data.get("cost") or {}).get("total_cost_usd")
 cwd = (data.get("workspace") or {}).get("project_dir") or data.get("cwd") or "."
 bits = []
+ceiling = None  # the active engagement's recorded spend ceiling, when one exists (step 8.4)
 
 MARKS = {"in_progress": "⏳", "blocked": "⛔", "closing": "🔒", "closed": "✅"}
-art = Path(cwd) / "artifacts"
+# Both layouts (2026-09-13 framework review, step 8.4): the VSIT workspace has been the default
+# since 2026-08-28, yet this only ever looked under artifacts/, so every new-layout project
+# showed Morgan dormant while an engagement was live. Newest layout first.
+art = Path(cwd) / "VSIT" / "engagements"
+if not art.is_dir():
+    art = Path(cwd) / "artifacts"
 live = None
 if art.is_dir():
     packs = []
@@ -100,10 +106,11 @@ if art.is_dir():
             continue
         status = st.get("status")
         if status in ("in_progress", "blocked", "closing"):
-            rows.append((name, status, st.get("phase") or ""))
+            ceiling = (st.get("budget") or {}).get("engagement_usd")
+            rows.append((name, status, st.get("phase") or "", ceiling))
     if rows:
         pick = next((r for r in rows if r[0] == active), rows[0])
-        name, status, phase = pick
+        name, status, phase, ceiling = pick
         label = "" if name == "(flat)" else f"{name} "
         more = f" +{len(rows) - 1}" if len(rows) > 1 else ""
         live = f"🎩 Morgan active - {label}{MARKS.get(status, status)} {status}·{phase}{more}"
@@ -167,7 +174,16 @@ bits.append(pref_line)
 
 if model:
     bits.append(model)
+# The cost meter (2026-09-13 framework review, step 8.4): spend against the engagement's
+# recorded ceiling (`engagement_state set-budget --engagement-usd N`), with a warning mark
+# from 80 percent, so the one fear every first-time user has is answered on screen rather
+# than in prose. Session cost is what the harness reports; the ceiling is per engagement.
 if isinstance(cost, (int, float)) and cost > 0:
-    bits.append(f"${cost:.2f}")
+    if isinstance(ceiling, (int, float)) and ceiling > 0:
+        share = cost / ceiling
+        mark = "⚠️ " if share >= 0.8 else ""
+        bits.append(f"{mark}${cost:.2f} / ${ceiling:.0f} ({share:.0%})")
+    else:
+        bits.append(f"${cost:.2f}")
 print(" | ".join(bits))
 PY

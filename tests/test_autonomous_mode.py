@@ -147,7 +147,11 @@ def test_the_session_side_still_cannot_create_the_marker():
         encoding="utf-8"
     )
     assert "exec-consent" in guard, "the guard no longer names the marker it protects"
-    skill = (REPO_ROOT / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8")
+    skill = (REPO_ROOT / ".claude" / "skills" / "engage" / "SKILL.md").read_text(
+        encoding="utf-8"
+    ) + (
+        REPO_ROOT / ".claude" / "skills" / "engage" / "references" / "launcher-flags.md"
+    ).read_text(encoding="utf-8")
     lowered = skill.lower()
     for phrase in ("create the marker", "touch .claude/." + "exec-consent"):
         assert phrase not in lowered, f"the skill tells a session to self-grant: {phrase!r}"
@@ -355,7 +359,11 @@ def test_the_skill_tells_an_auto_run_what_it_may_not_do():
     must survive that move is the trigger itself (a rule nothing routes to is not a rule)
     and the two things a run needs before it reads anything: ask nothing, and where to
     look."""
-    skill = (REPO_ROOT / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8")
+    skill = (REPO_ROOT / ".claude" / "skills" / "engage" / "SKILL.md").read_text(
+        encoding="utf-8"
+    ) + (
+        REPO_ROOT / ".claude" / "skills" / "engage" / "references" / "launcher-flags.md"
+    ).read_text(encoding="utf-8")
     assert "--auto" in skill
     assert "ask nothing at all" in skill.lower()
     assert "references/auto-mode.md" in skill, "the deferred detail is unreachable"
@@ -641,7 +649,11 @@ def test_auto_needs_an_actual_request(tmp_path):
 
 
 def test_the_skill_treats_the_typed_request_as_the_request():
-    skill = (REPO_ROOT / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8")
+    skill = (REPO_ROOT / ".claude" / "skills" / "engage" / "SKILL.md").read_text(
+        encoding="utf-8"
+    ) + (
+        REPO_ROOT / ".claude" / "skills" / "engage" / "references" / "launcher-flags.md"
+    ).read_text(encoding="utf-8")
     assert "--request" in skill
     assert "do not re-ask what the work is" in skill
 
@@ -675,7 +687,11 @@ def test_the_skill_documents_every_source_the_launcher_can_start_an_auto_run_fro
     assert from_ticket.endswith("--auto") and "--jira" in from_ticket
     assert from_request.endswith("--auto") and "--request" in from_request
 
-    skill = (REPO_ROOT / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8")
+    skill = (REPO_ROOT / ".claude" / "skills" / "engage" / "SKILL.md").read_text(
+        encoding="utf-8"
+    ) + (
+        REPO_ROOT / ".claude" / "skills" / "engage" / "references" / "launcher-flags.md"
+    ).read_text(encoding="utf-8")
     bullet = _auto_bullet(skill)
     assert "--jira" in bullet, "the ticket source must stay documented"
     assert "--request" in bullet, (
@@ -687,7 +703,11 @@ def test_the_skill_documents_every_source_the_launcher_can_start_an_auto_run_fro
 
 def test_an_auto_run_is_told_not_to_ask_what_the_work_is():
     """The reported symptom, pinned directly: the brief arrived with the flags."""
-    skill = (REPO_ROOT / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8")
+    skill = (REPO_ROOT / ".claude" / "skills" / "engage" / "SKILL.md").read_text(
+        encoding="utf-8"
+    ) + (
+        REPO_ROOT / ".claude" / "skills" / "engage" / "references" / "launcher-flags.md"
+    ).read_text(encoding="utf-8")
     bullet = _auto_bullet(skill)
     assert "ask nothing at all" in bullet
     lowered = bullet.lower()
