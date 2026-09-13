@@ -1121,3 +1121,25 @@ def test_sandbox_copy_leaves_the_checkout_daemon_state_behind(tmp_path, monkeypa
     tgt = tmp_path / "target"
     ee.build_target_sandbox(src, tgt, {})
     assert not (tgt / ".claude" / ".guard-daemon-port").exists()
+
+
+# ------------------------------------------------- 2026-09-13: plugin commands are namespaced
+
+
+def test_plugin_mode_sends_the_namespaced_front_door(tmp_path):
+    (tmp_path / ".claude-plugin").mkdir()
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text('{"name": "team-x"}')
+    assert ee.namespaced_command("/engage", tmp_path) == "/team-x:engage"
+    assert ee.namespaced_command("/engage-light now", tmp_path) == "/team-x:engage-light now"
+    assert ee.namespaced_command("/team-x:engage", tmp_path) == "/team-x:engage"
+    assert ee.namespaced_command("/engage", tmp_path / "nowhere") == "/engage"
+    for cmd in ("/engage", "/team-x:engage", "/engage-light x"):
+        assert ee._ENGAGE_OPEN_RE.match(cmd), cmd
+    assert not ee._ENGAGE_OPEN_RE.match("/handover")
+
+
+def test_an_unknown_command_reply_is_a_front_door_failure_not_a_zero_recall():
+    reason = ee.front_door_missing("Unknown command: /engage", 0)
+    assert reason.startswith("front door not loaded") and "/engage" in reason
+    assert ee.front_door_missing("🎩 Morgan here", 12) == ""
+    assert ee.front_door_missing("Unknown command: /engage", 3) == ""

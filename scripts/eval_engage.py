@@ -1801,6 +1801,13 @@ async def run_case(
             subprocess.run(  # nosec B603 B607
                 ["rsync", "-a", f"{fixtures}/", f"{sandbox}/"], check=True, capture_output=True
             )
+    if layout:
+        # A headless session resolves a plugin's commands under the plugin's namespace only
+        # (fourth live run, 2026-09-13: "Unknown command: /engage" in zero turns once the
+        # layout left the repo tree - the earlier runs had found this checkout's own
+        # .claude/skills by walking up from a sandbox inside it, and served a bare /engage
+        # from there, which is exactly the leak the move was made to close).
+        workflow_cmd = namespaced_command(workflow_cmd, layout.cache_dir)
     plugin_root = layout.cache_dir if layout else sandbox
     trust_configs = layout.claude_json_files if layout else None
     # What the tripwires need to know about this run's shape, persisted so --rescore over a
@@ -1893,6 +1900,13 @@ async def run_case(
         (out_dir / "cli-stderr.log").write_text("".join(cap.cli_stderr), encoding="utf-8")
 
     transcript = "".join(cap.transcript)
+    missing_door = front_door_missing(transcript, cap.num_turns)
+    if missing_door and not cap.is_error:
+        # Nothing the case tests ever ran; a recall of zero would misreport a setup defect
+        # as the team's behaviour.
+        cap.is_error = True
+        cap.error = missing_door
+        print(f"  [{case_id}] SESSION ERROR: {missing_door}", file=sys.stderr)
     (out_dir / "transcript.md").write_text(transcript, encoding="utf-8")
     (out_dir / "events.jsonl").write_text(
         "\n".join(json.dumps(e, default=str) for e in cap.events), encoding="utf-8"
@@ -2279,7 +2293,7 @@ def tripwire_context(
         project_root=str(meta.get("project_root") or sandbox),
         plugin_root=str(meta.get("plugin_root") or sandbox),
         allowed_roots=[str(r) for r in (manifest.get("tripwire_allowed_roots") or [])],
-        expects_engaged_open=str(workflow).startswith("/engage"),
+        expects_engaged_open=bool(_ENGAGE_OPEN_RE.match(str(workflow))),
     )
 
 
@@ -2440,6 +2454,40 @@ def case_timeout(manifest: dict, cli_timeout: int | None) -> int:
     except (TypeError, ValueError):
         return DEFAULT_TIMEOUT_S
     return value if value >= 0 else DEFAULT_TIMEOUT_S
+
+
+# The front-door commands, bare or under a plugin namespace - the same shape the prefetch
+# hook's own _ENGAGE_RE accepts.
+_ENGAGE_OPEN_RE = re.compile(r"^/(?:[\w.-]+:)?engage(?:-light)?(?:\s|$)")
+
+
+def namespaced_command(workflow_cmd: str, plugin_dir: Path) -> str:
+    """`/engage` -> `/<plugin name>:engage`, the form a headless session resolves for a
+    plugin's commands. The name comes from the plugin's own manifest; a command already
+    namespaced, or a manifest that cannot be read, is returned unchanged."""
+    head, _, rest = workflow_cmd.partition(" ")
+    if not head.startswith("/") or ":" in head:
+        return workflow_cmd
+    try:
+        name = json.loads((plugin_dir / ".claude-plugin" / "plugin.json").read_text("utf-8"))[
+            "name"
+        ]
+    except (OSError, ValueError, KeyError, TypeError):
+        return workflow_cmd
+    return f"/{name}:{head[1:]}" + (f" {rest}" if rest else "")
+
+
+def front_door_missing(transcript: str, num_turns: int | None) -> str:
+    """The CLI's own "Unknown command" reply, seen in place of the engagement: the plugin
+    or its skill did not load, so the run tested nothing. Returns the reason, or ""."""
+    head = (transcript or "").lstrip()[:200]
+    m = re.match(r"Unknown command: (/\S+)", head)
+    if m and not num_turns:
+        return (
+            f"front door not loaded: the session answered {m.group(1)!r} with 'Unknown "
+            "command' - the plugin or its skill was not registered for this session"
+        )
+    return ""
 
 
 def case_budget(manifest: dict, cli_budget: float | None) -> float | None:
