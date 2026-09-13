@@ -28,7 +28,7 @@ at the end.
    process is involved (point at `/reg-change-impact` or a process map if needed).
 4. **Acceptance criteria** in Gherkin (incl. true-positive and false-positive handling), and an
    **RTM** entry (`obligation → BRD → FSD → code → test`).
-5. For detection logic, get the relevant **`*-sme`** to confirm typology; thresholds are
+5. For detection logic, read the matching **`docs/sme/` pack** in-line to confirm typology (cite the pack); thresholds are
    SME/`tuning-analyst` decisions - flag them, don't invent.
 
 Output: an **elicitation/requirements doc** (`docs/templates/elicitation-requirements.md`) +

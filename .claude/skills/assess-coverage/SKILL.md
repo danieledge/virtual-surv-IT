@@ -20,7 +20,7 @@ Assess **surveillance coverage** for: **$ARGUMENTS**
 > checks the **data + coverage** side that tuning misses.
 
 Under the PM (CLAUDE.md §6), drive **business-analyst** (scope/obligations), **data-quality-reviewer**
-(feed health), **tuning-analyst** (scenario performance) and the relevant **`*-sme`** (typologies).
+(feed health), **tuning-analyst** (scenario performance) with typologies from the matching **`docs/sme/` pack**, read in-line (no SME spawn).
 **Establish the jurisdiction(s) and in-scope population first - ask via the question tool, one
 question per axis; make any mutually-exclusive axis (e.g. a single jurisdiction) single-select**
 (CLAUDE.md §2). **Before touching any feed data** - and **confirm now if you invoked this skill

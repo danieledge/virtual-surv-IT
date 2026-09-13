@@ -44,7 +44,7 @@ lines: **who** (name + role), **why this one and not another** (route-by-deliver
 tier and why** (e.g. *"Pip on haiku - it's mechanical bookkeeping, no need for opus"*; *"Ravi on
 opus - subtle security judgement"*), then bring them in for real and **summarise what they returned**
 (don't dump raw output - that's the clean-console rule). Call out the pattern each step demonstrates:
-- **Right-sizing** - *"a review this size needs 2-3 agents, not all 16 - watch me keep it lean."*
+- **Right-sizing** - *"a review this size needs 2-3 agents, not all 14 - watch me keep it lean."*
 - **Blackboard** - *"their findings go into the shared report, not chatter between agents."*
 - **Challenge pass** - *"now I re-score their findings as a sceptic, tagging 📊 measured vs 🧠
   inferred, before you see them."*
@@ -59,7 +59,7 @@ agents). State the token ballpark so the choice is informed. Pick a small, safe 
 
 1. **business-analyst** - a concise scenario spec (obligation cited; thresholds *flagged* as SME/
    tuning decisions, never invented).
-2. **the relevant `*-sme`** (read-only) - validate the typology; the FP drivers; the biggest pitfall.
+2. **the matching `docs/sme/` pack** (read in-line, cited by pack name, never a persona) - validate the typology; the FP drivers; the biggest pitfall.
 3. **rules-developer** - implement the validated spec as a small detection sketch + a true-positive
    and false-positive test.
 4. **Run the tests (fix→re-review loop).** Actually run them (this is why the Build demo chose

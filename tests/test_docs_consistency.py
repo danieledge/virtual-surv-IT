@@ -675,3 +675,21 @@ def test_claude_md_exec_allowlist_matches_guard():
         f"CLAUDE.md §7's consent-free script list is missing names the guard already "
         f"allow-lists: {sorted(missing)} - add them to CLAUDE.md's prose list"
     )
+
+
+# --- no live route to a retired SME persona --------------------------------------
+def test_no_route_to_retired_agents():
+    """The three SME advisors became `docs/sme/` knowledge packs on 2026-08-17
+    (docs/team-operating-guide.md roster: "never attribute new work to them"), yet seven
+    skill and agent lines still said "get the relevant `*-sme`" a month later (framework
+    review 2026-09-13, fix 7). A Task dispatch to a name with no agent behind it fails or
+    invents a persona, so the prompt surface must route to a pack, never to `*-sme`."""
+    offenders = []
+    for path in sorted((_ROOT / ".claude").rglob("*.md")):
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if "*-sme" in line or re.search(r"\b(?:tm|trade-surveillance|comms-surveillance)-sme\b", line):
+                offenders.append(f"{path.relative_to(_ROOT)}:{n}")
+    assert not offenders, (
+        "routes to retired SME personas (use `docs/sme/<pack>.md`, read in-line, cite the pack): "
+        + ", ".join(offenders)
+    )
