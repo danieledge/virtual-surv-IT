@@ -153,6 +153,10 @@ flag this explicitly as 🧠 inferred-only coverage for those, same as any other
 
 Follow `docs/code-review-method.md` (confidence scoring 0-100, filter thresholds, and the
 two modes: *change review* filters pre-existing issues; *audit review* keeps them in scope).
+This method doc and `docs/review/findings-schema.json` resolve **under the project root** (your
+cwd), or `$PLUGIN_ROOT` in an installed copy - read them there. **Never `find /` for them and
+never guess an absolute path outside the project** (live 2026-09-13: a reviewer read the method
+doc from a real checkout above its sandbox).
 **Take the mode from your brief - never infer it from whether a diff exists.** Mode follows
 BREADTH: a whole-target pass is audit mode even at Deep depth, and applying change mode there
 would score every finding −50 as "outside the diff" and filter the review to near-nothing
