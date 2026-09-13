@@ -386,3 +386,17 @@ def test_an_env_prefixed_command_is_not_an_assignment(tmp_path):
     ):
         assert _code(cmd, tmp_path) == BLOCK, cmd
     assert _code('FOO="bar baz"\necho $FOO', tmp_path) == ALLOW
+
+
+def test_source_in_a_descriptive_echo_is_not_sourcing(tmp_path):
+    """Live 2026-09-13: a review's file listing, `echo "=== source files ==="` inside a
+    cat/find chain, was blocked as sourcing a script. `source`/`.` only executes as a command
+    word, so it is anchored to command position; a real `source x.sh` is still caught."""
+    for cmd in (
+        'echo "=== source files (no class/jar/git) ==="',
+        'echo "=== source ==="',
+        'cat README.md && echo "=== source files ===" && find . -name "*.sql"',
+    ):
+        assert _code(cmd, tmp_path) == ALLOW, cmd
+    for cmd in ("source ~/.bashrc", ". ./env.sh", 'echo hi; source evil.sh'):
+        assert _code(cmd, tmp_path) == BLOCK, cmd
