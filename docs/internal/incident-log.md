@@ -229,3 +229,27 @@ banner · Windows permission-rule spelling (37).
 - **Correction to the 2026-08-18 external review: no "775k-token review" exists in this repo
   or its git history** (grep + pickaxe over all history). The largest documented run is the
   ~500k delivery above.
+
+## 2026-09-13: the three abnormal plugin-mode eval rows, root-caused (framework review, step 1.10)
+
+Nine `process-plugin-mode-open` rows landed on 2026-09-12/13 with one pass. Six failed on
+the open's own path handling (`plugin-path-guess`, `listing-above-project-root`,
+`FP-MODULEFORM`, `missing-prompt-injection`); the probe now prints `REFERENCES_DIR=` and
+`SHARED_DIR=` and `engage-open.md` forbids reading outside them. The three rows a path rule
+does not explain, read from `evals/runs/<id>/process-plugin-mode-open/events.jsonl`:
+
+- `20260913T082312Z` (0 turns, 0 USD): the session's first and only assistant message was
+  `Unknown command: /engage`. The harness launched the CLI before the plugin's skills were
+  visible in the throwaway HOME, so the slash command never resolved. A harness defect, not
+  a run; it should be its own tripwire (`skill-not-registered`) rather than a recall of 0.
+- `20260912T235009Z` (37 turns, 4.16 USD, `session_error: true`): `ResultMessage`
+  subtype `error_max_budget_usd`. The harness's spend cap ended the run; the guards and
+  the open were not involved.
+- `20260913T101219Z` (101 turns, 12.09 USD, `session_error: true`): subtype
+  `error_max_turns`. The turn cap ended the run mid-close (the row that prompted widening
+  `max_turns` to 140, since restored to 100 by plan step 5.2).
+
+Consequence for the scorer: `session_error` conflates a cap hit (`error_max_turns`,
+`error_max_budget_usd`) with a real session failure. Plan step 3.9 adds `capped` as a
+distinct outcome and the `skill-not-registered` tripwire, so a budget or registration
+problem is never read as a defect of the team.
