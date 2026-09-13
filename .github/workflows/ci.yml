@@ -239,6 +239,7 @@ jobs:
             ':!docs/review/gold-findings.jsonl'
             ':!evals/results.jsonl'
             ':!evals/cases/*/fixtures/**'
+            ':!evals/golden-runs/**'
           )
           if git ls-files "${PATHSPEC[@]}" | grep -q .; then
             echo "::error::Raw data files committed. Use synthetic data only (CLAUDE.md §5)."
@@ -246,6 +247,37 @@ jobs:
             exit 1
           fi
           echo "OK - no raw data files tracked."
+
+  eval-replay:
+    name: Golden-run replay (token-free)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (SHA-pinned, 2026-08-19 audit)
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5 (SHA-pinned)
+        with:
+          python-version: "3.12"
+      - run: pip install --require-hashes -r requirements-dev.lock
+      # Step 5.1 (framework review 2026-09-13): every kept golden run under evals/golden-runs/
+      # is rescored with --replay - deterministic probes, tripwires and the scorer over the
+      # saved normalizer output, no model contacted - so a scorer or tripwire change that
+      # would flip a known-good run fails here, for zero tokens. Skips cleanly while the
+      # directory is empty (populated by scripts/keep_golden_run.py after step 5.2).
+      - name: Replay every golden run
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          runs=(evals/golden-runs/*/)
+          if [ "${#runs[@]}" -eq 0 ]; then
+            echo "no golden runs kept yet - nothing to replay"
+            exit 0
+          fi
+          rc=0
+          for run in "${runs[@]}"; do
+            echo "== replay ${run}"
+            python -m scripts.eval_engage --rescore "${run%/}" --replay --skip-judge || rc=1
+          done
+          exit "$rc"
 
   eval:
     name: Live eval (manual, costs tokens)

@@ -2267,7 +2267,18 @@ def rescore_project_root(out_dir: Path) -> Path:
         except (OSError, json.JSONDecodeError):
             root = None
         if root:
-            return Path(root)
+            recorded = Path(root)
+            if recorded.is_dir():
+                return recorded
+            # A GOLDEN run relocated under evals/golden-runs/<case>/ (step 5.1, 2026-09-13)
+            # carries its project subset at <case>/sandbox; the absolute path run-meta
+            # recorded was a temp dir or a pruned run dir and is gone. The tripwires keep the
+            # recorded STRING (the transcript's paths are the original ones); only the
+            # artifact probe needs a directory that exists.
+            for candidate in (out_dir / "sandbox", out_dir / "project"):
+                if candidate.is_dir():
+                    return candidate
+            return recorded
     return out_dir / "sandbox"
 
 
@@ -2323,20 +2334,40 @@ async def score_run(
     # One-shot helpers flake occasionally (observed: an empty findings list on a rich
     # transcript; a spurious max-turns error) - retry once before degrading. A non-trivial
     # transcript never legitimately normalizes to zero findings.
-    for attempt in (1, 2):
+    if getattr(args, "replay", False):
+        # TOKEN-FREE REPLAY (step 5.1, 2026-09-13). The normalizer is a model call; a replay
+        # re-runs every deterministic layer (probes, gates, raw evidence, tripwires, the
+        # scorer) and reuses the normalizer output the original run saved, tagged
+        # `layer: normalizer` in findings.json. No model is contacted at any point.
         try:
-            normalized = await normalize(transcript, listing, args.aux_model)
-        except Exception as exc:
-            print(f"  [{case_id}] normalizer attempt {attempt} failed: {exc}", file=sys.stderr)
-            normalized = []
-        if normalized or len(transcript) < 2000:
-            findings += normalized
-            break
-        if attempt == 2:
-            print(
-                f"  [{case_id}] normalizer empty twice - deterministic findings only",
-                file=sys.stderr,
-            )
+            saved = json.loads((out_dir / "findings.json").read_text(encoding="utf-8"))
+        except Exception:
+            saved = {}
+        findings += [
+            f
+            for f in (saved.get("findings") or [])
+            if isinstance(f, dict) and f.get("layer") == "normalizer"
+        ]
+    else:
+        # One-shot helpers flake occasionally (observed: an empty findings list on a rich
+        # transcript; a spurious max-turns error) - retry once before degrading. A non-trivial
+        # transcript never legitimately normalizes to zero findings.
+        for attempt in (1, 2):
+            try:
+                normalized = await normalize(transcript, listing, args.aux_model)
+            except Exception as exc:
+                print(f"  [{case_id}] normalizer attempt {attempt} failed: {exc}", file=sys.stderr)
+                normalized = []
+            if normalized or len(transcript) < 2000:
+                for finding in normalized:
+                    finding.setdefault("layer", "normalizer")
+                findings += normalized
+                break
+            if attempt == 2:
+                print(
+                    f"  [{case_id}] normalizer empty twice - deterministic findings only",
+                    file=sys.stderr,
+                )
     (out_dir / "findings.json").write_text(
         json.dumps({"findings": findings}, indent=2), encoding="utf-8"
     )
@@ -2362,7 +2393,7 @@ async def score_run(
     manifest_judge = str(manifest.get("judge") or "").strip().lower()
     if manifest_judge in ("none", "off", "skip"):
         judge_result = {"skipped": True, "reason": "manifest declares judge: none"}
-    elif not args.skip_judge:
+    elif not args.skip_judge and not getattr(args, "replay", False):
         for attempt in (1, 2):
             try:
                 judge_result = await judge(transcript, listing, rubric, args.aux_model)
@@ -2888,7 +2919,16 @@ def main() -> int:
         help="path to a saved run's <case> dir (transcript.md + sandbox/): re-run the scoring "
         "layers only - no live session, writes score-rescore.json alongside the original",
     )
+    ap.add_argument(
+        "--replay",
+        action="store_true",
+        help="with --rescore: contact no model at all - reuse the saved normalizer findings "
+        "and skip the judge, so the deterministic layers, tripwires and scorer are exercised "
+        "token-free (CI's eval-replay job over evals/golden-runs/)",
+    )
     args = ap.parse_args()
+    if args.replay and not args.rescore:
+        ap.error("--replay only makes sense with --rescore <saved case dir>")
 
     available = engage_cases()
     if args.list:

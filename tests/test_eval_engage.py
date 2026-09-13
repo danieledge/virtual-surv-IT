@@ -1152,3 +1152,85 @@ def test_case_max_turns_precedence():
     assert ee.case_max_turns({}, d) == d
     assert ee.case_max_turns({"max_turns": "lots"}, d) == d
     assert ee.case_max_turns({"max_turns": 0}, d) == d
+
+
+# ------------------------------------------------ 2026-09-13 framework review, step 5.1
+
+
+def test_rescore_of_a_relocated_golden_run_falls_back_to_its_sandbox_subset(tmp_path):
+    """A golden run under evals/golden-runs/<case>/ carries its project subset at
+    <case>/sandbox; the absolute path run-meta recorded (a temp dir, a pruned run) is gone."""
+    out_dir = tmp_path / "process-plugin-mode-open"
+    (out_dir / "sandbox").mkdir(parents=True)
+    (out_dir / "run-meta.json").write_text(
+        json.dumps({"mode": "plugin", "project_root": "/tmp/vsit-eval-gone-xyz/proj"}),
+        encoding="utf-8",
+    )
+    assert ee.rescore_project_root(out_dir) == out_dir / "sandbox"
+    # A recorded root that still exists wins, as before.
+    live = tmp_path / "live-proj"
+    live.mkdir()
+    (out_dir / "run-meta.json").write_text(
+        json.dumps({"mode": "plugin", "project_root": str(live)}), encoding="utf-8"
+    )
+    assert ee.rescore_project_root(out_dir) == live
+
+
+def test_replay_scores_without_contacting_a_model(tmp_path, monkeypatch, capsys):
+    """--rescore --replay re-runs the deterministic layers and the scorer over the saved
+    normalizer findings; neither the normalizer nor the judge may be called."""
+    import asyncio
+    import types
+
+    out_dir = tmp_path / "process-blocked-not-done"
+    sandbox = out_dir / "sandbox"
+    sandbox.mkdir(parents=True)
+    (out_dir / "events.jsonl").write_text("", encoding="utf-8")
+    (out_dir / "findings.json").write_text(
+        json.dumps(
+            {
+                "findings": [
+                    {
+                        "title": "the blocked state was recorded",
+                        "severity": "warning",
+                        "layer": "normalizer",
+                    },
+                    {"title": "stale from a probe", "severity": "info"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    async def _no_model(*a, **k):
+        raise AssertionError("a replay must not call a model")
+
+    monkeypatch.setattr(ee, "normalize", _no_model)
+    monkeypatch.setattr(ee, "judge", _no_model)
+    manifest = {
+        "workflow": "/engage",
+        "judge": "none",
+        "rubric": "process-discipline-probe",
+        "planted": [
+            {
+                "id": "P-1",
+                "keywords": ["blocked state"],
+                "min_severity": "warning",
+                "must_find": True,
+            }
+        ],
+        "forbidden": [],
+        "pass": {"require_all_must_find": True, "forbid_all": True},
+    }
+    args = types.SimpleNamespace(skip_judge=False, aux_model="sonnet", replay=True)
+    result = asyncio.run(
+        ee.score_run(
+            "process-blocked-not-done", out_dir, sandbox, "transcript text", manifest, "", args
+        )
+    )
+    assert result["passed"] is True
+    titles = [
+        f.get("title") for f in json.loads((out_dir / "findings.json").read_text())["findings"]
+    ]
+    assert "the blocked state was recorded" in titles
+    assert "stale from a probe" not in titles, "only normalizer-layer findings are carried over"

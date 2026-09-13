@@ -259,6 +259,29 @@ time exactly as a skill does. Ageing covers the **working tree** as well as the 
 an uncommitted edit to any of those paths fails the gate, because the eval behind the
 baseline never exercised it.
 
+## Golden runs (token-free replay in CI)
+
+`evals/runs/` is git-ignored and pruned, so until 2026-09-13 every check of the scorer and
+the tripwires against a real transcript cost a live session. **`evals/golden-runs/<case>/`**
+(tracked) keeps one known-good run per flagship case, and CI's `eval-replay` job rescores
+each with `--rescore <dir> --replay --skip-judge`: the deterministic layers (artifact probe,
+gates, raw evidence, tripwires, scorer) re-run over the saved normalizer output (the
+findings tagged `layer: normalizer` in `findings.json`), and **no model is contacted**. A
+scorer or tripwire change that would flip a known-good run fails the job for zero tokens.
+
+What a golden run keeps: `transcript.md`, `events.jsonl`, `findings.json`, `score.json`,
+`run-meta.json`, `tripwires.json`, `fixture-baseline.json`, `gates.json`, and a `sandbox/`
+subset holding only the project's `VSIT/` workspace and the consent marker (never the full
+repo copy, never `data/`). Keep one with:
+
+    python scripts/keep_golden_run.py evals/runs/<run_id>/<case>
+
+A run qualifies only if it PASSES under the current scorer and tripwires (`--rescore
+--replay` on it exits 0). The three passing runs on the record as of 2026-09-13 all predate
+the guard false-positive fixes of that day and trip `benign-command-blocked` on replay, so
+the directory starts empty and is populated from the first clean runs after those fixes are
+applied (plan step 5.2). The job skips cleanly while it is empty.
+
 ## The tracked results log (`evals/results.jsonl`)
 
 `evals/runs/` is git-ignored and pruned by the retention rule, so the numbers used to
