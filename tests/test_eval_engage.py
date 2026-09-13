@@ -1100,3 +1100,24 @@ def test_a_session_that_died_at_the_cap_is_described_as_capped_not_crashed():
     plain = ee.SessionCapture(cost_usd=0.4)
     text = ee.describe_session_death(RuntimeError("stream dropped"), plain, 5.0)
     assert not plain.spend_capped and text == "RuntimeError: stream dropped"
+
+
+def test_sandbox_copy_leaves_the_checkout_daemon_state_behind(tmp_path, monkeypatch):
+    """Rerun of process-blocked-not-done (2026-09-13): the sandbox inherited this checkout's
+    daemon port file and token, its first hook calls were answered by this checkout's daemon
+    with nothing, and the /engage open carried no probe injection."""
+    src = tmp_path / "src"
+    (src / ".claude").mkdir(parents=True)
+    (src / ".claude" / ".guard-daemon-port").write_text("1234\nabc\n")
+    (src / ".claude" / ".guard-daemon-start-backoff").write_text("1")
+    (src / ".claude" / ".guard-interpreter").write_text("/usr/bin/python3\n")
+    (src / "README.md").write_text("x")
+    monkeypatch.setattr(ee, "REPO_ROOT", src)
+    dest = tmp_path / "sandbox"
+    ee.build_sandbox(dest)
+    assert not (dest / ".claude" / ".guard-daemon-port").exists()
+    assert not (dest / ".claude" / ".guard-daemon-start-backoff").exists()
+    assert (dest / ".claude" / ".guard-interpreter").exists()
+    tgt = tmp_path / "target"
+    ee.build_target_sandbox(src, tgt, {})
+    assert not (tgt / ".claude" / ".guard-daemon-port").exists()

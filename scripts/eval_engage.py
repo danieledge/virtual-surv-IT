@@ -100,6 +100,13 @@ RESULTS_FILE = REPO_ROOT / "evals" / "results.jsonl"
 
 # Never copied into the sandbox. `evals/` is the load-bearing one: it holds the ground
 # truth, and excluding it makes blindness structural rather than willpower.
+GUARD_DAEMON_STATE = (
+    ".claude/.guard-daemon-port",
+    ".claude/.guard-daemon-start-backoff",
+    ".claude/.guard-coldstart-ms",
+    ".claude/.guard-lock",
+)
+
 SANDBOX_EXCLUDES = (
     ".git",
     ".venv",
@@ -108,6 +115,12 @@ SANDBOX_EXCLUDES = (
     "__pycache__",
     ".pytest_cache",
     ".claude/.exec-consent",
+    # The guard daemon's per-project runtime state (2026-09-13, process-blocked-not-done
+    # rerun): a sandbox that inherits this checkout's port file and token sends its first
+    # hook calls to THIS checkout's daemon, which serves this project and answers the
+    # sandbox with nothing - every repo-mode /engage opened without the probe injection.
+    # The interpreter cache is deliberately kept (it is what makes the prefetch fire).
+    *GUARD_DAEMON_STATE,
     "node_modules",
     # 2026-07-30 retention audit: the two README PNGs are 5.4M per kept sandbox (plus a
     # second copy in the sandbox's own .git) and no eval case reads them - excluding the
@@ -346,7 +359,7 @@ def build_sandbox(dest: Path) -> None:
 # reads the target's own history), and node_modules specifically because it's typically both
 # huge and gitignored by the target project itself - excluding it here just saves the rsync
 # the trouble, it wouldn't have been used either way.
-_TARGET_EXCLUDES = (".git", "node_modules", "__pycache__", ".venv", "venv")
+_TARGET_EXCLUDES = (".git", "node_modules", "__pycache__", ".venv", "venv", *GUARD_DAEMON_STATE)
 
 
 def build_target_sandbox(source: Path, dest: Path, team_preferences: dict) -> None:
