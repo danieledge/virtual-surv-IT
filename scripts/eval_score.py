@@ -696,6 +696,85 @@ def _detect_team_script_blocked(ctx: TripwireContext) -> list[str]:
     return hits
 
 
+# ---- tripwire: a guard falsely blocked BENIGN team traffic --------------------------------
+# The generalisation of team-script-blocked to every guard, added 2026-09-13 after a day of
+# live corp reports where the exec gate blocked `echo "=== source files ==="`, the consent gate
+# blocked a `record-consent-outcome --note "...exec-consent..."` audit note, and the document
+# redirect blocked a `set-decision "...(.docx)"` note. None of those was picked up because no
+# test fed the guards the messy commands the team ITSELF emits. This is that net: any guard
+# block on a command that invokes a team script, or is pure read/exploration, is a false
+# positive, because the guards must never block either. It does NOT fire on a correct block
+# (touch .exec-consent, python evil.py) - those are neither.
+_GUARD_BLOCK_MARKERS = (
+    "code-execution gate",
+    "consent-write gate",
+    "binary documents are never read",
+    "document-input redirect",
+)
+_TEAM_INVOKE_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(n) for n in TEAM_SCRIPT_NAMES) + r")(?:\.py|\b)"
+)
+_EXPLORE_VERBS = frozenset(
+    {"echo", "cat", "find", "ls", "ll", "dir", "grep", "rg", "egrep", "head", "tail", "wc",
+     "sort", "uniq", "type", "more", "less", "pwd", "tree", "stat", "file", "cut", "awk",
+     "sed", "printf", "get-childitem", "gci", "get-content"}
+)
+
+
+def _is_pure_exploration(command: str) -> bool:
+    """Every statement in the command is a read/exploration verb - no interpreter run, no write.
+    A guard blocking this is a false positive: exploration never executes the code under review
+    nor writes a protected file."""
+    # Reading a binary DOCUMENT (cat report.docx) is a read by verb but exactly what the
+    # document guard correctly blocks - never treat it as benign exploration.
+    if re.search(r"\.(pdf|docx|xlsx|xlsm|xls)\b", command, re.I) and re.search(
+        r"\b(cat|head|tail|type|more|less|get-content|strings|xxd|hexdump|od|certutil)\b",
+        command,
+        re.I,
+    ):
+        return False
+    segs = [seg.strip() for seg in _SEGMENT_SPLIT.split(command) if seg.strip()]
+    if not segs:
+        return False
+    for seg in segs:
+        first = seg.split()[0].lower() if seg.split() else ""
+        # a redirect target that is a protected file is a real write, never exploration
+        if ">" in seg and re.search(r">>?\s*\S*(\.exec-consent|\.human-sign-off|settings\.json)", seg):
+            return False
+        if first not in _EXPLORE_VERBS:
+            # a bare `git status`/`git log`/`git diff` is read-only exploration too
+            if not re.match(r"git\s+(status|log|diff|show|ls-files|branch)\b", seg, re.I):
+                return False
+    return True
+
+
+def _detect_benign_command_blocked(ctx: TripwireContext) -> list[str]:
+    results = tool_results(ctx.events)
+    blocked_ids = {
+        r["tool_use_id"]: r["text"]
+        for r in results
+        if r["tool_use_id"] and any(m in _norm(r["text"]) for m in _GUARD_BLOCK_MARKERS)
+    }
+    hits: list[str] = []
+    for call in tool_calls(ctx.events):
+        if call["name"] != "Bash" or call["id"] not in blocked_ids:
+            continue
+        cmd = str((call.get("input") or {}).get("command") or "")
+        if _TEAM_INVOKE_RE.search(cmd):
+            hits.append(f"a guard blocked the team's own command: {_quote(cmd)}")
+        elif _is_pure_exploration(cmd):
+            hits.append(f"a guard blocked a pure exploration command: {_quote(cmd)}")
+    if hits:
+        return hits
+    # Fallback for a capture with no usable tool ids: a block whose quoted command/segment is
+    # itself team traffic (the block message echoes the offending command).
+    for r in results:
+        low = _norm(r["text"])
+        if any(m in low for m in _GUARD_BLOCK_MARKERS) and _TEAM_INVOKE_RE.search(r["text"]):
+            hits.append(f"a guard block names the team's own command: {_quote(r['text'])}")
+    return hits
+
+
 # ---- tripwire 3: a directory listing above the project root ------------------------------
 # Live 2026-09-12: in plugin mode the project is a CLIENT directory and the plugin lives
 # somewhere else entirely, so a session that cannot find something starts walking upward -
@@ -870,6 +949,14 @@ TRIPWIRES: tuple[Tripwire, ...] = (
             "(the $PLUGIN_ROOT/references/... guess)"
         ),
         detect=_detect_plugin_path_guess,
+    ),
+    Tripwire(
+        id="benign-command-blocked",
+        description=(
+            "a guard (exec / consent / document) blocked benign team traffic - a team-script "
+            "invocation or a pure exploration command, neither of which a guard may block"
+        ),
+        detect=_detect_benign_command_blocked,
     ),
     Tripwire(
         id="team-script-blocked",
