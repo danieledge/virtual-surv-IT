@@ -133,8 +133,14 @@ def main() -> int:
             command = str(tool_input.get("command") or "")
             if "convert_file" in command:
                 return 0
-            if _DOC_EXT_RE.search(command) and _HAND_PARSE_RE.search(command):
-                return _block("shell/PowerShell hand-parsing of a binary document blocked.")
+            # Judge PER STATEMENT: the hand-parse verb and the .docx must be in the SAME
+            # segment, so a .docx named in a decision note and a `| head` on a DIFFERENT chained
+            # command no longer combine into a false block (2026-09-13). Quoted paths are NOT
+            # blanked - a real read quotes its path (`ReadAllBytes('spec.pdf')`), so blanking
+            # would miss it.
+            for seg in re.split(r"&&|\|\||[;\n]", command):
+                if _DOC_EXT_RE.search(seg) and _HAND_PARSE_RE.search(seg):
+                    return _block("shell/PowerShell hand-parsing of a binary document blocked.")
     except Exception:
         return 0  # quality redirect, not a guard: always fail open
     return 0
