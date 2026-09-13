@@ -98,7 +98,7 @@ _RUNTIME_PARTS = (
     "preferences.json",
     "extensions.md",
     "derived.json",
-    "map.md",
+    "/map.md",  # VSIT/shared/map.md; the leading slash keeps docs/roadmap.md a real reference (2026-09-14)
     "tool-availability",
     "guard-interpreter",
     ".team-session.json",
@@ -224,6 +224,11 @@ _SKIP_PARTS = (
     # Same treatment for the local-only framework review of 2026-09-13 (review, plan,
     # challenge): a plan cites files it proposes, which do not exist until it is executed.
     "/framework-review-",
+    # The changelog's moved narrative and archive (2026-09-14, step 6.4): a verbatim record of
+    # past releases citing apply scripts and files that have since been deleted, exactly like a
+    # transcript. CHANGELOG.md itself was never scanned; its history keeps that treatment.
+    "/releases/archive-",
+    "/releases/unreleased-notes-",
 )
 
 
@@ -306,6 +311,15 @@ def find_orphans(root: Path = REPO_ROOT) -> list[str]:
     for path in sorted((root / "docs").rglob("*.md")):
         if any(part in path.as_posix() for part in _SKIP_PARTS):
             continue
+        # Templates are runtime inputs: prompts name them and the artifacts rendered from them
+        # carry the same basenames, which is why their citations fall under _RUNTIME_PARTS and
+        # never count as references. They are listed in docs/README.md; an unlisted one is a
+        # docs-index gap, not an orphan (2026-09-13 framework review, step 6.6).
+        if "/docs/templates/" in path.as_posix():
+            continue
+        # Local-only folders (gitignored) are indexed by their own README; CI never sees them.
+        if "/docs/internal/" in path.as_posix() or "/docs/adr/" in path.as_posix():
+            continue
         if path.name not in referenced:
             orphans.append(str(path.relative_to(root)))
     return orphans
@@ -323,6 +337,12 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Check the framework's internal references resolve.")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     ap.add_argument("--orphans", action="store_true", help="also list unreferenced docs")
+    ap.add_argument(
+        "--strict-orphans",
+        action="store_true",
+        help="with --orphans: exit 1 when any doc is unreferenced (CI, 2026-09-13 step 6.6); "
+        "link it from docs/README.md or the index of its own folder",
+    )
     args = ap.parse_args(argv)
 
     findings, total = check()
@@ -345,6 +365,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\nunreferenced docs: {len(orphans)}")
         for o in orphans:
             print(f"  {o}")
+    if args.orphans and args.strict_orphans and orphans:
+        return 1
     return 1 if findings else 0
 
 

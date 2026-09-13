@@ -625,6 +625,8 @@ def test_no_document_cites_sr_11_7_as_current_guidance():
     for md in repo.glob("docs/**/*.md"):
         if "/adr/" in md.as_posix() or "/internal/" in md.as_posix():
             continue  # dated records, ignored by design
+        if "/releases/archive-" in md.as_posix() or "/releases/unreleased-notes-" in md.as_posix():
+            continue  # the changelog's moved history (2026-09-14, step 6.4): a verbatim record
         if md.name == "house-rules.md":
             continue  # carries its own "this is a record of what was verified" banner
         for n, line in enumerate(md.read_text(encoding="utf-8").splitlines(), 1):

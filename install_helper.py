@@ -2513,6 +2513,19 @@ class Installer:
             self.step_skip("git", "not found - a real run needs it")
         else:
             self.step_fail("git", "git is required - install it and re-run")
+        # Step 7.4 (2026-09-13): no POSIX sh means no hooks, and an inert guard looks exactly
+        # like a healthy one. Fatal, with the fix named, before anything is installed.
+        if shutil.which("sh"):
+            self.step_ok("POSIX sh found (the hook launcher runs through it)")
+        elif self.demo:
+            self.step_skip("POSIX sh", "not found - a real run needs Git Bash or WSL on Windows")
+        else:
+            self.step_fail(
+                "POSIX sh",
+                "not found - Claude Code runs every safety hook through sh; on Windows install "
+                "Git for Windows (Git Bash) or use WSL, open a new terminal and re-run",
+                fatal=True,
+            )
         claude_path, how = find_claude(refresh=True)
         if how == "path":
             self.step_ok("claude CLI found")

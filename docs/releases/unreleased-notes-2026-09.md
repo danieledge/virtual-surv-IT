@@ -1,0 +1,293 @@
+# Unreleased: the working notes behind the next entry
+
+> Moved out of CHANGELOG.md on 2026-09-14 (framework review, step 6.4): the changelog keeps a short entry in user terms; the investigation narrative, per change, is here until the release is cut and these notes fold into `docs/releases/<version>.md`.
+
+### Independent audit fix pass (2026-09-12)
+
+An independent read of the framework as an agentic system, with the documentation treated as
+claims to test: eight lanes, 169 raw findings, every Critical and High re-verified against
+the source. The report and per-lane evidence live under `docs/internal/independent-audit-2026-09-12/`
+(local only). The fix pass landed as one commit per wave the same day.
+
+- **CI is green again, and every gate it implied now runs.** CI on dev had failed on every
+  run since 2026-08-30 (a reference validator that only resolves on the dev box, seven
+  ruff errors, nineteen Windows-only test failures), while the docs said tests were
+  mandatory. Fixed at the root; the validation and smoke steps now report independently.
+  mypy, coverage, a dashboard-ui job, a manual eval job and bandit over `install_helper.py`
+  are wired in. bandit reads `pyproject.toml`: subprocess notices a process launcher
+  generates by design are skipped, swallowed-exception notices stay on and every remaining
+  site carries its reason.
+- **The execution-consent gate closes two verified escapes** (staged in
+  `scripts/staged_hooks/`, promoted by the human). A whitelisted basename no longer skips
+  the location check for a literal path; `apply-*.sh` is refused before the allow-list;
+  the plugin-mode module rewrite grants an allow decision only to a single-segment
+  command. sudo, env, timeout, heredocs and stdin pipes count as execution. The
+  consent-write guard protects the new human sign-off marker in every session, refuses a
+  settings.json edit that introduces a `CST_` variable, and protects the staged hooks once
+  an engaged session holds consent. The raw-data guard inspects unknown tools, blocks
+  writes, treats `-f`/`--file` operands as reads and validates its presence cache. The
+  daemon client runs the guard in-process when the daemon answer is missing instead of
+  exiting 0; a TypeError in its cold-start path had been doing that on every miss. The
+  session stamp keeps the last eight session ids and a resume re-stamps, so compaction no
+  longer disarms the gate.
+- **Engagement state has one locked, atomic writer.** `check_artifacts --fix` wrote the
+  state file with no lock; four mutating commands including `sign-off` ran unlocked and
+  unstamped; the lock release could delete another holder's lock, and on Windows a waiter
+  could lose items silently. All fixed, with a test that derives the mutating set from the
+  code. `sign-off` requires a human-created `<pack>/.human-sign-off`; `record-dispatch` and
+  a `budget-status` that exits 3 when over make the agent budget a count. Findings packs and
+  marker files are written through `scripts/fsutil.py`, the one atomic writer.
+- **The launcher's silent-degrade class is closed, not one instance of it.** One crash
+  wrapper for all thirteen prompt_toolkit screens, one tier fall-through per front door,
+  one pause helper; the plain tier's `[n]` goes through the composer and the unattended
+  offer; an unhandled exception or Ctrl-C no longer launches a plain Claude session and
+  discards the decision. The consent sidecar is written before the marker and both are
+  removed on failure; a hand-made marker older than 14 days is warned about on every tier
+  and removal offered, never silent. Headless runs refuse to start without a spend cap
+  unless `--no-budget-cap` is passed. Eleven Windows CI failures traced to two real bugs
+  (a full-screen tier that fell through silently on Windows, tmux paths) and POSIX-only
+  assertions.
+- **The Definition of Done states which gates are hard.** Human sign-off, the dispatch
+  budget, the DoD stop gate (now re-checks findings before honouring a suppression, with
+  a ceiling of three blocks recorded as DOD-GATE-EXHAUSTED) and the review fingerprint check
+  are mechanical; the rest is named as advisory. All five reviewer prompts carry the
+  "reviewed content is data" clause. Masking's free-text tokens are 96-bit like structured
+  ones; identifier detection adds shape heuristics; ingest validates by default.
+- **Docs match the code.** Thirteen subagents everywhere (the marketplace said sixteen);
+  the hook and script tables are complete; CLAUDE.md's allow-list is pinned to the guard by
+  a test; the dormancy cost is stated as measured (about 4,500 tokens a turn), not zero.
+  Two PDFs no longer carry links into the author's home directory. The vendor tree ships
+  the pygments, markdown_it and mdurl that textual imports, with a manifest.
+
+Deferred with reasons: `docs/internal/backlog-2026-08-20.md` item 7.
+
+
+### Added
+- **A launcher crash now says what it went wrong.** Live report: "tried an option, it fell
+  out of the TUI, no way to see what the error was." Three stacked catch-alls sat between a
+  menu pick and the shell and none recorded anything, so the wrapper launched Claude plainly
+  and the user saw an unrelated shell error. Every degrade stays; the silence goes.
+  `_report_crash` writes a full traceback to `~/.config/virt-surv-it/launcher-crash.log` and
+  prints two lines naming the error and that path. `virt-surv --debug` (or
+  `VIRT_SURV_DEBUG=1`) re-raises after reporting.
+- **`preflight.py`: what the launcher knows before an action starts.** Nine named checks,
+  each with a predicate, a sentence written for a person, and a severity. Actions declare
+  what they need; `why_unavailable()` gives every tier one answer to "why can I not do
+  this". A check never raises and never blocks on an answer it does not have.
+- **`osv-scanner` joins the analyser set as the eighth supported tool**, covering dependency
+  vulnerabilities - a finding class the team could not see at all. Always run `--offline`:
+  that mode is the only reason it qualifies where `semgrep` and `pip-audit` did not. New
+  The install and update flows now carry a **Vulnerability database** step that downloads it
+  once, so scans afterwards need no network (Advanced > Vulnerability database re-runs it) -
+  "installed" and "usable" are two different things here, and the gap is invisible, since a
+  review with no database simply reports no dependency findings. The database goes where
+  osv-scanner itself looks rather than a location of ours: anywhere else would need an
+  environment variable to survive into a review session we do not control. A blocked
+  download names the URL and destination for an air-gapped machine.
+- **Unarchive, from the interface.** `u` on the done-and-archived screen takes a pack back
+  out. `engagement_state` has had `_cmd_unarchive` all along and nothing surfaced it, so
+  archiving was a one-way door in the UI with the way back sitting in a CLI the user never
+  sees. Not confirmed, unlike sign-off and archive-all: it removes a marker and is itself
+  undone by archiving again, and the confirmations elsewhere are for the things that do not
+  come back.
+- **F2 commits as well as Ctrl-D** on the request composer and the unattended pre-flight, in
+  both renderers. Ctrl-D arrives as the byte `\x04` and not every terminal delivers it,
+  which left the composer with no way to send at all.
+
+- **The vulnerability database is filled by the install and the update**, not off a menu
+  item someone has to know about (owner: "the install/uodate shouod handle the vulnaribility
+  datase just like anybother tool eg the code paraew etc"). It is a soft step on the code
+  intelligence pattern: a no-op when `osv-scanner` is absent, one confirmable download when
+  the scanner is there without a database, and never able to fail an install. It moved out
+  of `virt-surv configure` at the same time, because the database is machine-level and
+  asking once per project configured was the wrong scope.
+
+### Changed
+- **The Advanced submenu drops "Demo"** (owner: "remove the demo thats redundant"). Every
+  subset already honours `--demo`, the full run explains itself as it goes, and an item
+  whose only job was to preview another item earned its place when the flow was unfamiliar.
+  Items 6-16 renumber to 5-15.
+
+### Fixed
+- **The plain ticket prompt had no unattended option at all.** `_jira_decision` is the
+  fallback the launcher uses when no app tier can draw. It collected the ticket, returned an
+  ordinary `--jira` command and never mentioned autonomy - so the ref arrived intact,
+  `--auto` never appeared, no `.auto-pending.json` was written, and nothing on screen looked
+  wrong. Spotted from the outside by the owner, from the shape of the symptoms: "it did pick
+  up the jira param and its url entered so there is somethibg soecific fsiling sbout the
+  --auto and the write out of the cobfig" - both facts, one cause. It now asks, and routes to
+  the same authorisation gate every other path uses. A project that turned autonomy off is
+  never asked, and declining leaves the prompt exactly as it was. The gate itself still has
+  no plain-text rendering, by design - it is the whole safety story of an unattended run and
+  is not something to collect through a bare prompt - so where it cannot be drawn the run
+  proceeds attended, and now says so rather than doing it in silence.
+
+- **The prompt_toolkit renderer had the same silent hole, and it is the one plugin installs
+  use.** Found on the Windows test VM: the plugin cache there ships `prompt_toolkit` and has
+  no `vendor/textual` and no `scripts/launcher_textual.py` at all, so instrumenting only the
+  Textual adapter would have left the renderer actually drawing the gate as silent as
+  before. Its `except Exception: return None` around the screen is now reported, and the
+  answer-building after a human confirms is wrapped too. That tier had no "did it draw"
+  flag, so a crash after someone filled the screen in was indistinguishable from a tier that
+  could not run; the body renderer now records the first paint, and the log says which.
+  Verified on Windows Server 2025 / Python 3.12: the report fires, names the exception,
+  writes the log and prints where it is. Under a real console the screen draws and does not
+  crash, so this is not a blanket Windows fault.
+
+- **A crash in the unattended pre-flight became an attended engagement, silently.** Live
+  report: the gate drew, the human armed it, no `.auto-pending.json` was written and the
+  session launched attended. A cancelled pre-flight cannot produce that - it returns to the
+  menu and starts nothing - so the screen drew and then failed on the way out, and the
+  adapter's bare `except Exception: return None` reads upstream as "this tier could not
+  draw", which means start an ordinary run. It was the one adapter of its kind not
+  reporting; the menu and the request composer already routed through `_crashed()` and
+  `_report_outside_loop()`. The unattended gate now reports on all three paths - a crash
+  around `app.run()` (recording whether the screen had drawn, because that is what the human
+  saw), a crash Textual recorded internally, and a failure building the answers after a
+  human confirmed them. The degrade itself is unchanged.
+- **The downgrade no longer claims "no display tier could draw".** A screen that drew, was
+  filled in and then failed arrives as `None` too, and that wording sends the reader
+  looking in the wrong place. It points at the crash log instead.
+- **Leaving the unattended pre-flight says so.** It returned to the menu without a word, and
+  the menu is a full-screen app that paints over anything printed on the way back, so the
+  next thing started was attended with no explanation. The message now names what was
+  authorised (nothing) and which key starts the run - Ctrl-D or F2, since Space and Enter
+  only toggle rows - and is held on screen until read.
+- **`_auto_offered` stopped answering "no" when it merely could not tell.** A failed
+  `engage_probe` import and a project that turned autonomy off both returned `False`, which
+  paints no toggle and makes Ctrl-T a dead key with nothing said. The default when the
+  preference is absent is `True`, so an unreadable module must not be the one path that
+  silently answers no. It is now recorded.
+
+- **The menu no longer paints over what an action just printed.** Three reports in one
+  sitting, three different items - the vulnerability database, "How to use the team, day to
+  day", and the guard-daemon start check - all "flashes something and returns to menu". One
+  cause: the picker is a full-screen app, so it covers anything printed before it draws. The
+  actions were working; the guard-daemon check in particular passes all five of its checks.
+  A read-receipt pause now holds the screen on every path back to the picker, including
+  after a traceback, and is silent when nobody is at the keyboard.
+- **An unattended run that cannot start now says so.** Reported as "i chose jira engagement
+  and unattended but im being prompted for execution gate daya safety in the claude session",
+  and the launched command carried no `--auto` at all. When the pre-flight screen cannot draw,
+  the launcher falls back to an ordinary attended run - the right call, since an unattended
+  run must never begin by default because a screen failed - but it did so silently, so the
+  only symptom was the session asking questions an unattended run never asks. The fallback
+  stays; it now names itself and the reason, and a crash there is recorded rather than
+  swallowed.
+- **`--auto` is exempted from the opening gate where the gate is written.** The rule that an
+  unattended run asks nothing lived only in the flags section fifty lines above the step that
+  does the asking, so a session working through step 0a in order asked anyway.
+- **The execution-consent question stopped borrowing the data question** (owner: "asking for
+  execution consent but then references synthetic data only ... thats a seperate thing"). The
+  "Yes" option listed "synthetic data only" as a condition of consenting, which is a separate
+  question in the same batch. "No - static analysis only" also overstated what No costs: the
+  gate covers the untrusted code under review, never the team's own tooling, which is
+  allow-listed and runs either way. Analyser output stays observed; only findings that
+  genuinely needed the reviewed code to execute drop to inferred.
+- **Installer diagnostic bundles are git-ignored.** `--check-daemon-start` and friends write
+  a timestamped `.txt` beside the repo to be handed back whole; one landed untracked in the
+  repo root.
+- **The three guard hooks look for the session stamp where it is actually written.** The
+  `VSIT/` layout became the default for projects with neither layout present on 2026-08-28
+  (`PREFER_NEW_LAYOUT`), and `engage_probe` and `engagement_state` write the acting-session
+  stamp through `vsit_paths.engagements_dir()`. All three hooks read `artifacts/` literally.
+  In every project created since that date: the execution gate never armed, so an **engaged**
+  session could run the code under review, its tests, anything, with no human consent;
+  settings were not write-protected while engaged; the stamp itself was unprotected where it
+  actually lives, which is a disarm channel; and `_ALLOWED_PATH_RE` blocked the four
+  pack-writing reviewers from the exact path `code-reviewer.md` and its three siblings
+  instruct, so they fell back to prose. The plugin's own repo is on the legacy layout, which
+  is why none of it surfaced, and no guard test carried a new-layout path. Both layouts are
+  accepted now and the tests cover both.
+- **A pasted Jira URL lands in the ticket prompt.** A bracketed paste arrives as a Paste
+  event, not as key presses, and `JiraApp` had only an `on_key` handler, so the paste was
+  dropped with nothing shown and no error. The request composer has always had the handler
+  and the prompt_toolkit tier binds `BracketedPaste`, so only the Jira prompt in the Textual
+  tier was affected - which is the default tier, and the one screen where pasting matters
+  most, since nobody types a Jira URL by hand.
+- **The guards' own launcher can no longer be used to disarm them.** `run-guard.sh` reads a
+  cached interpreter name, executes it and returns its exit code, and nothing checked what
+  the string was: a file containing `/bin/true` made every hook exit 0, the raw-data wall
+  included, in every session, silently. It now validates the basename at all three sites
+  that execute the cache, and `guard-consent-writes` protects the files that decide what
+  runs on every hook call: the interpreter caches in both layouts, the daemon and its
+  client, and the port file. Protecting the guards while leaving their launcher writable
+  was not a boundary, and neither half is sufficient alone.
+- **A reviewed repo's own `scripts/` directory is no longer treated as the team's tooling.**
+  Three `_TEAM_ALLOW` branches carried no name check, so in plugin mode `python
+  scripts/deploy.py` and `bash scripts/run_all.sh` in a client repo ran with no consent
+  prompt, which is the one thing the execution gate exists to stop. The basename whitelist
+  could not fix it alone (24 names against 64 shipped scripts), so a script must now be ours
+  by NAME or by LOCATION. Residual, stated in the code: `-m` carries no path and a lexical
+  guard cannot resolve it through `sys.path`, so that form falls back to whether the plugin
+  actually ships the script.
+- **The findings-pack guard refuses a `..` segment.** Its regex anchors on a path *segment*,
+  so `artifacts/../data/findings-x.jsonl` matched the required shape while pointing somewhere
+  else entirely. Containment inside `CLAUDE_PROJECT_DIR` was tried and reverted: an absolute
+  path to the pack is a supported form, including the Windows `C:\project\artifacts\...`
+  case, and a hook cannot know which project such a path belongs to. Without `..` a path
+  cannot climb out of wherever it names.
+- **An update no longer refuses over changes the user never made.** The tool dirties its own
+  clone: `.claude/settings.json` and `.claude/team-preferences.json` are tracked and every
+  configure run or settings toggle writes one of them, while the dated `settings.json.bak-*`
+  each write leaves behind was not ignored. The tool's own config is now reset to the
+  incoming version before a pull, anything the user genuinely changed is stashed **and
+  restored**, and the backup shapes are ignored.
+- **The default monitor was blind.** `launcher_tiers` read `status`, `phase`, `elapsed` and
+  `spend` off the top level of a snapshot that nests them under `state`, so every configured
+  terminal showed "status unknown" and an artifact count forever. Both tiers now share one
+  `monitor_rows` model, and the monitor says when the pack last changed rather than only how
+  long you have been watching.
+- **Sign-off and archive-all ask before they commit.** Both were one keystroke and neither
+  undoes; the sign-off record is permanent, append-only and attributed to your git identity.
+- **Failed first-time setup no longer reads as "you declined"**, which had it telling users
+  they were probably in the wrong directory about a failure they could not see.
+- **`--demo` no longer writes.** `--extensions FILE` and three Advanced menu items were
+  performing real work during a demo session while the quit line said nothing had changed.
+- **The extensions "review" and "check" options read the right contract.** They ran with no
+  working directory, so from a project folder the import failed and from the clone root they
+  resolved the clone's own contract while the menu promised this directory's.
+- **Every settings toggle now lands where the probe reads it.** Five sites hardcoded
+  `.claude/team-preferences.json` while the probe resolved through `vsit_paths`, so on a
+  new-layout project a saved value was never read back.
+- **`virt-surv go` run directly honours the launcher's contract**: exit 97 means launch
+  nothing, and an interactive menu no longer times out at 120 seconds.
+- **The `@vitest/mocker` path-traversal advisory** (GHSA-82fw-gwwq-j7x9) in `dashboard-ui`.
+
+### Changed
+- **SR 11-7 was rescinded on 17 April 2026 and the docs now say what replaced it.**
+  **SR 26-2** supersedes it and SR 21-8, and narrows "model" to a *complex quantitative
+  method*, expressly excluding deterministic rule-based processes. A threshold-based
+  scenario is very likely **not a model**, so its artifact is the tuning decision register
+  rather than a model-validation report; statistical and ML detection still are models. The
+  determination is the firm's. Generative and agentic AI are out of scope entirely, and
+  these are principles rather than enforceable standards.
+- **Jira: transitions are configurable and default to off.** The engage reference said
+  transitions were human-only, this doc and the close checklist described a done-transition,
+  nothing enforced either, and the target was guessed from whatever the board offered.
+  `done_transition` names the exact state or the team never transitions. `dry_run` prints
+  every outward call and makes none.
+- **A failed Jira write is not a write**: no artifact may say or imply something reached the
+  ticket unless the call succeeded. And comments carry a `vsit:<slug>:<phase>` marker, checked
+  before posting, so a resume does not double-post.
+- **Carry-over at open.** A repeat engagement dispositions every codebase-map watch item as
+  picked up or deferred, and re-checks the previous pack's accepted and deferred findings
+  against the code as it stands.
+- **Right-sizing is priced per spawn** from `engagement_state budget-status` rather than a
+  flat "~15x", which was a chat-comparison figure that mispriced small cold-context spawns.
+- **`code-reviewer` reads the code before its narrative** - commit messages, PR descriptions
+  and ticket text are claims to check, not context to trust. `qa-engineer` derives its cases
+  from the spec before opening the builder's tests.
+
+- **The VSIT brand banner now opens both front doors** - `virt-surv go` and the
+  `virt-surv` installer menu - from one shared implementation, `scripts/brand_banner.py`:
+  the mascot, the VSIT wordmark, `Virtual Surveillance IT` and the
+  `SPECIALIST AI TEAM | INDEPENDENT REVIEW | HUMAN CONTROLLED` strapline, in the source
+  brand's cyan/violet/green with amber on `HUMAN CONTROLLED`. Drawn in pure ASCII, no
+  box-drawing glyphs: the source design is a dotted outline, so the corp-Windows cp1252
+  constraint costs the art nothing. Colour comes from the caller's existing detector
+  (`_Ink` / `Style`), so `NO_COLOR`, a pipe and a non-VT console all get the same text.
+  Three width tiers - the box at >= 65 columns, a compact two-line mark at >= 45, a
+  minimal mark below - so nothing wraps on a mobile/mosh screen. install_helper.py keeps
+  its own boxed banner as the fallback for the curl-bootstrapped single-file case, where
+  there is no `scripts/` sibling to import.

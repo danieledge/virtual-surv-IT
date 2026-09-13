@@ -84,7 +84,12 @@ jobs:
       # by name instead of surfacing as an assertion buried in the test output.
       - name: Validate internal references (docs/skills/agents cite paths that exist)
         if: ${{ !cancelled() }}
-        run: python -m scripts.validate_references
+        run: python -m scripts.validate_references --orphans --strict-orphans
+      # 2026-09-13 (framework review, step 7.12): a browser's print-to-PDF resolves relative
+      # links against the author's local path; a tracked PDF must not carry those.
+      - name: Tracked PDFs carry no local-path links
+        if: ${{ !cancelled() }}
+        run: python scripts/check_pdf_links.py
       # 2026-09-12: the validation steps and the smoke each report independently. Before this,
       # a red reference check skipped the smoke on every dev run for two weeks, so the
       # installer's status was simply unknown.
