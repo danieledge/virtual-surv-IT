@@ -205,6 +205,7 @@ STARTUP_TIMEOUT_S = 120
 # A case declares `timeout_s:` in its manifest when it needs more than the default; an explicit
 # --timeout on the command line still wins over both, so a quick smoke run can cap everything.
 DEFAULT_TIMEOUT_S = 2400
+_DEFAULT_MAX_TURNS = 100
 
 
 def _session_env() -> dict[str, str]:
@@ -1855,11 +1856,12 @@ async def run_case(
     started = time.monotonic()
     timeout_s = case_timeout(manifest, args.timeout)
     max_budget = case_budget(manifest, args.max_budget)
+    max_turns = case_max_turns(manifest, args.max_turns)
     budget_note = f", ${max_budget}" if max_budget else ""
     clock_note = f", {timeout_s}s wall clock" if timeout_s > 0 else ", no wall clock"
     print(
         f"  [{case_id}] running live /engage session "
-        f"(cap {args.max_turns} turns{budget_note}{clock_note})..."
+        f"(cap {max_turns} turns{budget_note}{clock_note})..."
     )
     try:
         await asyncio.wait_for(
@@ -1869,7 +1871,7 @@ async def run_case(
                 sandbox,
                 persona,
                 args.sim_model,
-                args.max_turns,
+                max_turns,
                 max_budget,
                 sim_log,
                 workflow_cmd=workflow_cmd,
@@ -2490,6 +2492,24 @@ def front_door_missing(transcript: str, num_turns: int | None) -> str:
     return ""
 
 
+def case_max_turns(manifest: dict, cli_turns: int) -> int:
+    """Resolve the turn cap for one case: a non-default --max-turns wins (a human capping a
+    smoke run), else the case's own `max_turns`, else the CLI default. Added 2026-09-13 after
+    process-plugin-mode-open opened cleanly, found every planted issue and answered eleven
+    gates, then hit the 100-turn cap mid-close - a full plugin-mode open with a review needs
+    more turns than a repo-mode behaviour case, and that is a property of the case."""
+    if cli_turns != _DEFAULT_MAX_TURNS:
+        return cli_turns
+    declared = manifest.get("max_turns")
+    if declared is None:
+        return cli_turns
+    try:
+        value = int(declared)
+    except (TypeError, ValueError):
+        return cli_turns
+    return value if value > 0 else cli_turns
+
+
 def case_budget(manifest: dict, cli_budget: float | None) -> float | None:
     """Resolve the spend cap for one case: CLI override, else the manifest's
     `max_budget_usd`, else none - the same precedence as case_timeout, for the same reason.
@@ -2763,7 +2783,12 @@ def main() -> int:
     ap.add_argument("--case", action="append", default=[], help="case id (repeatable)")
     ap.add_argument("--all-engage", action="store_true", help="every case with workflow: /engage")
     ap.add_argument("--list", action="store_true", help="list runnable cases and exit")
-    ap.add_argument("--max-turns", type=int, default=100, help="session turn cap (default 100)")
+    ap.add_argument(
+        "--max-turns",
+        type=int,
+        default=_DEFAULT_MAX_TURNS,
+        help=f"session turn cap (default {_DEFAULT_MAX_TURNS})",
+    )
     ap.add_argument(
         "--timeout",
         type=int,

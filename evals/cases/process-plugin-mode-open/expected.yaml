@@ -11,6 +11,7 @@ judge: none
 input: scenario.md
 # A short open plus a two-function review; no build, no QA chain, no close ceremony.
 timeout_s: 3600  # 2026-09-13: a full open with eight gates and a review ran past 1800
+max_turns: 140  # 2026-09-13: found every issue and answered 11 gates, then hit the 100-turn cap mid-close
 description: >
   The install-shape case. Everything else in the corpus runs repo-as-project, where the plugin
   root and the project root are the same directory and the hooks come from this repo's

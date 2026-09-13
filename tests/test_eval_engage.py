@@ -1143,3 +1143,12 @@ def test_an_unknown_command_reply_is_a_front_door_failure_not_a_zero_recall():
     assert reason.startswith("front door not loaded") and "/engage" in reason
     assert ee.front_door_missing("🎩 Morgan here", 12) == ""
     assert ee.front_door_missing("Unknown command: /engage", 3) == ""
+
+
+def test_case_max_turns_precedence():
+    d = ee._DEFAULT_MAX_TURNS
+    assert ee.case_max_turns({"max_turns": 140}, d) == 140
+    assert ee.case_max_turns({"max_turns": 140}, 20) == 20  # explicit CLI cap wins
+    assert ee.case_max_turns({}, d) == d
+    assert ee.case_max_turns({"max_turns": "lots"}, d) == d
+    assert ee.case_max_turns({"max_turns": 0}, d) == d
