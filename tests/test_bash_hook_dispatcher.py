@@ -388,6 +388,7 @@ def _staged_install(tmp_path):
         "module_form_redirect.py",
         "enumeration_redirect.py",
         "exploration_redirect.py",
+        "locked_menu_guard.py",
     ):
         source = REPO_ROOT / "scripts" / redirect
         if not (staged_dir / redirect).is_file():
@@ -506,3 +507,35 @@ def test_the_findings_pack_guard_is_registered_for_bash(tmp_path):
     assert "Bash" in entry[2]
     raw_entry = next(c for c in mod._CHECKS if c[0] == "guard_raw_data")
     assert raw_entry[2] is None, "the raw-data guard must see every tool - scope lives in it"
+
+
+# ------------------------------------------------ 2026-09-13 framework review, step 2.3
+
+
+def _menu_question(header, options, multi=False):
+    return {
+        "question": f"{header}?",
+        "header": header,
+        "multiSelect": multi,
+        "options": [{"label": lbl, "description": lbl} for lbl in options],
+    }
+
+
+def test_the_locked_menu_guard_runs_through_the_dispatcher_on_ask_user_question(tmp_path):
+    """The menu guard used to be PreToolUse's second matcher and second process per menu
+    call; the staged dispatcher runs it on the `*` matcher. A drifted review menu (the None
+    option dropped from Depth) is still blocked; an empty question list passes."""
+    drifted = [
+        _menu_question("Depth", ["Quick", "Deep", "Audit"]),
+        _menu_question("Performance", ["Yes", "No"]),
+        _menu_question("Fix-cycle", ["Report only", "Apply fixes", "Fix → re-review loop"]),
+    ]
+    proc = _run_staged_install(
+        tmp_path / "drifted", {"tool_name": "AskUserQuestion", "tool_input": {"questions": drifted}}
+    )
+    assert proc.returncode == 2, proc.stderr
+    assert "'Depth'" in proc.stderr
+    proc = _run_staged_install(
+        tmp_path / "empty", {"tool_name": "AskUserQuestion", "tool_input": {"questions": []}}
+    )
+    assert proc.returncode == 0, proc.stderr
