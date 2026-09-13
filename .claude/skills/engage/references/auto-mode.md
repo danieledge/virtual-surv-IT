@@ -20,6 +20,10 @@ anything else**. Ask no questions at all - not the opening batch, not a clarific
   synthetic data only.
 - **Deliver-back** to the ticket is approved by the pick, exactly as in an attended
   `--jira` run.
+- **Review depth** has no menu here, so it must NOT fall to the cheapest. An unattended code
+  review runs at **Deep** (the comprehensive default), or **Audit** when the ticket asks for
+  audit-readiness. Never silently Quick - nobody is here to ask for more. Record it as an
+  assumed decision (`assumed-depth`).
 
 ## The assumption ledger - not optional
 
