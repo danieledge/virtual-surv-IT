@@ -91,7 +91,7 @@ before the passes - "When invoked" step 2) and uses the shared `docs/review/outp
 | Python | `ruff`, `black --check` | `mypy` | `bandit` |
 | SQL | `sqlfluff lint` | - | - |
 | Bash | `shfmt -d` | - | - |
-| Any | - | - | `gitleaks`, `osv-scanner --offline` (dependency vulns) |
+| Any | - | - | `gitleaks`, `osv-scanner --offline` (dependency vulns), `opengrep scan --sarif --config <local-rules>` (SAST: SQL/Java/Scala/JS/Python security patterns, offline; SARIF via `convert_sarif`) |
 | *— best-effort below, not individually configurable —* | | | |
 | TypeScript | `eslint` | `tsc --noEmit` | `eslint` |
 | Scala | `scalafmt --test`, `scalafix` (non-semantic rules only) | - | - |

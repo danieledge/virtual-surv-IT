@@ -139,6 +139,7 @@ TOOLS=(
   "shellcheck|Bash lint|the installer downloads this (Language analysers step); or apt install shellcheck"
   "shfmt|Bash format|the installer downloads this (Language analysers step); or go install mvdan.cc/sh/v3/cmd/shfmt@latest"
   "osv-scanner|dependency vulns (OFFLINE only)|the installer downloads this (Dependency scanner step)"
+  "opengrep|SAST for SQL/Java/Scala/JS/Python security patterns (OFFLINE, needs local rules)|the installer downloads this (Language analysers step)"
   "bashate|Bash style|the installer pip-installs this (requirements-review.txt)"
   "eslint|TypeScript/JS lint|the installer runs npm install -g eslint when npm is present"
   "tsc|TypeScript types|the installer runs npm install -g typescript when npm is present"

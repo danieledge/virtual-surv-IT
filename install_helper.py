@@ -3293,7 +3293,7 @@ class Installer:
     # exactly the kind of mismatch that leaves a tool "missing" after a successful install.
     LANGUAGE_ANALYSER_PIP = (("bashate", "bashate"), ("ast-grep-cli", "ast-grep"))
     # Published releases, fetched by install_release_tool - see the table beside it.
-    LANGUAGE_ANALYSER_BINARIES = ("gitleaks", "shfmt", "shellcheck")
+    LANGUAGE_ANALYSER_BINARIES = ("gitleaks", "shfmt", "shellcheck", "opengrep")
 
     def language_analysers_step(self) -> None:
         """Install every language analyser that has a no-privilege path, and hint the rest.
@@ -9885,6 +9885,21 @@ def _shellcheck_asset(plat: str, arch: str, version: str) -> str:
     return f"shellcheck-v{version}.{plat}.{cpu}.tar.xz" if cpu else ""
 
 
+def _opengrep_asset(plat: str, arch: str, version: str) -> str:
+    """The self-contained OpenGrep binary (NOT opengrep-core, the OCaml build): a bare
+    executable with no version in the name, so the /releases/latest/download/ redirect works.
+    opengrep_manylinux_x86 / _aarch64, opengrep_osx_x86 / _arm64, opengrep_windows_x86.exe
+    (Windows publishes x86 only). OpenGrep is the LGPL community fork of Semgrep with fully
+    open rules; adopted 2026-09-13 for the SQL/Java/Scala security-analyser gap."""
+    if plat == "linux":
+        return "opengrep_manylinux_" + ("aarch64" if arch == "arm64" else "x86")
+    if plat == "darwin":
+        return "opengrep_osx_" + ("arm64" if arch == "arm64" else "x86")
+    if plat == "windows":
+        return "opengrep_windows_x86.exe"
+    return ""
+
+
 class ReleaseTool(NamedTuple):
     """One tool the installer downloads.
 
@@ -9913,6 +9928,7 @@ _RELEASE_TOOLS = {
     ),
     "shfmt": ReleaseTool("shfmt", "mvdan/sh", _shfmt_asset),
     "shellcheck": ReleaseTool("shellcheck", "koalaman/shellcheck", _shellcheck_asset),
+    "opengrep": ReleaseTool("opengrep", "opengrep/opengrep", _opengrep_asset, versioned=False),
 }
 
 

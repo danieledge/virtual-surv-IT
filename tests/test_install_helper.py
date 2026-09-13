@@ -9714,6 +9714,11 @@ def test_the_database_step_asks_nothing(monkeypatch, capsys):
         ("shellcheck", "win32", "AMD64", "0.11.0", "shellcheck-v0.11.0.zip"),
         ("osv-scanner", "linux", "x86_64", "", "osv-scanner_linux_amd64"),
         ("osv-scanner", "win32", "ARM64", "", "osv-scanner_windows_arm64.exe"),
+        ("opengrep", "linux", "x86_64", "", "opengrep_manylinux_x86"),
+        ("opengrep", "linux", "aarch64", "", "opengrep_manylinux_aarch64"),
+        ("opengrep", "darwin", "arm64", "", "opengrep_osx_arm64"),
+        ("opengrep", "darwin", "x86_64", "", "opengrep_osx_x86"),
+        ("opengrep", "win32", "AMD64", "", "opengrep_windows_x86.exe"),
         # No published build for this machine is a clean "cannot", not an error.
         ("gitleaks", "sunos5", "x86_64", "8.28.0", ""),
         ("shellcheck", "linux", "mips64", "0.11.0", ""),
