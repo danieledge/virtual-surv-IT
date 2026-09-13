@@ -171,3 +171,51 @@ configured MCP tools, with the same preview-then-approve step as close actions.
   company analysers and bespoke close actions still live in the ADR-009 extensions
   contract; this page covers only the first-class, mechanically-validated tracker/PR
   config.
+
+## Claude Code features this team is built on
+
+> Moved out of README.md on 2026-09-14 (framework review, step 6.8).
+
+The team is a native Claude Code plugin, not a wrapper - these are the platform features it
+uses and how (audited 2026-07-29 against the current Claude Code docs):
+
+| Feature | How the team uses it |
+|---|---|
+| **Skills / slash commands** | All 32 workflows ship as skills, costing ~nothing until you type `/engage` (mechanism: [Token usage](#-token-usage--optimisation)). `argument-hint` on every command. |
+| **Subagents** | 13 agent definitions (`.claude/agents/`) with per-agent `model:` tiers (opus for highest-stakes judgement, sonnet for build/advisory, haiku for the scorer) and least-privilege `tools:` - advisory agents hold no Edit; four hold Write scoped to their own findings-pack file only, mechanically enforced by a hook. |
+| **Hooks** | Four always-on `PreToolUse` safety guards (raw-data wall, execution-consent gate, consent-write gate, findings-pack write-scoping guard), plus five engagement-scoped lifecycle hooks that no-op in dormant sessions: a warn-first `Stop` DoD backstop (with a `todo_panel_nudge` sibling on the same `Stop` event), a `UserPromptSubmit` persona re-anchor that survives compaction (with an `engage_probe_prefetch` sibling on the same event), a `PreToolUse` document-input redirect (binary documents route to the vendored converter), a `SessionStart` compact/resume brief (ADR-011) and a `PostToolUse` post-edit lint (plus a `PostToolUse` subagent return-budget check on `Task`). Three further `PreToolUse` cost/UX redirects - `module_form_redirect`, `enumeration_redirect`, `exploration_redirect` - run engagement-scoped and fail open; detail in `docs/team-operating-guide.md`. A `locked_menu_guard` also runs `PreToolUse` on `AskUserQuestion`. Hook and settings edits are human-only (ADR-002); hook changes ship staged, are applied by the maintainer via the `apply-*.sh` scripts, and releases ship with everything already wired - end users apply nothing. |
+| **Plugin distribution** | `.claude-plugin/plugin.json` manifest (agents + skills), marketplace/git install, per-project enablement; every bundled script also resolves by `$PLUGIN_ROOT` path so the team works identically installed into a foreign project. |
+| **Permissions** | A curated `permissions.allow` block (fewer prompts on the team's own consent-free tooling) and `permissions.deny` as the hard floor under the raw-data wall. |
+| **CLAUDE.md layering** | A lean always-on core (dormancy, data safety, the execution gate) with the operating detail split into docs the team loads only when engaged - the context-budget discipline. |
+| **Agent SDK (headless)** | The eval harness (`scripts/eval_engage.py`) drives real headless `/engage` sessions in sandboxed repo copies - `can_use_tool` plays the consent gate, `setting_sources` loads the real project hooks - so the shipped safety net itself is what gets regression-tested. |
+
+Deliberately **not** used, with reasons: output styles (session-start-scoped, would break
+dormancy by construction - the per-turn anchor hook is the conditional equivalent); agent
+teams (experimental; the team coordinates through artifacts, not peer chatter, by design);
+checkpoints / rewind as a safety net (subagent edits are not restored - git is the backstop);
+exposing the scripts as an MCP server (a non-Claude-Code client would bypass the guard
+hooks entirely).
+
+<sub>[↑ Back to top](#readme-top)</sub>
+
+## Notes on the config
+
+<details>
+<summary>🔧 <b>Tool permissions · memory scope · model tiering</b></summary>
+
+- Advisory agents are restricted to read-only tools (`Read, Grep, Glob`, sometimes `Bash`)
+  so they physically cannot alter detection logic.
+- Build agents have write access (`Read, Write, Edit, Bash, Grep, Glob`).
+- Memory is **project-scoped, not plugin-scoped** (the plugin is installed across many projects, so
+  it accrues no project memory): **project-specific** learnings (typologies, tuning decisions, FP
+  drivers) go to the **working project's own memory** (its `CLAUDE.md`); only **general,
+  cross-project** conventions live in the committed, plugin-shipped
+  [`docs/house-rules.md`](docs/house-rules.md). Advisory agents recommend; the PM commits.
+  (Claude Code subagents have no per-agent memory; a committed file is the real, auditable mechanism.)
+- Models: **4 opus** (the final/unchecked judgement + novel-design roles) · **8 sonnet** ·
+  **1 haiku**; the per-agent rationale and best-practice conformance live in
+  [`docs/agent-design.md`](docs/agent-design.md). Change the `model:` field freely.
+
+</details>
+
+<sub>[↑ Back to top](#readme-top)</sub>
