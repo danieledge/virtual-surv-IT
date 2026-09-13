@@ -1,5 +1,5 @@
 ---
-description: Calibrate surveillance thresholds / tune scenarios with ATL-BTL evidence and the volume↔coverage trade-off
+description: Engine behind `/detection-health --tune` - type that instead (this name is kept for one release, 2026-09-13)
 argument-hint: <the scenario/rule to tune, and where the alert/behavioural data is>
 disable-model-invocation: true
 ---

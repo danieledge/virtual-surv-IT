@@ -1,5 +1,5 @@
 ---
-description: Meet the team - Morgan introduces the specialists, who they are and what they do
+description: Engine behind `/team` - type that instead (this name is kept for one release, 2026-09-13)
 disable-model-invocation: true
 allowed-tools: Read
 ---

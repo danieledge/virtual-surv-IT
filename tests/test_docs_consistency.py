@@ -755,4 +755,4 @@ def test_the_utility_skills_declare_allowed_tools_and_nothing_else_does():
         front = text.split("---")[1] if text.startswith("---") else ""
         if re.search(r"^allowed-tools:", front, re.M):
             declared.add(skill.name)
-    assert declared == {"meet-the-team", "run-evals", "preferences", "dashboard", "map-codebase"}
+    assert declared == {"meet-the-team", "run-evals", "preferences", "dashboard", "map-codebase", "team"}

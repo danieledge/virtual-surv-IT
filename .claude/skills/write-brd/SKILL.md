@@ -1,5 +1,5 @@
 ---
-description: Turn an idea into a Business Requirements Document (BABOK + EARS)
+description: Engine behind `/requirements --brd` - type that instead (this name is kept for one release, 2026-09-13)
 argument-hint: <the idea / business need>
 disable-model-invocation: true
 ---

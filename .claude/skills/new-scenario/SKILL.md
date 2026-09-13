@@ -1,5 +1,5 @@
 ---
-description: Drive a new detection scenario end to end - spec → SME review → implement → compliance review
+description: Engine behind `/build --scenario` - type that instead (this name is kept for one release, 2026-09-13)
 argument-hint: <scenario name or regulatory requirement>
 disable-model-invocation: true
 ---

@@ -1,5 +1,5 @@
 ---
-description: View or change this project's team preferences (docx export, regulatory citations, large-context review splitting, parallel dispatch, standards-critique pass, skeleton drift checking)
+description: Engine behind `/team --preferences` - type that instead (this name is kept for one release, 2026-09-13)
 disable-model-invocation: true
 allowed-tools: Read, Write, Edit, AskUserQuestion
 ---

@@ -1,5 +1,5 @@
 ---
-description: Static performance & scalability review against target data volumes (findings inferred; profiling is a future opt-in)
+description: Engine behind `/review --focus performance` - type that instead (this name is kept for one release, 2026-09-13)
 argument-hint: <path/glob or component to review> [at <volume/SLA> if known]
 disable-model-invocation: true
 ---

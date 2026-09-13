@@ -1,5 +1,5 @@
 ---
-description: Take on legacy / poorly-built code - assess, prioritise, fix, re-review, hand over
+description: Engine behind `/review --fix` - type that instead (this name is kept for one release, 2026-09-13)
 argument-hint: <path/glob of the legacy code>
 disable-model-invocation: true
 ---

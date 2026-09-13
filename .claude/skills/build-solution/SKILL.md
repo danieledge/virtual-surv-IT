@@ -1,5 +1,5 @@
 ---
-description: Build an end-to-end solution from a set of requirements (orchestrator-workers)
+description: Engine behind `/build` - type that instead (this name is kept for one release, 2026-09-13)
 argument-hint: <path to requirements pack / BRD+FSD, or describe it>
 disable-model-invocation: true
 ---

@@ -40,6 +40,10 @@ The request: **$ARGUMENTS**
 
 Run the engagement like this:
 
+**`--light`.** If `$ARGUMENTS` begins with `--light`, this is the low-ceremony profile: read
+`.claude/skills/engage-light/SKILL.md` (plugin mode: `$PLUGIN_ROOT/.claude/skills/engage-light/SKILL.md`)
+and follow it with the rest of the arguments; it opens through the same step 0 below.
+
 **0. Fast open.** Read the FILE `.claude/skills/.shared/engage-open.md` (plugin mode:
 `$PLUGIN_ROOT/.claude/skills/.shared/engage-open.md`). **`.shared/` is a SIBLING of this
 skill's own folder** - one level up, directly under `skills/`, never inside `skills/engage/`

@@ -1,5 +1,5 @@
 ---
-description: Periodic transaction-monitoring model validation pack (coverage, thresholds, data integrity, FP & alert-to-SAR)
+description: Engine behind `/detection-health --validate` - type that instead (this name is kept for one release, 2026-09-13)
 argument-hint: <the TM system/scenario set to validate, and where the alert/outcome data is>
 disable-model-invocation: true
 ---

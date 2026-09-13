@@ -1,5 +1,5 @@
 ---
-description: Detailed multi-dimension code review (bugs, security, architecture, impact) with confidence scoring
+description: Engine behind `/review (default depth)` - type that instead (this name is kept for one release, 2026-09-13)
 argument-hint: <path/glob, commit range, or nothing for the working diff>
 disable-model-invocation: true
 ---

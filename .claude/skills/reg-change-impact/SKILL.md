@@ -1,5 +1,5 @@
 ---
-description: Regulatory-change impact analysis - what a changed obligation means for scenarios, controls, data and specs
+description: Engine behind `/requirements --impact` - type that instead (this name is kept for one release, 2026-09-13)
 argument-hint: <the regulatory change / new obligation, and the affected area>
 disable-model-invocation: true
 ---

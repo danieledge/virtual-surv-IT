@@ -1,5 +1,5 @@
 ---
-description: Turn a BRD into a Functional Specification (ISO/IEC/IEEE 29148 + Gherkin)
+description: Engine behind `/requirements --fsd` - type that instead (this name is kept for one release, 2026-09-13)
 argument-hint: <path to the BRD, or paste it>
 disable-model-invocation: true
 ---

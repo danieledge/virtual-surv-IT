@@ -1,5 +1,5 @@
 ---
-description: Generate the local, static, cross-project team dashboard (every known engagement, every known project) and hand the user the file to open
+description: Engine behind `/team --dashboard` - type that instead (this name is kept for one release, 2026-09-13)
 disable-model-invocation: true
 allowed-tools: Bash(python -m scripts.dashboard:*), Bash(python3 -m scripts.dashboard:*), Read
 ---

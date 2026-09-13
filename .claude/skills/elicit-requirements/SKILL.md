@@ -1,5 +1,5 @@
 ---
-description: BA elicitation - stakeholder analysis, requirements gathering and traceability (BABOK)
+description: Engine behind `/requirements --elicit` - type that instead (this name is kept for one release, 2026-09-13)
 argument-hint: <the need / obligation / problem to elicit requirements for>
 disable-model-invocation: true
 ---

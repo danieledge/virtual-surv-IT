@@ -42,10 +42,10 @@ Route by **deliverable type**, not habit:
 
 **Exploration discipline (standing):** orientation before any search (map / brief list / one `repo_skeleton` call), a 2-3 miss search budget, small files read whole, independent lookups batched, grep as pinpoint symbol lookup only - full rules in `docs/team-operating-guide-orchestration.md` §Exploration discipline.
 
-## Command index (canonical - all 27 skills)
+## Command index (canonical - all 32 skills)
 
 The routing table above answers "who does the work"; the full one-line-per-command index of
-all 27 skills answers "which command runs it" - **→ read
+all 32 skills answers "which command runs it" - **→ read
 `docs/operating-guide.d/command-index.md`** when composing workflow options for the user
 beyond the routing table, or when unsure whether a command exists. Never invent or guess a
 command name.

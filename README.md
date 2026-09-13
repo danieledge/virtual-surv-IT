@@ -96,7 +96,7 @@ The team builds the tooling; a person signs off every step.
 
 > 🚀 **In one minute.** Virtual Surv-IT is a Claude Code plugin: Morgan, a PM agent, and 13 specialist agents that build,
 > review and hand over surveillance tooling, every step independently checked by a different agent before it counts as done.
-> **Three commands:** `/engage` (the front door for any job), `/demo` (a narrated engagement on synthetic data), `/meet-the-team`.
+> **Three commands:** `/engage` (the front door for any job), `/demo` (a narrated engagement on synthetic data), `/team` (meet the roster).
 > **Three guarantees:** the project's raw-data folder never reaches the model ([always-on guard](#-the-safety-hooks)); the code under
 > review never runs without a consent marker only a human can create; nothing is "done" until the mechanical Definition-of-Done gate says so.
 > **Install:** `git clone https://github.com/danieledge/virtual-surv-IT.git && cd virtual-surv-IT && python install_helper.py`, then enable
@@ -620,37 +620,28 @@ deliverable in both `.md` and `.html`** in the engagement's own `VSIT/engagement
 (one folder per engagement, with a generated `START-HERE.md` index and a machine-readable state
 file). Focused commands for each entry point:
 
-> The canonical index of **all 27 skills** lives in
+> The canonical index of **all 32 skills** (13 front doors plus their engines) lives in
 > [`docs/team-operating-guide.md`](docs/team-operating-guide.md) §Command index; the table below
 > is a summary.
 
 | Command | Use it for | Pattern |
 |---|---|---|
-| `/engage` | anything, the front door | PM intake + dynamic routing |
-| `/engage-light` | small, non-regulated jobs: same safety gates, a fraction of the ceremony (refuses detection logic, upgrades to standard) | light profile of `/engage` |
+| `/engage` | anything, the front door; `--light` for small, non-regulated jobs (same safety gates, a fraction of the ceremony) | PM intake + dynamic routing |
 | `/demo` | watch a full engagement end-to-end on synthetic data | guided, narrated demo |
-| `/meet-the-team` | Morgan introduces the roster | canonical introductions |
-| `/prepare-data` | get safe data ready (synthetic or masked) before analysis | guided onboarding + validation (⚠️ the masking pipeline is a placeholder, see [FAQ](docs/FAQ.md)) |
-| `/write-brd` | idea → Business Requirements (BABOK + EARS) | prompt chaining |
-| `/brd-to-fsd` | BRD → Functional Spec (ISO 29148 + Gherkin) | prompt chaining |
-| `/deep-review` | detailed code review (bugs, security, architecture, impact) | sequential dimension lenses + scoring |
-| `/performance-review` | performance & scalability vs target data volumes | static analysis (profiling only under the §7 exec gate) |
-| `/audit-review` | existing code → robust & audit-ready? | evaluator-optimizer loop |
-| `/security-audit` | deep security audit (OWASP ASVS / CWE + threat model) | evaluator-optimizer loop, security-focused |
-| `/remediate` | legacy / poorly-built code → assess, fix, hand over | assess → prioritise → fix loop |
-| `/build-solution` | full requirements → end-to-end build | orchestrator-workers |
-| `/handover` | developer + QA test-evidence handover pack | independent QA + dev docs |
-| `/new-scenario` | a single detection scenario | spec → SME → build → review |
-| `/elicit-requirements` | scope/stakeholders unclear → structured elicitation | question-led discovery |
+| `/review` | every code review: `--depth quick\|deep\|audit`, `--focus security\|performance\|quantexa`, `--fix` for legacy code | lenses + scoring; evaluator-optimizer loop at audit depth |
+| `/build` | full requirements → end-to-end build; `--scenario` for a single detection scenario | orchestrator-workers; spec → SME pack → build → review |
+| `/requirements` | `--elicit`, `--brd`, `--fsd`, `--impact` (regulatory change) | question-led discovery, prompt chaining |
+| `/detection-health` | `--coverage`, `--tune`, `--validate` for what is already deployed | coverage map, ATL/BTL calibration, validation pack |
+| `/why-no-alert` | "why did this not alert?" / silent scenario / volume drop | detection-gap triage: fixed lineage walk |
 | `/analyse-data` | exploratory / FP analysis / reporting-MI on safe data | evidence-tagged analysis |
-| `/why-no-alert` | "why did this not alert?" / silent scenario / volume drop | detection-gap triage: fixed lineage walk, evidence per stage |
-| `/tune-thresholds` | calibrate one scenario's thresholds (ATL/BTL, segmentation) | dry-run + decision register |
-| `/assess-coverage` | are we monitoring everything? typology→scenario→feed map | coverage + feed-health gaps |
-| `/validate-tm-model` | periodic TM model validation (coverage/threshold/data/MI) | data work + independent verdict |
-| `/reg-change-impact` | a regulatory change → impacted scenarios/controls | change-impact assessment |
-| `/beta-assess-quantexa` | (beta, vendor-specific) a Quantexa TM estate vs BRD/TSD traceability assessment | platform KB + traceability |
+| `/prepare-data` | get safe data ready (synthetic or masked) before analysis | guided onboarding + validation (⚠️ the masking pipeline is a placeholder, see [FAQ](docs/FAQ.md)) |
+| `/handover` | developer + QA test-evidence handover pack | independent QA + dev docs |
+| `/map-codebase` | first-contact codebase map, refreshed on drift | deterministic skeleton + synthesis |
+| `/team` | `--meet` the roster, `--preferences`, `--dashboard` | quick utilities, no engagement opened |
 | `/run-evals` | score the live team against the golden cases | regression net (spends tokens) |
-| `/preferences` | view/change project-wide settings (docx export, regulatory citations) | quick utility, no engagement |
+
+The older command names (`/deep-review`, `/write-brd`, `/meet-the-team` and the rest) are the
+engines behind these front doors and still work for one release; the index names each pair.
 
 **Example requests** (the PM routes each to the right specialists, and only those):
 
@@ -722,7 +713,7 @@ a convention), that's stated rather than dressed up.
 | Principle | What it means | What enforces it |
 |---|---|---|
 | **Engineering first** | Assists the engineering *behind* surveillance, not compliance, legal or regulatory advice. | Scope statement + proof-of-concept framing; obligations are cited from a verified register, never interpreted as advice. |
-| **Dormant until invoked** | A normal session is standard Claude Code; the team wakes only on `/engage`, and costs ~nothing until then. | `disable-model-invocation` on all 27 skills; a lean always-on `CLAUDE.md`; per-project plugin enablement. |
+| **Dormant until invoked** | A normal session is standard Claude Code; the team wakes only on `/engage`, and costs ~nothing until then. | `disable-model-invocation` on all 32 skills; a lean always-on `CLAUDE.md`; per-project plugin enablement. |
 | **Right-sized, not all-hands** | Only the agents a task needs (typically 2-5, never all 13), the simplest thing that works. | The PM states the intended agent count at the gate (you can veto it); a golden eval case samples the behaviour. Prompt-enforced. |
 | **Independent review** | Reviewers, SMEs and the model validator recommend; builders fix. Advisors hold no edit tools; QA and validation run as separate agents from the build. | Advisory agents carry **no `Write`/`Edit` tools**; build/QA/validation separation is by routing distinct agents with isolated context (see `docs/agent-design.md`). |
 | **Humans hold the keys** | Execution consent and config are human-only; nothing touches a live system without sign-off. | The consent-write gate blocks the model from **writing or editing** the consent marker, `settings*.json` and the hook files; the `CST_ALLOW_*` overrides live in the launch environment the model can't reach. Bash-channel writes are lexically guarded, not sandboxed (a documented PoC limit, ADR-002). |
@@ -981,7 +972,7 @@ python -m scripts.validate_masking --in data/masked/x.jsonl   # scan YOUR masked
 
 ## 📁 Layout
 
-In one line: `.claude/agents/` (13 subagents) · `docs/sme/` (3 SME knowledge packs) · `.claude/skills/` (27 workflows) · `.claude/hooks/` + `settings.json` (safety guards) · `rules/` + `tests/` (the spoofing worked example) · `scripts/` (tooling) · `vendor/` (pip-less deps) · `config/` (masking schema, regulatory register) · `docs/` · `evals/` · `.claude-plugin/` (manifests).
+In one line: `.claude/agents/` (13 subagents) · `docs/sme/` (3 SME knowledge packs) · `.claude/skills/` (32 workflows) · `.claude/hooks/` + `settings.json` (safety guards) · `rules/` + `tests/` (the spoofing worked example) · `scripts/` (tooling) · `vendor/` (pip-less deps) · `config/` (masking schema, regulatory register) · `docs/` · `evals/` · `.claude-plugin/` (manifests).
 
 <details>
 <summary>📁 <b>One consolidated map of the repo</b></summary>
@@ -996,7 +987,7 @@ CLAUDE.md                       # shared team handbook (example defaults - custo
                                   compliance-reviewer · data-quality-reviewer
    (SME typology advice lives in docs/sme/ knowledge packs - in-line, no agent)
    helper                         review-scorer (haiku - review prep, scoring, filter tallies)
-.claude/skills/                 # 27 workflows: /engage, /deep-review, /audit-review, /security-audit, /handover,
+.claude/skills/                 # 32 workflows: /engage, /deep-review, /audit-review, /security-audit, /handover,
                                 #   /new-scenario, /tune-thresholds, … (see "Using them")
 .claude/hooks/ + settings.json  # data-safety (always-on) + session-scoped execution guards
 rules/ · tests/                 # the bundled example (spoofing) + its true/false-positive tests
@@ -1154,7 +1145,7 @@ uses and how (audited 2026-07-29 against the current Claude Code docs):
 
 | Feature | How the team uses it |
 |---|---|
-| **Skills / slash commands** | All 27 workflows ship as skills, costing ~nothing until you type `/engage` (mechanism: [Token usage](#-token-usage--optimisation)). `argument-hint` on every command. |
+| **Skills / slash commands** | All 32 workflows ship as skills, costing ~nothing until you type `/engage` (mechanism: [Token usage](#-token-usage--optimisation)). `argument-hint` on every command. |
 | **Subagents** | 13 agent definitions (`.claude/agents/`) with per-agent `model:` tiers (opus for highest-stakes judgement, sonnet for build/advisory, haiku for the scorer) and least-privilege `tools:` - advisory agents hold no Edit; four hold Write scoped to their own findings-pack file only, mechanically enforced by a hook. |
 | **Hooks** | Four always-on `PreToolUse` safety guards (raw-data wall, execution-consent gate, consent-write gate, findings-pack write-scoping guard), plus five engagement-scoped lifecycle hooks that no-op in dormant sessions: a warn-first `Stop` DoD backstop (with a `todo_panel_nudge` sibling on the same `Stop` event), a `UserPromptSubmit` persona re-anchor that survives compaction (with an `engage_probe_prefetch` sibling on the same event), a `PreToolUse` document-input redirect (binary documents route to the vendored converter), a `SessionStart` compact/resume brief (ADR-011) and a `PostToolUse` post-edit lint (plus a `PostToolUse` subagent return-budget check on `Task`). Three further `PreToolUse` cost/UX redirects - `module_form_redirect`, `enumeration_redirect`, `exploration_redirect` - run engagement-scoped and fail open; detail in `docs/team-operating-guide.md`. A `locked_menu_guard` also runs `PreToolUse` on `AskUserQuestion`. Hook and settings edits are human-only (ADR-002); hook changes ship staged, are applied by the maintainer via the `apply-*.sh` scripts, and releases ship with everything already wired - end users apply nothing. |
 | **Plugin distribution** | `.claude-plugin/plugin.json` manifest (agents + skills), marketplace/git install, per-project enablement; every bundled script also resolves by `$PLUGIN_ROOT` path so the team works identically installed into a foreign project. |
@@ -1252,7 +1243,7 @@ so ±15%); the rest are estimates with no run behind them yet:
   them typeable/routable at all); what does **not** load is any skill or agent **body** (the
   multi-KB workflow instructions and agent prompts stay unread until something actually invokes
   that skill or dispatches that agent):
-  - `disable-model-invocation: true` on all 27 skills stops the model **auto-triggering** a skill
+  - `disable-model-invocation: true` on all 32 skills stops the model **auto-triggering** a skill
     on its own judgement - it does not remove the description from context; the description is
     exactly what needs to be resident for `/`-typing and routing to work at all;
   - measured 2026-09-12: the 27 skill descriptions sum to ~3.0k chars, the 13 agent descriptions
@@ -1502,7 +1493,7 @@ treats a local-scope plugin as mutable and **re-validates it every startup** (gi
 settings re-merge + re-scan) - that's the trigger. The ~20-27s amplifier is **Windows filesystem
 overhead** (git working-tree operations + real-time AV scanning) over the plugin's **large file
 tree**: 754 tracked files, of which **306 are the vendored pip-less Python libs in `vendor/`** - the
-13 agents / 27 skills are a tiny fraction, so agent/skill *count* is **not** the bottleneck (13
+13 agents / 32 skills are a tiny fraction, so agent/skill *count* is **not** the bottleneck (13
 file-opens is milliseconds). Largely a Claude-Code-×-Windows-×-local-install interaction, not
 plugin logic. **Mitigations (not yet applied):** (a) a **Windows Defender exclusion** for the plugin
 cache dir - usually the biggest, free win, and a quick A/B test; (b) installing via a

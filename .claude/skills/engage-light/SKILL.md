@@ -1,5 +1,5 @@
 ---
-description: The low-ceremony front door - an explicit light engagement for small, non-regulated work (same safety, minimal artifacts)
+description: Engine behind `/engage --light` - type that instead (this name is kept for one release, 2026-09-13)
 argument-hint: <a small task, quick review, utility script or question - NOT detection logic>
 disable-model-invocation: true
 ---

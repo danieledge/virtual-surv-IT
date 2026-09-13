@@ -1,5 +1,5 @@
 ---
-description: Surveillance coverage assessment - are all in-scope risks detected, and are the data feeds actually live?
+description: Engine behind `/detection-health --coverage` - type that instead (this name is kept for one release, 2026-09-13)
 argument-hint: <the surveillance area / book / desk to assess>
 disable-model-invocation: true
 ---

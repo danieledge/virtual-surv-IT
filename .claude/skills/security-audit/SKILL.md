@@ -1,5 +1,5 @@
 ---
-description: Deep security audit of code - OWASP ASVS / CWE / SEI CERT, threat model, secrets & data-safety, with the audit-review evaluator-optimizer loop
+description: Engine behind `/review --focus security` - type that instead (this name is kept for one release, 2026-09-13)
 argument-hint: <path/glob of code to audit, a commit range, or nothing for the working diff>
 disable-model-invocation: true
 ---

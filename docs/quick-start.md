@@ -48,13 +48,13 @@ full set, or read `docs/operating-guide.d/command-index.md`.
 | When | Command | What it does |
 |---|---|---|
 | Have a look first | `/demo` | the whole team on synthetic data, every decision narrated |
-| | `/meet-the-team` | who the 13 specialists are and what each owns |
+| | `/team` | who the 13 specialists are and what each owns (`--preferences`, `--dashboard` for the utilities) |
 | Before any real data | `/prepare-data` | safe data first: synthetic, or masked by approved tooling. Its own masking is a best-effort aid, not an anonymisation pipeline; masked output is still personal data |
-| The everyday work | `/deep-review` | a proper review of existing code, before a PR or an audit |
-| | `/new-scenario` | a detection scenario from spec through build to sign-off |
+| The everyday work | `/review` | a proper review of existing code, before a PR or an audit (`--depth`, `--focus`, `--fix`) |
+| | `/build --scenario` | a detection scenario from spec through build to sign-off |
 | | `/analyse-data` | a question you want evidenced, not just answered |
 | | `/why-no-alert` | why a case did not alert, or a scenario went silent |
-| | `/engage-light` | a small, non-regulated fix without the full ceremony |
+| | `/engage --light` | a small, non-regulated fix without the full ceremony |
 | Finishing | `/handover` | hand real code to a dev or ops team, with the QA evidence |
 
 ## Three safety rules, enforced in code

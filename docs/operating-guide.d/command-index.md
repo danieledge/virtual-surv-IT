@@ -1,44 +1,56 @@
-# Command index (canonical - all 27 skills)
+# Command index (canonical - 13 front doors, 32 skills on disk)
 
 > Deferred from `docs/team-operating-guide.md` (open-core split, token plan Phase 1,
 > 2026-08-18). **Read when** composing workflow options for the user beyond the routing
 > table, or when unsure whether a command exists. The routing table in the operating guide
-> answers "who does this work"; this file answers "which command runs it".
+> answers "who does this work"; this file answers "which command runs it". Since 2026-09-13
+> (framework review, step 4.5) the team has **13 front doors**; the older names are engines
+> behind them and still work for one release.
 
 ## Command index
 
-- `/engage` - front door: intake + orchestration for any request (problem, review or build)
-- `/engage-light` - explicit low-ceremony profile: same safety gates + code chain, one-page
-  brief, 2-3 agents, short summary email, no delivery report; refuses detection logic, upgrades to standard
-- `/map-codebase` - deterministic first-contact skeleton pass + a small synthesis team,
-  producing/refreshing the curated codebase map (ADR-007 Phase 1, `--refresh` re-verifies only
-  drifted areas)
-- `/meet-the-team` - Morgan introduces the roster (canonical intro)
-- `/prepare-data` - safe data onboarding (synthetic or masked) before any agent sees it
+- `/engage` - front door: intake + orchestration for any request (problem, review or build);
+  `--light` is the low-ceremony profile (same safety gates + code chain, 2-3 agents, refuses
+  detection logic, upgrades to standard)
 - `/demo` - guided end-to-end demo on synthetic data, every decision narrated
-- `/write-brd` - idea → Business Requirements Document (BABOK + EARS)
-- `/elicit-requirements` - stakeholder analysis + requirements gathering (BABOK)
-- `/brd-to-fsd` - BRD → Functional Spec (ISO/IEC/IEEE 29148 + Gherkin)
-- `/new-scenario` - new detection scenario end to end: spec → SME review → build → compliance review
-- `/build-solution` - end-to-end build from a requirements pack (orchestrator-workers)
-- `/analyse-data` - exploratory analysis → evidenced insight report
+- `/review` - every code review: `--depth quick|deep|audit`, `--focus security|performance|quantexa`,
+  `--fix` for the assess-fix-re-review loop on legacy code
+- `/build` - end-to-end build from a requirements pack; `--scenario` for a single detection
+  scenario (spec, SME-pack review, build, compliance review)
+- `/requirements` - `--elicit` (BABOK elicitation), `--brd` (idea to BRD), `--fsd` (BRD to FSD),
+  `--impact` (regulatory change to affected scenarios, controls, data, specs)
+- `/detection-health` - `--coverage` (is everything in scope monitored, are feeds live),
+  `--tune` (ATL/BTL threshold calibration), `--validate` (periodic TM model validation pack)
 - `/why-no-alert` - detection-gap triage: why a case-level miss, silent scenario or volume
-  drop happened - fixed lineage walk (feed → ingestion → logic → threshold → suppression →
-  scope), evidence per stage
-- `/tune-thresholds` - threshold calibration: ATL-BTL, segmentation, volume↔coverage trade-off
-- `/validate-tm-model` - periodic TM model validation pack (coverage, thresholds, data integrity)
-- `/assess-coverage` - are all in-scope risks monitored? typology→scenario→feed map + feed health
-- `/reg-change-impact` - regulatory change → affected scenarios, controls, data, specs
-- `/deep-review` - detailed multi-dimension code review with confidence scoring
-- `/audit-review` - audit/regulatory-defensibility review (evaluator-optimizer loop)
-- `/beta-assess-quantexa` - (beta) Quantexa TM estate vs BRD/TSD traceability assessment, with platform KB
-- `/security-audit` - deep security audit: OWASP ASVS / CWE + threat model, security-focused evaluator-optimizer loop
-- `/performance-review` - static performance & scalability review vs target volumes
-- `/remediate` - legacy / poorly-built code: assess → prioritise → fix → re-review → hand over
+  drop happened - fixed lineage walk, evidence per stage
+- `/analyse-data` - exploratory analysis to an evidenced insight report
+- `/prepare-data` - safe data onboarding (synthetic or masked) before any agent sees it
 - `/handover` - handover pack: dev docs + independent QA evidence + change/ops artifacts
-- `/run-evals` - team-quality eval harness against golden cases (regression net)
-- `/preferences` - view/change project-wide settings (docx export, regulatory citations);
-  quick utility, no engagement opened
-- `/dashboard` - regenerate the local, static, cross-project observability dashboard (every
-  project + engagement this machine has evidence of, ADR-013); quick utility, read-only, no
-  engagement opened.
+- `/map-codebase` - deterministic first-contact skeleton pass + a small synthesis team,
+  producing/refreshing the curated codebase map (`--refresh` re-verifies drifted areas)
+- `/team` - `--meet` (Morgan introduces the roster), `--preferences` (project settings),
+  `--dashboard` (the local cross-project dashboard); quick utilities, no engagement opened
+- `/run-evals` - the team-quality eval harness against the golden cases (spends tokens; kept
+  separate so its narrow Bash grant stays narrow)
+
+### Engines and aliases (type the front door instead; kept for one release)
+
+- `/engage-light` - engine for `/engage --light`
+- `/deep-review` - engine for `/review` (default depth)
+- `/audit-review` - engine for `/review --depth audit`
+- `/security-audit` - engine for `/review --focus security`
+- `/performance-review` - engine for `/review --focus performance`
+- `/beta-assess-quantexa` - engine for `/review --focus quantexa` (beta)
+- `/remediate` - engine for `/review --fix`
+- `/build-solution` - engine for `/build`
+- `/new-scenario` - engine for `/build --scenario`
+- `/elicit-requirements` - engine for `/requirements --elicit`
+- `/write-brd` - engine for `/requirements --brd`
+- `/brd-to-fsd` - engine for `/requirements --fsd`
+- `/reg-change-impact` - engine for `/requirements --impact`
+- `/assess-coverage` - engine for `/detection-health --coverage`
+- `/tune-thresholds` - engine for `/detection-health --tune`
+- `/validate-tm-model` - engine for `/detection-health --validate`
+- `/meet-the-team` - engine for `/team`
+- `/preferences` - engine for `/team --preferences`
+- `/dashboard` - engine for `/team --dashboard`

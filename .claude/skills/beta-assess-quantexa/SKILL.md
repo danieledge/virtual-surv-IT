@@ -1,5 +1,5 @@
 ---
-description: BETA - assess a Quantexa TM implementation against BRDs/TSDs - requirements-to-artifact traceability with a Quantexa knowledge base
+description: Engine behind `/review --focus quantexa` - type that instead (this name is kept for one release, 2026-09-13)
 argument-hint: <repo path + where the BRDs/TSDs are>
 disable-model-invocation: true
 ---

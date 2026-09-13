@@ -1,5 +1,5 @@
 ---
-description: Review existing code for robustness and audit/regulatory defensibility (evaluator-optimizer loop)
+description: Engine behind `/review --depth audit` - type that instead (this name is kept for one release, 2026-09-13)
 argument-hint: <path/glob of code to review, or a commit range>
 disable-model-invocation: true
 ---
