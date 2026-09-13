@@ -2440,6 +2440,7 @@ def verdict_block(results: list[dict], run_id: str) -> str:
     """
     raw_pass = sum(1 for r in results if r.get("passed"))
     total = len(results)
+    spend = round(sum(float(r.get("cost_usd") or 0) for r in results), 2)
     return "\n".join(
         [
             f"```{VERDICT_FENCE}",
@@ -2452,6 +2453,9 @@ def verdict_block(results: list[dict], run_id: str) -> str:
             "cases_adjudicated_pass: 0",
             f"unadjudicated_failures: {total - raw_pass}",
             f"runs: {run_id}",
+            # The spend ledger (step 5.10): what this evidence cost, checked by the release gate
+            # against the tracked log's cost_usd for the cited runs.
+            f"eval_spend_usd: {spend:.2f}",
             "```",
         ]
     )

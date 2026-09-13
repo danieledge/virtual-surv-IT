@@ -270,7 +270,8 @@ findings tagged `layer: normalizer` in `findings.json`), and **no model is conta
 scorer or tripwire change that would flip a known-good run fails the job for zero tokens.
 
 What a golden run keeps: `transcript.md`, `events.jsonl`, `findings.json`, `score.json`,
-`run-meta.json`, `tripwires.json`, `fixture-baseline.json`, `gates.json`, and a `sandbox/`
+`<case>/run-meta.json`, `<case>/tripwires.json`, `<case>/fixture-baseline.json`,
+`<case>/gates.json`, and a `sandbox/`
 subset holding only the project's `VSIT/` workspace and the consent marker (never the full
 repo copy, never `data/`). Keep one with:
 

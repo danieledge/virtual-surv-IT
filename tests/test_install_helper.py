@@ -2019,7 +2019,10 @@ def test_full_plan_includes_alias_setup_and_machine_defaults_offer(monkeypatch, 
     assert "Enable for a project (optional)" not in titles
     assert "Machine defaults (optional)" in titles
     assert "Dashboard (optional)" not in titles  # no longer part of the default flow
-    assert titles[-1] == "Machine defaults (optional)"  # last step
+    # 2026-09-13 (framework review, step 5.5): the armed check closes every install, after
+    # the machine defaults, so the run ends on one green or red line about the guards.
+    assert titles[-1] == "Guards armed?"
+    assert titles[-2] == "Machine defaults (optional)"
     assert titles.index("Alias setup") == titles.index("Machine defaults (optional)") - 1
 
 
@@ -7221,6 +7224,7 @@ def test_run_selftest_all_ok_returns_zero_and_writes_no_bundle(monkeypatch, tmp_
         return _proc(0, stdout="", stderr="")
 
     monkeypatch.setattr(ih.subprocess, "run", fake_run)
+    monkeypatch.setattr(ih, "_check_armed", lambda root: [("guards armed", "OK", "stubbed")])
     rc = ih.run_selftest(ih.Style(False), ih.marks())
     out = capsys.readouterr().out
     assert rc == 0
@@ -7250,6 +7254,7 @@ def test_run_selftest_failure_writes_debug_bundle(monkeypatch, tmp_path, capsys)
         return _proc(0, stdout="", stderr="")
 
     monkeypatch.setattr(ih.subprocess, "run", fake_run)
+    monkeypatch.setattr(ih, "_check_armed", lambda root: [("guards armed", "OK", "stubbed")])
     rc = ih.run_selftest(ih.Style(False), ih.marks())
     out = capsys.readouterr().out
     assert rc == 1
@@ -7274,6 +7279,7 @@ def test_run_selftest_close_gate_error_when_not_refused(monkeypatch, tmp_path, c
     monkeypatch.setattr(ih, "_check_runtime_dependencies", lambda: [])
     monkeypatch.setattr(ih.shutil, "which", lambda name: None)
     monkeypatch.setattr(ih.subprocess, "run", lambda *a, **k: _proc(0, stdout="", stderr=""))
+    monkeypatch.setattr(ih, "_check_armed", lambda root: [("guards armed", "OK", "stubbed")])
     rc = ih.run_selftest(ih.Style(False), ih.marks())
     out = capsys.readouterr().out
     assert rc == 1
@@ -7291,6 +7297,7 @@ def test_selftest_end_to_end_real_scripts(tmp_path, monkeypatch):
     if _shutil.which("bandit") is None:
         pytest.skip("bandit not installed in this environment")
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(ih, "_check_armed", lambda root: [("guards armed", "OK", "stubbed")])
     rc = ih.run_selftest(ih.Style(False), ih.marks())
     assert rc == 0
     assert not list(tmp_path.glob("virt-surv-selftest-*.txt"))
@@ -10198,3 +10205,32 @@ def test_the_committed_locks_cover_every_top_level_requirement():
             name = re.split(r"[<>=!\[; ]", line, 1)[0].lower().replace("_", "-")
             assert name in pinned, f"{stem}.lock does not pin {name}"
         assert lock.count("--hash=sha256:") >= len(pinned), f"{stem}.lock has unhashed entries"
+
+
+# ------------------------------------------- 2026-09-13 framework review, step 5.5
+
+
+def test_the_install_ends_by_proving_the_guards_are_armed(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
+    titles = [t if isinstance(t, str) else t() for t, _ in inst.build_plan()]
+    assert titles[-1] == "Guards armed?", "the armed check is the last step of the install"
+
+    inst.repo = tmp_path
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "armed_check.py").write_text(
+        "def check(repo, project):\n    return [('raw-data read', True, 'exit 2')]\n"
+        "def summary(project, results):\n    return True, f'guards armed in {project}: raw-data BLOCK'\n",
+        encoding="utf-8",
+    )
+    inst.armed_step()
+    assert "guards armed in" in capsys.readouterr().out
+
+    (tmp_path / "scripts" / "armed_check.py").write_text(
+        "def check(repo, project):\n    return [('raw-data read', False, 'exit 0')]\n"
+        "def summary(project, results):\n    return False, 'GUARDS NOT PROVEN'\n",
+        encoding="utf-8",
+    )
+    inst.armed_step()  # a red line, never a crash and never fatal to the install
+    assert "GUARDS NOT PROVEN" in capsys.readouterr().out

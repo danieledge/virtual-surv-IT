@@ -1,6 +1,8 @@
 # Development & pipeline tooling. The detection rules (rules/) use only the standard
 # library; the masking ingest reads its schema with pyyaml.
 pytest>=8.0
+pytest-timeout>=2.3  # per-test cap (plan 5.9, 2026-09-13): a hung launcher or subprocess test
+                     #   fails at 120 s instead of stalling the suite
 pytest-cov>=5.0  # coverage measurement in CI (T-9, 2026-09-12 test-quality audit) - no
                  #   percentage gate yet, just turning "which modules are referenced" into
                  #   "which lines actually execute" (see .github/workflows/ci.yml, py3.12 leg)

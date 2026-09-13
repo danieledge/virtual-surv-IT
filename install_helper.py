@@ -5143,7 +5143,47 @@ class Installer:
             ("Status line", self.statusline_step),
             ("Alias setup", self.alias_step),
             ("Machine defaults (optional)", self.machine_defaults_offer),
+            # Last, always (2026-09-13 framework review, step 5.5): prove the guards fire in
+            # the project the user is about to open, so the install ends on one green or red
+            # line instead of a claim. A hook that is silently inert looks exactly like a
+            # healthy one; this is the difference.
+            ("Guards armed?", self.armed_step),
         ]
+
+    def armed_step(self) -> None:
+        """Send synthetic tool calls through the real launcher and dispatcher and expect the
+        raw-data block and the execution gate to fire (scripts/armed_check.py). The project
+        proven is --enable-project when given, else this clone (repo-as-project)."""
+        target = getattr(self.args, "enable_project", None)
+        project = Path(target).resolve() if target else Path(self.repo).resolve()
+        if self.demo:
+            self.step_ok(
+                "Guards armed?",
+                f"would prove the raw-data block and the execution gate in {project} (demo)",
+            )
+            return
+        checker = Path(self.repo) / "scripts" / "armed_check.py"
+        if not checker.is_file():
+            self.step_skip(
+                "Guards armed?", f"{checker} not found - run python -m scripts.armed_check later"
+            )
+            return
+        try:
+            import importlib.util
+
+            spec = importlib.util.spec_from_file_location("armed_check", checker)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            results = module.check(Path(self.repo).resolve(), project)
+            good, line = module.summary(project, results)
+        except Exception as exc:  # noqa: BLE001 - a broken prover is a red line, not a crash
+            good, line = False, f"could not run the armed check: {str(exc)[:120]}"
+        if good:
+            self.step_ok(
+                "Guards armed", self.style.green(line) if hasattr(self.style, "green") else line
+            )
+        else:
+            self.step_fail("Guards armed", line, fatal=False)
 
     def run(self) -> int:
         s = self.style
@@ -11385,6 +11425,27 @@ def _selftest_engagement_probe(repo_root: Path, interpreter: str):
         yield run_step("archive", [py, str(engagement_state), "archive", slug, "--force"])
 
 
+def _check_armed(repo_root: Path) -> list:
+    """Step 5.5 (2026-09-13): prove the guards BLOCK what they exist to block, through the real
+    launcher and dispatcher in this repo (scripts/armed_check.py). Rows of (label, status,
+    detail) in the self-test's own shape; never raises. Module-level so a test can stub it
+    without a real interpreter or shell behind the launcher."""
+    try:
+        if str(repo_root) not in sys.path:
+            sys.path.insert(0, str(repo_root))
+        from scripts.armed_check import check as _armed_check, summary as _armed_summary
+
+        armed = _armed_check(repo_root, repo_root)
+        rows = [
+            (f"armed: {label}", "OK" if holds else "FAIL", detail) for label, holds, detail in armed
+        ]
+        good, line = _armed_summary(repo_root, armed)
+        rows.append(("guards armed", "OK" if good else "FAIL", line))
+        return rows
+    except Exception as exc:  # noqa: BLE001 - reporting is the point
+        return [("guards armed", "FAIL", f"could not run the armed check: {str(exc)[:120]}")]
+
+
 def run_selftest(style: Style, mark_map: dict, repo_hint: Optional[str] = None) -> int:
     """Standalone diagnostic (--selftest / Diagnostics menu): a throwaway synthetic
     "review this code" engagement, exercising the REAL guard hooks, the REAL analyser
@@ -11419,6 +11480,11 @@ def run_selftest(style: Style, mark_map: dict, repo_hint: Optional[str] = None) 
     with tempfile.TemporaryDirectory(prefix="virt-surv-it-selftest-guard-") as gtmp:
         for label, status, detail in _check_guard_hooks(interpreter, repo_root, Path(gtmp)):
             record(label, status, detail)
+    # Step 5.5 (2026-09-13): not only "the guards pass benign traffic" but "the guards BLOCK
+    # what they exist to block", proven through the real launcher in this repo.
+    print(style.dim("\n  Guards armed (a block where a block is due):"))
+    for label, status, detail in _check_armed(repo_root):
+        record(label, status, detail)
 
     print(style.dim("\n  Repo script syntax:"))
     for label, status, detail in _check_repo_py_syntax(interpreter, repo_root):

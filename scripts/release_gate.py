@@ -375,6 +375,42 @@ def _verdict_findings(baseline_name: str, text: str) -> list[str]:
     return findings
 
 
+def _spend_findings(
+    baseline_name: str, fields: dict[str, str], run_ids: list[str], root: Path
+) -> list[str]:
+    """The spend ledger (2026-09-13 framework review, step 5.10): when the block declares
+    `eval_spend_usd`, it must agree with the `cost_usd` the tracked log recorded for the cited
+    live runs (rescore rows cost nothing), within 5 percent or one dollar. A baseline that
+    understates what its evidence cost is a claim about a claim, like an unrecorded run."""
+    declared = fields.get("eval_spend_usd")
+    if declared is None:
+        return []
+    try:
+        declared_value = float(declared)
+    except ValueError:
+        return [
+            f"RELEASE-GATE: {baseline_name} eval-verdict 'eval_spend_usd: {declared}' is not a number"
+        ]
+    rows, _unparseable = _results_rows(root)
+    if rows is None:
+        return []  # _runs_findings has already reported the missing log
+    cited = set(run_ids)
+    recorded = round(
+        sum(
+            float(row.get("cost_usd") or 0)
+            for row in rows
+            if row.get("run_id") in cited and str(row.get("mode") or "run") == "run"
+        ),
+        2,
+    )
+    if abs(recorded - declared_value) > max(1.0, 0.05 * recorded):
+        return [
+            f"RELEASE-GATE: {baseline_name} declares eval_spend_usd: {declared_value:.2f} but the "
+            f"cited run(s) recorded {recorded:.2f} USD in {_RESULTS_LOG}"
+        ]
+    return []
+
+
 def _corroboration_findings(
     baseline_name: str,
     text: str,
@@ -411,6 +447,7 @@ def _corroboration_findings(
     run_ids = _cited_run_ids(fields)
     if run_ids:
         findings += _runs_findings(baseline_name, run_ids, counts, root)
+        findings += _spend_findings(baseline_name, fields, run_ids, root)
     elif not deterministic_only:
         findings.append(
             f"RELEASE-GATE: {baseline_name} eval-verdict names no 'runs:' - without run ids the "

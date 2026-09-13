@@ -4,7 +4,7 @@
 
 ![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green)
 ![Version 0.37.0](https://img.shields.io/badge/version-0.37.0-blue)
-![Tests 1900+ passing](https://img.shields.io/badge/tests-1900%2B%20passing-brightgreen)
+![Tests 3200+ passing](https://img.shields.io/badge/tests-3200%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 [![Quick start: one-page PDF](https://img.shields.io/badge/Quick%20start-one--page%20PDF-important)](docs/quick-start.pdf)
@@ -731,7 +731,7 @@ a convention), that's stated rather than dressed up.
 | **Evidence, not claims** | Findings carry 📊 measured / 🧠 inferred; pinpoint citations are retrieved, not recalled; every delivery traces requirement → code → test → obligation. | The RTM + `check_citations` (flags unregistered citations) + `check_artifacts` (the mechanical DoD gate) + the Definition of Done. |
 | **Remembers, safely** | Each working project gets one codebase map: bounded, SHA-anchored, 📊/🧠-tagged, PM-written only, **advisory context never enforcement**, and no PII/MNPI/secrets, ever. | ADR-003/ADR-007 + `check_artifacts` map hygiene - mechanical: size (excl. Deprecated), header fields, per-entry As-of/Anchor validation, anchor resolution + a staleness budget against HEAD, basis tags, secret patterns. The read-at-open / update-at-close discipline itself is prompt-enforced and eval-sampled, not mechanical. The guard hooks stay the only enforcement layer. |
 | **Show the journey** | Iteration history is evidence: failed review/QA passes stay visible append-only (journey strip, test cycles, clarification rounds), never smoothed into a clean narrative. | Two DoD gates ("a multi-pass engagement whose docs read first-pass-clean fails") + the templates' append-only structures. Prompt-enforced, eval-sampled. |
-| **Self-tested** | The team's own quality is regression-tested like code. | 1,900+ unit tests in CI (incl. the guards driven via their real protocol) + the eval harness: 9 rubrics, 52 golden cases, contract-checked in CI, live-scored by `/run-evals`. |
+| **Self-tested** | The team's own quality is regression-tested like code. | 3,200+ unit tests in CI (incl. the guards driven via their real protocol) + the eval harness: 9 rubrics, 52 golden cases, contract-checked in CI, live-scored by `/run-evals`. |
 | **Modular** | Each specialist evolves, retiers or gets replaced independently. | Per-agent frontmatter (`model:`, `tools:`) + manifest validation in CI + the tier table kept in sync by convention. |
 
 <sub>[↑ Back to top](#readme-top)</sub>

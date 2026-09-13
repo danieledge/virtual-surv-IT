@@ -11,6 +11,8 @@ requires-python = ">=3.10"
 pythonpath = ["."]
 testpaths = ["tests"]
 addopts = "-q"
+# pytest-timeout (requirements-dev.txt): no single test may run longer than this.
+timeout = 120
 
 [tool.ruff]
 # Matches the existing house style; long regex/comment lines are left as-is by the formatter.

@@ -510,3 +510,39 @@ def test_rescore_rows_never_count_toward_raw_passes(tmp_path, monkeypatch):
     assert any("passing raw" in f for f in rg.gate(root)), (
         "a rescore PASS must not inflate the raw count"
     )
+
+
+# ------------------------------------------ 2026-09-13 framework review, step 5.10
+
+
+def test_declared_eval_spend_must_match_the_recorded_cost_of_the_cited_runs(tmp_path):
+    rows = (
+        "\n".join(
+            json.dumps(
+                {"run_id": _RUN, "case": case, "mode": "run", "passed": True, "cost_usd": 4.5}
+            )
+            for case in _CASES
+        )
+        + "\n"
+        + json.dumps(
+            {"run_id": _RUN, "case": _CASES[0], "mode": "rescore", "passed": True, "cost_usd": 4.5}
+        )
+        + "\n"
+    )
+    (tmp_path / "evals").mkdir()
+    (tmp_path / "evals" / "results.jsonl").write_text(rows, encoding="utf-8")
+    honest = _CLEAN_VERDICT.replace("```\n", "eval_spend_usd: 27.00\n```\n", 1)
+    assert not [
+        f for f in rg._corroboration_findings("b.md", honest, tmp_path) if "eval_spend_usd" in f
+    ]
+    understated = _CLEAN_VERDICT.replace("```\n", "eval_spend_usd: 9.00\n```\n", 1)
+    findings = rg._corroboration_findings("b.md", understated, tmp_path)
+    assert any("eval_spend_usd: 9.00 but the cited run(s) recorded 27.00" in f for f in findings)
+    garbage = _CLEAN_VERDICT.replace("```\n", "eval_spend_usd: lots\n```\n", 1)
+    assert any(
+        "is not a number" in f for f in rg._corroboration_findings("b.md", garbage, tmp_path)
+    )
+    # A block that declares no spend is not penalised (older baselines).
+    assert not [
+        f for f in rg._corroboration_findings("b.md", _CLEAN_VERDICT, tmp_path) if "spend" in f
+    ]
