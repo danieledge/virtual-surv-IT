@@ -20,6 +20,7 @@ Usage: python -m scripts.render_findings <pack.jsonl> [--out REVIEW-<slug>.md] [
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -34,9 +35,15 @@ except ImportError:  # pragma: no cover - direct-path invocation
     from findings_pack_io import read_pack  # type: ignore[no-redef]
 
 _SEV = {"critical": "🔴", "warning": "🟠", "medium": "🟡", "style": "🔵"}
+_SEV_WORD = {"critical": "Critical", "warning": "Warning", "medium": "Medium", "style": "Style"}
 _SEV_ORDER = ["critical", "warning", "medium", "style"]
 _BASIS = {"measured": "📊 measured", "coded": "📄 coded", "inferred": "🧠 inferred"}
 _DISP = {"open": "🔴 Open", "fixed": "✅ Fixed", "accepted": "⚖️ Accepted", "deferred": "⏭️ Deferred"}
+# The review-scorer / self-scoring line is standardised as "Found N · Reported R · Filtered F"
+# (docs/code-review-method.md §Transparency). We surface those numbers as a prominent
+# false-positive-transparency line even when the pack only carries them inside the free-text
+# 'scoring' field, so a report never hides how many findings were seen and set aside.
+_FRF_RE = re.compile(r"Found\s+(\d+).*?Reported\s+(\d+).*?Filtered\s+(\d+)", re.S | re.I)
 # kind -> (artifact filename prefix, default report title). Same five-field finding shape for all;
 # performance findings add the optional cost/gain fields (rendered when present).
 _KIND = {
@@ -60,6 +67,23 @@ def _force_utf8_output() -> None:
             pass
 
 
+def _anchor(fid: str) -> str:
+    """A stable in-document anchor id for a finding, so the at-a-glance table can link
+    straight to the full entry. Deterministic from the finding id (not the title, whose
+    auto-slug is long and unpredictable): CR-01 -> f-cr-01."""
+    return "f-" + re.sub(r"[^a-z0-9]+", "-", fid.lower()).strip("-")
+
+
+def _tags_line(f: dict) -> str | None:
+    """Optional taxonomy tags (CWE / OWASP / rule ids) rendered only when the pack supplies
+    them - never fabricated. The cited 'standard' stays the authoritative reference; these are
+    the machine-filterable labels that SARIF/Semgrep/CodeQL carry alongside it."""
+    tags = f.get("tags")
+    if not tags:
+        return None
+    return "**Tags:** " + "  ·  ".join(f"`{t}`" for t in tags)
+
+
 def _finding_block(f: dict) -> str:
     sev = _SEV.get(f["severity"], "•")
     basis = _BASIS.get(f.get("basis", ""), f.get("basis", ""))
@@ -69,10 +93,21 @@ def _finding_block(f: dict) -> str:
     if f.get("impact_basis"):
         impact = f"{impact}  ({_BASIS.get(f['impact_basis'], f['impact_basis'])})"
     fix = f["fix"]
+    tags_line = _tags_line(f)
+    effort = f.get("effort")
+    disposition = f"**Disposition:** {_DISP.get(f['disposition'], f['disposition'])}"
+    if effort:
+        disposition += f"  ·  **Fix effort:** {effort}"
     return "\n".join(
         [
+            # Explicit anchor so the at-a-glance table links straight here (the heading's own
+            # auto-slug is long and emoji-stripped, so it is not a reliable link target).
+            f'<a id="{_anchor(f["id"])}"></a>',
             f"### {sev} {f['id']} — {f['title']}",
             f"**Location:** `{f['location']}`{conf_str}  ·  **Basis:** {basis}",
+        ]
+        + ([tags_line] if tags_line else [])
+        + [
             "",
             f"**Standard:** {f['standard']}",
             "",
@@ -100,9 +135,92 @@ def _finding_block(f: dict) -> str:
         )
         + [
             "",
-            f"**Disposition:** {_DISP.get(f['disposition'], f['disposition'])}",
+            disposition,
         ]
     )
+
+
+def _transparency(pack: dict, findings: list) -> tuple[int, int, int] | None:
+    """Found / Reported / Filtered - false-positive transparency. Prefer explicit integer
+    fields on the pack; otherwise recover the numbers from the standardised 'scoring' line so
+    packs that only carry them in prose still surface them. Returns None when neither is present
+    (a pack that never scored), so nothing is invented."""
+    found, reported, filtered = pack.get("found"), pack.get("reported"), pack.get("filtered")
+    if reported is None:
+        reported = len(findings)
+    if isinstance(found, int) and isinstance(filtered, int) and isinstance(reported, int):
+        return found, reported, filtered
+    m = _FRF_RE.search(pack.get("scoring") or "")
+    if m:
+        return int(m.group(1)), int(m.group(2)), int(m.group(3))
+    return None
+
+
+def _cell(text: str) -> str:
+    """Escape a value for a Markdown table cell: pipes would end the column, newlines the row."""
+    return str(text).replace("|", "\\|").replace("\n", " ").strip()
+
+
+def _summary_table(ordered: list) -> list[str]:
+    """The findings-at-a-glance index: one row per finding, worst-first, each id linking to its
+    full entry. The single most common gap versus GitHub code scanning / SonarQube / SARIF, which
+    all lead with a scannable per-finding list before the detail. Tags and Fix-effort columns
+    appear only when at least one finding carries them, so a pack that uses neither is unchanged."""
+    has_tags = any(f.get("tags") for f in ordered)
+    has_effort = any(f.get("effort") for f in ordered)
+    headers = ["ID", "Severity", "Title", "Location", "Conf."]
+    if has_tags:
+        headers.append("Tags")
+    if has_effort:
+        headers.append("Fix effort")
+    headers.append("Disposition")
+    rows = ["| " + " | ".join(headers) + " |", "|" + "---|" * len(headers)]
+    for f in ordered:
+        sev = f.get("severity", "style")
+        conf = f.get("confidence")
+        cells = [
+            f"[{_cell(f['id'])}](#{_anchor(f['id'])})",
+            f"{_SEV.get(sev, '•')} {_SEV_WORD.get(sev, sev)}",
+            _cell(f["title"]),
+            f"`{_cell(f['location'])}`",
+            f"{conf}" if conf is not None else "-",
+        ]
+        if has_tags:
+            tags = f.get("tags") or []
+            cells.append("  ·  ".join(f"`{_cell(t)}`" for t in tags) if tags else "-")
+        if has_effort:
+            cells.append(_cell(f["effort"]) if f.get("effort") else "-")
+        cells.append(_DISP.get(f.get("disposition", ""), f.get("disposition", "")))
+        rows.append("| " + " | ".join(cells) + " |")
+    return rows
+
+
+def _fix_first_line(ordered: list) -> str:
+    """Remediation priority - the fix-first call-out. Worst-first ordering answers 'how bad',
+    not 'what to fix first': the actionable order is the still-OPEN blocking findings (critical
+    and warning), highest severity then highest confidence. Medium and style are non-blocking and
+    left to follow-up, matching the severity lanes in docs/code-review-method.md."""
+    blocking = [
+        f
+        for f in ordered
+        if f.get("disposition") == "open" and f.get("severity") in ("critical", "warning")
+    ]
+    blocking.sort(
+        key=lambda f: (_SEV_ORDER.index(f.get("severity", "style")), -(f.get("confidence") or 0))
+    )
+    if not blocking:
+        return "**Fix first:** no open critical or warning findings."
+    refs = "  ·  ".join(
+        f"{_SEV.get(f.get('severity'), '•')} [{f['id']}](#{_anchor(f['id'])})" for f in blocking
+    )
+    return "**Fix first** (open critical/warning, highest severity then confidence): " + refs
+
+
+_LEGEND = (
+    "**Legend** · Severity 🔴 Critical · 🟠 Warning · 🟡 Medium · 🔵 Style/form · "
+    "Basis 📊 measured · 📄 coded · 🧠 inferred · "
+    "Disposition ✅ Fixed · 🔴 Open · ⚖️ Accepted · ⏭️ Deferred"
+)
 
 
 def render(pack: dict) -> str:
@@ -154,6 +272,22 @@ def render(pack: dict) -> str:
         scoreboard,
         "",
     ]
+    tr = _transparency(pack, findings)
+    if tr:
+        found, reported, filtered = tr
+        lines += [
+            f"**Found {found}**  ·  **Reported {reported}**  ·  **Filtered {filtered}**  "
+            "*(filtered items were seen and set aside with a reason, not missed)*",
+            "",
+        ]
+    if pack.get("scoring"):
+        lines += [f"> **Scoring & filtering.** {pack['scoring']}", ""]
+    # Findings at a glance: the fix-first order + a per-finding index table, so a reader sees the
+    # whole shape and the priority before the detail. Skipped on an empty pack (nothing to index).
+    if findings:
+        lines += ["## Findings at a glance", _fix_first_line(ordered), ""]
+        lines += _summary_table(ordered)
+        lines += ["", _LEGEND, ""]
     if pack.get("tooling_coverage"):
         # A SECTION, not a bold line (2026-09-13): the DoD gate looks for a
         # '## 🔬 Tooling coverage' heading (check_artifacts FINDINGS-NO-TOOLING-COVERAGE), so a
