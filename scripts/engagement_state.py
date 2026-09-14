@@ -3018,6 +3018,16 @@ def _cmd_budget_status(args: argparse.Namespace) -> int:
     # skill already carry, ~190B consumed by nothing at every gate (token audit Track C,
     # 2026-08-18). The caveat lives in this function's docstring and ADR-006.
     print(f"HEADROOM={worst}")
+    if worst == "unknown" and (daily or ceiling):
+        # 2026-09-14 live report (corporate box, no session transcripts to price): the PM got
+        # HEADROOM=unknown and the auto-mode park rung presumes a measurable spend. Say what
+        # the rung does with no telemetry, so no session has to invent it: the agents cap and
+        # the dispatch count are the operative limits, and the fact is recorded, not hidden.
+        print(
+            "NOTE: no spend telemetry on this box (transcripts unreadable or unpriced) - pace on "
+            "DISPATCHES against the agents cap; in auto mode proceed and record a ledger entry "
+            "saying spend was not measurable, never a guessed figure; attended, say so once."
+        )
     # 3, not 1: exit 1 already means "the state is invalid" throughout this CLI, and a
     # caller must be able to tell an over-dispatched engagement from a broken one.
     return 3 if over_dispatch else 0

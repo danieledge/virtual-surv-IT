@@ -50,6 +50,11 @@ tool outright). The human chose a rung at the pre-flight screen; it is on the st
 - **`park`** (the default) - park cleanly at the next gate, per the section below. The
   engagement resumes normally, which is why it is the default: a parked run is recoverable,
   a truncated one is not.
+- **`HEADROOM=unknown`** (no spend telemetry on this box: `budget-status` prints a NOTE
+  saying so) - the rung cannot trigger on spend, and this run has nobody to ask. Proceed,
+  pace on `DISPATCHES` against the agents cap (going over it still exits 3 and parks), and
+  record ONE ledger entry: "spend not measurable on this box; paced on the agents cap". Never
+  invent a figure, and never treat unknown as ok.
 - **`light`** - `set-profile light` for what remains, recorded as a ledger entry naming the
   figures that triggered it. Two constraints, both real: `engage-light` says the profile is
   chosen by invoking it and is **never inferred, nor suggested as a way around a gate** - this

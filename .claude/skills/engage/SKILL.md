@@ -298,7 +298,10 @@ and when the estimate exceeds it the plan section proposes a **day plan with gat
 day boundaries** (e.g. day 1 spec + build, day 2 QA + reviews, day 3 close) rather than
 pretending it fits one day; (b) `budget-status` runs at every gate and its DAILY/HEADROOM line
 is stated beside the team-sizing line (degrade ladder on approaching/exceeded: orchestration
-guide); (c) an approaching cap near a natural gate means **park cleanly, not push on**: advance
+guide); (c) `HEADROOM=unknown` means the box has no spend telemetry: say so once, pace on the
+`DISPATCHES` line against the agents cap, and ask the user whether to continue on that basis
+(auto mode proceeds and records it - `references/auto-mode.md`); (d) an approaching cap near a
+natural gate means **park cleanly, not push on**: advance
 the state file, keep the index current, write the outstanding list, and end the turn saying
 plainly "NOT closed - resuming tomorrow at <next gate>". The resume machinery makes tomorrow's
 pickup cheap; a hard org-side stop mid-review does not.

@@ -118,3 +118,21 @@ def test_budget_survives_a_render_cycle(tmp_path):
     assert es_main(["--dir", str(ws), "set-budget", "--daily-usd", "50"]) == 0
     assert es_main(["--dir", str(ws), "set-phase", "delivery"]) == 0
     assert load_state(ws)["budget"]["daily_usd"] == 50.0
+
+
+def test_unknown_headroom_says_what_to_do_without_telemetry(tmp_path, monkeypatch, capsys):
+    """2026-09-14 live report: HEADROOM=unknown on a box with no spend telemetry, and the
+    park rung presumed spend was measurable. The block now says what unknown means and what
+    the pacing rule is, so no session invents it."""
+    from scripts import engagement_state as es
+
+    pack = tmp_path / "VSIT" / "engagements" / "eng"
+    assert es.main(["init", "--slug", "eng", "--title", "Eng", "--dir", str(pack)]) == 0
+    assert es.main(["set-budget", "--daily-usd", "10", "--agents", "4", "--dir", str(pack)]) == 0
+    monkeypatch.setattr(es, "_load_dashboard_module", lambda: None)
+    capsys.readouterr()
+    assert es.main(["budget-status", "--dir", str(pack)]) == 0
+    out = capsys.readouterr().out
+    assert "HEADROOM=unknown" in out
+    assert "no spend telemetry" in out and "agents cap" in out
+    assert "never a guessed figure" in out
