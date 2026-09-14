@@ -7535,60 +7535,97 @@ def test_run_env_check_folds_in_synthetic_engagement(monkeypatch, tmp_path, caps
     assert "Summary" in out  # the new scoreboard is present too
 
 
-# --- hook-latency diagnostic (feeds the ADR-014 daemon decision) ---
+# --- hook-latency diagnostic (Diagnostics option 5 -> scripts/hook_latency_probe.py) ---
 
 
-def test_fmt_latency_stats_empty_list():
+def test_run_hook_latency_diagnostic_delegates_to_the_probe(monkeypatch, tmp_path, capsys):
+    """Option 5 runs scripts/hook_latency_probe.py as a subprocess with the repo as both
+    plugin root and project, a JSON file in the cwd, and the console JSON echo off (the
+    probe's own console report is what the user sees; the file carries the samples)."""
     import install_helper as ih
 
-    assert ih._fmt_latency_stats([]) == "no successful samples"
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "hook_latency_probe.py").write_text("", encoding="utf-8")
+    (tmp_path / ".claude" / "hooks").mkdir(parents=True)
+    (tmp_path / ".claude" / "hooks" / "run-guard.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: tmp_path)
+    calls = []
+
+    def fake_run(argv, **kw):
+        calls.append((argv, kw))
+        return _proc(0)
+
+    monkeypatch.setattr(ih.subprocess, "run", fake_run)
+    rc = ih.run_hook_latency_diagnostic(ih.Style(False), ih.marks(), repo_hint=str(tmp_path))
+    assert rc == 0
+    assert len(calls) == 1
+    argv, kw = calls[0]
+    assert argv[0] == ih.sys.executable
+    assert argv[1] == str(tmp_path / "scripts" / "hook_latency_probe.py")
+    assert argv[argv.index("--plugin-root") + 1] == str(tmp_path)
+    assert argv[argv.index("--project-dir") + 1] == str(tmp_path)
+    json_arg = argv[argv.index("--json") + 1]
+    assert json_arg.startswith(str(tmp_path / "virt-surv-hook-latency-"))
+    assert json_arg.endswith(".json")
+    assert "--quiet-json" in argv
+    assert kw["cwd"] == str(tmp_path)
+    assert "capture_output" not in kw  # the probe's console report streams to the user
+    out = capsys.readouterr().out
+    assert "Hook timing" in out
+    assert "hand this back whole" in out
 
 
-def test_fmt_latency_stats_all_failed():
+def test_run_hook_latency_diagnostic_relays_a_probe_failure(monkeypatch, tmp_path, capsys):
     import install_helper as ih
 
-    assert ih._fmt_latency_stats([None, None]) == "no successful samples (2 failed/timed out)"
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "hook_latency_probe.py").write_text("", encoding="utf-8")
+    (tmp_path / ".claude" / "hooks").mkdir(parents=True)
+    (tmp_path / ".claude" / "hooks" / "run-guard.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: tmp_path)
+    monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(2))
+    assert ih.run_hook_latency_diagnostic(ih.Style(False), ih.marks(), repo_hint=str(tmp_path)) == 1
+    monkeypatch.setattr(ih.subprocess, "run", _timeout_runner)
+    assert ih.run_hook_latency_diagnostic(ih.Style(False), ih.marks(), repo_hint=str(tmp_path)) == 1
+    assert "did not complete" in capsys.readouterr().out
 
 
-def test_fmt_latency_stats_mixed_reports_min_median_max_and_dropped_count():
+def test_run_hook_latency_diagnostic_skips_when_probe_or_launcher_missing(
+    monkeypatch, tmp_path, capsys
+):
+    """No probe or no launcher under the resolved root: say so and return 0, never spawn.
+    A plugin checkout that predates the probe must not turn a diagnostic into an error."""
     import install_helper as ih
 
-    detail = ih._fmt_latency_stats([0.1, 0.2, 0.3, None])
-    assert "min=100ms" in detail
-    assert "median=200ms" in detail
-    assert "max=300ms" in detail
-    assert "n=3" in detail
-    assert "1 failed/timed out" in detail
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: tmp_path)
+
+    def boom(argv, **kw):
+        raise AssertionError("nothing should be spawned")
+
+    monkeypatch.setattr(ih.subprocess, "run", boom)
+    rc = ih.run_hook_latency_diagnostic(ih.Style(False), ih.marks(), repo_hint=str(tmp_path))
+    assert rc == 0
+    assert "nothing to measure" in capsys.readouterr().out
+    assert not list(tmp_path.glob("virt-surv-hook-latency-*"))
 
 
-def test_trend_verdict_skips_with_too_few_samples():
+def test_diagnostics_menu_lists_hook_timing_above_the_prototype_divider():
+    """Owner ruling 2026-09-14: the hook latency probe is a first-class diagnostic. Its row
+    sits with the checks a normal user sees, above the internal/prototype divider, under
+    the same key (5) as before so stored keystrokes and _DIAGNOSTICS_ACTIONS still agree."""
     import install_helper as ih
 
-    status, detail = ih._trend_verdict([0.1, 0.2])
-    assert status == "SKIP"
-    assert "not enough" in detail
-
-
-def test_trend_verdict_detects_one_time_cache_pattern():
-    """First call much slower than the rest -> consistent with a one-time AV/EDR trust
-    cache, NOT per-process scanning - status OK (a cheaper fix than the daemon may exist)."""
-    import install_helper as ih
-
-    status, detail = ih._trend_verdict([0.5, 0.05, 0.04, 0.06, 0.05])
-    assert status == "OK"
-    assert "trust/scan cache" in detail
-    assert "ADR-014" in detail
-
-
-def test_trend_verdict_detects_flat_per_process_pattern():
-    """No meaningful drop-off -> consistent with per-process scanning regardless of
-    repetition - status WARN (the signal the daemon proposal is actually aimed at)."""
-    import install_helper as ih
-
-    status, detail = ih._trend_verdict([0.5, 0.48, 0.51, 0.49, 0.5])
-    assert status == "WARN"
-    assert "no meaningful drop-off" in detail
-    assert "daemon proposal" in detail
+    source = Path(ih.__file__).read_text(encoding="utf-8")
+    label_at = source.index('("5", "Hook timing (why are Bash/Read calls slow?)")')
+    divider_at = source.index('("", "-- internal / prototype diagnostics --")')
+    daemon_row_at = source.index('("6", "Guard daemon prototype test')
+    assert label_at < divider_at < daemon_row_at
+    assert ih._DIAGNOSTICS_ACTIONS["5"] == "hooklatency"
+    assert ih._DIAGNOSTICS_ACTIONS["6"] == "adr014smoke"
+    assert ih._DIAGNOSTICS_ACTIONS["7"] == "daemonstart"
 
 
 def test_resolve_sh_env_var_points_directly_at_sh(monkeypatch, tmp_path):
@@ -7661,33 +7698,6 @@ def test_resolve_sh_returns_none_when_nothing_resolves(monkeypatch):
     monkeypatch.setattr(ih.shutil, "which", lambda name: None)
     monkeypatch.setattr(ih.sys, "platform", "linux")
     assert ih._resolve_sh() is None
-
-
-def test_measure_repeated_returns_n_samples_all_successful(monkeypatch):
-    import install_helper as ih
-
-    monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0))
-    samples = ih._measure_repeated(lambda: (["true"], {}), n=5)
-    assert len(samples) == 5
-    assert all(s is not None and s >= 0 for s in samples)
-
-
-def test_measure_repeated_records_none_on_timeout(monkeypatch):
-    import install_helper as ih
-
-    monkeypatch.setattr(ih.subprocess, "run", _timeout_runner)
-    samples = ih._measure_repeated(lambda: (["true"], {}), n=3)
-    assert samples == [None, None, None]
-
-
-def test_measure_concurrent_returns_n_samples_and_a_total(monkeypatch):
-    import install_helper as ih
-
-    monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0))
-    samples, total = ih._measure_concurrent(lambda: (["true"], {}), n=6)
-    assert len(samples) == 6
-    assert all(s is not None for s in samples)
-    assert total >= 0
 
 
 def test_run_adr014_smoke_test_returns_none_when_spike_absent(tmp_path, monkeypatch):
@@ -7860,91 +7870,6 @@ def test_run_daemon_start_diagnostic_full_success_against_a_real_stub_daemon(
     assert "foreground daemon responds" in out
     assert "'exit_code': 0" in out
     assert "detached daemon spawn: port file appeared" in out
-
-
-def test_run_hook_latency_diagnostic_no_interpreter_skips_and_returns_1(monkeypatch, capsys):
-    import install_helper as ih
-
-    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], ""))
-    rc = ih.run_hook_latency_diagnostic(ih.Style(False), ih.marks())
-    out = capsys.readouterr().out
-    assert rc == 1
-    assert "no working interpreter found" in out
-
-
-def test_run_hook_latency_diagnostic_missing_launcher_skips_guard_sections(
-    monkeypatch, tmp_path, capsys
-):
-    """No .claude/hooks/run-guard.sh in this repo root -> the guard-launcher and fan-out
-    sections SKIP cleanly rather than erroring - the bare cold-start + trend sections
-    still run, since they only need an interpreter, not the launcher."""
-    import install_helper as ih
-
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("CLAUDE_CODE_GIT_BASH_PATH", raising=False)
-    _stub_interpreters(monkeypatch, ih, winner="python3")
-    monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0))
-    monkeypatch.setattr(ih.shutil, "which", lambda name: None)  # no sh, no powershell
-    # PIN the repo root to tmp_path. _resolve_repo_root rejects tmp_path (it is not a
-    # repo) and falls through to installer.json and then to __file__'s parent - which IS
-    # this repo, run-guard.sh and all - so on a runner with no installer.json the
-    # diagnostic measured the real launcher instead of SKIPping (2026-09-12, Windows CI).
-    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: tmp_path)
-    rc = ih.run_hook_latency_diagnostic(ih.Style(False), ih.marks(), repo_hint=str(tmp_path))
-    out = capsys.readouterr().out
-    assert rc == 0  # SKIP is not a failure
-    assert "real guard-launcher cost" in out
-    assert "can't measure the real path" in out
-    assert list(tmp_path.glob("virt-surv-hook-latency-*.txt"))  # always written
-
-
-def test_run_hook_latency_diagnostic_always_writes_data_file_even_when_clean(
-    monkeypatch, tmp_path, capsys
-):
-    """Unlike run_selftest's failure-only bundle, this one writes every time - the numbers
-    are the point here, not just catching errors."""
-    import install_helper as ih
-
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("CLAUDE_CODE_GIT_BASH_PATH", raising=False)
-    _stub_interpreters(monkeypatch, ih, winner="python3")
-    monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0))
-    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
-    ih.run_hook_latency_diagnostic(ih.Style(False), ih.marks(), repo_hint=str(tmp_path))
-    files = list(tmp_path.glob("virt-surv-hook-latency-*.txt"))
-    assert len(files) == 1
-    content = files[0].read_text(encoding="utf-8")
-    assert "hook-latency diagnostic" in content
-    assert "ADR-014" in content
-
-
-def test_run_hook_latency_diagnostic_measures_real_launcher_when_present(
-    monkeypatch, tmp_path, capsys
-):
-    """With a resolvable sh and a present run-guard.sh/dispatcher, the guard-launcher and
-    concurrent fan-out sections actually run (not just SKIP) - confirms the wiring reaches
-    the real-path branch, not just the missing-launcher fallback tested above."""
-    import install_helper as ih
-
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("CLAUDE_CODE_GIT_BASH_PATH", raising=False)
-    hooks_dir = tmp_path / ".claude" / "hooks"
-    hooks_dir.mkdir(parents=True)
-    (hooks_dir / "run-guard.sh").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    scripts_dir = tmp_path / "scripts"
-    scripts_dir.mkdir()
-    (scripts_dir / "bash_hook_dispatcher.py").write_text("", encoding="utf-8")
-    (tmp_path / "README.md").write_text("x", encoding="utf-8")
-
-    _stub_interpreters(monkeypatch, ih, winner="python3")
-    monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0))
-    monkeypatch.setattr(ih.shutil, "which", lambda name: "/bin/sh" if name == "sh" else None)
-    rc = ih.run_hook_latency_diagnostic(ih.Style(False), ih.marks(), repo_hint=str(tmp_path))
-    out = capsys.readouterr().out
-    assert rc == 0
-    assert "Real guard-launcher end to end" in out
-    assert "Concurrent fan-out simulation" in out
-    assert "guard overhead beyond bare interpreter" in out
 
 
 # --- enable_step delegates to run_configure (2026-08-12 consolidation) ---

@@ -82,7 +82,6 @@ import subprocess  # fixed-argv calls to git/claude/pip, no shell  # nosec B404
 import sys
 import tempfile
 import time
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path, PureWindowsPath
 from typing import Callable, NamedTuple, Optional
@@ -2329,11 +2328,12 @@ def choose_action(style: Style) -> str:
                     ("2", "Quick check (are the analysers behaving)"),
                     ("3", "Full check (this machine, and a test engagement end to end)"),
                     ("4", "Test engagement only (no environment checks)"),
+                    # 2026-09-14 (owner): a first-class entry, not a prototype. The hook
+                    # latency probe (scripts/hook_latency_probe.py) is the tool a user runs
+                    # when every Bash and Read call is slow; it reproduces the cost with the
+                    # real launcher, attributes it by layer and names the fix.
+                    ("5", "Hook timing (why are Bash/Read calls slow?)"),
                     ("", "-- internal / prototype diagnostics --"),
-                    (
-                        "5",
-                        "Hook timing (slow: runs each hook repeatedly and in parallel)",
-                    ),
                     ("6", "Guard daemon prototype test (starts a real background process)"),
                     (
                         "7",
@@ -4912,22 +4912,20 @@ class Installer:
             )
 
     def hook_latency_step(self) -> None:
-        """Standalone, easily re-runnable (menu option 5 under Diagnostics): measures real
-        PreToolUse hook latency on THIS machine - repeated cold starts, the real
-        guard-launcher end to end, and a concurrent fan-out simulation - and always writes
-        the full numbers to a file, feeding the ADR-014 persistent-daemon decision with
-        actual evidence instead of guesswork. Slower than the other diagnostics on
-        purpose - say so up front."""
+        """Diagnostics menu option 5, "Hook timing (why are Bash/Read calls slow?)": runs
+        scripts/hook_latency_probe.py on THIS machine - the real launcher end to end, each
+        layer of the per-call path timed on its own and attributed, and a ranked verdict
+        naming the fix for each cause. Takes a minute or so - say so up front."""
         self.step_intro(
-            "Measures real hook latency: repeated interpreter cold starts, the real "
-            "guard-launcher end to end, and a concurrent fan-out simulation - "
-            "the evidence docs/adr/ADR-014 calls for before deciding whether a persistent "
-            "guard daemon is worth building. Slower than the other checks (repeated + "
-            "concurrent measurement) - always writes the full numbers to a file, pass or "
-            "fail, since the data is the point here."
+            "Why are Bash and Read calls slow? Runs the hook latency probe: the real "
+            "guard launcher end to end (p50, p90, max), then each layer of the per-call path "
+            "on its own - shell spawn, interpreter resolution, Python start, guard imports, "
+            "the fan-out lock, the daemon round-trip or its cold-start fallback - attributed "
+            "so the layers add up to the total, with a ranked verdict naming the fix for "
+            "each. Takes a minute or so; always writes the full numbers to a JSON file."
         )
         if run_hook_latency_diagnostic(self.style, self.marks, self.args.repo) == 0:
-            self.step_ok("Hook latency diagnostic", "measured - see the data file for full numbers")
+            self.step_ok("Hook latency diagnostic", "measured - see the verdict above and the JSON file")
         else:
             self.step_fail(
                 "Hook latency diagnostic",
@@ -9284,23 +9282,6 @@ def run_env_check(style: Style, mark_map: dict, repo_hint: Optional[str] = None)
 # reasoning alone). This diagnostic is that measurement, made repeatable instead of ad hoc.
 
 
-def _fmt_latency_stats(samples: list) -> str:
-    """samples: elapsed seconds per call, or None for a call that errored/timed out -
-    excluded from the stats but counted separately so a crash mid-run doesn't silently
-    vanish or masquerade as a fast success."""
-    good = sorted(s for s in samples if s is not None)
-    dropped = len(samples) - len(good)
-    if not good:
-        return "no successful samples" + (f" ({dropped} failed/timed out)" if dropped else "")
-    good_ms = [s * 1000 for s in good]
-    n = len(good_ms)
-    median = good_ms[n // 2] if n % 2 else (good_ms[n // 2 - 1] + good_ms[n // 2]) / 2
-    detail = f"min={good_ms[0]:.0f}ms median={median:.0f}ms max={good_ms[-1]:.0f}ms (n={n})"
-    if dropped:
-        detail += f", {dropped} failed/timed out"
-    return detail
-
-
 def _resolve_sh() -> Optional[str]:
     """Resolve a POSIX shell to run run-guard.sh with - PATH alone is not enough on
     Windows. Live-confirmed 2026-08-11: a corp Windows box's PowerShell session had no
@@ -9361,222 +9342,58 @@ def _resolve_sh() -> Optional[str]:
     return None
 
 
-def _measure_repeated(argv_fn, n: int, timeout: float = 20.0) -> list:
-    """n separate, FRESH subprocess invocations, one after another - argv_fn() returns
-    (argv, kwargs) recomputed each call so a caller can vary the payload if needed. Returns
-    elapsed seconds per call; None = that call errored or timed out."""
-    samples = []
-    for _ in range(n):
-        argv, kwargs = argv_fn()
-        start = time.monotonic()
-        try:
-            subprocess.run(argv, capture_output=True, timeout=timeout, **kwargs)  # nosec B603
-            samples.append(time.monotonic() - start)
-        except (OSError, subprocess.TimeoutExpired):
-            samples.append(None)
-    return samples
-
-
-def _trend_verdict(good_bare: list) -> tuple:
-    """The decision-relevant signal: does repetition help? A sharp drop after the first
-    call is consistent with a one-time "this binary is now trusted" AV/EDR cache; a flat
-    cost across all samples is consistent with per-process scanning regardless of
-    repetition - the daemon only earns its keep in the second case (fewer processes =
-    fewer scans; a cache that already makes repeats cheap gets most of that benefit for
-    free without one). Pulled out of run_hook_latency_diagnostic as a pure function
-    (samples in, verdict out) specifically so it's testable with contrived sample lists -
-    the real function's actual timings come from mocked-instant subprocess calls in tests,
-    which can't be made to reproduce a genuine first-call-slow pattern through the mock
-    alone. Returns (status, detail)."""
-    if len(good_bare) < 3:
-        return "SKIP", "not enough successful samples to judge a trend"
-    first, rest = good_bare[0], good_bare[1:]
-    rest_median = sorted(rest)[len(rest) // 2]
-    if first > 0 and rest_median < first * 0.5:
-        return "OK", (
-            f"first call {first * 1000:.0f}ms, later calls ~{rest_median * 1000:.0f}ms - "
-            "consistent with a one-time trust/scan cache, NOT per-process scanning. "
-            "Worth investigating AV allow-listing or interpreter start-up flags (-S/-I) "
-            "before considering the daemon in ADR-014."
-        )
-    return "WARN", (
-        f"first call {first * 1000:.0f}ms, later calls ~{rest_median * 1000:.0f}ms - "
-        "no meaningful drop-off, consistent with per-process scanning regardless of "
-        "repetition. This is the signal ADR-014's daemon proposal is aimed at - fewer "
-        "processes is the only lever that reduces this."
-    )
-
-
-def _measure_concurrent(argv_fn, n: int, timeout: float = 30.0) -> tuple:
-    """n concurrent invocations (ThreadPoolExecutor, not a loop - the same
-    technique tests/test_run_guard_lock.py::test_concurrent_calls_are_actually_serialized
-    already uses) - reproduces the actual reported Workflow-fan-out symptom on demand
-    instead of waiting for it to happen organically in a real session. Returns (per-call
-    elapsed-seconds list, total wall-clock for the whole batch)."""
-
-    def _one(_i):
-        argv, kwargs = argv_fn()
-        start = time.monotonic()
-        try:
-            subprocess.run(argv, capture_output=True, timeout=timeout, **kwargs)  # nosec B603
-            return time.monotonic() - start
-        except (OSError, subprocess.TimeoutExpired):
-            return None
-
-    batch_start = time.monotonic()
-    with ThreadPoolExecutor(max_workers=n) as pool:
-        samples = list(pool.map(_one, range(n)))
-    total = time.monotonic() - batch_start
-    return samples, total
-
-
 def run_hook_latency_diagnostic(
     style: Style, mark_map: dict, repo_hint: Optional[str] = None
 ) -> int:
-    """Standalone diagnostic (--check-hook-latency / Diagnostics menu option 5): measures
-    real PreToolUse hook latency on THIS machine - repeated bare interpreter cold starts,
-    the real guard-launcher end to end, and a concurrent fan-out simulation -
-    feeding the ADR-014 daemon decision with actual numbers instead of guesswork. Slower
-    than the other diagnostics on purpose (repeated + concurrent measurement, not a single
-    pass) - ALWAYS writes its full numbers to a timestamped file, pass or fail, since the
-    data is the point here, not just catching errors (unlike run_selftest's bundle, which
-    is failure-only).
+    """Diagnostics menu option 5 / --check-hook-latency: runs scripts/hook_latency_probe.py,
+    the tool for "why is every Bash and Read call slow?". It reproduces the cost with the
+    real launcher (p50/p90/max), times each layer of the per-call path on its own (sh spawn,
+    interpreter resolution, Python start, guard imports, the fan-out lock, the daemon
+    round-trip or its cold-start fallback), attributes the milliseconds so the layers add up
+    to the total, and ranks the root causes with the fix that exists for each. The probe's
+    console output streams through untouched; its JSON goes to a timestamped file in the
+    current directory so the numbers can leave the box whole.
 
-    Verdict logic is deliberately conservative: it reports what the numbers are consistent
-    with, never a directive - "measured live" evidence for a human decision, matching this
-    project's own established discipline for changes of this size (docs/adr/ADR-014)."""
-    ok, fail = mark_map["ok"], mark_map["fail"]
+    This replaced the 2026-08 prototype (repeated cold starts plus a fan-out burst, a total
+    with no attribution) on 2026-09-14, when a live report of 2.4 to 4.4 seconds per call on
+    a corporate Windows box needed a root cause by layer, not another total."""
     repo_root = _resolve_repo_root(repo_hint) or Path(__file__).resolve().parent
-    rows = []
-    bundle_lines = []
-
-    def record(label: str, status: str, detail: str) -> None:
-        rows.append((label, status, detail))
-        bundle_lines.append(f"--- {label} [{status}] ---\n{detail}\n")
-        mark = {"OK": ok, "SKIP": style.dim("-"), "WARN": style.yellow("!")}.get(status, fail)
-        print(f"  {mark} {label}: {detail}", flush=True)
-
-    print(style.bold("Hook latency diagnostic (feeds the ADR-014 daemon decision)"))
-    print(
-        style.dim("  Repeated + concurrent measurement - slower than the other checks on purpose.")
-    )
-
-    order = ["python", "py", "python3"] if sys.platform == "win32" else ["python3", "python", "py"]
-    interp_rows, interpreter = _check_interpreters(order)
-    print(style.dim("\n  Interpreter resolution:"))
-    for name, status, detail in interp_rows:
-        record(name, status, detail)
-    if not interpreter:
-        record("bare cold start", "SKIP", "no working interpreter found - nothing to measure")
-        _print_diagnostic_summary(style, mark_map, rows)
-        return 1
-
-    print(style.dim(f"\n  Bare interpreter cold start ({interpreter}, 5 separate fresh calls):"))
-    bare = _measure_repeated(lambda: ([interpreter, "-c", "pass"], {}), n=5)
-    good_bare = [s for s in bare if s is not None]
-    record("bare cold start", "OK" if good_bare else "ERROR", _fmt_latency_stats(bare))
-
-    trend_status, trend_detail = _trend_verdict(good_bare)
-    record("repetition trend (daemon-relevant signal)", trend_status, trend_detail)
-
+    probe = repo_root / "scripts" / "hook_latency_probe.py"
     launcher = repo_root / ".claude" / "hooks" / "run-guard.sh"
-    dispatcher = repo_root / "scripts" / "bash_hook_dispatcher.py"
-    sh_path = _resolve_sh()
-    guard_good: list = []
-    if not (sh_path and launcher.is_file() and dispatcher.is_file()):
-        record(
-            "real guard-launcher cost",
-            "SKIP",
-            "sh, run-guard.sh or bash_hook_dispatcher.py not found - can't measure the real path",
+    if not probe.is_file() or not launcher.is_file():
+        print(
+            f"  {style.dim('-')} hook latency probe: scripts/hook_latency_probe.py or "
+            f".claude/hooks/run-guard.sh not found under {repo_root} - nothing to measure"
         )
-    else:
-        print(style.dim("\n  Real guard-launcher end to end (harmless payload, 5 separate calls):"))
-        payload = json.dumps(
-            {"tool_name": "Read", "tool_input": {"file_path": str(repo_root / "README.md")}}
-        )
-        guard_samples = _measure_repeated(
-            lambda: (
-                [sh_path, str(launcher), str(dispatcher)],
-                {"input": payload, "text": True, "cwd": repo_root},
-            ),
-            n=5,
-        )
-        guard_good = [s for s in guard_samples if s is not None]
-        record(
-            "real guard-launcher cost",
-            "OK" if guard_good else "ERROR",
-            _fmt_latency_stats(guard_samples),
-        )
-        if good_bare and guard_good:
-            bare_median = sorted(good_bare)[len(good_bare) // 2]
-            guard_median = sorted(guard_good)[len(guard_good) // 2]
-            record(
-                "guard overhead beyond bare interpreter",
-                "OK",
-                f"~{(guard_median - bare_median) * 1000:.0f}ms (guard imports/logic on top of "
-                "interpreter start-up alone)",
-            )
-
-        print(style.dim("\n  Concurrent fan-out simulation (8 concurrent calls):"))
-        fanout_samples, fanout_total = _measure_concurrent(
-            lambda: (
-                [sh_path, str(launcher), str(dispatcher)],
-                {"input": payload, "text": True, "cwd": repo_root},
-            ),
-            n=8,
-        )
-        fanout_good = [s for s in fanout_samples if s is not None]
-        record(
-            "concurrent fan-out (8 calls)",
-            "OK" if fanout_good else "ERROR",
-            f"{_fmt_latency_stats(fanout_samples)}, total wall-clock {fanout_total * 1000:.0f}ms",
-        )
-        if fanout_good:
-            worst_ms = max(fanout_good) * 1000
-            record(
-                "worst-case single call under fan-out",
-                "WARN" if worst_ms > 5000 else "OK",
-                f"{worst_ms:.0f}ms - compare against the 25-90s originally reported; this "
-                "reproduces the shape of that symptom on demand instead of waiting for it "
-                "to happen organically",
-            )
-
-    if sys.platform == "win32":
-        ps = shutil.which("powershell") or shutil.which("pwsh")
-        if ps:
-            print(style.dim(f"\n  PowerShell cold start ({ps}, diagnostic signal only, 5 calls):"))
-            ps_samples = _measure_repeated(
-                lambda: ([ps, "-NoProfile", "-Command", "exit 0"], {}), n=5
-            )
-            record(
-                "PowerShell cold start (diagnostic signal only - not a proposed fix, see ADR-014)",
-                "OK" if any(s is not None for s in ps_samples) else "ERROR",
-                _fmt_latency_stats(ps_samples),
-            )
-        else:
-            record("PowerShell cold start", "SKIP", "powershell/pwsh not found on PATH")
-    else:
-        record("PowerShell cold start", "SKIP", "Windows-only diagnostic signal")
-
-    _print_diagnostic_summary(style, mark_map, rows)
-
+        return 0
     ts = datetime.now().strftime("%Y%m%dT%H%M%S")
-    bundle_path = Path.cwd() / f"virt-surv-hook-latency-{ts}.txt"
-    header = (
-        "virt-surv-it hook-latency diagnostic (feeds the ADR-014 daemon decision)\n"
-        f"Python: {sys.version}\nPlatform: {sys.platform}\nInterpreter: {interpreter}\n"
-        f"Repo root: {repo_root}\n\n"
-    )
+    json_path = Path.cwd() / f"virt-surv-hook-latency-{ts}.json"
+    print(style.bold("Hook timing: where do the seconds go on every hook call?"))
+    print(style.dim(f"  Running {probe.relative_to(repo_root)} against {repo_root}; a minute or so."))
+    print("")
     try:
-        bundle_path.write_text(header + "\n".join(bundle_lines), encoding="utf-8")
-        print("")
-        print(style.dim(f"Full numbers written to: {bundle_path} - hand this back whole."))
-    except OSError as exc:
-        print("")
-        print(style.yellow(f"Could not write the data file: {exc}"))
-
-    bad = sum(1 for _label, status, _detail in rows if status == "ERROR")
-    return 1 if bad else 0
+        proc = subprocess.run(  # nosec B603 - fixed argv, the team's own probe
+            [
+                sys.executable,
+                str(probe),
+                "--plugin-root",
+                str(repo_root),
+                "--project-dir",
+                str(repo_root),
+                "--json",
+                str(json_path),
+                "--quiet-json",
+            ],
+            cwd=str(repo_root),
+            timeout=900,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        print(style.yellow(f"  the probe did not complete: {exc}"))
+        return 1
+    print("")
+    if proc.returncode == 0:
+        print(style.dim(f"Full numbers (every sample and the verdict) in: {json_path} - hand this back whole."))
+    return 0 if proc.returncode == 0 else 1
 
 
 # ------------------------------------------------------------------ ADR-014 spike smoke test wrapper
@@ -11878,11 +11695,10 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument(
         "--check-hook-latency",
         action="store_true",
-        help="standalone: measures real PreToolUse hook latency on this machine - "
-        "repeated interpreter cold starts, the real guard-launcher end to end, and a "
-        "concurrent fan-out simulation - feeding the docs/adr/ADR-014 persistent-daemon "
-        "decision with actual numbers. Slower than the other checks on purpose; always "
-        "writes the full numbers to a file, pass or fail, and exit",
+        help="standalone: why are Bash and Read calls slow? Runs scripts/hook_latency_probe.py - "
+        "the real guard launcher end to end (p50, p90, max), each layer of the per-call path "
+        "timed on its own and attributed so the layers add up to the total, and a ranked "
+        "verdict naming the fix for each. Writes the full numbers to a JSON file, and exit",
     )
     parser.add_argument(
         "--check-adr014-spike",
