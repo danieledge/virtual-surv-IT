@@ -121,6 +121,7 @@ signed as Morgan), and human sign-off.
   PDF / DOCX → data, deps vendored so no pip), `render_html`, `render_findings`, `render_docx`,
   `ingest`, `gen_synthetic`,
   `synthesise`, `validate_masking`, `validate_manifest`, `validate_rtm`, `validate_references`,
+  `validate_findings`,
   `check_citations`, `eval_score`,
   `calibrate_spoofing`, `check_artifacts`, `engagement_state`, `extensions`,
   `convert_sarif`, `engage_probe`, `repo_skeleton`, `explain_rule` (the "why did this NOT

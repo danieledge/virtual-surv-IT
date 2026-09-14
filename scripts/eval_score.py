@@ -662,6 +662,7 @@ TEAM_SCRIPT_NAMES = (
     "validate_manifest",
     "validate_rtm",
     "validate_references",
+    "validate_findings",
     "check_citations",
     "eval_score",
     "calibrate_spoofing",
