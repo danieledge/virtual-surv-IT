@@ -680,19 +680,78 @@ TEAM_SCRIPT_NAMES = (
 _GATE_BLOCK_MARKER = "blocked (code-execution gate"
 
 
+# The segment the gate refused, quoted back in its own block text. A command is several
+# segments; judging the whole command text was how a correct block of `python -c` inside a
+# command that ALSO ran render_html.py read as "the team's script was blocked" (live run
+# 20260914T063800Z). When the block names its segment, that segment is what is judged.
+_OFFENDING_RE = re.compile(r"offending segment:\s*(.+)", re.I)
+# A script that ships in the plugin's own scripts/ directory, invoked by path or module form.
+_SHIPPED_SCRIPT_RE = re.compile(
+    r"(?:^|[\s\"'=])(?:\S*[/\\\\])?scripts[/\\\\]([A-Za-z0-9_]+)\.py\b|-m\s+scripts\.([A-Za-z0-9_]+)\b"
+)
+
+
+# The gate quotes at most this many characters of the segment (guard-code-execution.py's
+# `[:200]`). A quote that long is cut, and the script name tends to be what fell off the end
+# in a sandbox whose paths run to 120 characters - so a cut quote is not judged on its own.
+_OFFENDING_QUOTE_CAP = 200
+
+
+def offending_segment(block_text: str) -> str:
+    """The segment a guard block names, or "" when the block does not say or the quote is
+    cut at the gate's cap (then the whole command is the only complete evidence)."""
+    m = _OFFENDING_RE.search(block_text or "")
+    if not m:
+        return ""
+    seg = m.group(1).strip()
+    return "" if len(seg) >= _OFFENDING_QUOTE_CAP else seg
+
+
+def _team_script_hit(judged: str, text: str) -> str:
+    """One evidence line when `judged` (a segment or a command) invokes the team's tooling."""
+    judged_low = _norm(judged)
+    for name in TEAM_SCRIPT_NAMES:
+        if f"{name}.py" in judged_low or f"scripts.{name}" in judged_low:
+            return f"code-execution gate blocked the team's own {name}.py: {_quote(text)}"
+    # Not on the allow-list, but shipped in scripts/ all the same (2026-09-14, run
+    # 20260914T063800Z: validate_findings.py exists, is documented, and was refused as
+    # untrusted code). Either the list has drifted behind the tooling or the session
+    # reached for a dev-only tool; both are worth a red run.
+    m = _SHIPPED_SCRIPT_RE.search(judged)
+    if m:
+        name = m.group(1) or m.group(2)
+        return (
+            f"code-execution gate blocked scripts/{name}.py, which is not on the "
+            f"allow-list: {_quote(text)}"
+        )
+    return ""
+
+
 def _detect_team_script_blocked(ctx: TripwireContext) -> list[str]:
     hits: list[str] = []
-    haystacks = [r["text"] for r in tool_results(ctx.events)]
+    results = tool_results(ctx.events)
+    # Blocks paired with the call they refused: judge the segment the gate names, or the
+    # whole command when the gate's quote is cut (the script name is what falls off the end).
+    calls = {c["id"]: c for c in tool_calls(ctx.events) if c["name"] == "Bash" and c["id"]}
+    paired: set = set()
+    for r in results:
+        text = r["text"]
+        if _GATE_BLOCK_MARKER not in _norm(text) or r["tool_use_id"] not in calls:
+            continue
+        paired.add(id(r))
+        cmd = str((calls[r["tool_use_id"]].get("input") or {}).get("command") or "")
+        hit = _team_script_hit(offending_segment(text) or cmd, text)
+        if hit:
+            hits.append(hit)
+    haystacks = [r["text"] for r in results if id(r) not in paired]
     haystacks += hook_outputs(ctx.events)
     haystacks.append(ctx.transcript)
     for text in haystacks:
-        low = _norm(text)
-        if _GATE_BLOCK_MARKER not in low:
+        if _GATE_BLOCK_MARKER not in _norm(text):
             continue
-        for name in TEAM_SCRIPT_NAMES:
-            if f"{name}.py" in low or f"scripts.{name}" in low:
-                hits.append(f"code-execution gate blocked the team's own {name}.py: {_quote(text)}")
-                break
+        hit = _team_script_hit(offending_segment(text) or text, text)
+        if hit:
+            hits.append(hit)
     return hits
 
 
@@ -789,9 +848,13 @@ def _detect_benign_command_blocked(ctx: TripwireContext) -> list[str]:
         if call["name"] != "Bash" or call["id"] not in blocked_ids:
             continue
         cmd = str((call.get("input") or {}).get("command") or "")
-        if _TEAM_INVOKE_RE.search(cmd):
+        # When the block names the segment it refused, judge THAT: a correct block of a
+        # `python -c` diagnostic must not read as a false positive because the same command
+        # also invoked render_html.py (run 20260914T063800Z).
+        judged = offending_segment(blocked_ids[call["id"]]) or cmd
+        if _TEAM_INVOKE_RE.search(judged):
             hits.append(f"a guard blocked the team's own command: {_quote(cmd)}")
-        elif _is_pure_exploration(cmd):
+        elif _is_pure_exploration(judged):
             hits.append(f"a guard blocked a pure exploration command: {_quote(cmd)}")
     if hits:
         return hits
