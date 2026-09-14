@@ -10343,3 +10343,32 @@ def test_preflight_demo_downgrades_a_missing_shell_to_a_skip(monkeypatch):
         inst.preflight()
     skips = [s for s in inst.tracker.steps if s[0] == "POSIX sh" and s[1] == "skip"]
     assert len(skips) == 1
+
+
+def test_resolve_sh_derives_the_shell_from_wherever_git_resolves(monkeypatch):
+    """2026-09-14 live: the owner's corporate box has a per-user Git for Windows under
+    %LOCALAPPDATA%\\Programs\\Git. Preflight found git, then declared sh missing, because
+    the fixed fallback list only knows the Program Files roots. Git for Windows ships both
+    binaries, so the shell is derived from git.exe's install root first."""
+    import install_helper as ih
+
+    monkeypatch.delenv("CLAUDE_CODE_GIT_BASH_PATH", raising=False)
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    git_exe = r"C:\Users\d\AppData\Local\Programs\Git\cmd\git.exe"
+    monkeypatch.setattr(ih.shutil, "which", lambda name: git_exe if name == "git" else None)
+    monkeypatch.setattr(ih.sys, "platform", "win32")
+    target = r"C:\Users\d\AppData\Local\Programs\Git\bin\sh.exe"
+    monkeypatch.setattr(ih.Path, "is_file", lambda self: str(self) == target)
+    assert ih._resolve_sh() == target
+
+
+def test_resolve_sh_checks_the_per_user_git_install_when_git_is_not_on_path_either(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.delenv("CLAUDE_CODE_GIT_BASH_PATH", raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", r"C:\Users\d\AppData\Local")
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ih.sys, "platform", "win32")
+    target = r"C:\Users\d\AppData\Local\Programs\Git\usr\bin\sh.exe"
+    monkeypatch.setattr(ih.Path, "is_file", lambda self: str(self) == target)
+    assert ih._resolve_sh() == target

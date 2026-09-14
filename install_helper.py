@@ -9217,14 +9217,29 @@ def _resolve_sh() -> Optional[str]:
     if found:
         return found
     if sys.platform == "win32":
-        for candidate in (
-            r"C:\Program Files\Git\bin\sh.exe",
-            r"C:\Program Files\Git\usr\bin\sh.exe",
-            r"C:\Program Files (x86)\Git\bin\sh.exe",
-            r"C:\Program Files (x86)\Git\usr\bin\sh.exe",
-        ):
-            if Path(candidate).is_file():
-                return candidate
+        # 2026-09-14: derive sh.exe from git.exe first. Git for Windows ships both, so
+        # wherever `git` resolves (Git\cmd\git.exe or Git\bin\git.exe) the shell sits at
+        # ..\bin\sh.exe or ..\usr\bin\sh.exe. This is the case the fixed list below misses:
+        # a per-user install under %LOCALAPPDATA%\Programs\Git, the usual shape on a
+        # corporate box with no admin rights, which is where the owner's update failed
+        # live with "POSIX sh not found" although preflight had just found git.
+        # Paths are assembled with ntpath (string-level Windows joins) so the logic is the
+        # same on every host and the unit tests can drive it from Linux CI.
+        import ntpath
+
+        roots = []
+        git_exe = shutil.which("git")
+        if git_exe:
+            roots.append(ntpath.dirname(ntpath.dirname(git_exe)))
+        roots += [r"C:\Program Files\Git", r"C:\Program Files (x86)\Git"]
+        local = os.environ.get("LOCALAPPDATA")
+        if local:
+            roots.append(ntpath.join(local, "Programs", "Git"))
+        for root in roots:
+            for rel in (("bin", "sh.exe"), ("usr", "bin", "sh.exe")):
+                candidate = ntpath.join(root, *rel)
+                if Path(candidate).is_file():
+                    return candidate
     return None
 
 
