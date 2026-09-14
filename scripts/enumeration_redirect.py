@@ -17,7 +17,12 @@ What still passes, deliberately:
 
 Dormant sessions are untouched (session-scoped arming, same stamp as the exec gate -
 but ADVISORY polarity: an unknown/missing stamp stays SILENT, this is a cost rule,
-not a safety wall). Fail-open on any internal error."""
+not a safety wall). Fail-open on any internal error.
+
+The message is two sentences (2026-09-14, live plugin-mode session on a corporate box):
+the eight-line version printed in red drowned the one instruction that mattered, and the
+session followed it anyway, so the rule stays and the words go. What was blocked, the one
+command to run instead, and where the reasoning lives."""
 
 from __future__ import annotations
 
@@ -44,6 +49,16 @@ _ALLOW_RE = re.compile(
     r"|\bgit\s+ls-files\b"
     r"|\brepo_skeleton\b)",
     re.IGNORECASE,
+)
+
+# Two sentences: what was blocked, and the one command to run instead. The forms that pass
+# and the reasoning are in the operating guide, which the session has already read.
+MESSAGE = (
+    "Blocked (map-first rule, engaged session): a full-tree listing, which this rule matches "
+    "on the whole command. Run `<python> -m scripts.repo_skeleton <dir>` instead, a "
+    "token-budgeted inventory that works for any directory; the reasoning and the forms "
+    "that pass (targeted `-name`/`-path`, `git ls-files`, `| wc -l`) are in "
+    "docs/team-operating-guide.md under Exploration discipline.\n"
 )
 
 
@@ -119,28 +134,7 @@ def main() -> int:
         if not _team_invoked_this_session(payload):
             return 0
         if _ENUM_RE.search(command) and not _ALLOW_RE.search(command):
-            sys.stderr.write(
-                # repo_skeleton leads (2026-08-20, live corporate session): the old wording
-                # opened with "the inventory already exists - read docs/codebase-map.md",
-                # which is untrue for the directory that actually triggers this most often -
-                # an archive the session extracted seconds earlier. No map covers it and it
-                # is not a git repo, so the first two suggestions both dead-end and the one
-                # that always works was listed third. Note also that the rule matches the
-                # WHOLE command, so a listing at the end of an && chain blocks the earlier
-                # steps too; run the extraction separately.
-                "full-tree enumeration blocked during an engagement (map-first rule, "
-                "2026-08-17): run `<python> -m scripts.repo_skeleton <dir>` for a "
-                "deterministic, token-budgeted inventory - this works for ANY directory, "
-                "including one you just extracted. The Glob tool also enumerates by "
-                "pattern and is cheaper than a Bash walk. "
-                "including one you just extracted or downloaded. For the working project "
-                "itself, docs/codebase-map.md (when it has one) or `git ls-files` (or "
-                "`git ls-files | wc -l` for a count) are cheaper still. Targeted lookups "
-                "(-name/-path) and count-only pipes pass this rule; a bare recursive "
-                "listing never does. This matches the whole command, so a listing at the "
-                "end of an `&&` chain blocks the earlier steps too - run those separately. "
-                "To create the standing map, route to /map-codebase.\n"
-            )
+            sys.stderr.write(MESSAGE)
             return 2
     except Exception:
         return 0  # advisory tier - never break a session over a cost rule

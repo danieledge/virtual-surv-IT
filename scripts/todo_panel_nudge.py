@@ -11,6 +11,11 @@ driver) and its live content is not observable from outside the running turn (ep
 never persisted) - so this cannot verify compliance the way dod_stop_gate.py verifies
 DoD findings from disk. It can only nudge at the structurally right moment.
 
+Not every session has the tool (2026-09-14, live plugin-mode session on a corporate box:
+"no TodoWrite tool in this session"). The nudge cannot see that either, so its wording
+covers both cases: mirror the gates if the tool is there; if not, the engagement state file
+is the progress view, said once, and the same marker is recorded so this stays quiet.
+
 Self-suppressing WITHOUT the hook writing state (every hook in this repo stays
 read-only - engagement-state.json is mutated only via engagement_state.py commands, by
 the model): the nudge asks Morgan to record `log-note "todo-panel-seeded"` once the
@@ -84,13 +89,12 @@ def _reason(slug: str | None, phase: str) -> str:
         else f'engagement_state log-note "{_SEEDED_MARKER}"'
     )
     return (
-        f"🎩 Task-panel nudge (Stop hook, warn-first, one-time) for {name}: its phase just "
-        f"reached '{phase}' and the operating guide's 'native task-list progress' rule "
-        "applies - seed one todo per planned gate (brief → build → tests → review → QA "
-        "→ DoD gate → close) via TodoWrite if you have not already, keeping exactly one "
-        "in_progress and ticking each as its evidence lands. Once the panel reflects the "
-        f"current gates, record `{log_note}` so this reminder never fires again for this "
-        "engagement. (One-time nudge - it will not repeat this stop cycle regardless.)"
+        f"🎩 Task-panel nudge (Stop hook, one-time) for {name}: its phase reached '{phase}'. "
+        "If the TodoWrite tool is available in this session, mirror the gates into the native "
+        "task list (one todo per planned gate: brief → build → tests → review → QA → DoD gate "
+        "→ close; exactly one in_progress; tick each as its evidence lands). If it is not, "
+        "engagement-state.json is the progress view - say so once. Either way, record "
+        f"`{log_note}` so this reminder does not fire again for this engagement."
     )
 
 
