@@ -478,3 +478,58 @@ def test_w6_after_exhaustion_new_findings_still_surface_as_a_warning(tmp_path, m
     assert rc == 0
     assert out == "", "exhausted means no more blocking, whatever the findings are"
     assert "SECOND.md" in err, "the new finding must still be printed in the warning"
+
+
+# ---- 2026-09-14 live report: the marker home is the pack the findings came from
+
+
+def test_marker_home_is_the_contributing_pack_not_the_first_gated_one(tmp_path):
+    staged = _load_staged_gate()
+    first, second = tmp_path / "alpha", tmp_path / "vrtsrv-13"
+    gated = [("alpha", first), ("vrtsrv-13", second)]
+    # Only the second pack contributed findings: it is the home, whatever the order.
+    assert staged.marker_home(gated, [("vrtsrv-13", second)], None) == ("vrtsrv-13", second)
+    # Several contributed and one is ACTIVE: the active one.
+    assert staged.marker_home(gated, gated, "vrtsrv-13") == ("vrtsrv-13", second)
+    # Several contributed, none active: the first contributing (the old rule, narrowed).
+    assert staged.marker_home(gated, gated, None) == ("alpha", first)
+    # Nothing contributed (project-level findings only): the old rule, unchanged.
+    assert staged.marker_home(gated, [], None) == ("alpha", first)
+    assert staged.marker_home([("", tmp_path), *gated], [], None) == ("", tmp_path)
+
+
+def test_two_open_engagements_the_remediation_names_the_pack_with_the_findings(
+    tmp_path, monkeypatch, capsys
+):
+    """VRTSRV-13, 2026-09-14: findings belonged to one pack, the hook hardcoded the first
+    gated slug in the command it printed, the block note landed in that other pack's log,
+    and the next stop escalated against a pack a direct check found clean. Now the slug in
+    the command, the note and the marker check all follow the findings."""
+    from scripts import engagement_state as es
+
+    art = tmp_path / "artifacts"
+    clean = art / "alpha-clean"
+    dirty = art / "vrtsrv-13"
+    for slug, pack in (("alpha-clean", clean), ("vrtsrv-13", dirty)):
+        assert es.main(["init", "--slug", slug, "--title", slug, "--dir", str(pack)]) == 0
+    (dirty / "NOTES.md").write_text("# notes\n", encoding="utf-8")  # MISSING-HTML on this pack
+    assert es.main(["add-artifact", "NOTES.md", "--title", "Notes", "--dir", str(dirty)]) == 0
+    (art / ".team-session.json").write_text(json.dumps({"session": _W6_SID}), encoding="utf-8")
+    # A stale suppression note on the CLEAN pack must not be read as a claim about the
+    # dirty one.
+    assert es.main(["log-note", "dod-nudged:0000000000000000", "--dir", str(clean)]) == 0
+    capsys.readouterr()
+    staged = _load_staged_gate()
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        "sys.stdin", io.StringIO(json.dumps({"session_id": _W6_SID, "cwd": str(tmp_path)}))
+    )
+    assert staged.main() == 0
+    out = capsys.readouterr().out
+    decision = json.loads(out)
+    assert decision["decision"] == "block"
+    assert "engagement_state --slug vrtsrv-13 log-note" in decision["reason"]
+    assert "--slug alpha-clean" not in decision["reason"]
+    assert "the note claims was done" not in decision["reason"]
+    assert "dod-gate-block:" in _w6_log(dirty)
+    assert "dod-gate-block:" not in _w6_log(clean)
