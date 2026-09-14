@@ -127,6 +127,13 @@ _CHECKS = (
     # engaged-sessions-only arming, and it redirects each target ONCE so a deliberate full
     # read still succeeds on the repeat. Prose said this already; prose did not do it.
     ("exploration_redirect", _SCRIPTS_DIR / "exploration_redirect.py", {"Read", "Grep"}, False),
+    # 2026-09-13 framework review, step 2.3: the locked-menu guard was the only reason
+    # PreToolUse carried a SECOND matcher (AskUserQuestion) and a second process per menu
+    # call. It runs here instead, on the same `*` matcher. Fail-open, exactly as its own
+    # __main__ behaves (a crash exits 1, non-blocking): a guard that cannot be sure must not
+    # block a legitimate question. The human removes the standalone entry from both hook
+    # files when applying this copy.
+    ("locked_menu_guard", _SCRIPTS_DIR / "locked_menu_guard.py", {"AskUserQuestion"}, False),
 )
 
 

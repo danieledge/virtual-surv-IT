@@ -178,6 +178,24 @@ _ORDINARY_DELIMS = (";", "&&", "||", "|", "\n")
 # `-F <file>` (a message FILE) is deliberately NOT exempted here - that IS a real read.
 _GIT_MESSAGE_VERBS = ("commit", "tag")
 
+# POSITIONAL PROSE CARVE-OUTS (2026-09-13 framework review, step 3.3). Three shapes that
+# blocked the team's own traffic on 2026-09-13 - a folder name inside an `echo` label, inside
+# the `--title` of the state script, and inside an Agent briefing - are prose in a position
+# that cannot read a file. They are exempted BY POSITION, never by verb list, so the
+# whole-segment scan below keeps every read shape it caught before: an echo whose output is
+# consumed (`echo <path> | xargs cat`, `f=$(echo <path>)`) or redirected is still judged,
+# and a non-Bash tool's `paths=[...]` list is now judged too (it never was).
+_PROSE_VERBS = ("echo", "printf")
+_STATE_SCRIPT_RE = re.compile(r"(?:engagement_state\.py\b|-m\s+scripts\.engagement_state\b)")
+# The two prose flags scripts/engagement_state.py defines. Their VALUE is text the user wrote.
+_STATE_PROSE_FLAG_RE = re.compile(r"""--(title|note)(?:=|\s+)("[^"]*"|'[^']*'|\S+)""")
+# Fields of a non-Bash tool that carry prose, never a path: an Agent/Task briefing, a
+# description, a commit-style message. Every OTHER string, and every string inside a list,
+# is still scanned (ADR-002 rec 22 - an MCP reader's `paths=[...]` or `uri=` stays covered).
+_PROSE_FIELDS = frozenset(
+    {"prompt", "description", "message", "content", "text", "body", "title", "reason"}
+)
+
 # ---------------------------------------------------------------------------
 # Canonical raw-data directory - the directory we protect.
 #
@@ -378,7 +396,7 @@ def _search_file_operands(command: str) -> list[str] | None:
             # data/raw/patterns.txt .` and `grep --file=data/raw/p.txt .` both passed,
             # because grep opens that file to read the patterns out of it. Same for the
             # include/exclude/glob filters, which can name a raw path just as directly.
-            # Only -e/--regexp genuinely carry a pattern rather than a path.
+            # Only -e/--regexp carry a pattern rather than a path.
             if base in _FLAGS_WITH_PATH_VALUE:
                 if "=" in tok:
                     value, step = tok.split("=", 1)[1], 1
@@ -495,6 +513,108 @@ def _requalify(text: str, cwd: str) -> str:
             continue
         out.append(f"{base}/{bare}")
     return " ".join(out)
+
+
+def _has_unquoted(segment: str, chars: str) -> bool:
+    """True when any of *chars* occurs outside single or double quotes."""
+    in_single = in_double = False
+    i = 0
+    while i < len(segment):
+        ch = segment[i]
+        if ch == "\\" and not in_single:
+            i += 2
+            continue
+        if ch == "'" and not in_double:
+            in_single = not in_single
+        elif ch == '"' and not in_single:
+            in_double = not in_double
+        elif not in_single and not in_double and ch in chars:
+            return True
+        i += 1
+    return False
+
+
+def _is_prose_echo(segment: str) -> bool:
+    """An `echo`/`printf` whose arguments go nowhere but the console (no redirect)."""
+    try:
+        tokens = shlex.split(segment)
+    except Exception:
+        return False
+    if not tokens or os.path.basename(tokens[0]) not in _PROSE_VERBS:
+        return False
+    return not _has_unquoted(segment, "<>")
+
+
+def _output_consumed_segments(command: str) -> set[str]:
+    """The segment texts whose OUTPUT another command reads: those followed by a single `|`,
+    and those opened by `$(` or a backtick. Same walk as _segments(), kept separate so that
+    function's contract (a plain list) is untouched. An echo in one of these positions is a
+    read path, not a label, and stays judged."""
+    consumed: set[str] = set()
+    current: list[str] = []
+    in_single = in_double = False
+    next_is_captured = False
+    i, n = 0, len(command)
+
+    def close(captured: bool) -> None:
+        nonlocal current, next_is_captured
+        text = "".join(current).strip()
+        if text and (captured or next_is_captured):
+            consumed.add(text)
+        current = []
+        next_is_captured = False
+
+    while i < n:
+        ch = command[i]
+        if ch == "\\" and not in_single and i + 1 < n:
+            if command[i + 1] == "\n":
+                i += 2
+                continue
+            current.append(command[i : i + 2])
+            i += 2
+            continue
+        if ch == "'" and not in_double:
+            in_single = not in_single
+            current.append(ch)
+            i += 1
+            continue
+        if ch == '"' and not in_single:
+            in_double = not in_double
+            current.append(ch)
+            i += 1
+            continue
+        if not in_single:
+            if command.startswith("`", i) or command.startswith("$(", i):
+                close(False)
+                next_is_captured = True
+                i += 2 if command.startswith("$(", i) else 1
+                continue
+            if not in_double:
+                if command.startswith("||", i) or command.startswith("&&", i):
+                    close(False)
+                    i += 2
+                    continue
+                if ch == "|":
+                    close(True)
+                    i += 1
+                    continue
+                if ch in ";\n":
+                    close(False)
+                    i += 1
+                    continue
+        current.append(ch)
+        i += 1
+    close(False)
+    return consumed
+
+
+def _state_prose_residual(segment: str) -> str | None:
+    """For an invocation of the team's own state script, the segment with the VALUES of its
+    two prose flags (`--title`, `--note`) replaced, else None. The script stores that text;
+    it never opens it as a path."""
+    if not _STATE_SCRIPT_RE.search(segment):
+        return None
+    return _STATE_PROSE_FLAG_RE.sub(lambda m: f"--{m.group(1)} <prose>", segment)
 
 
 def _segments(command: str) -> list[str]:
@@ -665,10 +785,21 @@ def _extract_path_candidates(tool: str, tool_input: dict) -> list[str]:
         # Deliberately unjudged - see _OUT_OF_SCOPE_TOOLS (currently empty).
         return []
 
-    # Unknown tool (a future local-filesystem MCP reader, NotebookRead variants, ...). Rather
-    # than the previous free pass, scan every string input for the marker. Advisory, but a
+    # Unknown tool (a future local-filesystem MCP reader, NotebookRead variants, an Agent/Task
+    # dispatch, ...). Rather than the previous free pass, scan every string input for the
+    # marker - and every string INSIDE A LIST, which the old comprehension skipped - except the
+    # fields that carry prose (_PROSE_FIELDS): a briefing that NAMES the folder is not a read
+    # of it, and the subagent's own reads pass through this same guard. Advisory, but a
     # coverage gap that returns [] is how a read tool reaches raw data with nothing checking it.
-    return [v for v in tool_input.values() if isinstance(v, str)]
+    out: list[str] = []
+    for key, value in tool_input.items():
+        if key in _PROSE_FIELDS:
+            continue
+        if isinstance(value, str):
+            out.append(value)
+        elif isinstance(value, list):
+            out.extend(v for v in value if isinstance(v, str))
+    return out
 
 
 def _block(reason: str) -> None:
@@ -709,7 +840,9 @@ def main() -> None:
     # per segment - never the whole compound command as if it were one invocation.
     if tool == "Bash":
         cwd = ""
-        for segment in _segments(_strip_heredoc_bodies(tool_input.get("command") or "")):
+        command = _strip_heredoc_bodies(tool_input.get("command") or "")
+        consumed = _output_consumed_segments(command)
+        for segment in _segments(command):
             moved = _cd_target(segment)
             operands = _search_file_operands(segment)
             if operands is not None:
@@ -730,9 +863,18 @@ def main() -> None:
                 if moved:
                     cwd = _advance_cwd(cwd, moved)
                 continue
+            # An echo/printf whose output reaches only the console is a label, not a read
+            # (step 3.3). One whose output is piped, substituted or redirected is judged.
+            if _is_prose_echo(segment) and segment not in consumed:
+                if moved:
+                    cwd = _advance_cwd(cwd, moved)
+                continue
             # A `find` that EXCLUDES the raw directory is the opposite of a read of it, so
             # its negated filters are dropped before matching (H-21).
             scan = _find_exclusion_residual(segment)
+            if scan is None:
+                # The state script's --title/--note values are text it stores (step 3.3).
+                scan = _state_prose_residual(segment)
             if scan is None:
                 scan = segment
             probes = [scan]

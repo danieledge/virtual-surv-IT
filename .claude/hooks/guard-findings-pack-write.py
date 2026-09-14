@@ -90,8 +90,18 @@ import re
 import sys
 from pathlib import Path
 
+# data-quality-reviewer joined on 2026-09-13 (framework review, step 4.6): its coverage
+# matrix, where an omission is an unmonitored venue, survived only as prose inside a 30-line
+# return budget ("anything you omit is lost"). Same narrow grant as the other four: its own
+# findings-coverage-<slug>.jsonl and nothing else.
 _SCOPED_AGENTS = frozenset(
-    {"code-reviewer", "compliance-reviewer", "model-validator", "performance-reviewer"}
+    {
+        "code-reviewer",
+        "compliance-reviewer",
+        "model-validator",
+        "performance-reviewer",
+        "data-quality-reviewer",
+    }
 )
 
 # Matches <root>/<slug>/data/findings-<anything>.jsonl (workspace) or
