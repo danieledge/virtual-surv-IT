@@ -833,10 +833,13 @@ def test_plugin_layout_never_writes_outside_its_own_root(tmp_path):
 
 
 def test_plugin_session_env_isolates_home_on_posix(tmp_path):
+    """A POSIX-shaped home by construction, like the Windows-shaped test below: on a real
+    Windows host tmp_path carries a drive letter, so HOMEDRIVE is rightly set there."""
     layout = _layout(tmp_path)
+    layout.home = pathlib.PurePosixPath("/runs/r1/home")
     env = layout.session_env()
-    assert env["HOME"] == str(layout.home)
-    assert env["USERPROFILE"] == str(layout.home)  # set on POSIX too, so a fake is never real
+    assert env["HOME"] == "/runs/r1/home"
+    assert env["USERPROFILE"] == "/runs/r1/home"  # set on POSIX too, so a fake is never real
     assert env["CLAUDE_CONFIG_DIR"] == str(layout.config_dir)
     assert "HOMEDRIVE" not in env  # no drive letter on a POSIX path
 
@@ -889,7 +892,7 @@ def test_auth_seeding_copies_credentials_and_nothing_else(tmp_path):
     assert "projects" not in carried and "installedPlugins" not in carried
 
 
-def test_windows_unnameable_files_are_skipped_on_every_platform(tmp_path):
+def test_windows_unnameable_files_are_skipped_on_every_platform(tmp_path, monkeypatch):
     assert ee.windows_nameable("normal.py")
     assert not ee.windows_nameable("aux")
     assert not ee.windows_nameable("COM1.txt")
@@ -898,9 +901,17 @@ def test_windows_unnameable_files_are_skipped_on_every_platform(tmp_path):
     src = tmp_path / "src"
     src.mkdir()
     (src / "keep.md").write_text("k", encoding="utf-8")
-    (src / "a:b.md").write_text("x", encoding="utf-8")
+    if os.name != "nt":
+        # Windows itself refuses to create this name ("a:" reads as a drive), so the
+        # copytree branch can only meet it on a POSIX source tree.
+        (src / "a:b.md").write_text("x", encoding="utf-8")
     ee.copy_plugin_tree(src, tmp_path / "dst")
     assert [p.name for p in (tmp_path / "dst").iterdir()] == ["keep.md"]
+    # The tracked-files branch (a git checkout) skips by NAME before it touches the disk,
+    # so the skip itself is exercised on every platform, Windows included.
+    monkeypatch.setattr(ee, "_tracked_files", lambda source: ["keep.md", "a:b.md", "aux/x.md"])
+    ee.copy_plugin_tree(src, tmp_path / "dst2")
+    assert [p.name for p in (tmp_path / "dst2").iterdir()] == ["keep.md"]
 
 
 def test_long_path_note_reports_the_worst_case_only_when_there_is_one(tmp_path):
@@ -1135,6 +1146,33 @@ def test_sandbox_copy_leaves_the_checkout_daemon_state_behind(tmp_path, monkeypa
     tgt = tmp_path / "target"
     ee.build_target_sandbox(src, tgt, {})
     assert not (tgt / ".claude" / ".guard-daemon-port").exists()
+
+
+def test_the_sandbox_copies_without_rsync_where_there_is_none(tmp_path, monkeypatch):
+    """The Windows VM and the Windows runner have no rsync (2026-09-14). Same excludes,
+    same reading of them: a bare name anywhere in the tree, a slashed one at that path."""
+    src = tmp_path / "src"
+    (src / ".claude").mkdir(parents=True)
+    (src / ".claude" / ".guard-daemon-port").write_text("1234\nabc\n")
+    (src / ".claude" / ".guard-interpreter").write_text("/usr/bin/python3\n")
+    (src / "sub" / "__pycache__").mkdir(parents=True)
+    (src / "sub" / "__pycache__" / "a.pyc").write_text("x")
+    (src / "sub" / "keep.py").write_text("x")
+    (src / "README.md").write_text("x")
+    monkeypatch.setattr(ee.shutil, "which", lambda name, *a, **k: None)
+    monkeypatch.setattr(ee, "REPO_ROOT", src)
+    dest = tmp_path / "sandbox"
+    ee.build_sandbox(dest)
+    copied = sorted(
+        p.relative_to(dest).as_posix()
+        for p in dest.rglob("*")
+        if p.is_file() and not p.relative_to(dest).as_posix().startswith(".git/")
+    )
+    assert copied == [".claude/.guard-interpreter", "README.md", "sub/keep.py"]
+    tgt = tmp_path / "target"
+    ee.build_target_sandbox(src, tgt, {"x": 1})
+    assert not (tgt / ".claude" / ".guard-daemon-port").exists()
+    assert (tgt / "sub" / "keep.py").is_file() and not (tgt / "sub" / "__pycache__").exists()
 
 
 # ------------------------------------------------- 2026-09-13: plugin commands are namespaced

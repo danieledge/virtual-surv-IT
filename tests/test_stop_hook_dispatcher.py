@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import subprocess
 import sys
 import types
@@ -49,6 +50,22 @@ def _load_dispatcher_module():
 _SID = "sess-dispatcher-suite"
 
 
+def _hook_env(project: Path) -> dict:
+    """The stripped env a hook child gets: the project anchor and a bare PATH, nothing of
+    this developer's own. On Windows a child also needs what the OS itself requires -
+    SystemRoot for its DLLs and a home it can resolve (check_artifacts falls back to
+    Path.home() for the config root, which raises with no USERPROFILE and took the whole
+    gate down its fail-open path: empty stdout, exit 0 - Windows CI, 2026-09-14)."""
+    env = {"CLAUDE_PROJECT_DIR": str(project), "PATH": "/usr/bin:/bin"}
+    if os.name == "nt":
+        home = project / "home"
+        home.mkdir(exist_ok=True)
+        env["USERPROFILE"] = str(home)
+        env["SystemRoot"] = os.environ.get("SystemRoot", "C:\\Windows")
+        env["PATH"] = env["SystemRoot"] + "\\System32"
+    return env
+
+
 def _run(script: Path, payload: dict, project: Path) -> subprocess.CompletedProcess:
     payload.setdefault("session_id", _SID)
     return subprocess.run(
@@ -56,7 +73,7 @@ def _run(script: Path, payload: dict, project: Path) -> subprocess.CompletedProc
         input=json.dumps(payload),
         capture_output=True,
         text=True,
-        env={"CLAUDE_PROJECT_DIR": str(project), "PATH": "/usr/bin:/bin"},
+        env=_hook_env(project),
         timeout=30,
     )
 

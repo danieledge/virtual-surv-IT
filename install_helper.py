@@ -7079,7 +7079,7 @@ def _posix_shell_rc_candidates() -> list:
     return candidates
 
 
-def _powershell_profile_candidates() -> list:
+def _powershell_profile_candidates(query: bool = True) -> list:
     """Both standard PowerShell profile paths - they are NOT the same file and this
     matters: Windows PowerShell 5.1 (the version built into every Windows machine,
     verified live 2026-08-04) uses Documents/WindowsPowerShell/..., while PowerShell 7+
@@ -7096,7 +7096,12 @@ def _powershell_profile_candidates() -> list:
     PowerShell never actually reads $PROFILE from. Falls back to the static guess (still
     gated on the Documents parent existing) only when that host's binary isn't on PATH or
     the query itself fails - never silently drops a candidate outright, since the
-    original static guess is still correct on the (common) machine with no redirection."""
+    original static guess is still correct on the (common) machine with no redirection.
+
+    `query=False` takes the static guess only. Demo mode passes it (Windows CI, 2026-09-14):
+    the dry run promises that nothing is executed, and asking each PowerShell host for its
+    $PROFILE is a process spawn, so a demo on a Windows box reached ensure_dir_on_path and
+    broke that promise while saying "nothing was executed"."""
     if sys.platform != "win32":
         return []
     docs = Path.home() / "Documents"
@@ -7106,7 +7111,7 @@ def _powershell_profile_candidates() -> list:
         ("PowerShell 7+", "pwsh.exe", "PowerShell"),
     ):
         queried = None
-        found = shutil.which(exe)
+        found = shutil.which(exe) if query else None
         if found:
             try:
                 proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
@@ -10197,7 +10202,7 @@ def ensure_dir_on_path(style: Style, directory: Path, demo: bool = False) -> lis
         # This process and everything it spawns, now. os.environ is the only PATH a child
         # actually inherits, and shutil.which reads it on every call.
         os.environ["PATH"] = str(directory) + os.pathsep + (os.environ.get("PATH") or "")
-    targets = list(_posix_shell_rc_candidates()) + _powershell_profile_candidates()
+    targets = list(_posix_shell_rc_candidates()) + _powershell_profile_candidates(query=not demo)
     if not targets:
         # No rc file exists to carry it. Naming the line is the fallback, not the plan.
         print(style.dim("    no shell startup file found to make that permanent - add:"))

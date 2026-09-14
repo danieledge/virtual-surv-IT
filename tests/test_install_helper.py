@@ -1047,6 +1047,28 @@ def test_demo_mode_executes_nothing_and_writes_nothing(monkeypatch, tmp_path, ca
     assert ih.run_cmd is original_run_cmd  # module runner restored after the run
 
 
+def test_demo_mode_takes_the_static_powershell_profile_guess_without_a_query(monkeypatch, tmp_path):
+    """Windows CI, 2026-09-14: a demo run reached ensure_dir_on_path, which asked each
+    PowerShell host on PATH for its $PROFILE - a process spawn inside a mode that says
+    nothing was executed. With query=False the static Documents-based guess stands in,
+    and the default still asks."""
+    import subprocess as _sp
+
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.sys, "platform", "win32")
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    (tmp_path / "Documents").mkdir()
+    monkeypatch.setattr(ih.shutil, "which", lambda name: "C:\\ps\\" + name)
+    monkeypatch.setattr(
+        _sp, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("spawned"))
+    )
+    labels = [label for label, _ in ih._powershell_profile_candidates(query=False)]
+    assert labels == ["PowerShell 5.1", "PowerShell 7+"]
+    with pytest.raises(AssertionError, match="spawned"):
+        ih._powershell_profile_candidates()
+
+
 def test_demo_mode_with_yes_is_noninteractive_dry_run(monkeypatch, tmp_path, capsys):
     import subprocess as _sp
 
@@ -2201,7 +2223,9 @@ def test_run_setup_alias_powershell_line_has_go_branch(tmp_path, monkeypatch):
     _stub_interpreters(monkeypatch, ih)
     profile = home / "Documents" / "PowerShell" / "Microsoft.PowerShell_profile.ps1"
     monkeypatch.setattr(ih, "_posix_shell_rc_candidates", lambda: [])
-    monkeypatch.setattr(ih, "_powershell_profile_candidates", lambda: [("PowerShell 7+", profile)])
+    monkeypatch.setattr(
+        ih, "_powershell_profile_candidates", lambda *a, **k: [("PowerShell 7+", profile)]
+    )
     monkeypatch.setattr(ih, "_verify_alias_line", lambda label, path, line, **k: (True, "resolves"))
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     assert rc == 0
@@ -8248,7 +8272,7 @@ def test_an_already_installed_alias_still_explains_a_stale_terminal(monkeypatch,
     monkeypatch.setattr(ih, "_alias_line_for", lambda *a, **k: line)
     rc.write_text(f"# existing\n{line}\n", encoding="utf-8")
     monkeypatch.setattr(ih, "_posix_shell_rc_candidates", lambda: [("bash", rc)])
-    monkeypatch.setattr(ih, "_powershell_profile_candidates", lambda: [])
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", lambda *a, **k: [])
     monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], interpreter))
     monkeypatch.setattr(ih, "_resolve_repo_root", lambda arg: tmp_path)
     monkeypatch.setattr(ih, "confirm", lambda *a, **k: True)
@@ -9370,7 +9394,7 @@ def test_the_demo_path_writes_nothing(monkeypatch, tmp_path, capsys):
 
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     monkeypatch.setattr(ih.shutil, "which", lambda name: None)
-    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", lambda *a, **k: [])
     monkeypatch.setattr(
         "urllib.request.urlopen",
         lambda *a, **k: (_ for _ in ()).throw(AssertionError("demo must not open the network")),
@@ -9390,7 +9414,7 @@ def test_a_blocked_download_is_reported_and_does_not_raise(monkeypatch, tmp_path
 
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     monkeypatch.setattr(ih.shutil, "which", lambda name: None)
-    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", lambda *a, **k: [])
 
     def _refuse(*a, **k):
         raise OSError("proxy refused the connection")
@@ -9446,7 +9470,7 @@ def test_a_successful_download_is_verified_and_put_on_PATH(monkeypatch, tmp_path
     monkeypatch.setattr(ih.shutil, "which", lambda name: None)
     rc = tmp_path / ".bashrc"
     rc.write_text("# mine\n", encoding="utf-8")
-    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", lambda *a, **k: [])
     monkeypatch.setenv("PATH", "/usr/bin")
     _pin_bytes(monkeypatch, "osv-scanner", "2.5.1", b"#!/bin/true\n")
     monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: _Response(b"#!/bin/true\n"))
@@ -9474,7 +9498,7 @@ def test_the_PATH_line_is_written_once_and_replaces_its_own_older_version(monkey
     import install_helper as ih
 
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
-    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", lambda *a, **k: [])
     monkeypatch.setenv("PATH", "/usr/bin")
     rc = tmp_path / ".bashrc"
     rc.write_text("# mine\n", encoding="utf-8")
@@ -9502,7 +9526,7 @@ def test_the_PATH_change_is_narrated_and_not_written_in_demo(monkeypatch, tmp_pa
     import install_helper as ih
 
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
-    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", lambda *a, **k: [])
     monkeypatch.setenv("PATH", "/usr/bin")
     rc = tmp_path / ".bashrc"
     rc.write_text("# mine\n", encoding="utf-8")
@@ -9861,7 +9885,11 @@ def test_an_archive_download_is_extracted_verified_and_put_on_PATH(monkeypatch, 
 
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     monkeypatch.setattr(ih.shutil, "which", lambda name: None)
-    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", lambda *a, **k: [])
+    # The fixture is the LINUX tarball, so the asset the installer asks for has to be the
+    # Linux one on every runner: on Windows the real answer is a .zip (Windows CI,
+    # 2026-09-14), and the .zip path has its own extraction test.
+    monkeypatch.setattr(ih, "_release_platform_arch", lambda *a, **k: ("linux", "amd64"))
     monkeypatch.setenv("PATH", "/usr/bin")
     rc = tmp_path / ".bashrc"
     rc.write_text("# mine\n", encoding="utf-8")
@@ -9887,8 +9915,8 @@ def test_an_archive_download_is_extracted_verified_and_put_on_PATH(monkeypatch, 
     assert ih._PATH_STAMP in rc.read_text(encoding="utf-8")
     out = capsys.readouterr().out
     assert "gitleaks installed at" in out
-    # Nothing half-written left behind beside it, under any name.
-    assert sorted(p.name for p in ih.release_bin_dir().iterdir()) == ["gitleaks"]
+    # Nothing half-written left behind beside it, under any name (gitleaks.exe on Windows).
+    assert sorted(p.name for p in ih.release_bin_dir().iterdir()) == [path.name]
 
 
 def test_a_tar_xz_download_is_opened_as_xz_not_guessed_from_the_temp_file(
@@ -9901,7 +9929,11 @@ def test_a_tar_xz_download_is_opened_as_xz_not_guessed_from_the_temp_file(
 
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     monkeypatch.setattr(ih.shutil, "which", lambda name: None)
-    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", lambda *a, **k: [])
+    # The fixture is the LINUX tarball, so the asset the installer asks for has to be the
+    # Linux one on every runner: on Windows the real answer is a .zip (Windows CI,
+    # 2026-09-14), and the .zip path has its own extraction test.
+    monkeypatch.setattr(ih, "_release_platform_arch", lambda *a, **k: ("linux", "amd64"))
     monkeypatch.setenv("PATH", "/usr/bin")
     archive = _tar_fixture(
         tmp_path / "src.tar.xz",
@@ -9924,7 +9956,7 @@ def test_a_blocked_release_download_is_reported_and_returns(monkeypatch, tmp_pat
 
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     monkeypatch.setattr(ih.shutil, "which", lambda name: None)
-    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", lambda *a, **k: [])
 
     # Failure one: the version cannot even be resolved, so there is no URL to try.
     monkeypatch.setattr(ih, "load_release_pins", lambda path=None: {})  # nothing pinned
@@ -9953,7 +9985,7 @@ def test_the_release_demo_path_writes_nothing_and_opens_no_socket(monkeypatch, t
 
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     monkeypatch.setattr(ih.shutil, "which", lambda name: None)
-    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", lambda *a, **k: [])
     monkeypatch.setattr(
         "urllib.request.urlopen",
         lambda *a, **k: (_ for _ in ()).throw(AssertionError("demo must not open the network")),
@@ -10077,7 +10109,7 @@ def test_a_digest_mismatch_is_refused_and_leaves_nothing_behind(monkeypatch, tmp
 
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     monkeypatch.setattr(ih.shutil, "which", lambda name: None)
-    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", lambda *a, **k: [])
     _pin_bytes(monkeypatch, "osv-scanner", "2.5.1", b"#!/bin/true\n")
     monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: _Response(b"#!/bin/false\n"))
 
@@ -10099,7 +10131,7 @@ def test_no_downloads_performs_no_fetch_at_all(monkeypatch, tmp_path, capsys):
 
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     monkeypatch.setattr(ih.shutil, "which", lambda name: None)
-    monkeypatch.setattr(ih, "_powershell_profile_candidates", list)
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", lambda *a, **k: [])
     _pin_bytes(monkeypatch, "osv-scanner", "2.5.1", b"#!/bin/true\n")
     monkeypatch.setattr(
         "urllib.request.urlopen",

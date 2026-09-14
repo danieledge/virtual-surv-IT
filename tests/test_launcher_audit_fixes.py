@@ -110,7 +110,10 @@ def _handmade_marker(mod, project: Path, age_days: int) -> Path:
     marker = mod._consent_marker_path(project)
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text("", encoding="utf-8")
-    old = time.time() - age_days * 86400
+    # An hour past the whole-day mark. The launcher reports whole days, and a timestamp
+    # set to the day boundary exactly came back one day short on the Windows runner
+    # (39 for 40, 2026-09-14); the boundary itself is not what these tests are about.
+    old = time.time() - age_days * 86400 - 3600
     os.utime(marker, (old, old))
     return marker
 

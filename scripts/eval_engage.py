@@ -330,14 +330,42 @@ def drop_workspace_trust(path: Path, configs: list[Path] | None = None) -> None:
             cfg.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+def _copy_excluding(source: Path, dest: Path, excludes: tuple, delete: bool = False) -> None:
+    """The sandbox copy: rsync where the box has it, shutil.copytree where it does not.
+
+    The Windows VM and the Windows CI runner have no rsync (the plugin-mode builder below
+    was written portable for that reason; these two were not, and the sandbox tests could
+    not run there - 2026-09-14). The exclude list keeps rsync's reading: a bare name matches
+    that basename anywhere in the tree, a name with a slash matches that path relative to
+    the source root."""
+    if shutil.which("rsync"):
+        args = ["rsync", "-a"] + (["--delete"] if delete else [])
+        for ex in excludes:
+            args += ["--exclude", ex]
+        args += [f"{source}/", f"{dest}/"]
+        # Fixed argv, no shell.
+        subprocess.run(args, check=True, capture_output=True)  # nosec B603
+        return
+    bare = {ex for ex in excludes if "/" not in ex}
+    anchored = {ex.strip("/") for ex in excludes if "/" in ex}
+
+    def _ignore(directory: str, names: list) -> set:
+        rel = Path(directory).resolve().relative_to(source.resolve()).as_posix()
+        skipped = set()
+        for name in names:
+            path = name if rel == "." else f"{rel}/{name}"
+            if name in bare or path in anchored:
+                skipped.add(name)
+        return skipped
+
+    if delete and dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(source, dest, ignore=_ignore, symlinks=False, dirs_exist_ok=True)
+
+
 def build_sandbox(dest: Path) -> None:
     """Throwaway repo copy: guard hooks live, ground truth absent, git baseline committed."""
-    args = ["rsync", "-a", "--delete"]
-    for ex in SANDBOX_EXCLUDES:
-        args += ["--exclude", ex]
-    args += [f"{REPO_ROOT}/", f"{dest}/"]
-    # Fixed argv, no shell.
-    subprocess.run(args, check=True, capture_output=True)  # nosec B603
+    _copy_excluding(REPO_ROOT, dest, SANDBOX_EXCLUDES, delete=True)
     (dest / "data" / "raw").mkdir(parents=True, exist_ok=True)
     _vsit_paths().engagements_dir(dest).mkdir(parents=True, exist_ok=True)
     env_git = [
@@ -369,11 +397,7 @@ def build_target_sandbox(source: Path, dest: Path, team_preferences: dict) -> No
     session opens already configured, rather than relying on the conversational offer-to-set
     flow. No git init here (unlike build_sandbox): the target's own history, if any, is not
     this harness's concern, and creating one would misrepresent a foreign project's provenance."""
-    args = ["rsync", "-a"]
-    for ex in _TARGET_EXCLUDES:
-        args += ["--exclude", ex]
-    args += [f"{source}/", f"{dest}/"]
-    subprocess.run(args, check=True, capture_output=True)  # nosec B603 - fixed argv, no shell
+    _copy_excluding(source, dest, _TARGET_EXCLUDES)
     claude_dir = dest / ".claude"
     claude_dir.mkdir(exist_ok=True)
     (claude_dir / "team-preferences.json").write_text(
