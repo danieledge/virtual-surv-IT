@@ -969,19 +969,20 @@ def test_a_cut_offending_quote_falls_back_to_the_whole_command():
 
 
 def test_a_shipped_script_off_the_allow_list_is_reported_as_drift():
-    """Run 20260914T063800Z: scripts/validate_findings.py ships, is documented, and was
-    refused as untrusted code because the guard's list never gained it. A name the scorer's
-    own list does not know is still the team's tooling when it lives in scripts/."""
+    """Run 20260914T063800Z: scripts/validate_findings.py shipped, was documented, and was
+    refused as untrusted code because the guard's list had never gained it (it has since).
+    A name the scorer's own list does not know is still the team's tooling when it lives in
+    scripts/, so the next such drift is reported the day it happens."""
     block = (
         "Blocked (code-execution gate, CLAUDE.md 7): this command EXECUTES code.\n"
         "Offending segment: /home/x/python3 "
-        '"/cache/vsit/0.37.0/scripts/validate_findings.py" "pack.jsonl" 2>&1'
+        '"/cache/vsit/0.37.0/scripts/newer_tool.py" "pack.jsonl" 2>&1'
     )
-    hits = eval_score._detect_team_script_blocked(_blocked("py validate_findings.py pack", block))
-    assert hits and "validate_findings.py" in hits[0] and "not on the allow-list" in hits[0]
+    hits = eval_score._detect_team_script_blocked(_blocked("py newer_tool.py pack", block))
+    assert hits and "newer_tool.py" in hits[0] and "not on the allow-list" in hits[0]
     module_form = (
         "Blocked (code-execution gate, CLAUDE.md 7): this command EXECUTES code.\n"
-        "Offending segment: python -m scripts.validate_findings pack.jsonl"
+        "Offending segment: python -m scripts.newer_tool pack.jsonl"
     )
     assert eval_score._detect_team_script_blocked(_blocked("x", module_form))
     # A block that names no shipped script is not drift.
