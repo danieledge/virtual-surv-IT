@@ -119,6 +119,7 @@ scripts` on a checkout is the authoritative inventory if this table and the tree
 | `scripts/dlp_guard.py` | Hard-rejects content containing blocked keywords (employer, colleague names, internal hosts); a `git` pre-commit/CI scanner, not a Claude Code hook |
 | `scripts/audit_screens.py` | Dev diagnostic: every menu option and screen, and whether each is actually wired |
 | `scripts/tier_probe.py` | Dev diagnostic: why did (or didn't) the Textual tier draw |
+| `scripts/hook_latency_probe.py` | Diagnostic: why are Bash/Read calls slow? Reproduces the per-hook-call cost with the real launcher, attributes it by layer and names the fix (Diagnostics menu option 5) |
 
 **Maintainer** (human-only; supports releases of this repo, not engagements)
 
