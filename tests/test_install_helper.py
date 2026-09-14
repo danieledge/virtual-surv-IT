@@ -3437,6 +3437,137 @@ def test_plugin_step_never_shows_wait_message_in_demo_mode(monkeypatch, capsys):
     assert "can take a moment" not in capsys.readouterr().out
 
 
+def _plugin_tree(root: Path, version: str, script_body: str) -> Path:
+    (root / ".claude-plugin").mkdir(parents=True, exist_ok=True)
+    (root / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"name": "compliance-surveillance-team", "version": version}), encoding="utf-8"
+    )
+    (root / "docs").mkdir(exist_ok=True)
+    (root / "docs" / "team-operating-guide.md").write_text("# guide\n", encoding="utf-8")
+    (root / "scripts").mkdir(exist_ok=True)
+    (root / "scripts" / "tool.py").write_text(script_body, encoding="utf-8")
+    (root / "scripts" / "__pycache__").mkdir(exist_ok=True)
+    (root / "scripts" / "__pycache__" / "tool.cpython-312.pyc").write_bytes(b"\x00")
+    return root
+
+
+def _fake_home_with_cache(tmp_path: Path, version: str, script_body: str) -> Path:
+    home = tmp_path / "home"
+    cache = (
+        home
+        / ".claude"
+        / "plugins"
+        / "cache"
+        / "virtual-surv-it"
+        / "compliance-surveillance-team"
+        / version
+    )
+    _plugin_tree(cache, version, script_body)
+    return home
+
+
+def _update_installer(monkeypatch, tmp_path, clone_body: str, cache_body: str, runner):
+    import install_helper as ih
+
+    clone = _plugin_tree(tmp_path / "clone", "0.37.0", clone_body)
+    home = _fake_home_with_cache(tmp_path, "0.37.0", cache_body)
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(ih, "run_cmd", runner)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
+    inst.mode = "update"
+    inst.repo = clone
+    return inst, home
+
+
+def test_update_that_copied_nothing_is_refreshed_by_a_reinstall(monkeypatch, tmp_path, capsys):
+    """Owner's corporate box, 2026-09-14: `claude plugin update` exited 0 all day and copied
+    nothing, because plugin.json's version gates the update and had not moved. The step
+    now compares the cache against the clone and reinstalls when they differ."""
+    import install_helper as ih
+
+    seen: list = []
+    home_box: dict = {}
+
+    def runner(argv, **kw):
+        seen.append(argv)
+        if "install" in argv and "uninstall" not in argv:
+            # the reinstall copies the clone into the cache
+            cache = ih._cache_dirs_at_version(home_box["home"], "0.37.0")[0]
+            (cache / "scripts" / "tool.py").write_text("new body\n", encoding="utf-8")
+        return _proc(returncode=0)
+
+    inst, home = _update_installer(monkeypatch, tmp_path, "new body\n", "old body\n", runner)
+    home_box["home"] = home
+    inst.plugin()
+    verbs = [a[2] for a in seen]
+    assert verbs == ["update", "uninstall", "install"]
+    assert (
+        any(
+            status == "ok" and "refreshed (version unchanged, files differed)" in detail
+            for detail, status, _ in [(n, s, d) for n, s, d in inst.tracker.steps]
+        )
+        or "refreshed (version unchanged, files differed)" in capsys.readouterr().out
+    )
+
+
+def test_update_whose_cache_already_matches_is_reported_as_updated(monkeypatch, tmp_path, capsys):
+    seen: list = []
+    inst, _home = _update_installer(
+        monkeypatch, tmp_path, "same\n", "same\n", lambda argv, **kw: seen.append(argv) or _proc(0)
+    )
+    inst.plugin()
+    assert [a[2] for a in seen] == ["update"]
+    assert "updated" in capsys.readouterr().out
+
+
+def test_a_cache_that_still_differs_after_the_reinstall_is_a_non_fatal_failure_with_the_commands(
+    monkeypatch, tmp_path, capsys
+):
+    seen: list = []
+    inst, _home = _update_installer(
+        monkeypatch, tmp_path, "new\n", "old\n", lambda argv, **kw: seen.append(argv) or _proc(0)
+    )
+    inst.plugin()  # must not raise: fatal=False
+    assert [a[2] for a in seen] == ["update", "uninstall", "install"]
+    assert any(status == "fail" for _n, status, _d in inst.tracker.steps)
+    out = capsys.readouterr().out
+    assert "claude plugin uninstall compliance-surveillance-team@virtual-surv-it" in out
+    assert "bump the version" in out
+
+
+def test_plugin_content_digest_ignores_caches_and_location_but_not_content(tmp_path):
+    import install_helper as ih
+
+    a = _plugin_tree(tmp_path / "a", "1.0.0", "x\n")
+    b = _plugin_tree(tmp_path / "elsewhere" / "b", "1.0.0", "x\n")
+    assert ih._plugin_content_digest(a) == ih._plugin_content_digest(b)
+    (b / "scripts" / "__pycache__" / "other.pyc").write_bytes(b"\x01")
+    assert ih._plugin_content_digest(a) == ih._plugin_content_digest(b)
+    (b / "scripts" / "tool.py").write_text("y\n", encoding="utf-8")
+    assert ih._plugin_content_digest(a) != ih._plugin_content_digest(b)
+
+
+def test_cache_dirs_at_version_ignores_the_marketplace_clone_and_other_versions(tmp_path):
+    import install_helper as ih
+
+    home = _fake_home_with_cache(tmp_path, "0.37.0", "x\n")
+    _plugin_tree(home / ".claude" / "plugins" / "marketplaces" / "virtual-surv-it", "0.37.0", "x\n")
+    _plugin_tree(
+        home
+        / ".claude"
+        / "plugins"
+        / "cache"
+        / "virtual-surv-it"
+        / "compliance-surveillance-team"
+        / "0.36.0",
+        "0.36.0",
+        "x\n",
+    )
+    found = ih._cache_dirs_at_version(home, "0.37.0")
+    assert [p.name for p in found] == ["0.37.0"]
+    assert all("cache" in p.parts for p in found)
+
+
 def test_installer_plugin_step_already_installed_is_ok_not_fail(monkeypatch, tmp_path, capsys):
     """Same 2026-08-07 fix, for the full-run install path: `claude plugin install`
     reporting "already installed" must not abort the whole run via step_fail's fatal

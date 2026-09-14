@@ -144,6 +144,56 @@ def _git_last_commit_ts(paths: list[str], root: Path = _ROOT) -> int | None:
     return int(ts) if ts.isdigit() else None
 
 
+# Everything the plugin ships. plugin.json's version is the plugin update mechanism: with the
+# number unchanged, `claude plugin update` leaves every installed cache exactly as it was (the
+# owner's corporate box ran a stale 0.37.0 cache all day on 2026-09-14 while each "Plugin
+# updated" line copied nothing). So a change to any shipped file since the last bump is a
+# promotion finding, guard hooks first among them (framework review 2026-09-13, step 6.7).
+# Measured from the last commit that touched plugin.json, not from a tag: the tags stopped at
+# v0.9.1 and the version file is what an install reads.
+_PLUGIN_PATHS = [
+    ".claude/hooks",
+    "hooks/hooks.json",
+    ".claude/skills",
+    ".claude/agents",
+    "scripts",
+    "docs",
+    "CLAUDE.md",
+]
+_VERSION_FILE = ".claude-plugin/plugin.json"
+
+
+def _git_hook_commits_since_version_bump(root: Path = _ROOT) -> list[str] | None:
+    """Short shas of commits that touched a shipped plugin file AFTER the last commit that
+    changed plugin.json (the last version bump); [] when none, None if git is unavailable.
+
+    The bump commit itself may touch those files (it usually promotes a staged guard), so the
+    range is exclusive of it. A repo with no bump commit at all has nothing to measure from.
+    """
+    try:
+        bump = subprocess.run(  # nosec B603 B607 - fixed argv
+            ["git", "log", "-1", "--format=%H", "--", _VERSION_FILE],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if bump.returncode != 0 or not bump.stdout.strip():
+            return None
+        out = subprocess.run(  # nosec B603 B607 - fixed argv
+            ["git", "log", "--format=%h", f"{bump.stdout.strip()}..HEAD", "--", *_PLUGIN_PATHS],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode != 0:
+        return None
+    return [line.strip() for line in out.stdout.splitlines() if line.strip()]
+
+
 def _git_dirty_paths(paths: list[str], root: Path = _ROOT) -> list[str] | None:
     """Prompt-bearing paths with UNCOMMITTED changes; [] when clean, None if git is unavailable.
 
@@ -486,6 +536,25 @@ def gate(
     changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8", errors="replace")
     if f"## [{version}]" not in changelog:
         findings.append(f"RELEASE-GATE: CHANGELOG.md has no entry for [{version}]")
+
+    # 1b. A shipped plugin file changed since the last version bump: `claude plugin update`
+    # copies nothing while the number stands still, so the change reaches no install (step
+    # 6.7; owner's stale-cache day, 2026-09-14).
+    hook_commits = _git_hook_commits_since_version_bump(root)
+    if hook_commits is None:
+        findings.append(
+            "RELEASE-GATE: git history unavailable - cannot verify that no shipped plugin file "
+            f"changed since the last version bump ({_VERSION_FILE})"
+        )
+    elif hook_commits:
+        shown = ", ".join(hook_commits[:5]) + (
+            f" (+{len(hook_commits) - 5} more)" if len(hook_commits) > 5 else ""
+        )
+        findings.append(
+            f"RELEASE-GATE: plugin files changed after the last version bump ({shown}) - bump "
+            f"the version in {_VERSION_FILE}: with it unchanged, `claude plugin update` leaves "
+            "every installed cache stale"
+        )
 
     # 2. Eval baseline record for THIS version.
     baseline = root / "evals" / f"eval-baseline-{version}.md"

@@ -3826,8 +3826,31 @@ class Installer:
             if self.mode == "update":
                 proc = run_cmd(["claude", "plugin", "update", PLUGIN_ID], timeout=300)
                 if proc.returncode == 0:
-                    self.step_ok(f"Plugin {PLUGIN_ID} " + self.did("updated", "would be updated"))
-                    return
+                    if self.demo or self._cache_matches_clone():
+                        self.step_ok(
+                            f"Plugin {PLUGIN_ID} " + self.did("updated", "would be updated")
+                        )
+                        return
+                    # The CLI said "updated" and copied nothing: the version gates the update
+                    # and it did not move (owner's corporate box, 2026-09-14, all day). A
+                    # reinstall is the refresh that works regardless of the number.
+                    run_cmd(["claude", "plugin", "uninstall", PLUGIN_ID], timeout=120)
+                    proc = run_cmd(["claude", "plugin", "install", PLUGIN_ID], timeout=300)
+                    if proc.returncode == 0 and self._cache_matches_clone():
+                        self.step_ok(
+                            f"Plugin {PLUGIN_ID} refreshed (version unchanged, files differed)"
+                        )
+                        return
+                    if proc.returncode == 0:
+                        self.step_fail(
+                            "Refresh plugin",
+                            "the installed cache still differs from the marketplace clone after "
+                            f"a reinstall - by hand: `claude plugin uninstall {PLUGIN_ID}` then "
+                            f"`claude plugin install {PLUGIN_ID}`, or bump the version in "
+                            ".claude-plugin/plugin.json so `claude plugin update` copies it",
+                            fatal=False,
+                        )
+                        return
             run_cmd(["claude", "plugin", "uninstall", PLUGIN_ID], timeout=120)
             proc = run_cmd(["claude", "plugin", "install", PLUGIN_ID], timeout=300)
         except OSError as exc:
@@ -3851,6 +3874,23 @@ class Installer:
             self.say_claude_launch_trace()
             self.step_fail("Install plugin", err or "claude plugin install failed")
         self.step_ok(f"Plugin {PLUGIN_ID} " + self.did("installed", "would be installed"))
+
+    def _cache_matches_clone(self) -> bool:
+        """Does every cache copy at the clone's version carry the clone's plugin files?
+
+        True when there is nothing to compare (no clone known, no cache copy at that version)
+        - the caller then reports the CLI's own result, as before. False only on evidence:
+        a cache copy at the same version whose content digest differs from the clone's."""
+        repo = getattr(self, "repo", None)
+        if not repo or not (Path(repo) / ".claude-plugin" / "plugin.json").is_file():
+            return True
+        repo = Path(repo)
+        version = _plugin_json_version(repo)
+        caches = _cache_dirs_at_version(Path.home(), version)
+        if not caches:
+            return True
+        wanted = _plugin_content_digest(repo)
+        return all(_plugin_content_digest(cache) == wanted for cache in caches)
 
     def persist(self) -> None:
         if self.demo:
@@ -7952,6 +7992,80 @@ def _plugin_cache_version_dirs(home: Path) -> list:
                     if version_dir not in found:
                         found.append(version_dir)
     return found
+
+
+# What `claude plugin update` is supposed to refresh, and what the cache-vs-clone comparison
+# below digests (2026-09-14, owner's stale-cache day): the plugin's version gates the update,
+# so with the number unchanged the cache stays exactly as it was while the CLI reports
+# success. plugin.json first, then everything a session actually loads.
+_PLUGIN_CONTENT_PATHS = (
+    ".claude-plugin/plugin.json",
+    "hooks",
+    ".claude/hooks",
+    ".claude/skills",
+    ".claude/agents",
+    "scripts",
+    "docs",
+)
+_DIGEST_SKIP_PARTS = ("__pycache__", ".pytest_cache", "staged_hooks")
+
+
+def _plugin_content_digest(root: Path) -> str:
+    """SHA-256 over the plugin's shipped files under `root`: relative path and bytes, in
+    sorted order, for every file under _PLUGIN_CONTENT_PATHS. Two copies of the same
+    plugin content digest the same whatever their location; a stale cache does not."""
+    import hashlib
+
+    digest = hashlib.sha256()
+    for rel in _PLUGIN_CONTENT_PATHS:
+        base = root / rel
+        if base.is_file():
+            files = [base]
+        elif base.is_dir():
+            files = sorted(p for p in base.rglob("*") if p.is_file())
+        else:
+            continue
+        for path in files:
+            posix = path.relative_to(root).as_posix()
+            if any(part in posix.split("/") for part in _DIGEST_SKIP_PARTS) or posix.endswith(
+                ".pyc"
+            ):
+                continue
+            digest.update(posix.encode("utf-8"))
+            digest.update(b"\0")
+            try:
+                digest.update(path.read_bytes())
+            except OSError:
+                digest.update(b"<unreadable>")
+            digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _plugin_json_version(root: Path) -> str:
+    try:
+        return str(
+            json.loads((root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")).get(
+                "version", ""
+            )
+        )
+    except (OSError, ValueError):
+        return ""
+
+
+def _cache_dirs_at_version(home: Path, version: str) -> list:
+    """The cache copies of THIS plugin (never the marketplace clone) whose plugin.json carries
+    `version` - the directories `claude plugin update` should have refreshed."""
+    cache_root = (home / ".claude" / "plugins" / "cache").resolve()
+    out = []
+    for version_dir in _plugin_cache_version_dirs(home):
+        try:
+            resolved = version_dir.resolve()
+            resolved.relative_to(cache_root)
+        except (OSError, ValueError):
+            continue
+        if _plugin_json_version(version_dir) == version:
+            out.append(version_dir)
+    return out
 
 
 # Registry filenames drift across Claude Code versions - same set find_plugin_root.py

@@ -6,6 +6,7 @@ working tree."""
 from __future__ import annotations
 
 import json
+import os
 
 import scripts.release_gate as rg
 
@@ -77,8 +78,69 @@ def _repo(
 
 
 def _clean_tree(monkeypatch):
-    """No uncommitted prompt edits (the tmp repos are not git repos at all)."""
+    """No uncommitted prompt edits, no hook change since the bump (the tmp repos are not git
+    repos at all)."""
     monkeypatch.setattr(rg, "_git_dirty_paths", lambda paths, root=None: [])
+    monkeypatch.setattr(rg, "_git_hook_commits_since_version_bump", lambda root=None: [])
+
+
+def test_a_hook_change_after_the_last_bump_blocks_promotion(tmp_path, monkeypatch):
+    """Step 6.7: a guard that refuses something different must ship under a new version."""
+    repo = _repo(tmp_path, baseline="Scope: full\n")
+    _fresh(monkeypatch)
+    assert rg.gate(repo) == []
+    monkeypatch.setattr(
+        rg, "_git_hook_commits_since_version_bump", lambda root=None: ["abc1234", "def5678"]
+    )
+    findings = rg.gate(repo)
+    assert len(findings) == 1 and "plugin files changed after the last version bump" in findings[0]
+    assert "abc1234" in findings[0]
+    monkeypatch.setattr(rg, "_git_hook_commits_since_version_bump", lambda root=None: None)
+    assert any("git history unavailable" in f for f in rg.gate(repo))
+
+
+def test_hook_commits_are_measured_from_the_bump_commit_on_a_real_repo(tmp_path):
+    """Real git: a hook commit after the bump is listed; one in the bump commit itself is not."""
+    import subprocess
+
+    def git(*args):
+        subprocess.run(
+            ["git", *args],
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+            env={
+                "GIT_AUTHOR_NAME": "t",
+                "GIT_AUTHOR_EMAIL": "t@example.com",
+                "GIT_COMMITTER_NAME": "t",
+                "GIT_COMMITTER_EMAIL": "t@example.com",
+                "PATH": os.environ.get("PATH", ""),
+                "HOME": str(tmp_path),
+            },
+        )
+
+    git("init", "-q")
+    (tmp_path / ".claude-plugin").mkdir()
+    (tmp_path / ".claude" / "hooks").mkdir(parents=True)
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text('{"version": "1.0.0"}')
+    (tmp_path / ".claude" / "hooks" / "g.py").write_text("v1\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "bump with hook")
+    assert rg._git_hook_commits_since_version_bump(tmp_path) == []
+    (tmp_path / ".claude" / "hooks" / "g.py").write_text("v2\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "hook change")
+    assert len(rg._git_hook_commits_since_version_bump(tmp_path)) == 1
+    # A skill or script counts too: every shipped file is behind the version number.
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "tool.py").write_text("x\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "script change")
+    assert len(rg._git_hook_commits_since_version_bump(tmp_path)) == 2
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text('{"version": "1.1.0"}')
+    git("add", "-A")
+    git("commit", "-q", "-m", "bump")
+    assert rg._git_hook_commits_since_version_bump(tmp_path) == []
 
 
 def test_missing_baseline_fails(tmp_path):
