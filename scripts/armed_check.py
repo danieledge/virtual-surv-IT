@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess  # nosec B404 - fixed argv, shell=False: the team's own launcher
 import sys
 import uuid
@@ -36,6 +37,59 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 PLUGIN_KEY = "compliance-surveillance-team"
+
+
+_NO_SH_ADVICE = (
+    "no POSIX shell to run the hooks through. Claude Code runs every safety hook via `sh`. "
+    "On Windows install Git for Windows (Git Bash), or set CLAUDE_CODE_GIT_BASH_PATH to its "
+    "bin folder, open a new terminal and re-run: python -m scripts.armed_check --project <dir>"
+)
+
+
+def _find_sh(sh: str = "sh") -> str | None:
+    """Resolve the shell the way the hook launcher does, not by PATH alone. 2026-09-14 live:
+    the owner's corporate Windows box has Git for Windows installed per user, `sh` is not on
+    PowerShell's PATH, and this check reported "exit -1" against every guard, which read as
+    the guards being inert when only the prover could not start. Order: an explicit path,
+    CLAUDE_CODE_GIT_BASH_PATH (file, its sibling sh.exe, or a folder), PATH, then on Windows
+    the folder git.exe itself lives in, the Program Files roots and the per-user install."""
+    if sh != "sh" and Path(sh).is_file():
+        return sh
+    override = os.environ.get("CLAUDE_CODE_GIT_BASH_PATH")
+    if override:
+        p = Path(override)
+        candidates = [p.parent / "sh.exe", p] if p.is_file() else [p / "sh.exe", p / "bin" / "sh.exe"]
+        for c in candidates:
+            if c.is_file():
+                return str(c)
+    found = shutil.which(sh)
+    if found:
+        return found
+    if sys.platform == "win32":
+        import ntpath
+
+        roots = []
+        git_exe = shutil.which("git")
+        if git_exe:
+            roots.append(ntpath.dirname(ntpath.dirname(git_exe)))
+        roots += [r"C:\Program Files\Git", r"C:\Program Files (x86)\Git"]
+        local = os.environ.get("LOCALAPPDATA")
+        if local:
+            roots.append(ntpath.join(local, "Programs", "Git"))
+        for root in roots:
+            for rel in (("bin", "sh.exe"), ("usr", "bin", "sh.exe")):
+                candidate = ntpath.join(root, *rel)
+                if Path(candidate).is_file():
+                    return candidate
+    return None
+
+
+def _detail(rc: int, want: int, why: str, sh: str) -> str:
+    """The detail column. A -1 is the launcher failing to start, not a guard verdict, and is
+    said so; a fake exit code here was what hid the real problem from the owner."""
+    if rc == -1:
+        return f"the hook launcher could not be started through {sh}; {_NO_SH_ADVICE}"
+    return f"exit {rc} (want {want}: {why})"
 
 
 def _run_guard(repo_root: Path, project_dir: Path, payload: dict, sh: str = "sh") -> int:
@@ -77,6 +131,13 @@ def plugin_enabled(project_dir: Path, repo_root: Path) -> tuple[bool, str]:
 def check(repo_root: Path, project_dir: Path, sh: str = "sh") -> list[tuple[str, bool, str]]:
     """Every assertion as (label, holds, detail). Never raises."""
     results: list[tuple[str, bool, str]] = []
+    sh_path = _find_sh(sh)
+    if sh_path is None:
+        results.append(("POSIX shell", False, _NO_SH_ADVICE))
+        ok, detail = plugin_enabled(project_dir, repo_root)
+        results.append(("plugin enabled", ok, detail))
+        return results
+    sh = sh_path
     raw_file = project_dir / "data" / ("r" + "aw") / "holdings.csv"
 
     rc = _run_guard(
@@ -85,7 +146,7 @@ def check(repo_root: Path, project_dir: Path, sh: str = "sh") -> list[tuple[str,
         {"tool_name": "Read", "tool_input": {"file_path": str(raw_file)}},
         sh,
     )
-    results.append(("raw-data read", rc == 2, f"exit {rc} (want 2: BLOCK)"))
+    results.append(("raw-data read", rc == 2, _detail(rc, 2, "BLOCK", sh)))
 
     rc = _run_guard(
         repo_root,
@@ -93,7 +154,7 @@ def check(repo_root: Path, project_dir: Path, sh: str = "sh") -> list[tuple[str,
         {"tool_name": "Read", "tool_input": {"file_path": str(project_dir / "README.md")}},
         sh,
     )
-    results.append(("ordinary read", rc == 0, f"exit {rc} (want 0: allow)"))
+    results.append(("ordinary read", rc == 0, _detail(rc, 0, "allow", sh)))
 
     marker = project_dir / ".claude" / ".exec-consent"
     if marker.exists():
@@ -112,7 +173,7 @@ def check(repo_root: Path, project_dir: Path, sh: str = "sh") -> list[tuple[str,
             sh,
         )
         results.append(
-            ("execution gate (engaged)", rc == 2, f"exit {rc} (want 2: BLOCK without consent)")
+            ("execution gate (engaged)", rc == 2, _detail(rc, 2, "BLOCK without consent", sh))
         )
 
     rc = _run_guard(
@@ -129,7 +190,7 @@ def check(repo_root: Path, project_dir: Path, sh: str = "sh") -> list[tuple[str,
         (
             "execution gate (dormant)",
             rc == 0,
-            f"exit {rc} (want 0: a dormant session runs its own tests)",
+            _detail(rc, 0, "a dormant session runs its own tests", sh),
         )
     )
 
@@ -148,7 +209,22 @@ def summary(project_dir: Path, results: list[tuple[str, bool, str]]) -> tuple[bo
             "ALLOW (dormant), plugin enabled"
         )
     failed = ", ".join(f"{label}: {detail}" for label, ok, detail in results if not ok)
-    return False, f"GUARDS NOT PROVEN in {project_dir}: {failed}"
+    labels = {label for label, ok, _ in results if not ok}
+    if "POSIX shell" in labels or any("could not be started" in d for _, ok, d in results if not ok):
+        action = "fix the shell as described, open a new terminal, then re-run the check"
+    elif labels == {"plugin enabled"}:
+        action = (
+            f"the guards fire, but the team is not enabled for {project_dir}; "
+            "run `virt-surv go` in that project (or enable the plugin in its .claude/settings.json)"
+        )
+    else:
+        action = (
+            "a guard did not fire as expected; do not use the team on real data in this project "
+            "until it does. Open a new terminal (a Claude Code session already open needs a "
+            "restart), re-run `python -m scripts.armed_check --project <dir>`, and if it still "
+            "fails send that output with your report (docs/safety-model.md explains each check)"
+        )
+    return False, f"GUARDS NOT PROVEN in {project_dir}: {failed}. Next: {action}"
 
 
 def main(argv: list[str] | None = None) -> int:

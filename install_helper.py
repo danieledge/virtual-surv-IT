@@ -5196,7 +5196,11 @@ class Installer:
             spec = importlib.util.spec_from_file_location("armed_check", checker)
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
-            results = module.check(Path(self.repo).resolve(), project)
+            # 2026-09-14: hand the check the shell the launcher itself resolves. A bare
+            # "sh" is not on PATH in a corporate PowerShell session even with Git Bash
+            # installed, and the check then reported every guard as "exit -1" on the owner's
+            # box, which read as inert guards when only the prover could not start.
+            results = module.check(Path(self.repo).resolve(), project, _resolve_sh() or "sh")
             good, line = module.summary(project, results)
         except Exception as exc:  # noqa: BLE001 - a broken prover is a red line, not a crash
             good, line = False, f"could not run the armed check: {str(exc)[:120]}"

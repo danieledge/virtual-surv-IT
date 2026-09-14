@@ -10270,7 +10270,7 @@ def test_the_install_ends_by_proving_the_guards_are_armed(monkeypatch, tmp_path,
     inst.repo = tmp_path
     (tmp_path / "scripts").mkdir()
     (tmp_path / "scripts" / "armed_check.py").write_text(
-        "def check(repo, project):\n    return [('raw-data read', True, 'exit 2')]\n"
+        "def check(repo, project, sh='sh'):\n    return [('raw-data read', True, 'exit 2')]\n"
         "def summary(project, results):\n    return True, f'guards armed in {project}: raw-data BLOCK'\n",
         encoding="utf-8",
     )
@@ -10278,7 +10278,7 @@ def test_the_install_ends_by_proving_the_guards_are_armed(monkeypatch, tmp_path,
     assert "guards armed in" in capsys.readouterr().out
 
     (tmp_path / "scripts" / "armed_check.py").write_text(
-        "def check(repo, project):\n    return [('raw-data read', False, 'exit 0')]\n"
+        "def check(repo, project, sh='sh'):\n    return [('raw-data read', False, 'exit 0')]\n"
         "def summary(project, results):\n    return False, 'GUARDS NOT PROVEN'\n",
         encoding="utf-8",
     )
