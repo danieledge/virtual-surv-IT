@@ -263,30 +263,50 @@ def markdown_to_safe_html(md_text: str, html_links: bool = True) -> str:
     return safe_body
 
 
-def render(md_text: str, title: str, source: str = "", generated: str = "") -> str:
-    safe_body = markdown_to_safe_html(md_text)
+def render_document(
+    body_html: str,
+    title: str,
+    *,
+    meta: str = "",
+    footer_bits=(),
+    extra_css: str = "",
+) -> str:
+    """Wrap ready-made body HTML in the team's document template: the letterhead, the house
+    CSS (light, dark via media query, print rules) and the standard footer. This is the one
+    shape every HTML artifact shares, so a renderer that builds its own markup (the Evidence
+    Room, 2026-09-14) calls this instead of carrying a theme of its own - which is how that
+    pack came to look nothing like the rest of the engagement's documents.
 
-    # html.escape() the title so injected HTML/JS in a Markdown H1 cannot
-    # break out of the <title> element.
+    `body_html` is trusted markup the caller built from escaped values; it is not
+    sanitised here (Markdown input goes through render(), which is). `meta` sits at the
+    right of the letterhead; `footer_bits` are joined with a middle dot; `extra_css` is
+    appended after the house CSS so a caller can add a few classes, not replace the look.
+    Both text arguments are escaped here."""
     safe_title = html.escape(title, quote=True)
-    meta = html.escape(generated, quote=True)
-    footer_bits = ["Generated from Markdown by the compliance surveillance engineering team."]
-    if source:
-        footer_bits.append(f"Source: {html.escape(source, quote=True)}")
-    if generated:
-        footer_bits.append(html.escape(generated, quote=True))
-
     fields = {
         "TITLE": safe_title,
-        "CSS": _CSS,
-        "META": meta,
-        "BODY": safe_body,
+        "CSS": _CSS + ("\n" + extra_css.strip() if extra_css.strip() else ""),
+        "META": html.escape(meta, quote=True),
+        "BODY": body_html,
         "FOOTER": " &middot; ".join(footer_bits),
     }
     # Single-pass substitution: inserted content (e.g. a title or body that itself contains a
     # literal %%BODY%%/%%FOOTER%% token) is never re-scanned, so it cannot collide with a later
     # placeholder. The callback's return value is inserted verbatim (no backref processing).
     return re.sub(r"%%(TITLE|CSS|META|BODY|FOOTER)%%", lambda m: fields[m.group(1)], _TEMPLATE)
+
+
+def render(md_text: str, title: str, source: str = "", generated: str = "") -> str:
+    safe_body = markdown_to_safe_html(md_text)
+
+    # html.escape() the title so injected HTML/JS in a Markdown H1 cannot
+    # break out of the <title> element (render_document escapes it).
+    footer_bits = ["Generated from Markdown by the compliance surveillance engineering team."]
+    if source:
+        footer_bits.append(f"Source: {html.escape(source, quote=True)}")
+    if generated:
+        footer_bits.append(html.escape(generated, quote=True))
+    return render_document(safe_body, title, meta=generated, footer_bits=footer_bits)
 
 
 def render_file(src: Path, out: Path | None = None) -> Path:

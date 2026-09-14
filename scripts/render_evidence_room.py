@@ -18,6 +18,11 @@ each load-bearing:
   render_html/check_artifacts, so it is free, reproducible and testable.
 * SELF-CONTAINED. Inline CSS, no external assets, no network, no server - a single file
   that opens offline, attaches to an email, or rides a Jira comment.
+* THE TEAM'S FORMAT. The pack is wrapped by render_html.render_document, the same
+  letterhead, house CSS and footer as every other HTML artifact the engagement produces
+  (2026-09-14 user report: the room "is not in the team's usual style and format" - it had
+  carried a dark dashboard theme of its own). Only the few classes its summary cards and
+  traceability chains need are added, in the house palette.
 * VERIFIABLE. A manifest of every source file with its SHA-256, so a reader can confirm
   the pack matches the artifacts it was built from.
 * NO COMPLIANCE CLAIM. It reports EVIDENCE COMPLETENESS - a mechanical present/absent
@@ -43,6 +48,21 @@ import html
 import json
 import sys
 from pathlib import Path
+
+
+def _render_document():
+    """render_html.render_document, resolved dual-mode (repo checkout or bundled plugin copy),
+    the same way render_findings reaches render_html."""
+    try:
+        from scripts.render_html import render_document
+    except ImportError:
+        import sys as _sys
+
+        _here = Path(__file__).resolve().parent
+        if str(_here) not in _sys.path:
+            _sys.path.insert(0, str(_here))
+        from render_html import render_document  # type: ignore[no-redef]
+    return render_document
 
 
 def _vsit_paths():
@@ -178,34 +198,29 @@ def _esc(value) -> str:
     return html.escape(str(value if value is not None else ""), quote=True)
 
 
-_CSS = """
-:root{--bg:#0f1115;--fg:#e6e6e6;--dim:#9aa0aa;--line:#262b33;--accent:#4aa3ff;
---ok:#3fb950;--warn:#d29922;--bad:#f85149;--card:#151922}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);
-font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-.wrap{max-width:1040px;margin:0 auto;padding:32px 20px 72px}
-h1{font-size:26px;margin:0 0 4px}
-h2{font-size:17px;margin:36px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
-.sub{color:var(--dim);font-size:13px;margin-bottom:22px}
-.bar{display:inline-block;padding:2px 9px;border-radius:11px;font-size:12px;
-border:1px solid var(--line);background:var(--card);color:var(--dim)}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:18px 0}
-.card{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:13px 15px}
-.card .n{font-size:23px;font-weight:600}
-.card .l{color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:.6px}
-table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
-th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top}
-th{color:var(--dim);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.5px}
-code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
-.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.dim{color:var(--dim)}
-.chain{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--accent);
-border-radius:7px;padding:11px 14px;margin:9px 0}
-.chain .step{color:var(--dim);font-size:13px}
-.chain .step b{color:var(--fg);font-weight:600}
-.gap{border-left-color:var(--warn)}
-footer{margin-top:44px;padding-top:14px;border-top:1px solid var(--line);
-color:var(--dim);font-size:12px}
+# Only what the house CSS (render_html._CSS) does not already have: the summary cards, the
+# traceability chains and the state colours. Same palette as the letterhead, light first,
+# dark under the same media query render_html uses, so the pack matches the documents beside it.
+_EXTRA_CSS = """
+.sub { color: #57606a; font-size: .9rem; margin: -.6rem 0 1.2rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .7rem;
+  margin: 1rem 0; }
+.card { border: 1px solid #d0d7de; border-radius: 6px; padding: .7rem .9rem; background: #f6f8fa; }
+.card .n { font-size: 1.5rem; font-weight: 600; line-height: 1.2; }
+.card .l { color: #57606a; font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .9em; }
+.ok { color: #1a7f37; } .warn { color: #9a6700; } .bad { color: #cf222e; } .dim { color: #57606a; }
+.chain { border: 1px solid #d0d7de; border-left: 4px solid #0969da; border-radius: 6px;
+  padding: .6rem .9rem; margin: .6rem 0; background: #f6f8fa; }
+.chain .step { color: #57606a; font-size: .9rem; }
+.chain .step b { color: inherit; font-weight: 600; }
+.chain.gap { border-left-color: #9a6700; }
+@media (prefers-color-scheme: dark) {
+  .sub, .card .l, .dim, .chain .step { color: #9da7b3; }
+  .card, .chain { background: #161b22; border-color: #30363d; }
+  .chain { border-left-color: #539bf5; } .chain.gap { border-left-color: #d29922; }
+  .ok { color: #3fb950; } .warn { color: #d29922; } .bad { color: #f85149; }
+}
 """
 
 
@@ -229,15 +244,12 @@ def build_html(workspace: Path, state: dict, findings: list[dict], envelope: dic
     ]
     parts: list[str] = []
     parts.append(
-        f"<!doctype html><html lang='en'><head><meta charset='utf-8'>"
-        f"<meta name='viewport' content='width=device-width,initial-scale=1'>"
-        f"<title>Evidence Room - {_esc(title)}</title><style>{_CSS}</style></head><body>"
-        f"<div class='wrap'><h1>{_esc(title)}</h1>"
-        f"<div class='sub'>Evidence Room &middot; <span class='mono'>{_esc(slug)}</span> "
+        f"<h1>Evidence Room: {_esc(title)}</h1>"
+        f"<p class='sub'><span class='mono'>{_esc(slug)}</span> "
         f"&middot; status {_esc(status)}"
         + (f" &middot; opened {_esc(eng.get('opened'))}" if eng.get("opened") else "")
         + (f" &middot; closed {_esc(eng.get('closed'))}" if eng.get("closed") else "")
-        + "</div>"
+        + "</p>"
     )
     # Summary cards - counts of facts, never a readiness verdict.
     parts.append("<div class='grid'>")
@@ -360,10 +372,12 @@ def build_html(workspace: Path, state: dict, findings: list[dict], envelope: dic
     )
     team = state.get("team") or []
     if team:
+        # Roster names read as AI agents (operating guide "Voice, names & console"): the 🤖
+        # marker on each name and the team named in full.
         parts.append(
             "<p class='dim'>Delivery team: "
-            + ", ".join(f"<b>{_esc(m)}</b>" for m in team)
-            + " &mdash; all AI agents of Virtual Surveillance IT.</p>"
+            + ", ".join(f"<b>\U0001f916 {_esc(m)}</b>" for m in team)
+            + ", all AI agents of Virtual Surveillance IT.</p>"
         )
 
     # --- residual risk ------------------------------------------------------
@@ -393,13 +407,21 @@ def build_html(workspace: Path, state: dict, findings: list[dict], envelope: dic
             f"<td class='mono dim'>{_esc(_sha256(path)[:16])}&hellip;</td></tr>"
         )
     parts.append("</table>")
-    parts.append(
-        "<footer>Generated by Virtual Surv-IT from the engagement's own artifacts. "
-        "Derived view only - the artifacts and <span class='mono'>engagement-state.json"
-        "</span> remain authoritative. Produced by AI agents; human sign-off is recorded "
-        "in the delivery report.</footer></div></body></html>"
+    footer_bits = (
+        "Generated by the compliance surveillance engineering team (AI agents, Virtual "
+        "Surveillance IT) from the engagement's own artifacts.",
+        "Derived view only: the artifacts and <span class='mono'>engagement-state.json</span> "
+        "remain authoritative.",
+        "Human sign-off is recorded in the delivery report.",
     )
-    return "".join(parts)
+    meta = f"Evidence Room · {slug} · status {status}"
+    return _render_document()(
+        "".join(parts),
+        f"Evidence Room: {title}",
+        meta=meta,
+        footer_bits=footer_bits,
+        extra_css=_EXTRA_CSS,
+    )
 
 
 def render(workspace: Path, force: bool = False) -> tuple[int, str]:

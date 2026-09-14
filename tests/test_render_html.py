@@ -120,3 +120,36 @@ def test_render_body_with_literal_placeholder_not_clobbered():
     html = render("# T\n\nThis doc mentions the %%FOOTER%% token literally.", "T")
     assert "%%FOOTER%%" in html  # the literal in the body was not substituted
     assert "Generated from Markdown" in html  # the real footer still rendered
+
+
+# --- render_document: the shared wrapper (2026-09-14) -------------------------------------
+
+
+def test_render_document_wraps_trusted_body_in_the_team_template():
+    page = rh.render_document(
+        "<h1>Body</h1><div class='card'>x</div>",
+        'Title <script>"q"</script>',
+        meta="meta <b>bold</b>",
+        footer_bits=("first", "second"),
+        extra_css=".card { color: red; }",
+    )
+    assert page.startswith("<!doctype html>") and page.rstrip().endswith("</html>")
+    assert '<span class="brand">Compliance Surveillance Engineering</span>' in page
+    assert "<title>Title &lt;script&gt;&quot;q&quot;&lt;/script&gt;</title>" in page
+    assert "<span>meta &lt;b&gt;bold&lt;/b&gt;</span>" in page  # meta is escaped
+    assert "<h1>Body</h1><div class='card'>x</div>" in page  # body is inserted verbatim
+    assert '<div class="footer">first &middot; second</div>' in page
+    house, extra = page.index(rh._CSS.splitlines()[0]), page.index(".card { color: red; }")
+    assert house < extra < page.index("</style>")  # extra CSS after the house CSS, inside <style>
+
+
+def test_render_document_without_extras_matches_render_shape():
+    plain = rh.render_document("<p>x</p>", "T")
+    assert "<span></span></header>" in plain  # empty meta
+    assert '<div class="footer"></div>' in plain
+    assert plain.count("<style>") == 1
+    # render() is now render_document over the sanitised Markdown body
+    via_md = rh.render("# T\n\nx", "T", source="a.md", generated="2026-09-14")
+    assert "Generated from Markdown by the compliance surveillance engineering team." in via_md
+    assert "Source: a.md &middot; 2026-09-14</div>" in via_md
+    assert "<span>2026-09-14</span></header>" in via_md
