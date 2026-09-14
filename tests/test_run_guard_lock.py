@@ -197,13 +197,20 @@ def test_a_lock_whose_holder_is_alive_is_never_reclaimed(proj):
 
 
 def _a_dead_pid() -> int:
-    """A pid that is certainly not running: spawn a trivial process and wait for it.
+    """A pid that is certainly not running, and cannot BECOME one during the test.
 
-    Reusing a hard-coded high number risks colliding with a real process on a busy box, which
-    would turn this into a flaky test of the opposite behaviour."""
-    proc = subprocess.Popen([sys.executable, "-c", "pass"])
-    proc.wait()
-    return proc.pid
+    An exited child's pid is dead at the moment it is read, but the kernel reuses pids, and
+    with a second test suite running on the same host (2026-09-14, the orchestrator's detached
+    worktree run) one was reused between this function returning and the launcher's `kill -0`,
+    so the holder looked alive and the lock was not reclaimed. A pid above the kernel's pid_max
+    can never be allocated, so `kill -0` on it fails for the whole test. The spawn-and-wait
+    fallback stays for a host with no readable pid_max."""
+    try:
+        return int(Path("/proc/sys/kernel/pid_max").read_text(encoding="utf-8").strip()) + 1
+    except (OSError, ValueError):
+        proc = subprocess.Popen([sys.executable, "-c", "pass"])
+        proc.wait()
+        return proc.pid
 
 
 def test_a_genuinely_held_lock_fails_open_within_the_wait_budget(proj):
