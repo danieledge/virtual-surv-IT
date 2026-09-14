@@ -1,6 +1,6 @@
 # Scripts reference
 
-> Moved out of README.md on 2026-09-14 (framework review, step 6.8); the README keeps a one-line pointer. Relative links below are relative to the repository root.
+> Moved out of README.md on 2026-09-14 (framework review, step 6.8); the README keeps a one-line pointer.
 
 
 Every file in `scripts/` (97 - counted via `ls scripts/*.py scripts/*.sh`), plus the four
@@ -136,4 +136,4 @@ scripts` on a checkout is the authoritative inventory if this table and the tree
 | `scripts/check_pdf_links.py` | Refuses a tracked PDF whose link annotations point at the author's local filesystem; a CI step |
 | `scripts/apply-staged.sh` | The one human-run promotion step (2026-09-13, plan step 3.6): moves every pending file in `scripts/staged_hooks/` to its live path (`guard-*` and `run-guard.sh` to `.claude/hooks/`, the rest to `scripts/`) and deletes the staged copy; `--dry-run` lists. The staging directory is empty at rest and the suite is red while anything is pending. Never run by an agent, per this project's house rules; shipped releases come pre-wired. |
 
-<sub>[↑ Back to top](#readme-top)</sub>
+<sub>[↑ Back to top](../README.md#readme-top)</sub>

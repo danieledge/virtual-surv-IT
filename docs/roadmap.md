@@ -1,11 +1,11 @@
 # Roadmap
 
-> Moved out of README.md on 2026-09-14 (framework review, step 6.8); the README keeps a one-line pointer. Relative links below are relative to the repository root.
+> Moved out of README.md on 2026-09-14 (framework review, step 6.8); the README keeps a one-line pointer.
 
 
 Tracked enhancements, with the rationale for each. *(Done this cycle: **subagent self-assessment**,
 agents now self-verify against their brief and flag gaps before returning; standing rule in
-[`docs/team-operating-guide.md`](docs/team-operating-guide.md).)*
+[`docs/team-operating-guide.md`](team-operating-guide.md).)*
 
 <details>
 <summary>🗺️ <b>What's shipped and what's next</b></summary>
@@ -22,7 +22,7 @@ agents now self-verify against their brief and flag gaps before returning; stand
   resume-or-new selection at the front door, and the stop-gate arming only on gated workspaces
   (a ⛔ parked sibling stays silent). Hardened in 0.33.0 (fail-safe gates, the 🔒 closing window,
   disk-first resume, the ADR-010 placement rule - see
-  [`docs/releases/0.33.md`](docs/releases/0.33.md)).
+  [`docs/releases/0.33.md`](releases/0.33.md)).
 - ✅ **Codebase map evolution: SHIPPED (0.33.28, ADR-007, Phase 1+2)**. Staleness detection
   (strict anchor validation, per-entry As-of/SHA checks, a `MAP-STALE` budget against HEAD) plus
   the generative layer: a deterministic `repo_skeleton` (inventory, tiered symbols, PageRank,
@@ -48,7 +48,7 @@ agents now self-verify against their brief and flag gaps before returning; stand
   lands. *Cost:* row parsing and cell resolution already exist, so this is an adjacency structure
   plus a traversal, stdlib only.
 
-**🚧 TODO: Automatic data-masking workflow** (detail in [`docs/internal/prepare-data-roadmap.md`](docs/internal/prepare-data-roadmap.md))
+**🚧 TODO: Automatic data-masking workflow** (detail in [`docs/internal/prepare-data-roadmap.md`](internal/prepare-data-roadmap.md))
 
 > **The goal:** *"throw a dataset at it and it masks/anonymises it safely"*, so the team can take
 > real data **without the user having to self-attest** it's clean. **Until that ships, the interim
@@ -64,7 +64,7 @@ agents now self-verify against their brief and flag gaps before returning; stand
 - **Auto-validation gate**: run the masking/NER check over the output and **block on residual
   PII**, so "auto-masked" is *proven* safe, not just attempted.
 
-**Evidence: move foundational → verified** (detail in [`docs/house-rules.md`](docs/house-rules.md))
+**Evidence: move foundational → verified** (detail in [`docs/house-rules.md`](house-rules.md))
 - **Comms-surveillance *practice*** (lexicon/NLP/voice/coverage methodology), **per-scenario
   detection-tuning practice**, and the **DA/BA boundary**. *Why:* the *regulatory* citations are
   verified; these *practice* details are industry-grounded, not primary-sourced; verify before
@@ -74,7 +74,7 @@ agents now self-verify against their brief and flag gaps before returning; stand
 - **Larger labelled synthetic calibration set** for the spoofing scenario (the shipped fixture is
   12 events). *Why:* enables a *measured* `/tune-thresholds` demo (ATL/BTL, real FP reduction)
   rather than an illustrative one. Plus the price-context (distance-from-touch) check noted in
-  [`docs/scenarios/spoofing.md`](docs/scenarios/spoofing.md).
+  [`docs/scenarios/spoofing.md`](scenarios/spoofing.md).
 
 **Performance / startup** *(nice-to-have)*
 - ✅ **Trim routing metadata: SHIPPED (0.8.x)**. Skill descriptions no longer load at all
@@ -88,4 +88,4 @@ agents now self-verify against their brief and flag gaps before returning; stand
 
 </details>
 
-<sub>[↑ Back to top](#readme-top)</sub>
+<sub>[↑ Back to top](../README.md#readme-top)</sub>

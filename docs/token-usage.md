@@ -1,6 +1,6 @@
 # Token usage and optimisation
 
-> Moved out of README.md on 2026-09-14 (framework review, step 6.8); the README keeps a one-line pointer. Relative links below are relative to the repository root.
+> Moved out of README.md on 2026-09-14 (framework review, step 6.8); the README keeps a one-line pointer.
 
 
 Multi-agent setups cost tokens, so the team is built to be cost-conscious, the biggest lever being
@@ -50,7 +50,7 @@ so ±15%); the rest are estimates with no run behind them yet:
   agent count at the gate, so over-spawning is visible.
 - **Model tiering**: opus (1.67× sonnet at current prices) reserved for final-judgement/novel-design roles only, haiku
   for the mechanical review bookkeeping (exact split and rationale: [Notes on the
-  config](#-notes-on-the-config)).
+  config](../README.md#-notes-on-the-config)).
 - **Artifacts-as-blackboard**: agents return condensed results; big output goes to files, not back
   through the orchestrator's context.
 - **Clean console**: detail to artifacts, not the chat.
@@ -69,7 +69,7 @@ so ±15%); the rest are estimates with no run behind them yet:
     per-session dormant floor, not "zero";
   - `CLAUDE.md` was slimmed once already (from ~185 lines / ~3.1k tokens to roughly 125 / ~2k,
     2026-07-01), with the roster, routing table and standing rules moved to
-    [`docs/team-operating-guide.md`](docs/team-operating-guide.md), which `/engage` now
+    [`docs/team-operating-guide.md`](team-operating-guide.md), which `/engage` now
     **explicitly reads** (previously it was referenced but never wired in) - it has since grown
     back to ~176 lines / ~3.1k tokens as engagement dormancy/safety carve-outs were added;
   - the 13 agent descriptions are trimmed to crisp routing lines;
@@ -81,4 +81,4 @@ so ±15%); the rest are estimates with no run behind them yet:
 
 </details>
 
-<sub>[↑ Back to top](#readme-top)</sub>
+<sub>[↑ Back to top](../README.md#readme-top)</sub>

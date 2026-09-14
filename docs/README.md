@@ -16,6 +16,8 @@ tracked document nothing links to, so a new page is added here or to its folder'
 - [`docs/team-operating-guide.md`](team-operating-guide.md) - roster, routing and the standing rules; the
   deferred topic files live in [`docs/operating-guide.d/command-index.md`](operating-guide.d/command-index.md)
 - [`docs/team-operating-guide-orchestration.md`](team-operating-guide-orchestration.md) - dispatch and right-sizing
+- [`docs/team.md`](team.md) - the roster, who does what, the portrait
+- [`docs/worked-example.md`](worked-example.md) - a captured review engagement, start to close
 - [`docs/agent-design.md`](agent-design.md) - why each agent has its tier and tool grants
 - [`docs/WAYS-OF-WORKING.md`](WAYS-OF-WORKING.md) - the frameworks (BABOK, 29148, ADRs, ASVS) and when each applies
 - [`docs/DEFINITION-OF-DONE.md`](DEFINITION-OF-DONE.md) - the evidenced gate an engagement must pass
@@ -96,3 +98,45 @@ Every artifact the team produces starts from one of these (`docs/templates/`):
 
 Local-only, not tracked: `docs/adr/` (decision records, indexed in its own README) and
 `docs/internal/` (reviews, audits and working plans).
+
+## Repository layout
+
+> Moved out of README.md on 2026-09-14 (framework review, step 6.8).
+
+
+In one line: `.claude/agents/` (13 subagents) · `docs/sme/` (3 SME knowledge packs) · `.claude/skills/` (32 workflows) · `.claude/hooks/` + `settings.json` (safety guards) · `rules/` + `tests/` (the spoofing worked example) · `scripts/` (tooling) · `vendor/` (pip-less deps) · `config/` (masking schema, regulatory register) · `docs/` · `evals/` · `.claude-plugin/` (manifests).
+
+<details>
+<summary>📁 <b>One consolidated map of the repo</b></summary>
+
+```
+.claude-plugin/                 # plugin + marketplace manifests (installable via /plugin)
+CLAUDE.md                       # shared team handbook (example defaults - customise as needed)
+.claude/agents/                 # 13 subagents:
+   builders                       business-analyst · rules-developer · platform-engineer ·
+                                  data-analyst · tuning-analyst · ml-engineer · qa-engineer
+   advisors (read-only)           model-validator · code-reviewer · performance-reviewer ·
+                                  compliance-reviewer · data-quality-reviewer
+   (SME typology advice lives in docs/sme/ knowledge packs - in-line, no agent)
+   helper                         review-scorer (haiku - review prep, scoring, filter tallies)
+.claude/skills/                 # 32 workflows: /engage, /deep-review, /audit-review, /security-audit, /handover,
+                                #   /new-scenario, /tune-thresholds, … (see "Using them")
+.claude/hooks/ + settings.json  # data-safety (always-on) + session-scoped execution guards
+rules/ · tests/                 # the bundled example (spoofing) + its true/false-positive tests
+scripts/                        # masking (ingest), synthesise, render_html, eval_score,
+                                #   calibrate_spoofing, check_citations, validate_* helpers,
+                                #   convert_file (the file-conversion front door)
+vendor/                         # bundled pure-Python deps (no pip): convert_file's readers +
+                                #   rich/prompt_toolkit for the virt-surv go TUI; licences in
+                                #   THIRD-PARTY-LICENSES.md
+config/                         # masking schema + regulatory register + feed-schema example
+docs/                           # OVERVIEW · WAYS-OF-WORKING · agent-design · scope-and-stack ·
+                                #   scenarios/ · demos/ · templates/ · adr/
+evals/                          # team-quality eval harness: 9 rubrics + 52 golden cases
+.github/workflows/ci.yml        # tests + lint + manifest validation + gitleaks + no-raw-data check
+.pre-commit-config.yaml         # local secret / raw-data guardrails
+```
+
+</details>
+
+<sub>[↑ Back to top](../README.md#readme-top)</sub>

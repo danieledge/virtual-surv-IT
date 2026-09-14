@@ -357,3 +357,29 @@ of the spec's own match keywords.
    manifest parses, its `input:`/`rubric:`/`workflow:` pointers resolve, numeric line anchors sit
    inside the input file, `scenario.md` carries no answer-key sections, a perfect run passes and
    an empty run fails (or passes, for zero-finding cases - add those to `ZERO_FINDING_CASES`).
+
+## The self-test, as the README told it
+
+> Moved out of README.md on 2026-09-14 (framework review, step 6.8).
+
+
+The repo's **1,900+ passing unit tests** (2,405 collected as of 0.35.0) check
+the *code*, and run in CI. The **eval harness** ([`evals/`](../evals/)) checks the **quality of what the
+team produces**: its contract and scorer run in CI, but scoring the *live team* (catching a prompt
+change that silently weakens a review) is run manually via `/run-evals`, not on every commit, because
+it spends tokens. (This is the regression net Anthropic's multi-agent guidance recommends.)
+
+<details>
+<summary>🧪 <b>What's in the harness</b>: 9 rubrics · 52 golden cases · deterministic scorer</summary>
+
+- **9 rubrics** (code-review · coverage · spec/traceability · tuning · data-safety · process-discipline ·
+  process-discipline-light · prompt-injection · regulatory-citation) + **52 golden cases** with deliberately seeded issues
+  *and* false-positive traps (all synthetic), including prompt-injection and fabricated-citation traps.
+- **Deterministic scorer** ([`scripts/eval_score.py`](../scripts/eval_score.py)): matches the team's
+  findings against each case's ground truth: recall, must-find criticals, FP-traps. **Unit-tested
+  (9 tests), runs free in CI** (no tokens).
+- **`/run-evals`** runs the live team per case, scores it, adds an **LLM-judge** for the qualitative
+  dimensions, and prints a scoreboard, flagging any regression. *(Spends tokens; run at milestones.)*
+</details>
+
+<sub>[↑ Back to top](../README.md#readme-top)</sub>

@@ -475,108 +475,13 @@ install path for users - that's the helper above.
 
 ## 👥 Meet the team
 
-![The compliance-surveillance engineering team - a group portrait of the 17 named characters as of v0.33, each labelled with name and role](docs/assets/team-portrait.png)
-
-*The team as portrayed at v0.33 - all seventeen. Since 2026-08-17 the three SME advisors
-(Hassan, Camila and Cleo, back row) are retired: their expertise ships as the
-[`docs/sme/`](docs/sme/README.md) knowledge packs, consulted in-line at zero spawn cost, and
-the live roster is Morgan + 13.*
-
-**Morgan** (PM & orchestrator) leads **13 agents**: twelve specialists and a tireless junior
-(Pip). Each has a day job, a name, strong opinions, and a Slack
-status that tells you more than their job title does. (Type `/meet-the-team` and Morgan does the
-introductions live.) **🧠 Advisors** hold no file-editing tools, your *independent* check, so they
-can critique all day but can't change the code (segregation of duties, basically). **🔧 Builders**
-write the stuff. Morgan engages only the ones a task needs, **not all of them every time**.
-
-```mermaid
-flowchart LR
-    You([You: a problem,<br/>a review, or a build]) --> PM[PM<br/>clarify + plan]
-    PM --> RA[business-analyst<br/>spec]
-    RA --> Build[right builder<br/>rule · pipeline · script · ML]
-    Build --> QA[qa-engineer<br/>independent tests]
-    QA --> Rev[review<br/>code · performance · compliance]
-    Rev --> Done([approved delivery ✅<br/>+ handover pack .md/.html])
-```
-
-*The shape of a full delivery: a typical task fires only **2-5** of the 13; complexity is opt-in
-("use the simplest thing that works").*
-
-> Routing by deliverable, not habit: a detection rule → `rules-developer`; an ETL pipeline or
-> a PowerShell transform → `platform-engineer`; a reconciliation/reporting job → `data-analyst`;
-> **threshold tuning → `tuning-analyst`**; **requirements/elicitation/reg-change → `business-analyst`**;
-> an ML model → `ml-engineer`. The PM picks; see CLAUDE.md §6.
-
-<details>
-<summary>👥 <b>The full roster</b>: day jobs, strong opinions and Slack statuses (or run <code>/meet-the-team</code>)</summary>
-
-**🎩 Morgan**: *Project Manager & orchestrator.* Translates regulator-speak into plain English,
-leads with "yes, here's how", and physically cannot let a piece of work end at "analysis". Will
-get it past the reviewers **and** the change board. · *Slack:* "happy to take that as an action."
-
-### 🔧 Builders: they engineer the surveillance technology
-
-- **Amara**: *Business Analyst.* Asks "but what does the regulation *actually require*?" until the
-  spec can't be misread. BABOK to her bones; allergic to ambiguity and to thresholds that turned up
-  without a rationale. · *Slack:* "requirement unclear → workshop booked (recurring)."
-- **Mateo**: *Detection Rules Developer.* Turns "catch the spoofers" into deterministic, tested
-  logic, second line of defence, in code form. A rule without a false-positive test is, to him,
-  just a rumour. · *Slack:* "no test, no merge. it's in the SDLC."
-- **Ana**: *Data Analyst.* Lives in the data and the false positives; trusts nothing until she's
-  seen the distribution. Will name your FP driver before you've finished writing the ticket. ·
-  *Slack:* "the data says otherwise."
-- **Theo**: *Tuning Analyst.* Can defend a threshold to a regulator with a straight face: ATL/BTL,
-  segmentation, the lot. Treats "let's just round it to 10k" as a personal insult. · *Slack:*
-  "show me the below-the-line sample."
-- **Mei**: *ML Engineer.* Reaches for ML only when plain rules aren't enough, and says
-  so out loud, because she knows Viktor's coming. Won't ship a model she can't explain to a
-  regulator. · *Slack:* "…do we actually need a model for this?"
-- **Kenji**: *Platform / Data Engineer.* Builds the plumbing nobody thanks him for until a feed
-  drops at quarter-end. Pipelines, ETL, retention, lineage, and a deep, personal grudge against
-  silent failures. · *Slack:* "have you tried the runbook?"
-- **Linh**: *QA Engineer.* Refuses to mark her own homework, independent by design. Finds the
-  edge case you were hoping nobody would raise in UAT. Residual risk: stated, not buried. ·
-  *Slack:* "reopening: it's a finding, not a nit."
-
-### 🧠 Advisors: they guide and sign off (read-only)
-
-- *(Retired 2026-08-17: **Hassan** the AML SME, **Camila** the trade-surveillance SME and
-  **Cleo** the comms-surveillance SME - their expertise now ships as the three
-  [`docs/sme/`](docs/sme/README.md) knowledge packs, read in-line by whoever needs them: same
-  substance, no spawn, and a leaner roster that routes better. Their Slack statuses are
-  preserved in the packs' git history.)*
-- **Viktor**: *Model Validator.* Independent of Mei *by design*, and entirely comfortable telling
-  her the model's wrong. Lives in **SR 11-7**; the friendly adversary every model needs. ·
-  *Slack:* "prove it. then prove it again. then document it."
-- **Ravi**: *Code Reviewer.* Reads seven languages (**Python, TypeScript/JS, Scala, Java,
-  PowerShell, Bash, SQL**) and the security flaws in all of them. Drives the real analysers
-  (ruff/mypy/bandit/SpotBugs/ShellCheck…), adds judgement on top, and, sorry, there's a
-  hard-coded secret on line 42. · *Slack:* "nit: naming (×40). also: CRITICAL, line 42."
-- **Thabo**: *Performance Reviewer.* Asks one question (*"will it survive month-end?"*) and
-  answers with evidence, not vibes. **Static by default** (won't run your code uninvited, §7). ·
-  *Slack:* "fine in dev. now do it at 10× and T+1."
-- **Layla**: *Compliance Reviewer.* The last gate before anything ships: auditability, the
-  alert→logic→obligation trail, secrets/PII, the Definition of Done. "Probably fine" does not pass
-  review. · *Slack:* "if it isn't documented, it didn't happen."
-- **Yuki**: *Data-Quality Reviewer.* Quietly obsessed with the one missing feed that means abuse
-  goes undetected: completeness, timeliness, **total coverage**. Knows a silent feed gap *is* the
-  control failure. · *Slack:* "no feed, no alert, no idea."
-
-### ⚙️ …and behind the scenes
-
-- **Pip**: *Review Coordinator.* Haiku-tier and proud of it. Preps every review: detects the
-  context, picks the lenses, scores findings and keeps the Found/Reported/Filtered tallies, so the
-  senior reviewers never burn opus on arithmetic. Will absolutely raise a ticket for it. ·
-  *Slack:* "review prepped & triaged ▓▓▓░░ (JIRA raised)"
-
-> Why read-only matters: an advisor that could quietly edit the thing it's reviewing isn't a
-> real independent check. The restriction is enforced by the tools each agent is granted: no
-> advisor holds `Write`/`Edit` (the reviewers add `Bash`
-> for static analysers and `git diff`, gated by the execution hook), not by convention.
-
-</details>
-
-<sub>[↑ Back to top](#readme-top)</sub>
+Morgan (PM) and 13 specialists: Amara (business analyst), Mateo (rules developer), Ana (data analyst),
+Theo (tuning analyst), Mei (ML engineer), Kenji (platform engineer), Linh (QA), Viktor (model validator),
+Ravi (code reviewer), Thabo (performance reviewer), Layla (compliance reviewer), Yuki (data-quality reviewer)
+and Pip (review scorer). Builders write; reviewers advise and can only write their own findings pack.
+Domain typology advice comes from the three `docs/sme/` knowledge packs, read in-line. Who does what, why each
+agent has its model tier and tool grants, and the roster table with the portrait: [`docs/team.md`](docs/team.md);
+the canonical routing table: [`docs/team-operating-guide.md`](docs/team-operating-guide.md). Type `/team` to meet them.
 
 ## 🤖 Using them
 
@@ -676,34 +581,7 @@ company-unique instructions - four working recipes plus the first-class extensio
 
 ## 📓 Worked example
 
-A complete reference scenario ships with the repo so the conventions are concrete, the
-**bundled example** (the worked example, not the agents themselves):
-
-```
-rules/spoofing.py            # MAR spoofing detection (deterministic, explainable)
-scripts/gen_synthetic.py     # synthetic order-flow generator (§5 - no real data)
-tests/test_spoofing.py       # true-positive + false-positive cases (§4)
-docs/scenarios/spoofing.md   # audit trail: alert → logic → obligation
-```
-
-(The full repo structure is in [Layout](#-layout). New to the spoofing example?
-[`docs/OVERVIEW.md` §6](docs/OVERVIEW.md) explains it in plain English.)
-
-Quickstart:
-
-```bash
-pip install -r requirements-dev.txt
-pytest                                   # all tests green
-python -m scripts.gen_synthetic --kind spoofing --out data/synthetic/spoofing.jsonl
-pre-commit install                       # optional: enable local guardrails
-```
-
-Add a new detection with `/new-scenario <requirement>`, which chains
-business-analyst (consulting the `docs/sme/` pack) → rules-developer → code-reviewer →
-compliance-reviewer per the
-handbook.
-
-<sub>[↑ Back to top](#readme-top)</sub>
+A captured review engagement, start to close, with what Morgan said at each gate: [`docs/worked-example.md`](docs/worked-example.md) and the verbatim transcript in [`docs/demos/review-demo.md`](docs/demos/review-demo.md).
 
 ## 🧭 Core principles
 
@@ -730,98 +608,11 @@ a convention), that's stated rather than dressed up.
 
 ## 🔍 Code-review tooling
 
-The `code-reviewer` agent drives standard analysers; it doesn't reinvent rules. None are required
-to *use* the team; they sharpen reviews. **Without them, reviews still run, but degrade to
-inference-only (🧠) instead of tool-backed measured (📊) findings** (the 🔬 tooling-coverage line
-says what couldn't run).
-
-<details>
-<summary>🔍 <b>Analyser install per language</b> (optional; sharpens <code>code-reviewer</code>)</summary>
-
-**Most of them are installed for you.** The installer's *Language analysers* step (part of
-"Install/update or reconfigure"; rerun it on an existing install to pick them up) fetches every
-analyser that needs no admin rights and no extra runtime: `bashate` and `ast-grep` by pip,
-`gitleaks`, `shfmt` and `shellcheck` as release binaries into a per-user directory the installer
-manages, and `eslint` + `tsc` by npm when node is already on the machine. The *Dependency
-scanner* step does the same for `osv-scanner` and its offline vulnerability database. No Go
-toolchain, package manager or elevated shell is needed for any of them, and the step explains
-what it fetched and from where. The ones it deliberately leaves alone need a runtime (a JDK,
-coursier or PowerShell), which is a decision for you, not a convenience the installer should
-take; they stay hints.
-
-**Seven tools are officially supported and individually configurable** - each proven to run
-single-file, dependency-free and network-free (the same bar `semgrep`/`pip-audit` failed and were
-removed for):
-
-| Tool | Language / role | How you get it |
-|---|---|---|
-| `ruff`, `mypy`, `bandit`, `black` | Python lint/types/security/format | `pip install -r requirements-review.txt` - one command, the only manual step |
-| `sqlfluff` | SQL lint | same file |
-| `gitleaks` | secret scan (any language) | installed for you (release binary) |
-| `shfmt` | Bash format | installed for you (release binary) |
-
-Turn any of the seven `on`/`off` per project (`install_helper.py`'s "Project preferences" step,
-or `VSIT/config/preferences.json`'s `review_tools` key directly), or set a default for every
-project on this machine (same step, "save as default" → `~/.config/virt-surv-it/installer.json`'s
-`default_review_tools`). `auto` (the default) means "use it if present, skip silently if not". A
-security team can disable all seven centrally with the env var `CST_NO_EXTERNAL_TOOLS=1`.
-`install_helper.py --check-tools` (or the interactive menu's Diagnostics → "Check analyser output
-cleanliness") live-tests each one against a throwaway synthetic file before you rely on it -
-catching a hanging/network-blocked tool the same way this caught semgrep/pip-audit. The full
-diagnostic also lists every analyser below as installed or missing, with what a missing one
-costs (inferred 🧠 findings in that language, never a broken review).
-
-**The rest are best-effort, presence-only, not individually configurable:**
-
-| Language | How you get it | Caveat |
-|---|---|---|
-| Bash | `shellcheck` (lint) and `bashate` (style): installed for you | - |
-| Any (structural search) | `ast-grep`: installed for you | used by the reviewers to find implementations and callers by AST pattern |
-| TypeScript / JavaScript | `eslint` + `tsc`: installed for you when node is already present, otherwise a hint | needs `node_modules` populated, or skipped |
-| Java | `checkstyle`, `pmd` - hint only, needs a JDK | standalone CLI only - **never** via Maven/Gradle or raw `java -jar` (both blocked as code execution) |
-| Scala | `scalafmt` - hint only, via `coursier`/sbt | format-only; semantic `scalafix` rules need a prior compile, not driven |
-| PowerShell | `pwsh -c 'Install-Module PSScriptAnalyzer -Scope CurrentUser'` - hint only | effectively dead today - see note below |
-
-Not driven at all (removed 2026-08-04, alongside semgrep/pip-audit): Java's `error-prone` and
-`spotbugs`+`find-sec-bugs`, Scala's `scalac -Xlint` and `wartremover` - all need a full compiled
-build via `mvn`/`gradle`/`sbt`, which both reaches the network and is blocked by the
-code-execution guard. Java/Scala deep static analysis is 🧠 inferred-only until a network-free
-alternative exists.
-
-> **PowerShell note:** the execution gate treats any `pwsh` invocation as code execution, so
-> `Invoke-ScriptAnalyzer` only runs once a human has opened the CLAUDE.md §7 consent gate; the
-> settings allow-list entry for it was removed for exactly this reason. Before consent, PowerShell
-> review stays static (🧠).
-
-The agent runs whatever is present and enabled, and reports which analysers were unavailable or
-disabled; nothing is silently skipped.
-
-</details>
-
-<sub>[↑ Back to top](#readme-top)</sub>
+Which analysers run per language, what is deliberately not used and why, and how findings are scored: [`docs/review/tooling.md`](docs/review/tooling.md) and [`docs/code-review-method.md`](docs/code-review-method.md).
 
 ## 🧪 Self-test (eval harness)
 
-The repo's **1,900+ passing unit tests** (2,405 collected as of 0.35.0) check
-the *code*, and run in CI. The **eval harness** ([`evals/`](evals/)) checks the **quality of what the
-team produces**: its contract and scorer run in CI, but scoring the *live team* (catching a prompt
-change that silently weakens a review) is run manually via `/run-evals`, not on every commit, because
-it spends tokens. (This is the regression net Anthropic's multi-agent guidance recommends.)
-
-<details>
-<summary>🧪 <b>What's in the harness</b>: 9 rubrics · 52 golden cases · deterministic scorer</summary>
-
-- **9 rubrics** (code-review · coverage · spec/traceability · tuning · data-safety · process-discipline ·
-  process-discipline-light · prompt-injection · regulatory-citation) + **52 golden cases** with deliberately seeded issues
-  *and* false-positive traps (all synthetic), including prompt-injection and fabricated-citation traps.
-- **Deterministic scorer** ([`scripts/eval_score.py`](scripts/eval_score.py)): matches the team's
-  findings against each case's ground truth: recall, must-find criticals, FP-traps. **Unit-tested
-  (9 tests), runs free in CI** (no tokens).
-- **`/run-evals`** runs the live team per case, scores it, adds an **LLM-judge** for the qualitative
-  dimensions, and prints a scoreboard, flagging any regression. *(Spends tokens; run at milestones.)*
-</details>
-
-<sub>[↑ Back to top](#readme-top)</sub>
+`python install_helper.py --selftest` runs a throwaway synthetic engagement with no model call and ends on the armed-guards line; the 3,200+ unit tests in CI drive the guards through their real protocol; `virt-surv try` shows the finished result. The live eval harness (52 golden cases, tripwires, a token-free replay in CI): [`evals/README.md`](evals/README.md).
 
 ## 🪝 The safety hooks
 
@@ -973,42 +764,7 @@ python -m scripts.validate_masking --in data/masked/x.jsonl   # scan YOUR masked
 
 ## 📁 Layout
 
-In one line: `.claude/agents/` (13 subagents) · `docs/sme/` (3 SME knowledge packs) · `.claude/skills/` (32 workflows) · `.claude/hooks/` + `settings.json` (safety guards) · `rules/` + `tests/` (the spoofing worked example) · `scripts/` (tooling) · `vendor/` (pip-less deps) · `config/` (masking schema, regulatory register) · `docs/` · `evals/` · `.claude-plugin/` (manifests).
-
-<details>
-<summary>📁 <b>One consolidated map of the repo</b></summary>
-
-```
-.claude-plugin/                 # plugin + marketplace manifests (installable via /plugin)
-CLAUDE.md                       # shared team handbook (example defaults - customise as needed)
-.claude/agents/                 # 13 subagents:
-   builders                       business-analyst · rules-developer · platform-engineer ·
-                                  data-analyst · tuning-analyst · ml-engineer · qa-engineer
-   advisors (read-only)           model-validator · code-reviewer · performance-reviewer ·
-                                  compliance-reviewer · data-quality-reviewer
-   (SME typology advice lives in docs/sme/ knowledge packs - in-line, no agent)
-   helper                         review-scorer (haiku - review prep, scoring, filter tallies)
-.claude/skills/                 # 32 workflows: /engage, /deep-review, /audit-review, /security-audit, /handover,
-                                #   /new-scenario, /tune-thresholds, … (see "Using them")
-.claude/hooks/ + settings.json  # data-safety (always-on) + session-scoped execution guards
-rules/ · tests/                 # the bundled example (spoofing) + its true/false-positive tests
-scripts/                        # masking (ingest), synthesise, render_html, eval_score,
-                                #   calibrate_spoofing, check_citations, validate_* helpers,
-                                #   convert_file (the file-conversion front door)
-vendor/                         # bundled pure-Python deps (no pip): convert_file's readers +
-                                #   rich/prompt_toolkit for the virt-surv go TUI; licences in
-                                #   THIRD-PARTY-LICENSES.md
-config/                         # masking schema + regulatory register + feed-schema example
-docs/                           # OVERVIEW · WAYS-OF-WORKING · agent-design · scope-and-stack ·
-                                #   scenarios/ · demos/ · templates/ · adr/
-evals/                          # team-quality eval harness: 9 rubrics + 52 golden cases
-.github/workflows/ci.yml        # tests + lint + manifest validation + gitleaks + no-raw-data check
-.pre-commit-config.yaml         # local secret / raw-data guardrails
-```
-
-</details>
-
-<sub>[↑ Back to top](#readme-top)</sub>
+What lives where in this repository: [`docs/README.md`](docs/README.md), "Repository layout".
 
 ## 🗂️ Scripts reference
 
@@ -1035,48 +791,7 @@ Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FA
 
 ## 📖 Documentation
 
-**Reading paths: the repo has 130+ doc files; start with the path that matches your goal:**
-
-- 🆕 **New here** → [`docs/quick-start.pdf`](docs/quick-start.pdf)
-  (one page, the whole mental model, renders directly on GitHub) → [`docs/OVERVIEW.md`](docs/OVERVIEW.md) (plain English, no prior knowledge) →
-  this README → [`docs/demos/review-demo.md`](docs/demos/review-demo.md) (a real transcript, nothing to
-  run) → type **`/demo`**.
-- 🔧 **Extending the team** (agents/skills/menus) → [`docs/agent-design.md`](docs/agent-design.md)
-  (design rationale + conformance matrix) → [`docs/team-operating-guide.md`](docs/team-operating-guide.md)
-  (standing rules, roster, routing, question-tool limits) → [`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md)
-  (frameworks + the canonical template catalogue).
-- 🕵️ **Auditing / assessing it** → [`docs/DEFINITION-OF-DONE.md`](docs/DEFINITION-OF-DONE.md) →
-  [`docs/code-review-method.md`](docs/code-review-method.md) → the internal ADRs (citation
-  grounding ADR-001; safety-hook threat model ADR-002; engagement memory ADR-003) →
-  [`evals/README.md`](evals/README.md).
-- 📊 **Data & tuning** → [Handling real data](#-handling-real-data) (above) →
-  [`docs/internal/prepare-data-roadmap.md`](docs/internal/prepare-data-roadmap.md) →
-  [`docs/scenarios/spoofing.md`](docs/scenarios/spoofing.md) (the worked example, incl. calibration).
-
-| Guide | What it covers |
-|---|---|
-| [`docs/quick-start.pdf`](docs/quick-start.pdf) | **One-page quick-start reference** - the mental model, the four steps to a first engagement, and every command with when to use it (renders directly on GitHub; the [interactive HTML](https://htmlpreview.github.io/?https://github.com/danieledge/virtual-surv-IT/blob/dev/docs/quick-start.html) is also available) |
-| [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Plain-English tour, start here if you're new to agents/LLMs |
-| [`docs/FAQ.md`](docs/FAQ.md) | The questions a newcomer actually asks: evidence tags, hallucination, consent, the artifacts folder, Morgan |
-| [`docs/demos/`](docs/demos/) | Captured transcripts - a review run and a full-lifecycle eval run; see the team work without running anything |
-| [`docs/EXTENDING.md`](docs/EXTENDING.md) | Extending the team for your organisation: recipes + the extensions contract, analyser registry, tool allowlist |
-| [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md) | First-class Jira and (experimental) PR-comment presence via your own MCP servers - **off by default**, project-scoped, one clear place to configure |
-| [`docs/team-operating-guide.md`](docs/team-operating-guide.md) | Standing rules, roster + routing table, question construction (read on-engage) |
-| [`docs/team-operating-guide-orchestration.md`](docs/team-operating-guide-orchestration.md) | Delegation/dispatch discipline - right-sizing, concurrent dispatch, review-splitting (read on first delegation, not at open) |
-| [`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md) | Frameworks, the canonical template catalogue, the traceability spine |
-| [`docs/agent-design.md`](docs/agent-design.md) | Per-agent rationale + the Anthropic best-practice conformance matrix |
-| [`docs/DEFINITION-OF-DONE.md`](docs/DEFINITION-OF-DONE.md) | The evidenced gate every delivery must pass before handover |
-| [`docs/scope-and-stack.md`](docs/scope-and-stack.md) | The (example) regulatory scope and tech stack, customise to yours |
-| [`docs/code-review-method.md`](docs/code-review-method.md) | How reviews score, filter and stay transparent |
-| [`docs/house-rules.md`](docs/house-rules.md) | General, cross-project engineering & review conventions |
-| [`docs/internal/engagement-flow-poster-flowchart.pdf`](docs/internal/engagement-flow-poster-flowchart.pdf) | **Under the hood: an engagement lifecycle** - the full workflow as a navigable flowchart poster (phases 0-5, guards, shared memory), kept in sync with the current version at each release (currently v0.33.6); renders directly on GitHub. The [interactive HTML](https://htmlpreview.github.io/?https://github.com/danieledge/virtual-surv-IT/blob/dev/docs/internal/engagement-flow-poster-flowchart.html) is also available (the [plain repo link](docs/internal/engagement-flow-poster-flowchart.html) just shows source on GitHub); see [`docs/internal/engagement-flow-diagram.md`](docs/internal/engagement-flow-diagram.md) for the Mermaid version GitHub renders inline; the normative lifecycle spec (maintainer doc) is [`docs/internal/engagement-flow-spec.md`](docs/internal/engagement-flow-spec.md) |
-| `docs/adr/` (internal) | Architecture decision records ADR-001 to ADR-011: citation grounding, safety-hook threat model, engagement memory, machine-readable state, multi-engagement workspaces, company extensions, the one placement rule, the session-resume brief. **Internal maintainer documents, deliberately not published in this repo** - the docs that cite an ADR carry the decision's substance themselves. |
-| [`docs/releases/0.33.md`](docs/releases/0.33.md) | The 0.33.x release overview - the whole cycle (workflow robustness + platform capability adoption) on one page |
-| [`CHANGELOG.md`](CHANGELOG.md) | Full release history |
-
-<sub>[↑ Back to top](#readme-top)</sub>
-
-<a id="known-issues"></a>
+Every document under `docs/`, by purpose: [`docs/README.md`](docs/README.md).
 
 ## ⚠️ Known issues
 
