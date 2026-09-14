@@ -86,6 +86,40 @@ agents now self-verify against their brief and flag gaps before returning; stand
   first-block-wins, with a per-guard crash policy so a broken guard fails closed rather than
   silently disabling the rest. Wired in both `hooks/hooks.json` and `.claude/settings.json`.
 
+**Corporate Windows estate: open follow-ups from the live sessions of 2026-09-14** *(P1 first)*
+- **P1: PreToolUse hooks cost 2.4 to 4.4 seconds per Bash and Read call** on the owner's
+  corporate Windows box, with `guard_daemon: true` in the project's team preferences. In a
+  four-reviewer parallel review (VRTSRV-13: 609k tokens, 11 minutes) that latency was the
+  dominant cost. Not to be fixed blind. To measure on WINTEST (or the owner's box), in this
+  order: (1) does the daemon actually start there - after one tool call, does
+  `.claude/.guard-daemon-port` exist and hold a port, and does a second call reach it; (2) the
+  interpreter probe - what `.claude/.guard-interpreter` (or `VSIT/local/guard-interpreter`)
+  holds, and whether it is a resolved absolute path; (3) the lock - the value in
+  `.claude/.guard-coldstart-ms` and how often `run-guard.sh: note: waited ... proceeded without
+  serialization` appears in a fan-out; (4) the per-call `sh` spawn itself - time
+  `sh .claude/hooks/run-guard.sh scripts/bash_hook_dispatcher.py < payload.json` once cold and
+  once warm from Git Bash. No shipped probe prints these timings yet; `engage_probe` prints
+  `DOUBLE_HOOKS`, `tier_probe` covers the launcher tiers only.
+- **Two copies that can drift.** In that session the hooks resolved to the working checkout
+  (`.../virt-surv-IT/.claude/hooks/`) while skills and docs resolved to the plugin cache at
+  0.37.0. `engage_probe` already reports this shape as `DOUBLE_HOOKS=1` (the project is the
+  team repo and the plugin is installed), and `.claude/skills/.shared/engage-open.md` tells the
+  open what to say; a check that the hooks root and the skills root are the same install is a
+  follow-up, not yet written.
+- **The guard lock directory in a client project.** `.claude/.guard-lock/` is ignored by this
+  repo's own `.gitignore`; a plugin cannot edit a host project's, and the `VSIT/.gitignore` the
+  team writes covers `engagements/` and `local/` only. A client project that commits its
+  `.claude/` folder can pick up a transient lock directory. Moving the lock under
+  `VSIT/local/` (the two-location rule the interpreter cache already follows) is the fix; not
+  done in the leak fix of the same day, which only silenced the shell error.
+- **Launcher Update option repaints over printed text.** Owner's words: "choosing the Update
+  option in the launcher shows text printed behind the TUI, which flashes up". Launcher-tier
+  rendering on the corporate box; needs WINTEST or the owner's box to reproduce.
+- **Plugin-mode sandbox has no Markdown renderer.** The eval harness's plugin-mode session could
+  not render `.html` siblings (`render_html` needs the `markdown` and `bleach` packages, which
+  are not vendored the way `convert_file`'s dependencies are), so a close cannot complete there.
+  Vendoring them is the candidate fix.
+
 </details>
 
 <sub>[↑ Back to top](../README.md#readme-top)</sub>
