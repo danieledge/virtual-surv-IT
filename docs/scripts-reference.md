@@ -27,7 +27,7 @@ scripts` on a checkout is the authoritative inventory if this table and the tree
 | `scripts/extensions.py` | Parses and surfaces the company-extensions contract from a working project's `VSIT/config/extensions.md` (ADR-009) |
 | `scripts/convert_sarif.py` | Converts SARIF analyser output to the team's findings-pack JSONL so company-tool findings keep 📊 measured status |
 | `scripts/engage_probe.py` | The `/engage` step-0 open-time probe, as code |
-| `scripts/repo_skeleton.py` | Deterministic, token-budgeted codebase skeleton (inventory, tiered symbols, PageRank importance) - the mechanical layer under `/map-codebase` and the sanctioned whole-repo inventory during engagements |
+| `scripts/repo_skeleton.py` | Deterministic, token-budgeted codebase skeleton (inventory, tiered symbols, PageRank importance; placeholders and archives counted in a footer, symbol-less directories rolled up to one line) - the mechanical layer under `/map-codebase` and the sanctioned whole-repo inventory during engagements |
 | `scripts/explain_rule.py` | "Why did this NOT alert?" per-condition trace for the spoofing worked example (the `/why-no-alert` step c) |
 | `scripts/doc_skeleton.py` | Deterministic, token-budgeted inventory of a documentation tree |
 | `scripts/map_fingerprint.py` | Content fingerprinting for codebase-map drift detection (ADR-007 Phase 1) |

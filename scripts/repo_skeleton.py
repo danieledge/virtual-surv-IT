@@ -88,6 +88,90 @@ _MARKDOWN_EXTS = frozenset({".md", ".markdown", ".rst"})
 _CHARS_PER_TOKEN = 4
 _DEFAULT_BUDGET_TOKENS = 6000
 
+# ------------------------------------------- non-code inventories (2026-09-14, live report)
+#
+# A plugin-mode session on an Informatica/ActOne/Autosys repository (4,723 files, mostly .apf
+# XML, .zip archives and .gitkeep placeholders) got "4723 files inventoried, budget ~6000
+# tokens" followed by one entry per placeholder and archive, each with a "(no symbols
+# extracted)" line, and the useful inventory never fit. Placeholders and archives are counted
+# in a footer instead of listed; a directory whose files all yield no symbols collapses to one
+# roll-up line; a floor-tier file with no symbols is a bare heading. Files with symbols keep
+# the per-file form, so a code repository reads as before.
+_PLACEHOLDER_NAMES = frozenset({".gitkeep", ".keep"})
+_BINARY_EXTS = frozenset(
+    {
+        ".zip",
+        ".gz",
+        ".tgz",
+        ".tar",
+        ".bz2",
+        ".xz",
+        ".7z",
+        ".rar",
+        ".jar",
+        ".war",
+        ".ear",
+        ".whl",
+        ".exe",
+        ".dll",
+        ".so",
+        ".dylib",
+        ".bin",
+        ".class",
+        ".pyc",
+        ".o",
+        ".a",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".bmp",
+        ".ico",
+        ".webp",
+        ".tif",
+        ".tiff",
+        ".pdf",
+        ".xlsx",
+        ".xls",
+        ".docx",
+        ".doc",
+        ".pptx",
+        ".ppt",
+        ".parquet",
+        ".pkl",
+        ".woff",
+        ".woff2",
+        ".ttf",
+        ".eot",
+        ".mp3",
+        ".mp4",
+        ".mov",
+        ".avi",
+    }
+)
+
+
+def _is_placeholder(rel_path: str) -> bool:
+    """A file that exists to keep a directory in git: .gitkeep, .keep, or a .gitignore below
+    the root (the root .gitignore says something about the project; a nested one does not)."""
+    name = rel_path.rsplit("/", 1)[-1]
+    return name in _PLACEHOLDER_NAMES or (name == ".gitignore" and "/" in rel_path)
+
+
+def _is_binary(rel_path: str) -> bool:
+    return Path(rel_path).suffix.lower() in _BINARY_EXTS
+
+
+def _ext_breakdown(paths: list[str]) -> str:
+    """`2 .apf, 1 .zip` - most common first, then by name; extensionless files are named so."""
+    counts: dict[str, int] = {}
+    for rel in paths:
+        ext = Path(rel).suffix.lower() or "(no extension)"
+        counts[ext] = counts.get(ext, 0) + 1
+    return ", ".join(
+        f"{n} {ext}" for ext, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    )
+
 
 def _force_utf8_output() -> None:
     for stream in (sys.stdout, sys.stderr):
@@ -1104,9 +1188,30 @@ def _file_block(
     lines = [f"## {rel_path}  [{tier}]{suffix}"]
     if symbols:
         lines.extend(f"  - {s}" for s in symbols)
-    else:
+    elif tier != _TIER_FLOOR:
+        # A parser tier that found nothing is worth saying (an empty module, a parse that
+        # fell short); the floor finding nothing is the expected case for a non-code file
+        # and the line only cost budget (2026-09-14).
         lines.append("  (no symbols extracted)")
     return "\n".join(lines)
+
+
+def _dir_block(
+    directory: str,
+    members: list[str],
+    churn: dict | None,
+    churn_measured: bool,
+) -> str:
+    """One line for a directory none of whose files yield a symbol:
+    `## ActOne/EQM-IAP/  3 files (2 .apf, 1 .zip), churn: 1 commits (measured)`. The churn
+    shown is the most-changed member's (or the newest mtime when inferred)."""
+    suffix = ""
+    if churn:
+        known = [m for m in members if m in churn]
+        if known:
+            suffix = _churn_suffix(max(known, key=lambda m: churn[m]), churn, churn_measured)
+    plural = "file" if len(members) == 1 else "files"
+    return f"## {directory}/  {len(members)} {plural} ({_ext_breakdown(members)}){suffix}"
 
 
 # ------------------------------------------- pattern-tier fallback notice (2026-09-12)
@@ -1196,7 +1301,28 @@ def build_skeleton(
     dependency diagram after the file listing."""
     files = inventory(root) if files is None else files
     ranks = ranks or {}
-    ordered = sorted(files, key=lambda p: (-ranks.get(p, 0.0), p))
+
+    # Non-code inventories (2026-09-14): placeholders and archives are never listed, only
+    # counted; a directory whose remaining files all yield no symbols becomes one roll-up
+    # line. Root-level files stay per-file (there is no directory to roll them into).
+    placeholders = [p for p in files if _is_placeholder(p)]
+    binaries = [p for p in files if not _is_placeholder(p) and _is_binary(p)]
+    extracted: dict[str, tuple[list[str], str]] = {
+        p: extract_symbols(root / p) for p in files if not _is_placeholder(p) and not _is_binary(p)
+    }
+    by_dir: dict[str, list[str]] = {}
+    for p in files:
+        if _is_placeholder(p) or "/" not in p:
+            continue
+        by_dir.setdefault(p.rsplit("/", 1)[0], []).append(p)
+    rolled_dirs = {
+        d: members
+        for d, members in by_dir.items()
+        if all(_is_binary(m) or not extracted[m][0] for m in members)
+    }
+    rolled_files = {m for members in rolled_dirs.values() for m in members}
+    listed = [p for p in extracted if p not in rolled_files]
+    ordered = sorted(listed, key=lambda p: (-ranks.get(p, 0.0), p))
 
     header = [
         f"# Repository skeleton - {root}",
@@ -1214,7 +1340,7 @@ def build_skeleton(
     omitted = 0
 
     for i, rel_path in enumerate(ordered):
-        symbols, tier = extract_symbols(root / rel_path)
+        symbols, tier = extracted[rel_path]
         compact = compact_from is not None
         block = _file_block(
             rel_path, symbols, tier, compact=compact, churn=churn, churn_measured=churn_measured
@@ -1243,11 +1369,35 @@ def build_skeleton(
         body.append(block)
         used_tokens += block_tokens
 
+    omitted_dirs = 0
+    for directory in sorted(rolled_dirs):
+        block = _dir_block(directory, rolled_dirs[directory], churn, churn_measured)
+        block_tokens = _estimate_tokens(block) + 1
+        if used_tokens + block_tokens > budget_tokens:
+            omitted_dirs += 1
+            continue
+        body.append(block)
+        used_tokens += block_tokens
+
     if omitted:
         body.append(
             f"\n...and {omitted} more lower-ranked file(s) omitted "
             "(--budget to raise, or run against a narrower path)."
         )
+    if omitted_dirs:
+        body.append(
+            f"\n...and {omitted_dirs} more symbol-less director{'y' if omitted_dirs == 1 else 'ies'} "
+            "omitted (--budget to raise, or run against a narrower path)."
+        )
+    not_listed = []
+    if placeholders:
+        not_listed.append(
+            f"{len(placeholders)} placeholder file(s) (.gitkeep, .keep, nested .gitignore)"
+        )
+    if binaries:
+        not_listed.append(f"{len(binaries)} archive/binary file(s) ({_ext_breakdown(binaries)})")
+    if not_listed:
+        body.append("\n# not listed: " + "; ".join(not_listed))
 
     out = "\n".join(header) + "\n".join(body) + "\n"
     if mermaid_graph is not None:

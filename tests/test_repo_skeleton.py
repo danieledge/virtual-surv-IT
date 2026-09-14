@@ -1246,3 +1246,58 @@ def test_the_cli_summary_surfaces_the_fallback(tmp_path, monkeypatch, capsys):
     assert rs.main(["repo_skeleton", str(tmp_path)]) == 0
     streams = capsys.readouterr()
     assert "> Note:" in streams.out and streams.err.strip().startswith("Note:")
+
+
+def test_non_code_repository_rolls_up_directories_and_skips_placeholders(tmp_path):
+    """Live plugin-mode session, 2026-09-14: an Informatica/ActOne/Autosys repository (4,723
+    files, mostly .apf XML, .zip archives and .gitkeep placeholders) got one entry per
+    placeholder and archive, each with a "(no symbols extracted)" line, and the useful
+    inventory never fit the budget. Shaped like the owner's tree, smaller."""
+    (tmp_path / "README.md").write_text("# Models\n\n## Layout\n\ntext\n", encoding="utf-8")
+    tree = {
+        "ActOne/EQM-IAP": ["a.apf", "b.apf", "c.zip"],
+        "ActOne/EQM-CORE": ["core.apf"],
+        "Informatica/PRD/mappings": ["m1.apf", "m2.apf", "m3.apf"],
+        "Autosys/jobs": ["nightly.jil", "weekly.jil"],
+    }
+    for directory, names in tree.items():
+        (tmp_path / directory).mkdir(parents=True)
+        for name in names:
+            (tmp_path / directory / name).write_bytes(
+                b"<xml/>" if not name.endswith(".zip") else b"PK\x03\x04"
+            )
+    for empty in ("ActOne/empty", "Informatica/DEV", "Autosys/archive"):
+        (tmp_path / empty).mkdir(parents=True)
+        (tmp_path / empty / ".gitkeep").write_text("", encoding="utf-8")
+    (tmp_path / "Informatica" / ".gitignore").write_text("*.log\n", encoding="utf-8")
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", "-A")
+    churn = {p: 1 for p in inventory(tmp_path)}
+
+    out = build_skeleton(tmp_path, budget_tokens=2000, churn=churn, churn_measured=True)
+
+    # One roll-up line per directory, in the agreed shape, with the churn suffix.
+    assert "## ActOne/EQM-IAP/  3 files (2 .apf, 1 .zip), churn: 1 commits" in out
+    assert "## Informatica/PRD/mappings/  3 files (3 .apf)" in out
+    assert "## Autosys/jobs/  2 files (2 .jil)" in out
+    for directory in tree:
+        assert out.count(f"## {directory}/") == 1, directory
+    # No per-file entries for the rolled-up files, no placeholders, no empty-symbol lines.
+    assert "## ActOne/EQM-IAP/a.apf" not in out and "c.zip" not in out.split("# not listed")[0]
+    assert ".gitkeep" not in out.split("# not listed")[0]
+    assert "(no symbols extracted)" not in out
+    # The README keeps the per-file form: it has headings to show.
+    assert "## README.md" in out and "Layout" in out
+    # The footer accounts for what was not listed.
+    assert "# not listed: 4 placeholder file(s)" in out
+    assert "1 archive/binary file(s) (1 .zip)" in out
+    # And the whole thing fits with headroom.
+    assert _estimate_tokens(out) < 2000 // 2, _estimate_tokens(out)
+
+
+def test_a_floor_file_without_symbols_is_a_bare_heading_but_parser_tiers_still_say_so():
+    from scripts.repo_skeleton import _file_block, _TIER_AST
+
+    assert _file_block("notes.txt", [], _TIER_FLOOR, compact=False) == "## notes.txt  [floor]"
+    block = _file_block("empty.py", [], _TIER_AST, compact=False)
+    assert "(no symbols extracted)" in block
