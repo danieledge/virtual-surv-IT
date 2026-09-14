@@ -49,7 +49,7 @@ is the common, valid default - not an error). Resolve the seven known preference
   daemon files (`scripts/guard_daemon.py`, `scripts/guard_daemon_client.py`, the
   daemon-aware `run-guard.sh`) ship live as of 2026-08-13 - a current checkout needs no
   separate apply step; an older checkout needs a human to run
-  `scripts/apply-guard-daemon.sh` once (ADR-002 rec 5: hook files are never applied
+  `scripts/apply-staged.sh` once (ADR-002 rec 5: hook files are never applied
   automatically). Like `large_context_review_split`, no machine-wide tier.
 
 **Also read your own model, read-only.** `Read .claude/settings.json` if it exists and

@@ -9,13 +9,14 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _load():
     spec = importlib.util.spec_from_file_location(
-        "staged_post_edit_lint", REPO_ROOT / "scripts" / "staged_hooks" / "post_edit_lint.py"
+        "staged_post_edit_lint", staged_or_live("post_edit_lint.py")
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

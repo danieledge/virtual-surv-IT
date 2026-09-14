@@ -21,6 +21,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO = Path(__file__).resolve().parents[1]
 REDIRECT = REPO / "scripts" / "exploration_redirect.py"
@@ -169,7 +170,7 @@ def test_grep_redirect_is_also_once_per_pattern(armed):
 def test_it_is_dispatched_for_read_and_grep_and_fails_open():
     """A guard nobody calls is not a guard. Pins the dispatcher entry, including the
     fail_open flag - this is advisory infra, and must never block on its own crash."""
-    staged = REPO / "scripts" / "staged_hooks" / "bash_hook_dispatcher.py"
+    staged = staged_or_live("bash_hook_dispatcher.py")
     spec = importlib.util.spec_from_file_location("staged_dispatcher", staged)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 
 import scripts.todo_panel_nudge as nudge
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 
 def _run_bare(monkeypatch, capsys, payload: dict):
@@ -178,7 +179,7 @@ def test_staged_and_live_match_when_installed():
 
     repo = Path(__file__).resolve().parents[1]
     live = repo / "scripts" / "todo_panel_nudge.py"
-    staged = repo / "scripts" / "staged_hooks" / "todo_panel_nudge.py"
+    staged = staged_or_live("todo_panel_nudge.py")
     assert live.is_file(), f"live hook missing at {live} - it is not installed"
     assert live.read_bytes() == staged.read_bytes(), (
         "staged todo-panel nudge not yet applied - run: bash scripts/apply-todo-panel-nudge.sh"
@@ -192,9 +193,10 @@ def _load_staged_nudge():
     above correctly flags that as pending), so testing the live import would test
     unfixed code. Same pattern as test_dod_stop_gate.py's own _load_staged_gate()."""
     import importlib.util
-    from pathlib import Path
 
-    path = Path(__file__).resolve().parents[1] / "scripts" / "staged_hooks" / "todo_panel_nudge.py"
+    from _staging import staged_or_live
+
+    path = staged_or_live("todo_panel_nudge.py")  # staged copy while pending, else live (step 3.6)
     spec = importlib.util.spec_from_file_location("staged_todo_panel_nudge", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

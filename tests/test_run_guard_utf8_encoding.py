@@ -20,10 +20,16 @@ import sys
 from pathlib import Path
 
 import pytest
+from _staging import (
+    launcher_copy,
+    staged_or_live,
+)  # staged copy while pending, else live (step 3.6)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-LAUNCHER = REPO_ROOT / "scripts" / "staged_hooks" / "run-guard.sh"
-GUARD = REPO_ROOT / "scripts" / "staged_hooks" / "locked_menu_guard.py"
+LAUNCHER = (
+    launcher_copy()
+)  # a copy off the .claude/hooks/ path, steered by env like the staged copy was
+GUARD = staged_or_live("locked_menu_guard.py")
 
 pytestmark = pytest.mark.skipif(
     sys.platform == "win32" or shutil.which("sh") is None, reason="needs a POSIX shell"

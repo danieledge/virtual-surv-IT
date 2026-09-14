@@ -24,14 +24,13 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _load(name: str):
-    spec = importlib.util.spec_from_file_location(
-        f"staged_{name}", REPO_ROOT / "scripts" / "staged_hooks" / f"{name}.py"
-    )
+    spec = importlib.util.spec_from_file_location(f"staged_{name}", staged_or_live(f"{name}.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -88,7 +87,7 @@ def test_stop_gate_fires_in_plugin_mode_subprocess(tmp_path):
     (art / "START-HERE.md").write_text("Status: ⏳ in progress\n", encoding="utf-8")
     (art / "review-pass-1.md").write_text("# interim\n", encoding="utf-8")  # MISSING-HTML
     (art / ".team-session.json").write_text(json.dumps({"session": _SID}), encoding="utf-8")
-    hook = REPO_ROOT / "scripts" / "staged_hooks" / "dod_stop_gate.py"
+    hook = staged_or_live("dod_stop_gate.py")
     env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
     env["CLAUDE_PROJECT_DIR"] = str(project)
     result = subprocess.run(

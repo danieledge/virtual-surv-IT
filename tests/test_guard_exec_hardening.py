@@ -21,9 +21,10 @@ import sys
 from pathlib import Path
 
 import pytest
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO = Path(__file__).resolve().parents[1]
-GUARD = REPO / "scripts" / "staged_hooks" / "guard-code-execution.py"
+GUARD = staged_or_live("guard-code-execution.py")
 
 ALLOW, BLOCK = 0, 2
 

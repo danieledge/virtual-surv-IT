@@ -18,9 +18,10 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-HOOK = REPO_ROOT / "scripts" / "staged_hooks" / "subagent_return_budget.py"
+HOOK = staged_or_live("subagent_return_budget.py")
 LIVE_HOOK = REPO_ROOT / "scripts" / "subagent_return_budget.py"
 
 

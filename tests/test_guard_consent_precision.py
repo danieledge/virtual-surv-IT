@@ -15,8 +15,13 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
+
 _ROOT = Path(__file__).resolve().parents[1]
-_STAGED = _ROOT / "scripts" / "staged_hooks" / "guard-consent-writes.py"
+_STAGED = staged_or_live("guard-consent-writes.py")  # the guard under test
+_STAGED_PATH = (
+    _ROOT / "scripts" / "staged_hooks" / "guard-consent-writes.py"
+)  # a staging PATH (empty at rest)
 
 ALLOW, BLOCK = 0, 2
 
@@ -114,7 +119,7 @@ def test_rm_marker_still_allowed_fail_safe():
 
 def test_write_tool_on_staged_hooks_is_not_blocked_path():
     # staging area is scripts/, not .claude/hooks/ - the Write channel must not confuse them
-    payload = {"tool_name": "Write", "tool_input": {"file_path": str(_STAGED)}}
+    payload = {"tool_name": "Write", "tool_input": {"file_path": str(_STAGED_PATH)}}
     assert _run(payload) == ALLOW
 
 

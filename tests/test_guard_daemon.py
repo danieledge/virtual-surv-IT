@@ -28,9 +28,12 @@ import time
 from pathlib import Path
 
 import pytest
+from _staging import (
+    launcher_copy,
+    staged_or_live,
+)  # staged copy while pending, else live (step 3.6)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-STAGED_DIR = REPO_ROOT / "scripts" / "staged_hooks"
 
 
 def _load_guard_daemon(monkeypatch):
@@ -39,7 +42,7 @@ def _load_guard_daemon(monkeypatch):
     own `from guard_daemon import read_port_and_token` resolves to THIS instance -
     same collision-proofing rationale as the spike test file's loader (see its
     docstring: two same-named modules on sys.path is a real, previously-hit bug)."""
-    path = STAGED_DIR / "guard_daemon.py"
+    path = staged_or_live("guard_daemon.py")
     spec = importlib.util.spec_from_file_location("guard_daemon", path)
     module = importlib.util.module_from_spec(spec)
     monkeypatch.setitem(sys.modules, "guard_daemon", module)
@@ -49,7 +52,7 @@ def _load_guard_daemon(monkeypatch):
 
 def _load_guard_daemon_client(monkeypatch):
     _load_guard_daemon(monkeypatch)
-    path = STAGED_DIR / "guard_daemon_client.py"
+    path = staged_or_live("guard_daemon_client.py")
     spec = importlib.util.spec_from_file_location("guard_daemon_client", path)
     module = importlib.util.module_from_spec(spec)
     monkeypatch.setitem(sys.modules, "guard_daemon_client", module)
@@ -90,7 +93,7 @@ def test_client_loads_and_reads_port_without_importing_guard_daemon_at_all(tmp_p
     work correctly - proving the two are no longer coupled at import time."""
     assert "guard_daemon" not in sys.modules  # nothing pre-loaded it - the point of this test
 
-    path = STAGED_DIR / "guard_daemon_client.py"
+    path = staged_or_live("guard_daemon_client.py")
     spec = importlib.util.spec_from_file_location("guard_daemon_client_standalone", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)  # must not raise ModuleNotFoundError: guard_daemon
@@ -626,7 +629,9 @@ def test_client_main_passes_explicit_target_as_third_arg(tmp_path, monkeypatch):
 # --------------------------------------------------------------- run-guard.sh integration
 
 
-LAUNCHER = STAGED_DIR / "run-guard.sh"
+LAUNCHER = (
+    launcher_copy()
+)  # a copy off the .claude/hooks/ path, steered by env like the staged copy was
 
 pytestmark_sh = pytest.mark.skipif(
     sys.platform == "win32" or not LAUNCHER.is_file(),
@@ -891,7 +896,7 @@ def test_the_client_entry_point_fails_open_too():
     hook it carries has one, but an uncaught raise in the client itself exited 1, and a
     non-zero hook exit is reported to the user as an error. The client is transport - it
     decides nothing - so a failure there must cost the injected context, never surface."""
-    source = (STAGED_DIR / "guard_daemon_client.py").read_text(encoding="utf-8")
+    source = (staged_or_live("guard_daemon_client.py")).read_text(encoding="utf-8")
     tail = source[source.index('if __name__ == "__main__":') :]
     assert "except BaseException" in tail, "a bare Exception catch leaves KeyboardInterrupt"
     assert "sys.exit(0)" in tail
@@ -1003,7 +1008,7 @@ def test_the_environment_snapshot_has_a_bounded_lifetime():
     re-read, so the snapshot expires and a fresh process picks up the current one."""
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("gd_ttl", STAGED_DIR / "guard_daemon.py")
+    spec = importlib.util.spec_from_file_location("gd_ttl", staged_or_live("guard_daemon.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     assert mod.ENV_SNAPSHOT_TTL_SECONDS == 300

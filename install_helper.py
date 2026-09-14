@@ -2935,7 +2935,7 @@ class Installer:
 
         Prompted by a live question: guard_daemon now defaults to true (see
         run_configure), but the daemon files it needs are staged, not live, until a
-        human runs scripts/apply-guard-daemon.sh - so a fresh clone could carry a
+        human runs scripts/apply-staged.sh - so a fresh clone could carry a
         preference that quietly does nothing, with no way to notice short of reading
         docs or running pytest by hand. install_helper.py is the one place every
         install/update already passes through, so it is the right place to surface
@@ -5852,7 +5852,7 @@ def write_team_preferences(
     - guard_daemon: whether run-guard.sh's PreToolUse guards route through the persistent
       ADR-014 daemon instead of a fresh interpreter per call (this preference alone does
       nothing on a project that hasn't applied the daemon files - see
-      scripts/apply-guard-daemon.sh - since run-guard.sh checks `[ -f "$DAEMON_CLIENT" ]`
+      scripts/apply-staged.sh - since run-guard.sh checks `[ -f "$DAEMON_CLIENT" ]`
       before ever using it). **Unlike every other preference in this function, absence of
       this key does NOT mean "off"** - run-guard.sh's own check (`grep -q '"guard_daemon"
       *: *true'`) only ever matches an explicit `true`; there is no "default true when

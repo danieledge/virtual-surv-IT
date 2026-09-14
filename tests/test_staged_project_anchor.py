@@ -22,14 +22,13 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _load(name: str):
-    spec = importlib.util.spec_from_file_location(
-        f"staged_{name}", REPO_ROOT / "scripts" / "staged_hooks" / f"{name}.py"
-    )
+    spec = importlib.util.spec_from_file_location(f"staged_{name}", staged_or_live(f"{name}.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

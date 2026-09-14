@@ -17,6 +17,7 @@ import re
 from pathlib import Path
 
 import pytest
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -28,7 +29,7 @@ def _load(path: Path):
     return module
 
 
-STAGED = _load(REPO / "scripts" / "staged_hooks" / "guard-code-execution.py")
+STAGED = _load(staged_or_live("guard-code-execution.py"))
 LIVE = _load(REPO / ".claude" / "hooks" / "guard-code-execution.py")
 
 
@@ -264,7 +265,7 @@ def test_double_quoted_exec_substitution_end_to_end_via_staged_guard(tmp_path):
     import subprocess
     import sys
 
-    staged_path = REPO / "scripts" / "staged_hooks" / "guard-code-execution.py"
+    staged_path = staged_or_live("guard-code-execution.py")
     for cmd in ('echo "$(pytest)"', 'echo "$(make)"', 'echo "`pytest`"'):
         env = {k: v for k, v in os.environ.items() if k != "CST_ALLOW_EXEC"}
         env["CLAUDE_PROJECT_DIR"] = str(tmp_path)
@@ -330,9 +331,7 @@ def test_live_guard_matches_staged_once_applied():
     fails the suite until the human applies it.
     """
     live_text = (REPO / ".claude" / "hooks" / "guard-code-execution.py").read_text(encoding="utf-8")
-    staged_text = (REPO / "scripts" / "staged_hooks" / "guard-code-execution.py").read_text(
-        encoding="utf-8"
-    )
+    staged_text = (staged_or_live("guard-code-execution.py")).read_text(encoding="utf-8")
     assert live_text == staged_text, (
         "staged guard not yet applied - run: bash scripts/apply-guard-exec-allow.sh"
     )
@@ -343,7 +342,7 @@ def test_live_guard_matches_staged_once_applied():
 
 def _load_with_env(monkeypatch, value):
     monkeypatch.setenv("CST_COMPANY_ALLOW", value)
-    return _load(REPO / "scripts" / "staged_hooks" / "guard-code-execution.py")
+    return _load(staged_or_live("guard-code-execution.py"))
 
 
 def test_new_team_script_basenames_staged():

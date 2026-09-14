@@ -31,9 +31,10 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO = Path(__file__).resolve().parents[1]
-STAGED_PATH = REPO / "scripts" / "staged_hooks" / "guard-findings-pack-write.py"
+STAGED_PATH = staged_or_live("guard-findings-pack-write.py")
 LIVE_PATH = REPO / ".claude" / "hooks" / "guard-findings-pack-write.py"
 
 _SCOPED_AGENTS = (

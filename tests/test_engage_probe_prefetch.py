@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 
 import scripts.vsit_paths as _vsit
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -26,7 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 def _load():
     spec = importlib.util.spec_from_file_location(
         "staged_engage_probe_prefetch",
-        REPO_ROOT / "scripts" / "staged_hooks" / "engage_probe_prefetch.py",
+        staged_or_live("engage_probe_prefetch.py"),
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

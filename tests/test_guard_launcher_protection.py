@@ -22,10 +22,11 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO = Path(__file__).resolve().parents[1]
-CONSENT = REPO / "scripts" / "staged_hooks" / "guard-consent-writes.py"
-RUN_GUARD = REPO / "scripts" / "staged_hooks" / "run-guard.sh"
+CONSENT = staged_or_live("guard-consent-writes.py")
+RUN_GUARD = staged_or_live("run-guard.sh")
 
 # Files that decide what executes on every hook call. Named here rather than imported so a
 # change to the guard's regex has to be a deliberate change to this list too.
@@ -165,7 +166,7 @@ def _exec_guard():
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(
-        "gce_staged", REPO / "scripts" / "staged_hooks" / "guard-code-execution.py"
+        "gce_staged", staged_or_live("guard-code-execution.py")
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

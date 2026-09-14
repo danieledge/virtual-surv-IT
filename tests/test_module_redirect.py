@@ -12,10 +12,11 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HOOK = REPO_ROOT / "scripts" / "module_form_redirect.py"
-STAGED = REPO_ROOT / "scripts" / "staged_hooks" / "module_form_redirect.py"
+STAGED = staged_or_live("module_form_redirect.py")
 
 
 def _run(payload: dict, plugin_root: str = "") -> subprocess.CompletedProcess:

@@ -27,9 +27,12 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
+from _staging import launcher_copy  # staged copy while pending, else live (step 3.6)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-LAUNCHER = REPO_ROOT / "scripts" / "staged_hooks" / "run-guard.sh"
+LAUNCHER = (
+    launcher_copy()
+)  # a copy off the .claude/hooks/ path, steered by env like the staged copy was
 NOOP_TARGET = REPO_ROOT / ".claude" / "hooks" / "guard-raw-data.py"
 
 pytestmark = pytest.mark.skipif(

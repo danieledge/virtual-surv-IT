@@ -222,7 +222,9 @@ def test_only_blocked_workspaces_stay_silent(tmp_path, monkeypatch, capsys):
 def _load_staged_gate():
     import importlib.util
 
-    path = Path(__file__).resolve().parents[1] / "scripts" / "staged_hooks" / "dod_stop_gate.py"
+    from _staging import staged_or_live
+
+    path = staged_or_live("dod_stop_gate.py")  # staged copy while pending, else live (step 3.6)
     spec = importlib.util.spec_from_file_location("staged_dod_stop_gate", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

@@ -11,9 +11,10 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-HOOK = REPO_ROOT / "scripts" / "staged_hooks" / "locked_menu_guard.py"
+HOOK = staged_or_live("locked_menu_guard.py")
 LIVE_HOOK = REPO_ROOT / "scripts" / "locked_menu_guard.py"
 
 

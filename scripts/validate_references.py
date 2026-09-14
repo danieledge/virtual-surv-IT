@@ -233,6 +233,12 @@ _SKIP_PARTS = (
     # docs/internal/ is local-only (gitignored) and holds dated reviews, briefings and working
     # plans that cite scripts and files as they were on the day; CI never sees the folder.
     "/docs/internal/",
+    # Release notes and eval baselines are dated records too (step 3.6, 2026-09-14): they name
+    # the apply scripts and files of their day, which the single apply script has replaced.
+    "/docs/releases/",
+    "/evals/eval-baseline-",
+    "/evals/artifact-review-",
+    "/docs/adr/",  # local-only decision records (owner ruling 2026-08-29); CI never sees them
 )
 
 

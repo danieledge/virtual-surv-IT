@@ -30,9 +30,10 @@ import time
 from pathlib import Path
 
 import pytest
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO = Path(__file__).resolve().parents[1]
-STAGED_PATH = REPO / "scripts" / "staged_hooks" / "guard-raw-data.py"
+STAGED_PATH = staged_or_live("guard-raw-data.py")
 LIVE_PATH = REPO / ".claude" / "hooks" / "guard-raw-data.py"
 
 
@@ -383,9 +384,7 @@ def test_double_quoted_substitution_with_no_raw_data_still_allowed(project_witho
 def test_semicolon_inside_quoted_argument_is_not_a_segment_boundary():
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location(
-        "graw", REPO / "scripts" / "staged_hooks" / "guard-raw-data.py"
-    )
+    spec = importlib.util.spec_from_file_location("graw", staged_or_live("guard-raw-data.py"))
     graw = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(graw)
     cmd = 'echo "close as-is; no real source data exists" && echo done'
@@ -396,9 +395,7 @@ def test_semicolon_inside_quoted_argument_is_not_a_segment_boundary():
 def test_ampersand_and_pipe_inside_quotes_are_not_boundaries():
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location(
-        "graw", REPO / "scripts" / "staged_hooks" / "guard-raw-data.py"
-    )
+    spec = importlib.util.spec_from_file_location("graw", staged_or_live("guard-raw-data.py"))
     graw = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(graw)
     assert graw._segments('echo "a && b | c"') == ['echo "a && b | c"']
@@ -410,9 +407,7 @@ def test_quoted_text_does_not_shield_a_genuine_later_boundary():
     real boundary after the closing quote still splits."""
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location(
-        "graw", REPO / "scripts" / "staged_hooks" / "guard-raw-data.py"
-    )
+    spec = importlib.util.spec_from_file_location("graw", staged_or_live("guard-raw-data.py"))
     graw = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(graw)
     segs = graw._segments('echo "a; b" && echo "c; d"')

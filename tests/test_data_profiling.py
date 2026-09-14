@@ -20,6 +20,7 @@ import subprocess
 import sys
 from datetime import date, timedelta
 from pathlib import Path
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -368,7 +369,7 @@ def test_the_shell_and_python_tiers_agree_on_the_default():
     # Asserts the STAGED copy, which is the source of truth for the intended rule. Whether
     # it has reached the live file is a different question, and test_hooks_in_sync owns it -
     # duplicating that here would just mean two tests failing for one pending apply.
-    shell = (REPO_ROOT / "scripts" / "staged_hooks" / "run-guard.sh").read_text(encoding="utf-8")
+    shell = (staged_or_live("run-guard.sh")).read_text(encoding="utf-8")
     assert "_use_daemon=1" in shell
     # F1 (2026-08-26) replaced three `grep` spawns per tool call with a builtin `case`
     # match, so the rule is no longer spelled as a grep pattern. The property under test is

@@ -22,14 +22,16 @@ import subprocess
 import sys
 import types
 from pathlib import Path
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DISPATCHER = REPO_ROOT / "scripts" / "stop_hook_dispatcher.py"
-STAGED = REPO_ROOT / "scripts" / "staged_hooks" / "stop_hook_dispatcher.py"
-DOD_STOP_GATE = REPO_ROOT / "scripts" / "staged_hooks" / "dod_stop_gate.py"
-TODO_PANEL_NUDGE = REPO_ROOT / "scripts" / "staged_hooks" / "todo_panel_nudge.py"
+STAGED = staged_or_live("stop_hook_dispatcher.py")
+DOD_STOP_GATE = staged_or_live("dod_stop_gate.py")
+TODO_PANEL_NUDGE = staged_or_live("todo_panel_nudge.py")
 
-sys.path.insert(0, str(REPO_ROOT / "scripts" / "staged_hooks"))
+sys.path.insert(0, str(REPO_ROOT / "scripts" / "staged_hooks"))  # a pending copy wins
+sys.path.insert(1, str(REPO_ROOT / "scripts"))
 
 
 def _load_dispatcher_module():

@@ -23,10 +23,11 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 _ROOT = Path(__file__).resolve().parents[1]
-_EXEC = _ROOT / "scripts" / "staged_hooks" / "guard-code-execution.py"
-_CONSENT = _ROOT / "scripts" / "staged_hooks" / "guard-consent-writes.py"
+_EXEC = staged_or_live("guard-code-execution.py")
+_CONSENT = staged_or_live("guard-consent-writes.py")
 
 BLOCK = 2
 ALLOW = 0

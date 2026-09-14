@@ -22,7 +22,6 @@ import json
 import re
 from pathlib import Path
 
-import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 _DISPATCHER = REPO / "scripts" / "bash_hook_dispatcher.py"
@@ -76,49 +75,6 @@ def test_every_declared_event_family_is_compared():
 
 
 # --------------------------------------------------------------- staged vs live
-
-_STAGED_FILES = sorted(
-    p for p in _STAGED_DIR.iterdir() if p.is_file() and not p.name.startswith(".")
-)
-
-
-def test_staged_dir_is_not_empty():
-    assert _STAGED_FILES, "no staged hook files found - the discovery glob is broken"
-
-
-@pytest.mark.parametrize("staged", _STAGED_FILES, ids=lambda p: p.name)
-def test_staged_file_has_a_live_counterpart(staged):
-    live = _live_path_for(staged)
-    assert live.exists(), (
-        f"staged {staged.name} has no live counterpart at {live.relative_to(REPO)} - "
-        "either the placement rule in _live_path_for is wrong or the file was never installed"
-    )
-
-
-@pytest.mark.parametrize("staged", _STAGED_FILES, ids=lambda p: p.name)
-def test_staged_matches_live(staged):
-    """HARD FAILURE, never a skip.
-
-    The 2026-08-01 audit found guard-code-execution.py drifted from its staged copy while the
-    full suite reported green, because its sync test called pytest.skip() when the two differed.
-    The live guard was missing three team-script allow-list entries, so plugin-mode /engage was
-    asking users for execution consent to run its own step-0 probe - and the regression net that
-    should have caught it went quiet precisely because the fix was unapplied.
-
-    A control that is silently inert looks identical to a healthy one. That is the failure mode
-    this project exists to warn about (FCA Market Watch 79: a feed that never fired for three
-    years), so a pending guard fix now FAILS the suite until the human applies it.
-    """
-    live = _live_path_for(staged)
-    if not live.exists():
-        pytest.fail(f"no live counterpart for {staged.name}")
-    staged_text = staged.read_text(encoding="utf-8")
-    live_text = live.read_text(encoding="utf-8")
-    assert staged_text == live_text, (
-        f"{staged.name} is STAGED but not applied: {live.relative_to(REPO)} differs from "
-        f"{staged.relative_to(REPO)}. Run the matching scripts/apply-*.sh (a human action - "
-        "the model is blocked from editing .claude/hooks/**), then re-run."
-    )
 
 
 def test_all_guards_are_registered():
@@ -192,52 +148,6 @@ def test_guards_use_portable_python_launcher():
 # whose apply script installs both. These two tests pin the discovery and the routing, because
 # the failure mode is silence: the script cannot tell you about a file it never looked at.
 
-_APPLY_ALL = REPO / "scripts" / "apply-all-staged.sh"
-
-
-def _staged_files():
-    return sorted(
-        p
-        for p in _STAGED_DIR.iterdir()
-        if p.is_file() and p.suffix != ".pyc" and not p.name.startswith(".")
-    )
-
-
-def test_apply_all_staged_globs_every_file_not_just_python():
-    """The discovery glob must not filter by extension."""
-    body = _APPLY_ALL.read_text(encoding="utf-8")
-    assert "staged_hooks/*.py;" not in body and "staged_hooks/*.py " not in body, (
-        "apply-all-staged.sh is globbing *.py again - a staged shell file would be invisible "
-        "to it and it would report 'nothing pending' while that file waits to be applied"
-    )
-    assert "for staged in scripts/staged_hooks/*;" in body, (
-        "expected the loop to iterate every entry in scripts/staged_hooks/"
-    )
-    # Non-files must still be skipped, or __pycache__ becomes a phantom pending fix.
-    assert '[ -f "$staged" ] || continue' in body, (
-        "apply-all-staged.sh must skip directories such as __pycache__"
-    )
-
-
-def test_every_staged_file_is_mapped_to_an_apply_script():
-    """Each staged file routes to an apply script that exists.
-
-    The map is only consulted for a file that DIFFERS from live, so a missing entry stays
-    latent until the day that file changes on its own - exactly how run-guard.sh, and then
-    guard_daemon_client.py and module_form_redirect.py, went unnoticed.
-    """
-    body = _APPLY_ALL.read_text(encoding="utf-8")
-    case_block = body.split("apply_for() {", 1)[1].split("}", 1)[0]
-    missing, dangling = [], []
-    for staged in _staged_files():
-        if staged.name not in case_block:
-            missing.append(staged.name)
-    for match in re.findall(r'echo "(scripts/apply-[a-z0-9-]+\.sh)"', case_block):
-        if not (REPO / match).is_file():
-            dangling.append(match)
-    assert not missing, f"staged file(s) with no apply_for() mapping: {missing}"
-    assert not dangling, f"apply_for() points at non-existent script(s): {dangling}"
-
 
 # ---------------------------------------------- 2026-09-13 framework review, step 3.2
 def _load_module(path: Path):
@@ -280,3 +190,21 @@ def test_no_script_wired_both_in_dispatcher_and_top_level():
                         if name in cmd:
                             offenders.append(f"{cfg}:{event}: {name} (already run by {dispatcher})")
     assert not offenders, "hook wired twice - " + "; ".join(offenders)
+
+
+# ------------------------------------------------ 2026-09-13 framework review, step 3.6
+def test_staged_dir_is_empty_at_rest():
+    """scripts/staged_hooks/ holds a file only while the model has a change waiting for the
+    human. A non-empty directory is pending work, and the suite stays red - naming the file
+    and the one command - until `bash scripts/apply-staged.sh` promotes it and deletes the
+    copy. This replaces the tracked mirror of every hook (8,325 duplicated lines) and 28
+    per-fix apply scripts (2026-09-13 framework review); the human gate is unchanged."""
+    pending = (
+        sorted(p.name for p in _STAGED_DIR.iterdir() if p.is_file() and not p.name.startswith("."))
+        if _STAGED_DIR.is_dir()
+        else []
+    )
+    assert not pending, (
+        "staged hook change(s) waiting for a human: " + ", ".join(pending) + " - a human runs "
+        "`bash scripts/apply-staged.sh` (never the model), then re-run the suite"
+    )

@@ -125,3 +125,23 @@ it does not restore working cross-document links. A proper fix regenerates the P
 `.html` source from a neutral working directory with relative or `https://github.com/...` links
 baked in before the print step - out of scope until a headless-render tool is vendored or added to
 `.venv`.
+
+## Every other note in this folder
+
+- [`ai-runtime-economics-audit-2026-08.md`](ai-runtime-economics-audit-2026-08.md)
+- [`alert-absence-enhancement-plan-2026-08-18.md`](alert-absence-enhancement-plan-2026-08-18.md)
+- [`backlog-2026-08-20.md`](backlog-2026-08-20.md)
+- [`backlog-map-first-review-scoping-2026-08-17.md`](backlog-map-first-review-scoping-2026-08-17.md)
+- [`backlog-research-review-2026-09-04.md`](backlog-research-review-2026-09-04.md)
+- [`deep-review-2026-09-11.md`](deep-review-2026-09-11.md)
+- [`plan-autonomous-jira-mode-2026-08-20.md`](plan-autonomous-jira-mode-2026-08-20.md)
+- [`plan-headless-unattended-2026-08-25.md`](plan-headless-unattended-2026-08-25.md)
+- [`plan-installer-tui-2026-08-25.md`](plan-installer-tui-2026-08-25.md)
+- [`plan-supported-monitoring-2026-08-25.md`](plan-supported-monitoring-2026-08-25.md)
+- [`plan-temporal-data-lens-2026-08-24.md`](plan-temporal-data-lens-2026-08-24.md)
+- [`plan-test-container-2026-08-25.md`](plan-test-container-2026-08-25.md)
+- [`plan-tui-app-2026-08-20.md`](plan-tui-app-2026-08-20.md)
+- [`plan-workflow-visualisation-2026-08-25.md`](plan-workflow-visualisation-2026-08-25.md)
+- [`prompt-inventory-baseline-2026-08.md`](prompt-inventory-baseline-2026-08.md)
+- [`research-review-2026-09-02.md`](research-review-2026-09-02.md)
+- [`token-optimisation-plan-2026-08-18.md`](token-optimisation-plan-2026-08-18.md)

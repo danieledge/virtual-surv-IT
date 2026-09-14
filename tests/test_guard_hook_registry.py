@@ -25,9 +25,10 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO = Path(__file__).resolve().parents[1]
-CONSENT = REPO / "scripts" / "staged_hooks" / "guard-consent-writes.py"
+CONSENT = staged_or_live("guard-consent-writes.py")
 
 _NO_CONSENT_DIR = tempfile.mkdtemp(prefix="hook-registry-project-")
 

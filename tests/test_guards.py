@@ -17,12 +17,13 @@ import sys
 from pathlib import Path
 
 import pytest
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 _ROOT = Path(__file__).resolve().parents[1]
 _RAW_GUARD = _ROOT / ".claude" / "hooks" / "guard-raw-data.py"
 _EXEC_GUARD = _ROOT / ".claude" / "hooks" / "guard-code-execution.py"
-_STAGED_RAW_GUARD = _ROOT / "scripts" / "staged_hooks" / "guard-raw-data.py"
-_STAGED_EXEC_GUARD = _ROOT / "scripts" / "staged_hooks" / "guard-code-execution.py"
+_STAGED_RAW_GUARD = staged_or_live("guard-raw-data.py")
+_STAGED_EXEC_GUARD = staged_or_live("guard-code-execution.py")
 
 BLOCK = 2
 ALLOW = 0

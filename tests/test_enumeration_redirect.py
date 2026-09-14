@@ -12,6 +12,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HOOK = REPO_ROOT / "scripts" / "enumeration_redirect.py"
@@ -97,9 +98,7 @@ def test_missing_session_id_stays_silent(tmp_path):
 def test_dispatcher_wires_the_rule():
     """The staged dispatcher must carry the enumeration_redirect entry for Bash -
     without it the module is inert (the 2026-08-01 'silently inert control' lesson)."""
-    staged = (REPO_ROOT / "scripts" / "staged_hooks" / "bash_hook_dispatcher.py").read_text(
-        encoding="utf-8"
-    )
+    staged = (staged_or_live("bash_hook_dispatcher.py")).read_text(encoding="utf-8")
     assert "enumeration_redirect" in staged
 
 

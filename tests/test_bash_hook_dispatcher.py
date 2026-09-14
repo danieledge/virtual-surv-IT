@@ -23,10 +23,11 @@ import types
 from pathlib import Path
 
 import pytest
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DISPATCHER = REPO_ROOT / "scripts" / "bash_hook_dispatcher.py"
-STAGED = REPO_ROOT / "scripts" / "staged_hooks" / "bash_hook_dispatcher.py"
+STAGED = staged_or_live("bash_hook_dispatcher.py")
 
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import bash_hook_dispatcher as bhd  # noqa: E402
@@ -375,14 +376,13 @@ def _staged_install(tmp_path):
     (scripts / "bash_hook_dispatcher.py").write_text(
         STAGED.read_text(encoding="utf-8"), encoding="utf-8"
     )
-    staged_dir = REPO_ROOT / "scripts" / "staged_hooks"
     for guard in (
         "guard-raw-data.py",
         "guard-code-execution.py",
         "guard-consent-writes.py",
         "guard-findings-pack-write.py",
     ):
-        (hooks / guard).write_text((staged_dir / guard).read_text(encoding="utf-8"), "utf-8")
+        (hooks / guard).write_text(staged_or_live(guard).read_text(encoding="utf-8"), "utf-8")
     for redirect in (
         "document_input_redirect.py",
         "module_form_redirect.py",
@@ -390,13 +390,9 @@ def _staged_install(tmp_path):
         "exploration_redirect.py",
         "locked_menu_guard.py",
     ):
-        source = REPO_ROOT / "scripts" / redirect
-        if not (staged_dir / redirect).is_file():
-            (scripts / redirect).write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
-        else:
-            (scripts / redirect).write_text(
-                (staged_dir / redirect).read_text(encoding="utf-8"), encoding="utf-8"
-            )
+        (scripts / redirect).write_text(
+            staged_or_live(redirect).read_text(encoding="utf-8"), encoding="utf-8"
+        )
     return scripts / "bash_hook_dispatcher.py", {"CLAUDE_PROJECT_DIR": str(tmp_path)}
 
 

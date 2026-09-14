@@ -34,9 +34,10 @@ import sys
 from pathlib import Path
 
 import pytest
+from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO = Path(__file__).resolve().parents[1]
-STAGED_PATH = REPO / "scripts" / "staged_hooks" / "guard-consent-writes.py"
+STAGED_PATH = staged_or_live("guard-consent-writes.py")
 LIVE_PATH = REPO / ".claude" / "hooks" / "guard-consent-writes.py"
 
 
