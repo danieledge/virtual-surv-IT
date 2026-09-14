@@ -625,6 +625,7 @@ def test_init_captures_settings_snapshot_from_team_preferences(tmp_path, monkeyp
         "autonomous_mode": True,  # kill switch, not an enabler - per-ticket decision (2026-08-21)
         "autonomous_default": False,
         "new_window": False,  # opt-in for now (owner, 2026-08-25)
+        "claude_debug": False,  # project-only diagnostic switch (owner, 2026-09-14)
         "data_profiling": True,  # aggregates-only data tools, on by default (2026-08-24)
         "document_map": True,  # doc-tree orientation, on by default both tiers (2026-08-25)
         "guard_daemon": True,  # persistent guard process, on by default both tiers (2026-08-25)
@@ -648,6 +649,7 @@ def test_init_settings_snapshot_builtin_defaults_when_no_preferences_file(tmp_pa
         "autonomous_mode": True,  # kill switch, not an enabler - per-ticket decision (2026-08-21)
         "autonomous_default": False,
         "new_window": False,  # opt-in for now (owner, 2026-08-25)
+        "claude_debug": False,  # project-only diagnostic switch (owner, 2026-09-14)
         "data_profiling": True,  # aggregates-only data tools, on by default (2026-08-24)
         "document_map": True,  # doc-tree orientation, on by default both tiers (2026-08-25)
         "guard_daemon": True,  # persistent guard process, on by default both tiers (2026-08-25)
