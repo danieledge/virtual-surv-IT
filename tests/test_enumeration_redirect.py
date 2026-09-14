@@ -15,7 +15,7 @@ from pathlib import Path
 from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-HOOK = REPO_ROOT / "scripts" / "enumeration_redirect.py"
+HOOK = staged_or_live("enumeration_redirect.py")  # staged copy while pending, else live
 
 
 def _run(command: str, project: Path, session: str = "sess-1") -> subprocess.CompletedProcess:
@@ -45,8 +45,20 @@ def _engaged(project: Path, session: str = "sess-1") -> Path:
 def test_bare_find_type_f_blocked_when_engaged(tmp_path):
     r = _run('find "C:/Users/x/proj" -type f | grep -v pycache', _engaged(tmp_path))
     assert r.returncode == 2
-    assert "codebase-map" in r.stderr
     assert "repo_skeleton" in r.stderr
+    assert "team-operating-guide" in r.stderr
+
+
+def test_the_block_message_is_two_sentences(tmp_path):
+    """Live plugin-mode session, 2026-09-14: the redirect printed eight lines of red text and
+    the session followed the one instruction in it anyway. What was blocked, the command to
+    run instead, a pointer to the reasoning - and nothing else."""
+    r = _run("find /proj -type f | head -40", _engaged(tmp_path))
+    assert r.returncode == 2
+    text = r.stderr.strip()
+    assert text.count(". ") + 1 <= 2, text
+    assert len(text) < 450, len(text)
+    assert "`<python> -m scripts.repo_skeleton <dir>`" in text
 
 
 def test_recursive_ls_and_powershell_forms_blocked(tmp_path):
