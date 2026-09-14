@@ -8120,6 +8120,277 @@ def test_classify_daemon_persistence(spawn_error, port, alive, code, err, read_o
     assert fix_hint in verdict["fix"]
 
 
+# --- option 7, Check D: the real parent chain and the job object (2026-09-14) ---
+
+_JOB_CONFINED = {
+    "in_job": True,
+    "limit_flags": 0x2000,
+    "breakaway_ok": False,
+    "kill_on_job_close": True,
+}
+_JOB_FREE = {"in_job": False, "limit_flags": 0, "breakaway_ok": True, "kill_on_job_close": False}
+_JOB_NA = {"in_job": None, "note": "Windows job objects only"}
+
+
+def test_job_object_facts_off_windows_never_raises(monkeypatch):
+    """Off Windows there is no job object; the reader must say so and never raise."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.sys, "platform", "linux")
+    facts = ih._job_object_facts()
+    assert facts["in_job"] is None
+    assert "Windows job objects only" in facts["note"]
+
+
+@pytest.mark.parametrize(
+    "spawn_error, port, alive, answered, err, job, kind, status, fix_hint",
+    [
+        # the spawn was refused by a job that forbids breakaway: production's swallowed OSError
+        (
+            "OSError: [WinError 5] Access is denied (errno=13, winerror=5)",
+            False,
+            False,
+            False,
+            "",
+            _JOB_CONFINED,
+            "breakaway-refused",
+            "ERROR",
+            "CREATE_BREAKAWAY_FROM_JOB is refused",
+        ),
+        # a spawn failure that is not a breakaway refusal stays the generic spawn-failed
+        (
+            "OSError: [Errno 2] No such file or directory",
+            False,
+            False,
+            False,
+            "",
+            _JOB_FREE,
+            "spawn-failed",
+            "ERROR",
+            "swallows this exception",
+        ),
+        # a refused-looking error but no job facts to confirm breakaway: still generic
+        (
+            "OSError: [WinError 5] Access is denied",
+            False,
+            False,
+            False,
+            "",
+            _JOB_NA,
+            "spawn-failed",
+            "ERROR",
+            "swallows this exception",
+        ),
+        # the daemon outlived its short-lived parent and answered: the good case
+        (
+            None,
+            True,
+            True,
+            True,
+            "",
+            _JOB_NA,
+            "persisted-after-parent-exit",
+            "OK",
+            "not the problem",
+        ),
+        # alive but the client cannot reach it
+        (
+            None,
+            True,
+            True,
+            False,
+            "",
+            _JOB_NA,
+            "alive-but-unreachable",
+            "ERROR",
+            "loopback connection refused",
+        ),
+        # wrote its port file then died with the parent: a kill-on-close job
+        (
+            None,
+            True,
+            False,
+            False,
+            "Killed by policy\n",
+            _JOB_CONFINED,
+            "died-with-parent",
+            "ERROR",
+            "costs more than none",
+        ),
+        # nothing at all after the parent exited
+        (
+            None,
+            False,
+            False,
+            False,
+            "",
+            _JOB_NA,
+            "never-started",
+            "ERROR",
+            "job object or endpoint security",
+        ),
+    ],
+)
+def test_classify_parent_chain(
+    spawn_error, port, alive, answered, err, job, kind, status, fix_hint
+):
+    import install_helper as ih
+
+    verdict = ih._classify_parent_chain(spawn_error, port, alive, answered, err, job)
+    assert verdict["kind"] == kind
+    assert verdict["status"] == status
+    assert fix_hint.lower() in verdict["fix"].lower()
+
+
+def _run_check_d(
+    ih,
+    monkeypatch,
+    tmp_path,
+    capsys,
+    *,
+    job,
+    spawn_answer,
+    port_text,
+    pid_alive,
+    answered,
+    stderr_text="",
+):
+    """Drive _daemon_parent_chain_check with the intermediate spawn and the job reader stubbed,
+    so every verdict is reachable without a real Windows box or a real job object."""
+
+    def fake_run(argv, **kwargs):
+        daemon_argv = json.loads(argv[3])
+        log_path = Path(argv[4])
+        scratch = Path(daemon_argv[3])
+        if spawn_answer.get("error"):
+            return SimpleNamespace(stdout=json.dumps(spawn_answer), stderr="", returncode=0)
+        if port_text is not None:
+            port_file = scratch / ".claude" / ".guard-daemon-port"
+            port_file.parent.mkdir(parents=True, exist_ok=True)
+            port_file.write_text(port_text, encoding="utf-8")
+        if stderr_text:
+            log_path.write_text(stderr_text, encoding="utf-8")
+        return SimpleNamespace(stdout=json.dumps({"pid": 4242}), stderr="", returncode=0)
+
+    monkeypatch.setattr(ih.subprocess, "run", fake_run)
+    monkeypatch.setattr(ih, "_job_object_facts", lambda: dict(job))
+    monkeypatch.setattr(ih, "_pid_alive", lambda pid: pid_alive)
+    monkeypatch.setattr(ih, "_kill_pid", lambda pid: None)
+    monkeypatch.setattr(
+        ih, "_daemon_answers", lambda client, root, payload: (answered, f"answered={answered}")
+    )
+
+    rows = []
+
+    def record(label, status, detail):
+        rows.append((label, status, detail))
+        print(f"  [{status}] {label}: {detail}")
+
+    verdict = ih._daemon_parent_chain_check(
+        ih.Style(False),
+        record,
+        tmp_path,
+        tmp_path,
+        tmp_path / "scripts" / "guard_daemon.py",
+        persist_seconds=0.05,
+        port_wait_seconds=0.2,
+    )
+    return verdict, rows, capsys.readouterr().out
+
+
+def test_check_d_persisted_after_parent_exit_and_scratch_removed(tmp_path, monkeypatch, capsys):
+    ih = _check_c_repo(tmp_path, monkeypatch)
+    verdict, rows, out = _run_check_d(
+        ih,
+        monkeypatch,
+        tmp_path,
+        capsys,
+        job=_JOB_NA,
+        spawn_answer={},
+        port_text="1\ntok\n",
+        pid_alive=True,
+        answered=True,
+    )
+    assert verdict["kind"] == "persisted-after-parent-exit" and verdict["status"] == "OK"
+    statuses = dict((label, status) for label, status, _d in rows)
+    assert statuses["intermediate parent"] == "OK"
+    assert statuses["port file appeared (chain)"] == "OK"
+    assert statuses["client reaches it (chain)"] == "OK"
+    # off Windows the job row is a SKIP that names why
+    assert statuses["job object (this process)"] == "SKIP"
+    assert "Windows job objects only" in out
+    # the scratch state (and the .claude the fake repo did have) is cleaned up
+    assert not list((tmp_path / ".claude").glob(".daemon-diag-chain-*"))
+
+
+def test_check_d_died_with_parent_reports_kill_on_close_job(tmp_path, monkeypatch, capsys):
+    ih = _check_c_repo(tmp_path, monkeypatch)
+    verdict, rows, out = _run_check_d(
+        ih,
+        monkeypatch,
+        tmp_path,
+        capsys,
+        job=_JOB_CONFINED,
+        spawn_answer={},
+        port_text="1\ntok\n",
+        pid_alive=False,
+        answered=False,
+        stderr_text="Killed by policy\n",
+    )
+    assert verdict["kind"] == "died-with-parent" and verdict["status"] == "ERROR"
+    assert "Killed by policy" in verdict["headline"]
+    assert "costs more than none" in verdict["fix"].lower()
+    by_label = {label: (status, detail) for label, status, detail in rows}
+    # the job-object facts render: in a job, breakaway NOT allowed, kill-on-close
+    assert by_label["job object (this process)"][0] == "WARN"
+    job_detail = by_label["job object (this process)"][1]
+    assert "breakaway allowed: False" in job_detail
+    assert "kill on job close: True" in job_detail
+    assert not list((tmp_path / ".claude").glob(".daemon-diag-chain-*"))
+
+
+def test_check_d_breakaway_refused_names_the_job_policy(tmp_path, monkeypatch, capsys):
+    ih = _check_c_repo(tmp_path, monkeypatch)
+    verdict, rows, out = _run_check_d(
+        ih,
+        monkeypatch,
+        tmp_path,
+        capsys,
+        job=_JOB_CONFINED,
+        spawn_answer={
+            "error": "OSError: [WinError 5] Access is denied",
+            "errno": 13,
+            "winerror": 5,
+        },
+        port_text=None,
+        pid_alive=False,
+        answered=False,
+    )
+    assert verdict["kind"] == "breakaway-refused" and verdict["status"] == "ERROR"
+    assert "CREATE_BREAKAWAY_FROM_JOB is refused" in verdict["fix"]
+    statuses = dict((label, status) for label, status, _d in rows)
+    assert statuses["intermediate parent"] == "ERROR"
+    assert not list((tmp_path / ".claude").glob(".daemon-diag-chain-*"))
+
+
+def test_check_d_never_started_when_nothing_appears(tmp_path, monkeypatch, capsys):
+    ih = _check_c_repo(tmp_path, monkeypatch)
+    verdict, rows, out = _run_check_d(
+        ih,
+        monkeypatch,
+        tmp_path,
+        capsys,
+        job=_JOB_FREE,
+        spawn_answer={},
+        port_text=None,
+        pid_alive=False,
+        answered=False,
+    )
+    assert verdict["kind"] == "never-started" and verdict["status"] == "ERROR"
+    statuses = dict((label, status) for label, status, _d in rows)
+    assert statuses["port file appeared (chain)"] == "ERROR"
+
+
 def test_path_zone_facts_flag_network_and_onedrive(monkeypatch, tmp_path):
     import install_helper as ih
 

@@ -11578,6 +11578,367 @@ def _daemon_real_project_check(
     return verdict
 
 
+# ------------------------------------------------------------------ guard daemon: the real parent chain
+#
+# 2026-09-14, from the first live run of Check C: the daemon persisted when its parent was the
+# installer, which stays alive for the whole wait. In a real session the parent chain is
+# Claude Code -> sh -> the client python, which spawns the daemon and EXITS AT ONCE, all inside
+# whatever job object the hook runner owns. Two things can differ there and Check C never
+# exercises either: CREATE_BREAKAWAY_FROM_JOB is refused by a job that does not allow breakaway
+# (the spawn fails, the client swallows it, no daemon ever), or the spawn succeeds and the job's
+# kill-on-close tears the daemon down when its short-lived parent goes. Check D spawns the
+# daemon THROUGH a short-lived intermediate interpreter that exits immediately, then asks
+# whether the daemon outlived it, and reads this process's own job-object limits so a run from
+# inside a session's Bash tool reports the hook's actual confinement.
+
+_JOB_OBJECT_LIMIT_BREAKAWAY_OK = 0x00000800
+_JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK = 0x00001000
+_JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000
+_STILL_ACTIVE = 259
+
+# The intermediate: production's _start_daemon_detached, byte for byte in shape (same flags,
+# DEVNULL stdin), except stderr goes to the log it is handed. It prints one JSON line and exits,
+# so the daemon's parent is gone before anyone looks.
+_PARENT_CHAIN_SNIPPET = """
+import json, subprocess, sys
+argv = json.loads(sys.argv[1]); log = sys.argv[2]
+kw = {}
+if sys.platform == "win32":
+    kw["creationflags"] = (subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
+                           | subprocess.CREATE_BREAKAWAY_FROM_JOB)
+else:
+    kw["start_new_session"] = True
+try:
+    with open(log, "a", encoding="utf-8") as h:
+        p = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=h, stderr=h, **kw)
+    print(json.dumps({"pid": p.pid}))
+except OSError as e:
+    print(json.dumps({"error": f"{type(e).__name__}: {e}", "errno": e.errno,
+                      "winerror": getattr(e, "winerror", None)}))
+"""
+
+
+def _job_object_facts() -> dict:
+    """Is THIS process inside a Windows job object, and what does the job allow? Read with
+    ctypes from kernel32, no admin. On other platforms there is no job object to read."""
+    if sys.platform != "win32":
+        return {"in_job": None, "note": "Windows job objects only"}
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        k32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        in_job = wintypes.BOOL()
+        if not k32.IsProcessInJob(k32.GetCurrentProcess(), None, ctypes.byref(in_job)):
+            return {"in_job": None, "note": "IsProcessInJob failed"}
+        if not in_job.value:
+            return {
+                "in_job": False,
+                "limit_flags": 0,
+                "breakaway_ok": True,
+                "kill_on_job_close": False,
+            }
+        # JobObjectExtendedLimitInformation = 9; LimitFlags is the DWORD at offset 16 of the
+        # basic block (after two LARGE_INTEGER time limits).
+        buf = ctypes.create_string_buffer(256)
+        returned = wintypes.DWORD()
+        if not k32.QueryInformationJobObject(
+            None, 9, buf, ctypes.sizeof(buf), ctypes.byref(returned)
+        ):
+            return {
+                "in_job": True,
+                "limit_flags": None,
+                "note": "QueryInformationJobObject failed (limits unreadable)",
+            }
+        flags = int.from_bytes(buf.raw[16:20], "little")
+        return {
+            "in_job": True,
+            "limit_flags": flags,
+            "breakaway_ok": bool(
+                flags & (_JOB_OBJECT_LIMIT_BREAKAWAY_OK | _JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK)
+            ),
+            "kill_on_job_close": bool(flags & _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE),
+        }
+    except Exception as exc:  # noqa: BLE001 - a fact we cannot read is reported as such
+        return {"in_job": None, "note": f"{type(exc).__name__}: {exc}"}
+
+
+def _pid_alive(pid: int) -> bool:
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            k32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+            handle = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+            if not handle:
+                return False
+            try:
+                code = wintypes.DWORD()
+                if not k32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                    return False
+                return code.value == _STILL_ACTIVE
+            finally:
+                k32.CloseHandle(handle)
+        except Exception:  # noqa: BLE001
+            return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _kill_pid(pid: int) -> None:
+    try:
+        if sys.platform == "win32":
+            import ctypes
+
+            k32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+            handle = k32.OpenProcess(0x0001, False, pid)  # PROCESS_TERMINATE
+            if handle:
+                try:
+                    k32.TerminateProcess(handle, 1)
+                finally:
+                    k32.CloseHandle(handle)
+        else:
+            import signal
+
+            os.kill(pid, signal.SIGKILL)
+    except Exception:  # noqa: BLE001 - best effort; an idle timeout ends it anyway  # nosec B110
+        pass
+
+
+def _classify_parent_chain(
+    spawn_error,
+    port_appeared: bool,
+    alive_after_parent_exit: bool,
+    answered: bool,
+    stderr_text: str,
+    job: dict,
+) -> dict:
+    """The verdict for Check D. Pure, so every branch is tested without a spawn."""
+    err = (stderr_text or "").strip()
+    tail = err.splitlines()[-1] if err else ""
+    if spawn_error:
+        text = str(spawn_error)
+        low = text.lower()
+        refused = any(
+            token in low
+            for token in (
+                "winerror 5",
+                "winerror=5",
+                "winerror': 5",
+                "access is denied",
+                "errno 13",
+                "errno=13",
+            )
+        )
+        if refused and job.get("in_job") and job.get("breakaway_ok") is False:
+            return {
+                "kind": "breakaway-refused",
+                "status": "ERROR",
+                "headline": f"the intermediate could not spawn the daemon: {text}. This process sits in a job object that does not allow breakaway",
+                "fix": (
+                    "CREATE_BREAKAWAY_FROM_JOB is refused by the enclosing job, so production's client fails the "
+                    "same way on every call and swallows it: no daemon, ever, plus a cold-start fallback each time. "
+                    "The fix is in guard_daemon_client._start_daemon_detached (retry without the breakaway flag when "
+                    "the job forbids it), staged for the human to apply, or run hooks outside that job. Until then set "
+                    '"guard_daemon": false so calls stop paying the failed spawn.'
+                ),
+            }
+        return {
+            "kind": "spawn-failed",
+            "status": "ERROR",
+            "headline": f"the intermediate could not spawn the daemon: {text}",
+            "fix": 'Production swallows this exception on every call. Fix what the error names, or set "guard_daemon": false until it is fixed.',
+        }
+    if alive_after_parent_exit and answered:
+        return {
+            "kind": "persisted-after-parent-exit",
+            "status": "OK",
+            "headline": "the daemon outlived the short-lived parent that spawned it, and answered",
+            "fix": (
+                "The parent chain is not the problem from THIS process. If this run was from PowerShell, repeat it from "
+                "a Claude Code session's Bash tool in the project: the hook runner's job object is the one that matters, "
+                "and the job facts above will then describe it."
+            ),
+        }
+    if alive_after_parent_exit and not answered:
+        return {
+            "kind": "alive-but-unreachable",
+            "status": "ERROR",
+            "headline": "the daemon is still running after its parent exited, but the client cannot reach it",
+            "fix": "See the port file and client lines above: a port file the client will not read, or a loopback connection refused (firewall or endpoint policy).",
+        }
+    if port_appeared and not alive_after_parent_exit:
+        return {
+            "kind": "died-with-parent",
+            "status": "ERROR",
+            "headline": "the daemon started and wrote its port file, then died when its parent exited"
+            + (f". Its last words: {tail}" if tail else ""),
+            "fix": (
+                "A job object with kill-on-close taking the daemon down with its parent, or endpoint security ending a "
+                "detached windowless listener. If the job facts above show kill_on_job_close, hooks run confined and "
+                "the daemon cannot persist there; otherwise an AV exclusion for the interpreter and the project. Either "
+                'way a daemon that cannot persist costs more than none: set "guard_daemon": false until it can.'
+            ),
+        }
+    return {
+        "kind": "never-started",
+        "status": "ERROR",
+        "headline": "no port file and no live daemon after the parent exited"
+        + (f". Captured stderr: {tail}" if tail else ""),
+        "fix": "Read the captured stderr above. If it is empty the process was ended before it could speak, which points at the job object or endpoint security.",
+    }
+
+
+def _daemon_parent_chain_check(
+    style: Style,
+    record,
+    repo_root: Path,
+    project_root: Path,
+    daemon_py: Path,
+    persist_seconds: float = 5.0,
+    port_wait_seconds: float = 10.0,
+) -> dict:
+    """Check D. Returns the classification dict (see _classify_parent_chain)."""
+    print(
+        style.dim("\n  Check D - the real parent chain (spawned by a parent that exits at once):")
+    )
+    job = _job_object_facts()
+    if job.get("in_job") is None:
+        record("job object (this process)", "SKIP", job.get("note", "not readable"))
+    elif not job["in_job"]:
+        record(
+            "job object (this process)",
+            "OK",
+            "not in a job object; run this from a Claude Code Bash tool to see the hook runner's job",
+        )
+    else:
+        flags = job.get("limit_flags")
+        record(
+            "job object (this process)",
+            "WARN" if (job.get("breakaway_ok") is False or job.get("kill_on_job_close")) else "OK",
+            f"in a job object; limit flags {flags if flags is None else hex(flags)}; "
+            f"breakaway allowed: {job.get('breakaway_ok')}; kill on job close: {job.get('kill_on_job_close')}",
+        )
+
+    scratch = (
+        project_root
+        / ".claude"
+        / f"{_DAEMON_DIAG_SCRATCH_PREFIX}chain-{os.getpid()}-{int(time.time())}"
+    )
+    claude_dir_existed = (project_root / ".claude").is_dir()
+    try:
+        (scratch / ".claude").mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        record("scratch state root (chain)", "ERROR", f"cannot create {scratch}: {exc}")
+        return _classify_parent_chain(exc, False, False, False, "", job)
+    port_file = scratch / ".claude" / ".guard-daemon-port"
+    log_path = scratch / "daemon-stderr.log"
+    daemon_argv = [
+        sys.executable,
+        str(daemon_py),
+        str(repo_root),
+        str(scratch),
+        "--idle-timeout",
+        "60",
+    ]
+    spawn_error = None
+    pid = None
+    try:
+        proc = subprocess.run(  # nosec B603 - fixed argv: this interpreter, an inline snippet, JSON args
+            [sys.executable, "-c", _PARENT_CHAIN_SNIPPET, json.dumps(daemon_argv), str(log_path)],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
+        )
+        line = (proc.stdout or "").strip().splitlines()
+        answer = json.loads(line[-1]) if line else {}
+        if answer.get("error"):
+            spawn_error = f"{answer['error']} (errno={answer.get('errno')}, winerror={answer.get('winerror')})"
+        else:
+            pid = answer.get("pid")
+        if pid is None and spawn_error is None:
+            spawn_error = f"intermediate exited {proc.returncode} without a pid; stderr={proc.stderr.strip()[:300]!r}"
+    except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
+        spawn_error = f"{type(exc).__name__}: {exc}"
+    record(
+        "intermediate parent",
+        "ERROR" if spawn_error else "OK",
+        spawn_error
+        or f"spawned the daemon (pid {pid}) with production's flags, printed the pid, exited",
+    )
+
+    port_appeared = False
+    alive = False
+    answered = False
+    if pid is not None:
+        deadline = time.monotonic() + port_wait_seconds
+        while time.monotonic() < deadline and not port_file.is_file():
+            if not _pid_alive(pid):
+                break
+            time.sleep(0.1)
+        port_appeared = port_file.is_file()
+        record(
+            "port file appeared (chain)",
+            "OK" if port_appeared else "ERROR",
+            str(port_file) if port_appeared else f"not within {port_wait_seconds:.0f}s",
+        )
+        deadline = time.monotonic() + persist_seconds
+        while time.monotonic() < deadline and _pid_alive(pid):
+            time.sleep(0.2)
+        alive = _pid_alive(pid)
+        record(
+            f"daemon alive {persist_seconds:.0f}s after its parent exited",
+            "OK" if alive else "ERROR",
+            f"pid {pid} running" if alive else f"pid {pid} gone",
+        )
+        if port_appeared and alive:
+            client = _load_daemon_client_module(repo_root)
+            payload_text = json.dumps(
+                {
+                    "session_id": f"daemon-diag-chain-{os.getpid()}",
+                    "tool_name": "Read",
+                    "tool_input": {"file_path": str(project_root / "README.md")},
+                }
+            )
+            answered, detail = _daemon_answers(client, scratch, payload_text)
+            record("client reaches it (chain)", "OK" if answered else "ERROR", detail)
+        if alive:
+            _kill_pid(pid)
+    stderr_text = ""
+    try:
+        stderr_text = log_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        pass
+    if stderr_text.strip():
+        record(
+            "captured stderr (chain)",
+            "WARN" if alive else "ERROR",
+            "\n" + "\n".join(stderr_text.strip().splitlines()[-25:]),
+        )
+    verdict = _classify_parent_chain(spawn_error, port_appeared, alive, answered, stderr_text, job)
+    record(f"verdict (chain): {verdict['kind']}", verdict["status"], verdict["headline"])
+    print(f"    fix: {verdict['fix']}")
+    for _attempt in range(5):
+        try:
+            shutil.rmtree(scratch)
+            break
+        except OSError:
+            time.sleep(0.2)
+    if not claude_dir_existed:
+        try:
+            (project_root / ".claude").rmdir()
+        except OSError:
+            pass
+    return verdict
+
+
 def run_daemon_start_diagnostic(
     style: Style,
     mark_map: dict,
@@ -11608,6 +11969,12 @@ def run_daemon_start_diagnostic(
          UNDER the real .claude (same drive, permissions and AV posture), followed by a
          wait and a second look: still running, or gone, and what it said before it went.
          A ranked verdict names the cause and the fix. See _daemon_real_project_check.
+      D. The real PARENT CHAIN (2026-09-14, after C passed on a box whose sessions still could
+         not reach a daemon): C's parent stays alive for the wait, a hook's does not. D spawns
+         the daemon through a short-lived intermediate interpreter that exits at once, asks
+         whether the daemon outlived it, and reads this process's Windows job-object limits
+         (in a job, breakaway allowed, kill on close). Run from a Claude Code Bash tool it
+         reports the hook runner's own confinement. See _daemon_parent_chain_check.
 
     Kept in sync with _start_daemon_detached() by comment, not code, same trade-off this
     file already accepts elsewhere (see prewarm_guard_cache's own docstring) - this
@@ -11819,6 +12186,10 @@ def run_daemon_start_diagnostic(
 
     # --- Check C: the real project, production's spawn with its stderr captured ---
     _daemon_real_project_check(
+        style, record, repo_root, project_root, daemon_py, persist_seconds, port_wait_seconds
+    )
+    # --- Check D: the same spawn through a parent that exits at once, plus this process's job ---
+    _daemon_parent_chain_check(
         style, record, repo_root, project_root, daemon_py, persist_seconds, port_wait_seconds
     )
 
