@@ -7870,6 +7870,22 @@ def test_run_daemon_start_diagnostic_full_success_against_a_real_stub_daemon(
         encoding="utf-8",
     )
 
+    # Check D does a real, job-object-dependent spawn (CREATE_BREAKAWAY_FROM_JOB on Windows).
+    # A CI Windows runner sits in a confining job that legitimately refuses breakaway - which
+    # is exactly the failure Check D exists to report, but it would flip THIS check's exit code
+    # on that one platform. This test is the A/B/C + reporting-mechanics end-to-end; Check D's
+    # own behaviour is covered by the stubbed test_check_d_* tests below, so here it is pinned
+    # to a controlled OK to keep the end-to-end deterministic on every platform.
+    def _stub_check_d(style, record, *a, **k):
+        record(
+            "verdict (chain): persisted-after-parent-exit",
+            "OK",
+            "pinned for the end-to-end mechanics test; real behaviour has its own tests",
+        )
+        return {"kind": "persisted-after-parent-exit", "status": "OK", "headline": "", "fix": ""}
+
+    monkeypatch.setattr(ih, "_daemon_parent_chain_check", _stub_check_d)
+
     rc = ih.run_daemon_start_diagnostic(
         ih.Style(False), ih.marks(), repo_hint=str(tmp_path), persist_seconds=1.0
     )
