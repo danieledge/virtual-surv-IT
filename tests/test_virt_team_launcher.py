@@ -1020,7 +1020,21 @@ def test_pt_failure_falls_back_to_numbered_menu(tmp_path, monkeypatch, capsys):
     mod = _load()
     monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
     monkeypatch.setenv("VIRT_SURV_FORCE_PTK", "1")  # pt tier engages...
-    monkeypatch.setattr(mod, "_pt_pick", lambda *a, **k: mod._PT_FAILED)  # ...and dies
+
+    # ...and its console layer dies at widget start. The failure is injected where the
+    # menu really runs since f3b34a3 (launcher_app.run_app -> tui_chrome.screen), not at
+    # the pre-app `_pt_pick`, which this path no longer calls. Patching the dead name
+    # left the live app to run for real, and on the Windows runner that meant a
+    # prompt_toolkit Win32 input waiting on a console nobody types into: the test hung
+    # until pytest-timeout killed the whole leg (CI, 2026-09-14). On POSIX it only
+    # passed because pytest's captured stdin raises, which happened to look like the
+    # failure the test wanted to inject.
+    import launcher_app
+
+    def _console_refuses(*_a, **_k):
+        raise RuntimeError("NoConsoleScreenBufferError: no console screen buffer")
+
+    monkeypatch.setattr(launcher_app, "screen", _console_refuses)
     monkeypatch.setattr("builtins.input", lambda prompt="": "1")
     rc = mod.main()
     out = capsys.readouterr()
