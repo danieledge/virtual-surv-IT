@@ -226,3 +226,21 @@ def test_load_checker_does_not_grow_sys_path_on_repeat_calls(tmp_path):
         "a second call with the same project_root grew sys.path again - the dedup "
         "check did not hold"
     )
+
+
+def test_the_nudge_covers_a_session_without_the_todowrite_tool():
+    """Live plugin-mode session, 2026-09-14: "no TodoWrite tool in this session". The nudge
+    cannot see that, so its words must fit both cases and still name the marker that
+    silences it."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "todo_panel_nudge_wording", staged_or_live("todo_panel_nudge.py")
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    reason = mod._reason("alpha", "delivery")
+    assert "If the TodoWrite tool is available" in reason
+    assert "If it is not" in reason and "engagement-state.json is the progress view" in reason
+    assert 'engagement_state --slug alpha log-note "todo-panel-seeded"' in reason
+    assert reason.count(". ") <= 5, "keep it short"

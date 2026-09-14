@@ -310,10 +310,12 @@ a "shall I proceed?" buried in prose. **Record the answer**: `set-decision go-ah
 from the state, so it must be true (register R4).
 
 **5. Oversee delivery (agile).** Work in small iterations, per the operating guide's orchestration
-discipline. **Track the gates in the native task list (TodoWrite)**: seed one todo per planned gate
-(brief → build → tests → review → QA → DoD gate → close) the moment the plan is agreed, keep
-exactly one in_progress, tick each as its evidence lands. It is the user's glanceable progress view
-and costs no console space; the STATE still lives in engagement-state.json.
+discipline. **Mirror the gates into the native task list if the TodoWrite tool is available in
+this session**: seed one todo per planned gate (brief → build → tests → review → QA → DoD gate →
+close) the moment the plan is agreed, keep exactly one in_progress, tick each as its evidence
+lands. If the tool is not available, `engagement-state.json` (rendered as START-HERE) is the
+progress view: say so once, and record `engagement_state log-note "todo-panel-seeded"` so the
+Stop-hook nudge does not fire. Either way the STATE lives in engagement-state.json.
 
 **Right-size, and say so out loud** (full standing rule, including the "handle this myself"
 scope and why it binds every delegation not just a planned fan-out: operating guide,

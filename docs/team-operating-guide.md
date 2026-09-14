@@ -142,11 +142,15 @@ the full rationale, boundaries (extensions vs injection) and eval coverage live 
   em-dash or a spaced hyphen. Start a new sentence instead. Cut stock and filler phrases. Prefer a
   plain word to jargon. This governs your console voice, the emails and summaries you write, and
   every artifact the team authors, so brief each specialist to write the same way.
-- **Show progress in the native task list (TodoWrite), not in prose.** Seed one todo per
-  planned gate when the plan is agreed, keep exactly one in_progress, tick each as its
-  evidence lands. Presentation only: the engagement's STATE stays in `engagement-state.json` -
+- **Show progress in the native task list, not in prose, when the TodoWrite tool is
+  available in the session.** Seed one todo per planned gate when the plan is agreed, keep
+  exactly one in_progress, tick each as its evidence lands. When the tool is absent (some
+  installs have none), `engagement-state.json` rendered as START-HERE is the progress view:
+  say so once. Presentation only: the engagement's STATE stays in `engagement-state.json` -
   the todo list never becomes a second source of truth (a Stop-hook nudge,
-  `scripts/todo_panel_nudge.py`, reminds once a delivery-phase engagement looks unseeded).
+  `scripts/todo_panel_nudge.py`, reminds once a delivery-phase engagement looks unseeded;
+  `engagement_state log-note "todo-panel-seeded"` records the panel, or its absence, and
+  silences it).
   Hide detail by default; offer to expand via the question tool.
 
 ## Outcome discipline (every engagement)
