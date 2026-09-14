@@ -241,7 +241,9 @@ def test_lock_dir_matches_the_documented_gitignore_entry():
     )
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root reads a chmod 000 file anyway")
+@pytest.mark.skipif(
+    getattr(os, "geteuid", lambda: 1)() == 0, reason="root reads a chmod 000 file anyway"
+)  # no geteuid on Windows, where the module-level skip already applies
 def test_a_stamp_the_shell_cannot_open_leaks_no_raw_shell_error(tmp_path):
     """Live report, 2026-09-14 (four parallel reviewers on a corporate Windows box):
     "run-guard.sh: line 552: .../.claude/.guard-lock/acquired-at: No such file or directory"
