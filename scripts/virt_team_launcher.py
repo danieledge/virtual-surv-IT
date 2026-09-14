@@ -4886,12 +4886,15 @@ def _run_in_app(argv, project_dir: Path, title: str = "First-time setup", step: 
     def work(observer):
         observer.step(1, 1, step)
         try:
+            # _DECODE already carries errors="replace"; naming it again here made every
+            # Popen raise "got multiple values for keyword argument 'errors'" the moment a
+            # screen tier could draw the progress screen - the owner's first-time setup on
+            # the corporate box died with exactly that traceback behind the TUI (2026-09-14).
             proc = subprocess.Popen(  # fixed argv, shell=False  # nosec B603
                 argv,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 **_DECODE,
-                errors="replace",
                 # Nothing to type, and a pipe rather than the terminal means a subprocess
                 # that somehow DID ask gets EOF and gives up, instead of waiting forever
                 # behind a screen that cannot show the question.

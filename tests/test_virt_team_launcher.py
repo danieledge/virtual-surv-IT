@@ -2100,3 +2100,31 @@ def test_launch_command_applies_explicit_morgan_model(tmp_path, monkeypatch):
     monkeypatch.setattr(v, "_configured_launch_command", lambda: "cc --model opus")
     (tmp_path / ".claude" / "settings.json").write_text('{"model": "sonnet"}')
     assert v._launch_command_with_model(tmp_path) == "cc --model opus"
+
+
+def test_run_in_app_actually_starts_the_subprocess_behind_the_screen(tmp_path, monkeypatch):
+    """Owner's corporate box, 2026-09-14 (photo of the first-time setup screen): the progress
+    screen's Popen passed `errors` twice (once inside _DECODE, once by name) and raised
+    "got multiple values for keyword argument 'errors'" behind the TUI, so setup never ran.
+    Nothing exercised the real Popen before: the screen was always stubbed away."""
+    mod = _load()
+    seen: list[str] = []
+
+    class _Observer:
+        def step(self, *_a):
+            pass
+
+        def line(self, text):
+            seen.append(text)
+
+        def result(self, *_a):
+            pass
+
+    monkeypatch.setattr(
+        mod, "_tiered_screen", lambda name, steps, work, module, **kw: work(_Observer())
+    )
+    code = mod._run_in_app(
+        [sys.executable, "-c", "print('setup line')"], tmp_path, "First-time setup", "Working"
+    )
+    assert code == 0
+    assert any("setup line" in line for line in seen)
