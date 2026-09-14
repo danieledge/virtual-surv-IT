@@ -10336,7 +10336,13 @@ def test_preflight_accepts_sh_that_only_the_resolver_can_see(monkeypatch):
     with pytest.raises(_StopAtClaude):
         inst.preflight()
     sh_steps = [s for s in inst.tracker.steps if s[0].startswith("POSIX sh")]
-    assert sh_steps == [(r"POSIX sh found at C:\Program Files\Git\bin\sh.exe (the hook launcher runs through it)", "ok", "")]
+    assert sh_steps == [
+        (
+            r"POSIX sh found at C:\Program Files\Git\bin\sh.exe (the hook launcher runs through it)",
+            "ok",
+            "",
+        )
+    ]
 
 
 def test_preflight_still_fails_hard_when_no_shell_resolves_at_all(monkeypatch):

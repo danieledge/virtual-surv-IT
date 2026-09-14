@@ -58,7 +58,9 @@ def _find_sh(sh: str = "sh") -> str | None:
     override = os.environ.get("CLAUDE_CODE_GIT_BASH_PATH")
     if override:
         p = Path(override)
-        candidates = [p.parent / "sh.exe", p] if p.is_file() else [p / "sh.exe", p / "bin" / "sh.exe"]
+        candidates = (
+            [p.parent / "sh.exe", p] if p.is_file() else [p / "sh.exe", p / "bin" / "sh.exe"]
+        )
         for c in candidates:
             if c.is_file():
                 return str(c)
@@ -210,7 +212,9 @@ def summary(project_dir: Path, results: list[tuple[str, bool, str]]) -> tuple[bo
         )
     failed = ", ".join(f"{label}: {detail}" for label, ok, detail in results if not ok)
     labels = {label for label, ok, _ in results if not ok}
-    if "POSIX shell" in labels or any("could not be started" in d for _, ok, d in results if not ok):
+    if "POSIX shell" in labels or any(
+        "could not be started" in d for _, ok, d in results if not ok
+    ):
         action = "fix the shell as described, open a new terminal, then re-run the check"
     elif labels == {"plugin enabled"}:
         action = (

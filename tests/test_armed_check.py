@@ -54,7 +54,9 @@ def test_the_team_repo_itself_counts_as_enabled():
     assert ok and "repo-as-project" in detail
 
 
-def test_a_missing_shell_is_named_with_its_fix_not_reported_as_exit_minus_one(tmp_path, monkeypatch):
+def test_a_missing_shell_is_named_with_its_fix_not_reported_as_exit_minus_one(
+    tmp_path, monkeypatch
+):
     """2026-09-14 live: on the owner's corporate Windows box the installer's armed check
     reported 'raw-data read: exit -1' for every guard. The guards were fine; the prover could
     not start `sh`. The failure must say which, and what to do."""
@@ -98,7 +100,9 @@ def test_find_sh_derives_the_shell_from_git_on_windows(monkeypatch):
     monkeypatch.delenv("CLAUDE_CODE_GIT_BASH_PATH", raising=False)
     monkeypatch.delenv("LOCALAPPDATA", raising=False)
     git_exe = r"C:\Users\d\AppData\Local\Programs\Git\cmd\git.exe"
-    monkeypatch.setattr(armed_check.shutil, "which", lambda name: git_exe if name == "git" else None)
+    monkeypatch.setattr(
+        armed_check.shutil, "which", lambda name: git_exe if name == "git" else None
+    )
     monkeypatch.setattr(armed_check.sys, "platform", "win32")
     target = r"C:\Users\d\AppData\Local\Programs\Git\bin\sh.exe"
     monkeypatch.setattr(armed_check.Path, "is_file", lambda self: str(self) == target)
