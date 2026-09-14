@@ -129,7 +129,12 @@ _CHECKS = (
     # arming, and it redirects each target ONCE so a deliberate full read still succeeds on
     # the repeat. Prose said this already; prose did not do it. Bash joined the tool set
     # here; the top-level matcher already carries Bash, so no matcher change is needed.
-    ("exploration_redirect", _SCRIPTS_DIR / "exploration_redirect.py", {"Read", "Grep", "Bash"}, False),
+    (
+        "exploration_redirect",
+        _SCRIPTS_DIR / "exploration_redirect.py",
+        {"Read", "Grep", "Bash"},
+        False,
+    ),
     # 2026-09-13 framework review, step 2.3: the locked-menu guard was the only reason
     # PreToolUse carried a SECOND matcher (AskUserQuestion) and a second process per menu
     # call. It runs here instead, on the same `*` matcher. Fail-open, exactly as its own
