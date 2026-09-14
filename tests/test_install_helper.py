@@ -8152,8 +8152,10 @@ def test_claude_dir_writable_reports_missing_and_blocked(tmp_path):
     (tmp_path / ".claude").mkdir()
     ok, detail = ih._claude_dir_writable(tmp_path)
     assert ok is True and "accepts a new file" in detail
-    if hasattr(os, "geteuid") and os.geteuid() == 0:
-        return  # root writes anywhere; the blocked case cannot be shown
+    if sys.platform == "win32" or (hasattr(os, "geteuid") and os.geteuid() == 0):
+        # root writes anywhere, and chmod does not remove write access on Windows (the
+        # CI leg saw the probe file land); the blocked case cannot be shown on either.
+        return
     (tmp_path / ".claude").chmod(0o500)
     try:
         ok, detail = ih._claude_dir_writable(tmp_path)
