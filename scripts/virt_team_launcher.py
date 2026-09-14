@@ -574,6 +574,7 @@ _TOGGLE_PREFS = (
     ("data profiling tools", "data_profiling"),
     ("document map", "document_map"),
     ("guard daemon", "guard_daemon"),
+    ("claude session debug", "claude_debug"),
 )
 
 
@@ -694,6 +695,13 @@ _SETTING_HELP = {
         "cost differs (~625ms vs ~211ms per call on Windows).",
         "On by default at machine and project level. Off falls back to a process per call: "
         "slower, never less safe.",
+    ),
+    "claude session debug": (
+        "Starts the session with Claude Code's own --debug, so hook timings, tool-call "
+        "failures and plugin loading are logged where you can read them. For diagnosing a "
+        "slow or misbehaving box; this project only.",
+        "Off (the default): a normal session. Turn it on when something is wrong, off again "
+        "when it is understood - the log is noisy.",
     ),
     "document map": (
         "Lets the team inventory a documentation tree first - filenames, dates and heading "
@@ -816,6 +824,10 @@ _SETTING_GROUPS = (
     (
         "Speed",
         ("probe_cache", "guard_daemon", "env_tuning"),
+    ),
+    (
+        "Diagnosing problems",
+        ("claude_debug",),
     ),
 )
 
@@ -5032,10 +5044,29 @@ def _launch_command_with_model(project_dir: Path) -> str:
     forces it (an unset model keeps the CLI default), and never when the user's own launch
     command already pins a model."""
     base = _configured_launch_command()
-    if "--model" in base.split():
-        return base
-    model = _configured_orchestrator_model(project_dir)
-    return f"{base} --model {model}" if model else base
+    if "--model" not in base.split():
+        model = _configured_orchestrator_model(project_dir)
+        if model:
+            base = f"{base} --model {model}"
+    return _with_debug_flag(base, project_dir)
+
+
+def _with_debug_flag(command: str, project_dir: Path) -> str:
+    """Append Claude Code's `--debug` when this project's `claude_debug` preference is on
+    (2026-09-14, owner request): a corporate box with slow hooks or a stale plugin cache is
+    diagnosed from the session's own debug log, and the switch belongs in the project's
+    settings, not in a hand-edited launch command. Never doubled when the user's own command
+    already carries it; any failure to read the preference means no flag."""
+    words = command.split()
+    if any(w in ("--debug", "-d", "--debug-file") or w.startswith("--debug=") for w in words):
+        return command
+    try:
+        import engage_probe
+
+        on = bool(engage_probe.resolve_preferences(project_dir).get("claude_debug"))
+    except Exception:  # noqa: BLE001 - a preference that cannot be read adds no flag
+        on = False
+    return f"{command} --debug" if on else command
 
 
 def _headless_allow_rules(allow_web: bool = False) -> tuple:

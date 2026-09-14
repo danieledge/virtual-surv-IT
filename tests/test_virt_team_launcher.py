@@ -2128,3 +2128,35 @@ def test_run_in_app_actually_starts_the_subprocess_behind_the_screen(tmp_path, m
     )
     assert code == 0
     assert any("setup line" in line for line in seen)
+
+
+def test_claude_debug_preference_adds_the_cli_flag_to_the_launch_command(tmp_path, monkeypatch):
+    """Owner request, 2026-09-14: a project setting that runs the session in Claude Code's
+    debug mode, for diagnosing slow hooks and stale caches on a corporate box without
+    hand-editing the launch command. Project-only, off by default, never doubled."""
+    v = _load()
+    monkeypatch.setattr(v, "_configured_launch_command", lambda: "claude")
+    monkeypatch.setattr(v, "_configured_orchestrator_model", lambda project_dir: None)
+    prefs = tmp_path / ".claude" / "team-preferences.json"
+    prefs.parent.mkdir(parents=True)
+    assert v._launch_command_with_model(tmp_path) == "claude"  # absent: off
+    prefs.write_text(json.dumps({"claude_debug": False}), encoding="utf-8")
+    assert v._launch_command_with_model(tmp_path) == "claude"
+    prefs.write_text(json.dumps({"claude_debug": True}), encoding="utf-8")
+    assert v._launch_command_with_model(tmp_path) == "claude --debug"
+    monkeypatch.setattr(v, "_configured_orchestrator_model", lambda project_dir: "opus")
+    assert v._launch_command_with_model(tmp_path) == "claude --model opus --debug"
+    monkeypatch.setattr(v, "_configured_launch_command", lambda: "claude --debug api")
+    assert v._launch_command_with_model(tmp_path) == "claude --debug api --model opus"
+
+
+def test_claude_debug_is_a_settings_row_that_toggles_and_is_off_by_default(tmp_path):
+    mod = _load()
+    project = _plugin_enabled_project(tmp_path)
+    rows = {label: (value, on) for label, value, on in mod._editor_rows(project)}
+    assert rows["claude session debug"][1] is False
+    mod._editor_apply_key(project, "claude_debug")
+    prefs = json.loads((project / ".claude" / "team-preferences.json").read_text(encoding="utf-8"))
+    assert prefs["claude_debug"] is True
+    rows = {label: (value, on) for label, value, on in mod._editor_rows(project)}
+    assert rows["claude session debug"][1] is True

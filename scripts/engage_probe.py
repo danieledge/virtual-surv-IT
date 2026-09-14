@@ -842,6 +842,12 @@ def resolve_preferences(project_dir: Path) -> dict:
     qa_depth = str(prefs.get("qa_depth") or "auto").strip().lower()
     if qa_depth not in ("auto", "quick", "deep", "audit"):
         qa_depth = "auto"
+    # claude_debug (2026-09-14, owner request after a day of hook-latency and stale-cache
+    # reports on a corporate box): `virt-surv go` starts the session with Claude Code's own
+    # `--debug`, so hook timings and tool-call failures are visible without editing the
+    # launch command by hand. Off unless this project says so; no machine tier - debug is
+    # something you turn on where the problem is.
+    claude_debug_on = bool(prefs.get("claude_debug", False))
     return {
         "extra_formats": extra_formats,
         "regulatory_citations": citations_on,
@@ -857,6 +863,7 @@ def resolve_preferences(project_dir: Path) -> dict:
         "autonomous_mode": autonomous_mode_on,
         "autonomous_default": autonomous_default_on,
         "new_window": new_window_on,
+        "claude_debug": claude_debug_on,
         "qa_depth": qa_depth,
     }
 

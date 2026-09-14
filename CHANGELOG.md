@@ -5,7 +5,12 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 
 ## [Unreleased]
 
-Nothing yet.
+- **Project setting "claude session debug":** `virt-surv go` starts the session with Claude
+  Code's own `--debug` when this project's `claude_debug` preference is on, so hook timings and
+  tool-call failures on a slow box are logged where they can be read. Off by default, project
+  only, never doubled when the launch command already carries the flag.
+- **Launcher:** the first-time setup and update progress screens crashed before their
+  subprocess started (a duplicated `errors` keyword in the Popen call); fixed.
 
 ## [0.38.0] - 2026-09-14 - Guards applied, plugin mode proven live, a sample engagement shipped
 
