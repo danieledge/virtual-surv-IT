@@ -10330,8 +10330,6 @@ def test_preflight_accepts_sh_that_only_the_resolver_can_see(monkeypatch):
     with 'POSIX sh not found'. The launcher resolves through _resolve_sh (env override,
     PATH, then the Git for Windows install locations); the preflight must ask the same
     question or an installed shell reads as missing."""
-    import install_helper as ih
-
     inst = _preflight_until_claude(
         monkeypatch, demo=False, resolved_sh=r"C:\Program Files\Git\bin\sh.exe"
     )
