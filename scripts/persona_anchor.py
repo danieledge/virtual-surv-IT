@@ -32,11 +32,17 @@ since hooks in this repo stay read-only); every later prompt gets a short 3-line
 just the rules that actually decay. A brand-new engagement, or one whose marker cannot be read,
 gets the full anchor - erring toward more context, never toward silently under-anchoring.
 
+2026-09-14 live report: the anchor still said artifacts ship in `artifacts/<slug>/`, the layout
+that `VSIT/engagements/<slug>/` replaced on 2026-08-28, so a resumed session was pointed at a
+folder that does not exist. The workspace root is now taken from the layout resolver and
+printed as the project holds it (`VSIT/engagements` on the new layout, `artifacts` on a legacy
+one), never spelled by hand.
+
 Stdin: UserPromptSubmit JSON payload. Stdout (exit 0) is added to the model's context. Fails open
 on any error - a presentation aid must never break a prompt. UTF-8-forced (Windows-safe).
 
 Wire via hooks -> "UserPromptSubmit" in .claude/settings.json + hooks/hooks.json
-(scripts/apply-persona-anchor.sh - human-run; hook/config edits are human-only, ADR-002 rec 5).
+(scripts/apply-staged.sh - human-run; hook/config edits are human-only, ADR-002 rec 5).
 
 2026-08-14 (ADR-014 daemon, multi-target extension): daemon-servable (fires on every
 user message, the highest-frequency point besides Bash calls, so the biggest single
@@ -81,7 +87,7 @@ _ANCHOR = """<persona-anchor>
 - You are Morgan, the PM (opt-in team persona). Open every reply with 🎩. Name specialists by
   their roster names (roster: team-operating-guide.md - $PLUGIN_ROOT/docs/ in plugin mode).
 - Ask EVERY clarification/choice via the AskUserQuestion tool - never questions buried in prose.
-- Clean console (no code walls); artifacts ship .md + .html in artifacts/<slug>/. STATUS lives
+- Clean console (no code walls); artifacts ship .md + .html in {where}/<slug>/. STATUS lives
   in the workspace's engagement-state.json - mutate via scripts.engagement_state; START-HERE
   is generated, never hand-edit. On resume re-read the state (decisions, consent, runtime).
 - Close = set-status closing -> check_artifacts --fix -> summary email -> set-status closed
@@ -110,6 +116,16 @@ def _force_utf8_output() -> None:
             stream.reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, ValueError, OSError):
             pass
+
+
+def workspace_root_label(artifacts: Path, project_root: Path) -> str:
+    """The engagements root as the project holds it, for the anchor text: `VSIT/engagements`
+    on the new layout, `artifacts` on a legacy one, the absolute path when it is neither
+    (never a hand-spelled folder name - 2026-09-14)."""
+    try:
+        return artifacts.resolve().relative_to(project_root.resolve()).as_posix()
+    except (ValueError, OSError):
+        return artifacts.as_posix()
 
 
 _CHECK_ARTIFACTS_MODULE_CACHE = None
@@ -184,8 +200,8 @@ def _fallback_status(pack: Path) -> str | None:
 
 
 def _open_engagements(artifacts: Path, ca) -> list[tuple[str, str, Path]]:
-    """(name, status, pack path) for every LIVE pack - workspaces `artifacts/<slug>/` plus
-    the legacy flat pack. Shared detection + parser when the checker loads (G5/G7);
+    """(name, status, pack path) for every LIVE pack - the workspaces under the engagements
+    root plus the legacy flat pack. Shared detection + parser when the checker loads (G5/G7);
     fail-open per pack: unreadable input never misfires the anchor."""
     out: list[tuple[str, str, Path]] = []
     packs: list[tuple[str, Path]] = []
@@ -267,6 +283,7 @@ def main() -> int:
     opens = _open_engagements(artifacts, ca)
     if not opens:
         return 0
+    where = workspace_root_label(artifacts, cwd)
 
     # Marker home for the full-vs-short decision: prefer the flat pack when it's among the
     # live set, else the ACTIVE workspace if named, else the first. Not semantically tied to
@@ -286,7 +303,7 @@ def main() -> int:
     if _already_seeded(marker_pack):
         print(_ANCHOR_SHORT)
     else:
-        print(_ANCHOR.format(log_note=_log_note_command(slug)))
+        print(_ANCHOR.format(log_note=_log_note_command(slug), where=where))
 
     if len(opens) > 1 or (len(opens) == 1 and opens[0][0] != "(flat)"):
         marks = {"open": "⏳", "in_progress": "⏳", "blocked": "⛔", "closing": "🔒"}
@@ -300,7 +317,7 @@ def main() -> int:
             )
         else:
             tail = (
-                " - each lives in artifacts/<slug>/; record which is ACTIVE this session "
+                f" - each lives in {where}/<slug>/; record which is ACTIVE this session "
                 "(`engagement_state set-active <slug>`) and target its workspace (--slug)"
             )
         print(f"<open-engagements>{listing}{tail}</open-engagements>")

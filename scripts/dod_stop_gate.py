@@ -63,6 +63,15 @@ finding set forever. Two changes, both structural rather than a firmer instructi
     distinguishable from a gate that was satisfied. The warning still prints the findings at
     every stop after that, so nothing disappears - only the blocking stops.
 
+2026-09-14 live report (project with two open engagements, four parallel reviewers): the
+marker home was "the flat pack, else the FIRST gated workspace", whatever pack the findings
+came from. The first gated workspace was the OTHER engagement, so the remediation command
+named the wrong slug, the block note landed in the wrong log, and on the next stop the marker
+check read that wrong log and escalated ("the work the note claims was done was not done")
+while a direct `check_artifacts --slug <right one>` was clean. The marker home is now the pack
+the findings actually came from (main(), "marker home"); the old rule is the fallback only
+when no single pack contributed.
+
 Fail-open is unchanged: every new path is wrapped, an unreadable log counts as zero blocks
 (fail toward blocking, matching `_already_nudged`'s direction), and a failed log-note costs the
 record, never the block.
@@ -74,7 +83,7 @@ always 0.
 Wired in `.claude/settings.json` + `hooks/hooks.json` -> `hooks.Stop` (it ships wired; hook and
 config edits are human-only under ADR-002 rec 5). Patches to this file are staged at
 `scripts/staged_hooks/dod_stop_gate.py` and installed by the human via
-`bash scripts/apply-project-anchor.sh`.
+`bash scripts/apply-staged.sh`.
 
 2026-08-14 live report (corp Windows dogfooding session, screenshots): a session was nudged
 about an unrelated OPEN engagement while its own most recent message had just asked for a new,
@@ -421,6 +430,31 @@ def _load_checker(project_root: Path):
     return None
 
 
+def marker_home(
+    gated: list[tuple[str, Path]],
+    contributing: list[tuple[str, Path]],
+    active_slug: str | None,
+) -> tuple[str, Path]:
+    """The pack whose log carries this gate's markers: the one the findings CAME FROM.
+
+    2026-09-14 live report. The home used to be "the flat pack, else the FIRST gated
+    workspace", so in a project with two open engagements the remediation command named the
+    wrong slug, the block note landed in the wrong log, and the marker check on the next stop
+    read that wrong log and escalated - against a pack a direct check found clean. Now: the
+    single pack that contributed the findings; the active pack when several did and it is
+    among them; otherwise the old rule, which still covers project-level findings (registry,
+    orphans, map) that belong to no one pack."""
+    if len(contributing) == 1:
+        return contributing[0]
+    if active_slug:
+        for name, pack in contributing:
+            if name == active_slug:
+                return name, pack
+    if contributing:
+        return next((c for c in contributing if not c[0]), contributing[0])
+    return next((g for g in gated if not g[0]), gated[0])
+
+
 def main() -> int:
     data = _load_input()
 
@@ -527,6 +561,8 @@ def main() -> int:
 
         active_findings: list[str] = []
         other_findings: list[str] = []
+        # The packs whose findings went into the fix-list, for the marker home below.
+        contributing: list[tuple[str, Path]] = []
         for name, pack in gated:
             if not name and packs:
                 flat_finding = (
@@ -545,6 +581,7 @@ def main() -> int:
             elif active_slug is None or len(gated) == 1 or name == active_slug:
                 prefix = f"[{name}] " if name else ""
                 active_findings.extend(f"{prefix}{f}" for f in raw)
+                contributing.append((name, pack))
             else:
                 # OTHER packs are summarised, never pasted in full (the same live
                 # report's other half: 13 findings' full bodies in the console).
@@ -577,11 +614,10 @@ def main() -> int:
         return 0
 
     findings_hash = _findings_hash(active_findings + other_findings)
-    # Marker home: prefer the flat pack when it's among the gated set (it's what most
-    # single-engagement projects have), else the first gated workspace. Which specific pack
-    # holds the marker is not semantically load-bearing - it is just a durable place to
-    # record "this exact finding set was already nudged", shared across every gated pack.
-    marker_name, marker_pack = next((g for g in gated if not g[0]), gated[0])
+    # Marker home: the pack the findings came from (2026-09-14; see marker_home). Which
+    # pack holds the marker IS load-bearing - it is the slug in the remediation command the
+    # model is told to run, and the log the next stop reads the marker back from.
+    marker_name, marker_pack = marker_home(gated, contributing, active_slug)
     slug = marker_name or None
 
     # W-6 (2026-09-12 audit). The suppression marker used to end the story: a

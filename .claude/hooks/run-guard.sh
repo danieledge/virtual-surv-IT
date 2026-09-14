@@ -31,6 +31,15 @@
 # check EVERY time - "several minutes" for a single /engage turned out to be that stub hang
 # repeated dozens of times. `command -v` alone (existence, no execution) is cheap and safe
 # to redo every call; only the EXECUTION probe needs to happen once and be trusted after.
+#
+# REDIRECTION ORDER (2026-09-14 live report, a four-reviewer fan-out on a corporate Windows
+# box): "run-guard.sh: line 552: .../.claude/.guard-lock/acquired-at: No such file or
+# directory" leaked into the session as a raw shell error. The fail-open was working; the
+# message was the shell's own. A redirection failure (`<file` on a stamp the holder's EXIT
+# trap had just removed, or `>file` into a lock directory a reclaimer had just torn down) is
+# reported by the shell BEFORE it applies any later `2>/dev/null` on the same command,
+# because redirections are processed left to right. So every file redirection below whose
+# target can vanish or be unwritable puts `2>/dev/null` FIRST. Same semantics, no leak.
 
 # UTF-8 pin (2026-07-31 corporate report): the guards' stdin is the tool-call JSON payload,
 # which can carry non-ASCII (the Fix-cycle arrow "→" in locked_menu_guard.py's canonical
@@ -206,7 +215,7 @@ _json_has() {
 		for _jw in "$@"; do
 			_jc="$_jc$_jw"
 		done
-	done <"$_jf" 2>/dev/null
+	done 2>/dev/null <"$_jf"
 	[ "$_jg" = 1 ] || set +f
 	case "$_jc" in
 		*"\"$_jk\":$_jv"*) return 0 ;;
@@ -334,7 +343,7 @@ if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
 		_fastcache="$_project_root/.claude/.guard-interpreter"
 	fi
 	if [ -f "$_fastcache" ]; then
-		IFS= read -r _fastcached <"$_fastcache" 2>/dev/null
+		IFS= read -r _fastcached 2>/dev/null <"$_fastcache"
 		if [ -n "$_fastcached" ] && _looks_like_python "$_fastcached" &&
 			command -v "$_fastcached" >/dev/null 2>&1; then
 			"$_fastcached" -S "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
@@ -421,7 +430,7 @@ if [ -z "$_measured_ms" ] && [ -f "$CACHE" ]; then
 			_measured_ms=0
 		fi
 		mkdir -p "$(dirname "$COLDSTART_CACHE")" 2>/dev/null
-		printf '%s' "$_measured_ms" >"$COLDSTART_CACHE" 2>/dev/null
+		printf '%s' "$_measured_ms" 2>/dev/null >"$COLDSTART_CACHE"
 	fi
 fi
 [ -n "$_measured_ms" ] || _measured_ms=0
@@ -463,7 +472,10 @@ while [ "$_elapsed_ms" -lt "$LOCK_WAIT_BUDGET_MS" ]; do
 	if mkdir "$LOCK_DIR" 2>/dev/null; then
 		# The pid goes in alongside the timestamp so a waiter can tell a working holder
 		# from an abandoned lock directly, instead of guessing from an age threshold.
-		if { date +%s; echo "$$"; } >"$LOCK_STAMP" 2>/dev/null; then
+		# `2>/dev/null` BEFORE the target: a reclaimer tearing the directory down between
+		# our mkdir and this write would otherwise put the shell's own error on the
+		# session's console (2026-09-14, see the redirection-order note at the top).
+		if { date +%s; echo "$$"; } 2>/dev/null >"$LOCK_STAMP"; then
 			_lock_acquired=1
 		else
 			# Stamp write failed even though mkdir succeeded (2026-08-11 corp report: seen
@@ -487,9 +499,12 @@ while [ "$_elapsed_ms" -lt "$LOCK_WAIT_BUDGET_MS" ]; do
 		_stamp=""
 		_holder=""
 		_line=""
+		# The holder's EXIT trap can remove the stamp between the -f test above and this
+		# read; with `2>/dev/null` first the failed open is silent and the loop polls again,
+		# instead of the shell printing "acquired-at: No such file or directory".
 		while IFS= read -r _line || [ -n "$_line" ]; do
 			if [ -z "$_stamp" ]; then _stamp="$_line"; else _holder="$_line"; fi
-		done <"$LOCK_STAMP" 2>/dev/null
+		done 2>/dev/null <"$LOCK_STAMP"
 		_now=$(date +%s 2>/dev/null)
 		_reclaim=0
 		if [ -n "$_holder" ]; then
@@ -522,7 +537,7 @@ while [ "$_elapsed_ms" -lt "$LOCK_WAIT_BUDGET_MS" ]; do
 			_line=""
 			while IFS= read -r _line || [ -n "$_line" ]; do
 				if [ -z "$_stamp2" ]; then _stamp2="$_line"; else _holder2="$_line"; fi
-			done <"$LOCK_STAMP" 2>/dev/null
+			done 2>/dev/null <"$LOCK_STAMP"
 			if [ "$_holder2" != "$_holder" ] || [ "$_stamp2" != "$_stamp" ]; then
 				_elapsed_ms=$((_elapsed_ms + LOCK_POLL_MS))
 				continue  # someone else owns it now - poll again, do not tear it down
@@ -623,7 +638,7 @@ for interpreter in $order; do
 			# never leave the cache empty.
 			_resolved=$(command -v "$interpreter" 2>/dev/null) || _resolved=""
 			[ -n "$_resolved" ] || _resolved="$interpreter"
-			printf '%s' "$_resolved" >"$CACHE" 2>/dev/null
+			printf '%s' "$_resolved" 2>/dev/null >"$CACHE"
 			if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
 				"$interpreter" -S "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
 				exit $?

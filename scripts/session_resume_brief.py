@@ -9,14 +9,21 @@ instruction to go and re-read the disk state it now has. This hook closes that s
 (ADR-011; the natural mirror of ADR-004's capture-at-end proposal).
 
 Dormancy-exact by construction: it emits output ONLY when a pack under the project's
-`artifacts/` is live (state in_progress/blocked/closing, index sniff fallback).
-A session that never engaged the team gets zero added context, in every project the plugin
-is installed into. Fails open (exit 0, no output) on any internal error.
+engagements root (`VSIT/engagements/`, or `artifacts/` on a legacy layout) is live (state
+in_progress/blocked/closing, index sniff fallback). A session that never engaged the team gets
+zero added context, in every project the plugin is installed into. Fails open (exit 0, no
+output) on any internal error.
+
+2026-09-14 live report: the brief told a resumed session to re-read
+`artifacts/<slug>/engagement-state.json FIRST`, a path that has not existed since the VSIT
+layout became the default on 2026-08-28 - the first instruction after a compaction pointed at
+a file that was not there. The root is now taken from the layout resolver and printed as the
+project holds it, never spelled by hand.
 
 Fires on the `compact` and `resume` sources only (the apply script sets the matcher);
 `startup`/`clear` sessions are untouched. Stdout (exit 0) is added to the model's context.
 
-Wire via scripts/apply-session-brief.sh (HUMAN-run - hook/config edits are human-only,
+Wire via scripts/apply-staged.sh (HUMAN-run - hook/config edits are human-only,
 ADR-002 rec 5) into `.claude/settings.json` + `hooks/hooks.json` -> hooks.SessionStart.
 """
 
@@ -138,6 +145,15 @@ def _pack_state(pack: Path) -> dict | None:
     return None
 
 
+def workspace_root_label(artifacts: Path, project_root: Path) -> str:
+    """The engagements root as the project holds it: `VSIT/engagements` on the new layout,
+    `artifacts` on a legacy one, the absolute path when it is neither (2026-09-14)."""
+    try:
+        return artifacts.resolve().relative_to(project_root.resolve()).as_posix()
+    except (ValueError, OSError):
+        return artifacts.as_posix()
+
+
 def main() -> int:
     _force_utf8_output()
     try:
@@ -176,7 +192,8 @@ def main() -> int:
         name, state = next((r for r in live if r[0] == active), live[0])
         status = state.get("status")
         phase = state.get("phase") or "?"
-        where = "artifacts/" if name == "(flat)" else f"artifacts/{name}/"
+        root_label = workspace_root_label(artifacts, root)
+        where = f"{root_label}/" if name == "(flat)" else f"{root_label}/{name}/"
         others = ", ".join(f"{n} {_MARKS.get(s.get('status'), '')}" for n, s in live if n != name)
         lines = [
             "<engagement-resume-brief>",
