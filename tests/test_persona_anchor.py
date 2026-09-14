@@ -164,3 +164,46 @@ def test_load_checker_does_not_grow_sys_path_on_repeat_calls(tmp_path, monkeypat
         "a second call with the same project_root grew sys.path again - the dedup "
         "check did not hold"
     )
+
+
+# ---- 2026-09-14 live report: the anchor named artifacts/<slug>/, a folder that no longer exists
+
+
+def _load_staged_anchor():
+    import importlib.util
+
+    from _staging import staged_or_live
+
+    path = staged_or_live("persona_anchor.py")
+    spec = importlib.util.spec_from_file_location("persona_anchor_staged", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_workspace_root_label_follows_the_layout(tmp_path):
+    mod = _load_staged_anchor()
+    assert (
+        mod.workspace_root_label(tmp_path / "VSIT" / "engagements", tmp_path) == "VSIT/engagements"
+    )
+    assert mod.workspace_root_label(tmp_path / "artifacts", tmp_path) == "artifacts"
+    other = Path("/somewhere/else/engagements")
+    assert mod.workspace_root_label(other, tmp_path) == other.as_posix()
+
+
+def test_the_anchor_names_the_vsit_workspace_on_a_vsit_project(tmp_path, monkeypatch, capsys):
+    mod = _load_staged_anchor()
+    eng = tmp_path / "VSIT" / "engagements"
+    (eng / "alpha").mkdir(parents=True)
+    (eng / "alpha" / "engagement-state.json").write_text(
+        json.dumps({"schema": 2, "status": "in_progress"}), encoding="utf-8"
+    )
+    (eng / ".team-session.json").write_text(json.dumps({"session": _SID}), encoding="utf-8")
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        "sys.stdin", io.StringIO(json.dumps({"cwd": str(tmp_path), "session_id": _SID}))
+    )
+    assert mod.main() == 0
+    out = capsys.readouterr().out
+    assert "VSIT/engagements/<slug>/" in out
+    assert "artifacts/<slug>/" not in out

@@ -208,3 +208,18 @@ def test_a_live_engagement_resume_does_not_arm_a_session_that_was_never_engaged(
     rc, out = _run(monkeypatch, capsys, {"source": "resume", "session_id": "stranger-1"}, tmp_path)
     assert rc == 0 and "engagement-resume-brief" in out
     assert not (tmp_path / "artifacts" / ".team-session.json").exists()
+
+
+def test_the_brief_names_the_vsit_workspace_not_a_legacy_folder(tmp_path, monkeypatch, capsys):
+    """2026-09-14 live report: a compacted session was told to re-read
+    `artifacts/VRTSRV-13/engagement-state.json FIRST`; the workspace has lived under
+    VSIT/engagements/ since 2026-08-28 and artifacts/ did not exist."""
+    eng = tmp_path / "VSIT" / "engagements"
+    (eng / "vrtsrv-13").mkdir(parents=True)
+    (eng / "vrtsrv-13" / "engagement-state.json").write_text(
+        json.dumps({"schema": 2, "status": "in_progress", "phase": "delivery"}), encoding="utf-8"
+    )
+    rc, out = _run(monkeypatch, capsys, {"source": "compact", "cwd": str(tmp_path)}, tmp_path)
+    assert rc == 0
+    assert "VSIT/engagements/vrtsrv-13/engagement-state.json FIRST" in out
+    assert "artifacts/" not in out
