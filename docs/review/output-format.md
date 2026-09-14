@@ -90,10 +90,35 @@ the terminal only ever sees the scoreboard.)
 > report + `.html`). This is what makes format drift impossible - the model supplies field *values*,
 > the renderer owns the *format*. Do not hand-author a findings report when a pack can be produced.
 
+### Rendered section order (what `render_findings` emits)
+
+Title + provenance banner → Contents (`[TOC]`) → **Executive summary** → **Scoreboard** →
+**Findings at a glance** → Method (if any) → 🔬 Tooling coverage (if any) → **Findings**
+(worst-first detail) → 🔵 Developer guidance → Limitations & residual risk → Disposition tally.
+The two scannability sections below sit before the detail so a reader sees the whole shape and
+the priority first, the way GitHub code scanning, SonarQube and a security-report summary table
+all lead with a per-finding list.
+
+- **Scoreboard.** The per-severity counts, then - when the pack carries them - a prominent
+  **`Found N · Reported R · Filtered F`** transparency line and the free-text **scoring &
+  filtering** note (who scored, and *why* each filtered item was set aside). The numbers come
+  from the pack's explicit `found`/`reported`/`filtered` integers, or are recovered from the
+  standardised `scoring` line when only that is present. A pack that never scored shows neither.
+- **Findings at a glance.** A **fix-first** line (the still-open Critical/Warning findings in
+  remediation-priority order - highest severity then highest confidence, since worst-first by
+  severity answers *how bad*, not *what to fix first*), then a one-row-per-finding index table
+  (id linking to the full entry · severity chip · title · location · confidence · disposition,
+  plus **Tags** and **Fix effort** columns only when some finding supplies them), then a
+  severity/basis/disposition **legend**. Skipped entirely on an empty pack.
+
 Every reported finding carries: `file:line`, a **confidence** score (`docs/code-review-method.md`),
 the **standard/tool** cited, an **evidence basis** (📊 measured / 🧠 inferred - never conflate),
 a plain-language **Problem** explanation, a one-line **Impact if unaddressed**, and a concrete
-**`diff`-style fix + "why this works."**
+**`diff`-style fix + "why this works."** Two **optional** per-finding fields render only when the
+pack supplies them, never fabricated: **`tags`** (machine-filterable taxonomy - `CWE-89`,
+`OWASP A03:2021`, a rule id - shown as a Tags line and column; the cited `standard` stays the
+authoritative reference) and **`effort`** (a fix-size / remediation-effort estimate such as `S` /
+`M` / `~15 min`, shown on the disposition line and in the table).
 
 > **Every finding uses these five named fields - the same five, in this order, each on its own
 > line, every finding. Print the field _names_, not C-words:**

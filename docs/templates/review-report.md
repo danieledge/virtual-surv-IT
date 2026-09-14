@@ -45,6 +45,10 @@ anything) must change first.
 
 **Found N · Reported R · Filtered F** (depth: quick / deep · mode: change / audit)
 
+> The **rendered** report (`render_findings`) leads the Findings with a **Findings at a glance**
+> index - a fix-first order (open Critical/Warning by severity then confidence) and a one-row-per-
+> finding table linking to each entry - before the detail below. See `docs/review/output-format.md`.
+
 ## 2. Findings
 Confidence score per `docs/code-review-method.md` (Critical 95-100, Warning 80-94, Medium
 70-79 - deep only). **Each finding carries a plain-language Problem explanation, a one-line

@@ -206,3 +206,11 @@ Found N issues · Reported R · Filtered F
 
 This counts table and the per-finding confidence score go into the Review Report
 (`docs/templates/review-report.md`).
+
+**In the rendered report** (`render_findings`), the `Found N · Reported R · Filtered F`
+numbers are surfaced as a prominent transparency line right under the Scoreboard, followed by
+the `scoring` provenance (who scored, and why each filtered item was set aside), and the
+**Findings at a glance** section leads with a **fix-first** order - the still-open
+Critical/Warning findings by severity then confidence, so *how bad* (worst-first severity) and
+*what to fix first* (remediation priority) are shown as the distinct axes they are.
+Format detail: `docs/review/output-format.md`.
