@@ -9,6 +9,7 @@ covered on a fast Linux runner with no slow environment anywhere near it.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -16,7 +17,10 @@ import pytest
 
 from scripts import hook_latency_probe as hlp
 
-INTERP = "/usr/bin/python3"
+# The interpreter the fake box "runs" and the one written into the fake interpreter cache: the
+# probe checks that a cached absolute path exists, so it has to be a real file on every CI leg
+# (Windows included; a fixed /usr/bin/python3 read as "does not resolve" there).
+INTERP = sys.executable
 SH = "/bin/sh"
 
 

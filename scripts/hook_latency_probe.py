@@ -432,7 +432,7 @@ def _is_git_bash(sh_path: Optional[str], probe_output: str) -> Optional[bool]:
     text = probe_output.upper()
     if "MINGW" in text or "MSYS" in text:
         return True
-    return False if sys.platform != "win32" else None
+    return False
 
 
 def gather_environment(
