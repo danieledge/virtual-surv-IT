@@ -7620,9 +7620,12 @@ def test_diagnostics_menu_lists_hook_timing_above_the_prototype_divider():
 
     source = Path(ih.__file__).read_text(encoding="utf-8")
     label_at = source.index('("5", "Hook timing (why are Bash/Read calls slow?)")')
+    # Option 7 joined the user-facing rows on 2026-09-14 (it now runs against the real
+    # project and captures the daemon's death); key 7 is unchanged, only its row moved.
+    daemon_start_at = source.index('("7", "Why won\'t the guard daemon start (in this project')
     divider_at = source.index('("", "-- internal / prototype diagnostics --")')
     daemon_row_at = source.index('("6", "Guard daemon prototype test')
-    assert label_at < divider_at < daemon_row_at
+    assert label_at < daemon_start_at < divider_at < daemon_row_at
     assert ih._DIAGNOSTICS_ACTIONS["5"] == "hooklatency"
     assert ih._DIAGNOSTICS_ACTIONS["6"] == "adr014smoke"
     assert ih._DIAGNOSTICS_ACTIONS["7"] == "daemonstart"
@@ -7837,6 +7840,8 @@ def test_run_daemon_start_diagnostic_full_success_against_a_real_stub_daemon(
     monkeypatch.chdir(tmp_path)  # the debug bundle writes to Path.cwd() - keep it in tmp_path
     scripts_dir = tmp_path / "scripts"
     scripts_dir.mkdir()
+    # Check C verifies the module root carries the dispatcher the daemon imports.
+    (scripts_dir / "bash_hook_dispatcher.py").write_text("", encoding="utf-8")
     stub = scripts_dir / "guard_daemon.py"
     stub.write_text(
         "import json, socket, sys, threading, time\n"
@@ -7859,17 +7864,302 @@ def test_run_daemon_start_diagnostic_full_success_against_a_real_stub_daemon(
         "    conn.close()\n"
         "t = threading.Thread(target=serve, daemon=True)\n"
         "t.start()\n"
-        "time.sleep(3)\n",
+        # Long enough to outlive Check C's persist wait; the diagnostic kills the scratch
+        # daemon itself once it has seen it survive (2026-09-14).
+        "time.sleep(20)\n",
         encoding="utf-8",
     )
 
-    rc = ih.run_daemon_start_diagnostic(ih.Style(False), ih.marks(), repo_hint=str(tmp_path))
+    rc = ih.run_daemon_start_diagnostic(
+        ih.Style(False), ih.marks(), repo_hint=str(tmp_path), persist_seconds=1.0
+    )
     out = capsys.readouterr().out
     assert rc == 0
     assert "foreground daemon spawn: port file appeared" in out
     assert "foreground daemon responds" in out
     assert "'exit_code': 0" in out
     assert "detached daemon spawn: port file appeared" in out
+    # Check C ran against the real project (cwd = tmp_path), reached the scratch daemon and
+    # saw it persist; the scratch state was removed afterwards.
+    assert "Check C" in out
+    assert "verdict: persisted" in out
+    assert not list((tmp_path / ".claude").glob(".daemon-diag-*"))
+
+
+# --- option 7, Check C: the REAL project and the captured detached death (2026-09-14) ---
+
+
+class _FakeDaemonProcess:
+    """What Popen hands back, scripted: writes (or not) the port file at spawn, writes text to
+    the captured stderr, and dies after `dies_after` polls (None = stays alive)."""
+
+    def __init__(self, argv, kwargs, port_text, stderr_text, dies_after, exit_code=1):
+        self.pid = 4242
+        self.returncode = None
+        self.killed = False
+        self._polls = 0
+        self._dies_after = dies_after
+        self._exit_code = exit_code
+        state_root = Path(argv[3])
+        if port_text is not None:
+            (state_root / ".claude").mkdir(parents=True, exist_ok=True)
+            (state_root / ".claude" / ".guard-daemon-port").write_text(port_text, encoding="utf-8")
+        if stderr_text:
+            kwargs["stderr"].write(stderr_text)
+            kwargs["stderr"].flush()
+
+    def poll(self):
+        if self.returncode is not None:
+            return self.returncode
+        self._polls += 1
+        if self._dies_after is not None and self._polls > self._dies_after:
+            self.returncode = self._exit_code
+        return self.returncode
+
+    def kill(self):
+        self.killed = True
+        self.returncode = -9
+
+    def terminate(self):
+        self.kill()
+
+    def wait(self, timeout=None):
+        return self.returncode
+
+
+def _check_c_repo(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    _make_fake_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "guard_daemon.py").write_text("", encoding="utf-8")
+    (tmp_path / "scripts" / "bash_hook_dispatcher.py").write_text("", encoding="utf-8")
+    (tmp_path / ".claude").mkdir()
+    return ih
+
+
+def _run_check_c(ih, tmp_path, capsys, port_text, stderr_text, dies_after, raise_oserror=None):
+    spawned = []
+
+    def fake_popen(argv, **kwargs):
+        if raise_oserror is not None:
+            raise raise_oserror
+        proc = _FakeDaemonProcess(argv, kwargs, port_text, stderr_text, dies_after)
+        spawned.append((argv, kwargs, proc))
+        return proc
+
+    ih.subprocess.Popen = fake_popen  # restored by monkeypatch in the caller
+    rows = []
+
+    def record(label, status, detail):
+        rows.append((label, status, detail))
+        print(f"  [{status}] {label}: {detail}")
+
+    verdict = ih._daemon_real_project_check(
+        ih.Style(False),
+        record,
+        tmp_path,
+        tmp_path,
+        tmp_path / "scripts" / "guard_daemon.py",
+        persist_seconds=0.05,
+        port_wait_seconds=0.3,
+    )
+    return verdict, rows, spawned, capsys.readouterr().out
+
+
+def test_check_c_persisted_daemon_is_fine_and_scratch_is_removed(tmp_path, monkeypatch, capsys):
+    ih = _check_c_repo(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        ih, "_daemon_answers", lambda client, root, payload: (True, "answered on port 1")
+    )
+    monkeypatch.setattr(ih.subprocess, "Popen", None)
+    verdict, rows, spawned, out = _run_check_c(ih, tmp_path, capsys, "1\ntok\n", "", None)
+    assert verdict["kind"] == "persisted" and verdict["status"] == "OK"
+    assert "option 5" in verdict["fix"]
+    argv, kwargs, proc = spawned[0]
+    # production's argv shape and flags, stderr captured to a file instead of DEVNULL
+    assert argv[0] == ih.sys.executable and argv[1].endswith("guard_daemon.py")
+    assert argv[2] == str(tmp_path) and argv[3].startswith(
+        str(tmp_path / ".claude" / ".daemon-diag-")
+    )
+    assert kwargs["stdin"] is ih.subprocess.DEVNULL
+    assert kwargs["stderr"] is not ih.subprocess.DEVNULL and kwargs["stderr"] is kwargs["stdout"]
+    assert kwargs.get("start_new_session") is True or "creationflags" in kwargs
+    assert proc.killed  # the scratch daemon is not left running
+    assert not list((tmp_path / ".claude").glob(".daemon-diag-*"))
+    statuses = dict((label, status) for label, status, _d in rows)
+    assert statuses["port file appeared"] == "OK"
+    assert statuses["process still alive after 0s"] == "OK"
+    assert statuses["verdict: persisted"] == "OK"
+    assert statuses["CLAUDE_PROJECT_DIR"] == "WARN"  # unset: the '.'-as-cwd hazard is named
+    assert "hook's own cwd" in out
+
+
+def test_check_c_vanished_daemon_reports_its_last_words(tmp_path, monkeypatch, capsys):
+    ih = _check_c_repo(tmp_path, monkeypatch)
+    monkeypatch.setattr(ih, "_daemon_answers", lambda client, root, payload: (True, "answered"))
+    monkeypatch.setattr(ih.subprocess, "Popen", None)
+    verdict, rows, spawned, out = _run_check_c(
+        ih,
+        tmp_path,
+        capsys,
+        "1\ntok\n",
+        "Traceback (most recent call last):\n  File x\nKilled by policy\n",
+        1,
+    )
+    assert verdict["kind"] == "vanished" and verdict["status"] == "ERROR"
+    assert "Killed by policy" in verdict["headline"]
+    assert "costs MORE than none" in verdict["fix"]
+    assert "AV exclusion" in verdict["fix"] and '"guard_daemon": false' in verdict["fix"]
+    assert "Killed by policy" in out  # the captured stderr is printed, not swallowed
+    statuses = dict((label, status) for label, status, _d in rows)
+    assert statuses["process still alive after 0s"] == "ERROR"
+    assert statuses["captured stderr"] == "ERROR"
+
+
+def test_check_c_never_started_shows_the_captured_error(tmp_path, monkeypatch, capsys):
+    ih = _check_c_repo(tmp_path, monkeypatch)
+    monkeypatch.setattr(ih.subprocess, "Popen", None)
+    verdict, rows, spawned, out = _run_check_c(
+        ih, tmp_path, capsys, None, "PermissionError: [Errno 13] Permission denied: '.claude'\n", 0
+    )
+    assert verdict["kind"] == "never-started"
+    assert "Permission denied" in verdict["headline"]
+    assert "not writable" in verdict["fix"]
+    assert "Permission denied" in out
+
+
+def test_check_c_spawn_failure_is_surfaced(tmp_path, monkeypatch, capsys):
+    ih = _check_c_repo(tmp_path, monkeypatch)
+    monkeypatch.setattr(ih.subprocess, "Popen", None)
+    verdict, rows, spawned, out = _run_check_c(
+        ih, tmp_path, capsys, None, "", None, raise_oserror=OSError(5, "Access is denied")
+    )
+    assert verdict["kind"] == "spawn-failed"
+    assert "Access is denied" in verdict["headline"]
+    assert "swallows this exception" in verdict["fix"]
+    assert not list((tmp_path / ".claude").glob(".daemon-diag-*"))
+
+
+def test_check_c_port_file_the_client_cannot_read_is_a_mismatch(tmp_path, monkeypatch, capsys):
+    ih = _check_c_repo(tmp_path, monkeypatch)
+    monkeypatch.setattr(ih.subprocess, "Popen", None)
+    # a port file the inline reader cannot parse stands for one the client will not accept
+    verdict, rows, spawned, out = _run_check_c(ih, tmp_path, capsys, "not-a-port\n", "", None)
+    assert verdict["kind"] == "mismatch" and verdict["status"] == "ERROR"
+    assert "cannot read it back" in verdict["headline"]
+    assert "owner" in verdict["fix"]
+
+
+def test_check_c_names_crossed_roots_and_the_backoff_marker(tmp_path, monkeypatch, capsys):
+    ih = _check_c_repo(tmp_path, monkeypatch)
+    other = tmp_path / "elsewhere"
+    other.mkdir()
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(other))
+    plugin = tmp_path / "plugin-cache"
+    plugin.mkdir()  # no scripts/ inside: the misresolved plugin root
+    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(plugin))
+    (tmp_path / ".claude" / ".guard-daemon-start-backoff").write_text("3", encoding="utf-8")
+    monkeypatch.setattr(ih, "_daemon_answers", lambda client, root, payload: (True, "answered"))
+    monkeypatch.setattr(ih.subprocess, "Popen", None)
+    verdict, rows, spawned, out = _run_check_c(ih, tmp_path, capsys, "1\ntok\n", "", None)
+    by_label = {label: (status, detail) for label, status, detail in rows}
+    assert by_label["CLAUDE_PROJECT_DIR"][0] == "WARN"
+    assert (
+        str(other) in by_label["CLAUDE_PROJECT_DIR"][1]
+        and str(tmp_path) in by_label["CLAUDE_PROJECT_DIR"][1]
+    )
+    assert by_label["CLAUDE_PLUGIN_ROOT"][0] == "ERROR"
+    assert "root mismatch" in by_label["CLAUDE_PLUGIN_ROOT"][1]
+    assert by_label["daemon start back-off marker"][0] == "WARN"
+    assert "streak 3" in by_label["daemon start back-off marker"][1]
+
+
+@pytest.mark.parametrize(
+    "spawn_error, port, alive, code, err, read_ok, kind, fix_hint",
+    [
+        (OSError("boom"), False, False, None, "", False, "spawn-failed", "swallows"),
+        (None, True, True, None, "", True, "persisted", "option 5"),
+        (None, True, True, None, "", False, "mismatch", "owner"),
+        (None, True, False, 1, "", False, "vanished", "costs MORE than none"),
+        (None, False, False, 1, "", False, "vanished", "job-object"),
+        (None, False, False, 1, "OSError: [WinError 10013] bind", False, "never-started", "bind"),
+        (
+            None,
+            False,
+            False,
+            1,
+            "ModuleNotFoundError: No module named 'scripts'",
+            False,
+            "never-started",
+            "root-mismatch",
+        ),
+        (
+            None,
+            False,
+            False,
+            1,
+            "RuntimeError: something else",
+            False,
+            "never-started",
+            "captured stderr",
+        ),
+        (None, False, False, None, "", False, "never-started", "longer wait"),
+    ],
+)
+def test_classify_daemon_persistence(spawn_error, port, alive, code, err, read_ok, kind, fix_hint):
+    import install_helper as ih
+
+    verdict = ih._classify_daemon_persistence(spawn_error, port, alive, code, err, read_ok, 5.0)
+    assert verdict["kind"] == kind
+    assert verdict["status"] == ("OK" if kind == "persisted" else "ERROR")
+    assert fix_hint in verdict["fix"]
+
+
+def test_path_zone_facts_flag_network_and_onedrive(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    monkeypatch.delenv("OneDrive", raising=False)
+    monkeypatch.delenv("OneDriveCommercial", raising=False)
+    monkeypatch.delenv("OneDriveConsumer", raising=False)
+    local = {label: status for label, status, _d in ih._path_zone_facts(tmp_path)}
+    assert local["project path zone"] == "OK"
+    assert local["OneDrive-synced folder"] == "OK"
+    unc = {
+        label: (status, d)
+        for label, status, d in ih._path_zone_facts(Path("//corp-share/team/project"))
+    }
+    assert unc["project path zone"][0] == "WARN" and "UNC" in unc["project path zone"][1]
+    monkeypatch.setenv("OneDrive", str(tmp_path))
+    synced = {label: status for label, status, _d in ih._path_zone_facts(tmp_path / "proj")}
+    assert synced["OneDrive-synced folder"] == "WARN"
+    named = {
+        label: status
+        for label, status, _d in ih._path_zone_facts(Path("/home/u/OneDrive - Corp/proj"))
+    }
+    assert named["OneDrive-synced folder"] == "WARN"
+
+
+def test_claude_dir_writable_reports_missing_and_blocked(tmp_path):
+    import install_helper as ih
+
+    ok, detail = ih._claude_dir_writable(tmp_path)
+    assert ok is False and "does not exist" in detail
+    (tmp_path / ".claude").mkdir()
+    ok, detail = ih._claude_dir_writable(tmp_path)
+    assert ok is True and "accepts a new file" in detail
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        return  # root writes anywhere; the blocked case cannot be shown
+    (tmp_path / ".claude").chmod(0o500)
+    try:
+        ok, detail = ih._claude_dir_writable(tmp_path)
+    finally:
+        (tmp_path / ".claude").chmod(0o700)
+    assert ok is False and "cannot write" in detail
 
 
 # --- enable_step delegates to run_configure (2026-08-12 consolidation) ---

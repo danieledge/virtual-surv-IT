@@ -2333,12 +2333,16 @@ def choose_action(style: Style) -> str:
                     # when every Bash and Read call is slow; it reproduces the cost with the
                     # real launcher, attributes it by layer and names the fix.
                     ("5", "Hook timing (why are Bash/Read calls slow?)"),
-                    ("", "-- internal / prototype diagnostics --"),
-                    ("6", "Guard daemon prototype test (starts a real background process)"),
+                    # 2026-09-14 (owner): option 7 now runs against the REAL project and
+                    # captures the detached daemon's death, so it sits with the checks a
+                    # normal user needs. Key 7 is kept (stored keystrokes); only the row
+                    # moved, which is why 7 is listed before 6.
                     (
                         "7",
-                        "Why won't the guard daemon start (starts the real one)",
+                        "Why won't the guard daemon start (in this project, captures why it dies)",
                     ),
+                    ("", "-- internal / prototype diagnostics --"),
+                    ("6", "Guard daemon prototype test (starts a real background process)"),
                     ("b", "Back"),
                 ),
                 _DIAGNOSTICS_ACTIONS,
@@ -4925,7 +4929,9 @@ class Installer:
             "each. Takes a minute or so; always writes the full numbers to a JSON file."
         )
         if run_hook_latency_diagnostic(self.style, self.marks, self.args.repo) == 0:
-            self.step_ok("Hook latency diagnostic", "measured - see the verdict above and the JSON file")
+            self.step_ok(
+                "Hook latency diagnostic", "measured - see the verdict above and the JSON file"
+            )
         else:
             self.step_fail(
                 "Hook latency diagnostic",
@@ -4967,15 +4973,20 @@ class Installer:
         around run_daemon_start_diagnostic, same shape as adr014_smoke_step - keeps the
         CLI flag (--check-daemon-start) and the menu path sharing one implementation."""
         self.step_intro(
-            "Actually starts the real guard daemon (foreground AND the exact detached "
-            "spawn production uses) in a throwaway temp directory, and reports exactly "
-            "what happens - built because a failed detached spawn is silent by design "
-            "in production (must never brick a hook call), which makes 'why isn't the "
-            "daemon starting' otherwise impossible to debug from the outside."
+            "Starts the real guard daemon three ways and reports exactly what happens: "
+            "foreground and detached in a temp directory (does the code work), then in THIS "
+            "project with production's own detached spawn and its stderr captured instead of "
+            "discarded - is the .claude directory writable, is it on a network or OneDrive "
+            "path, do the roots match, does the daemon still exist a few seconds later, and "
+            "if not, what did it say. Built because a daemon that dies in the background is "
+            "silent by design in production, and a daemon that never persists costs more than "
+            "none: every hook call pays a spawn attempt plus the cold-start fallback."
         )
         rc = run_daemon_start_diagnostic(self.style, self.marks, self.args.repo)
         if rc == 0:
-            self.step_ok("Guard daemon start diagnostic", "both checks passed - see output above")
+            self.step_ok(
+                "Guard daemon start diagnostic", "all checks passed - see the verdict above"
+            )
         else:
             self.step_fail(
                 "Guard daemon start diagnostic",
@@ -9369,7 +9380,9 @@ def run_hook_latency_diagnostic(
     ts = datetime.now().strftime("%Y%m%dT%H%M%S")
     json_path = Path.cwd() / f"virt-surv-hook-latency-{ts}.json"
     print(style.bold("Hook timing: where do the seconds go on every hook call?"))
-    print(style.dim(f"  Running {probe.relative_to(repo_root)} against {repo_root}; a minute or so."))
+    print(
+        style.dim(f"  Running {probe.relative_to(repo_root)} against {repo_root}; a minute or so.")
+    )
     print("")
     try:
         proc = subprocess.run(  # nosec B603 - fixed argv, the team's own probe
@@ -9392,7 +9405,11 @@ def run_hook_latency_diagnostic(
         return 1
     print("")
     if proc.returncode == 0:
-        print(style.dim(f"Full numbers (every sample and the verdict) in: {json_path} - hand this back whole."))
+        print(
+            style.dim(
+                f"Full numbers (every sample and the verdict) in: {json_path} - hand this back whole."
+            )
+        )
     return 0 if proc.returncode == 0 else 1
 
 
@@ -11017,13 +11034,562 @@ def _report_extensions_contents(path: Path, style: Style, mark_map: dict) -> Non
         print(style.yellow(f"  {mark_map.get('warn') or '!'} {problem}"))
 
 
+# ------------------------------------------------------------------ guard daemon: the REAL project
+#
+# 2026-09-14 (owner's corporate Windows box): the daemon was unreachable in every real session
+# while Diagnostics option 7 reported every check PASS. The two checks above run in a throwaway
+# temp directory on purpose, so they never met the real project's .claude directory, its
+# permissions, a network or OneDrive-backed path, the session's plugin and project roots, or
+# the endpoint security that was killing the detached process. And production's spawn
+# (guard_daemon_client._start_daemon_detached) points the child's stderr at DEVNULL, so a real
+# detached death leaves nothing behind. Check C below runs against the real project, in a
+# scratch directory UNDER its .claude (same drive, same permissions, same AV posture; the
+# live port file is never touched), mirrors the production Popen but captures stderr to a
+# log, waits, and says whether the process is still there - and if not, prints what it said
+# before it died.
+
+_DAEMON_DIAG_SCRATCH_PREFIX = ".daemon-diag-"
+
+
+def _path_zone_facts(path: Path) -> list:
+    """Where a project lives, as far as file locking and endpoint security care: a UNC or
+    mapped network drive, a OneDrive-synced folder, a substituted or junctioned path. Each
+    returns (label, status, detail); WARN means "a reason the daemon's files can misbehave
+    here", never proof on its own."""
+    facts = []
+    text = str(path)
+    lowered = text.lower()
+    if text.startswith("\\\\") or text.startswith("//"):
+        facts.append(("project path zone", "WARN", f"UNC network path: {text}"))
+    elif sys.platform == "win32":
+        drive = os.path.splitdrive(text)[0]
+        kind = None
+        try:
+            import ctypes
+
+            kind = ctypes.windll.kernel32.GetDriveTypeW(ctypes.c_wchar_p(drive + "\\"))  # type: ignore[attr-defined]
+        except Exception:  # noqa: BLE001 - a drive we cannot classify is reported as such
+            kind = None
+        names = {
+            2: "removable",
+            3: "local fixed disk",
+            4: "network drive",
+            5: "optical",
+            6: "RAM disk",
+        }
+        if kind == 4:
+            facts.append(
+                ("project path zone", "WARN", f"{drive} is a mapped network drive ({text})")
+            )
+        elif kind is not None:
+            facts.append(
+                ("project path zone", "OK", f"{drive} is a {names.get(kind, f'drive type {kind}')}")
+            )
+        else:
+            facts.append(
+                ("project path zone", "OK", f"local path (drive type not readable): {text}")
+            )
+    else:
+        facts.append(("project path zone", "OK", f"local path: {text}"))
+    onedrive_roots = [
+        os.environ.get(k) for k in ("OneDrive", "OneDriveCommercial", "OneDriveConsumer")
+    ]
+    onedrive_roots = [r.lower() for r in onedrive_roots if r]
+    if "onedrive" in lowered or any(lowered.startswith(r) for r in onedrive_roots):
+        facts.append(
+            (
+                "OneDrive-synced folder",
+                "WARN",
+                f"{text} - the sync client and its on-demand hydration take file locks and rescan every "
+                "write; the daemon's port file and the interpreter cache sit right in that path (inferred from the name)",
+            )
+        )
+    else:
+        facts.append(
+            ("OneDrive-synced folder", "OK", "no OneDrive marker in the path or its environment")
+        )
+    try:
+        real = path.resolve()
+    except OSError:
+        real = path
+    if str(real).lower() != str(path).lower():
+        facts.append(
+            (
+                "substituted / junctioned path",
+                "WARN",
+                f"{path} resolves to {real} - a hook process and this diagnostic may name the same "
+                "directory two ways, which is the root-mismatch class run-guard.sh's comments record",
+            )
+        )
+    else:
+        facts.append(("substituted / junctioned path", "OK", "the path is its own real path"))
+    return facts
+
+
+def _claude_dir_writable(project_root: Path) -> tuple:
+    """Can the real .claude directory take a new file? The daemon has to write its port file
+    there and the launcher its interpreter cache. Returns (ok, detail)."""
+    claude_dir = project_root / ".claude"
+    if not claude_dir.is_dir():
+        return (
+            False,
+            f"{claude_dir} does not exist - the daemon creates it, so a create failure would show as the spawn's error",
+        )
+    probe = claude_dir / f".daemon-diag-write-probe-{os.getpid()}"
+    try:
+        probe.write_text("probe\n", encoding="utf-8")
+        probe.unlink()
+    except OSError as exc:
+        return False, f"cannot write into {claude_dir}: {type(exc).__name__}: {exc}"
+    return True, f"{claude_dir} accepts a new file"
+
+
+def _classify_daemon_persistence(
+    spawn_error,
+    port_appeared: bool,
+    alive_after_wait: bool,
+    exit_code,
+    stderr_text: str,
+    client_read_ok: bool,
+    persist_seconds: float,
+) -> dict:
+    """The verdict for Check C, from what happened: kind, status, headline and the fix.
+    Pure, so every branch is tested without a spawn."""
+    err = (stderr_text or "").strip()
+    tail = err.splitlines()[-1] if err else ""
+    lower = err.lower()
+    if spawn_error is not None:
+        return {
+            "kind": "spawn-failed",
+            "status": "ERROR",
+            "headline": f"the detached spawn itself failed: {type(spawn_error).__name__}: {spawn_error}",
+            "fix": (
+                "Production swallows this exception, so every hook call retries the spawn and falls back to a "
+                "cold start. Fix what the error names (an interpreter that cannot be executed, a creation flag "
+                'this host rejects, a directory it cannot read) or set "guard_daemon": false in '
+                ".claude/team-preferences.json until it is fixed."
+            ),
+        }
+    if port_appeared and alive_after_wait and client_read_ok:
+        return {
+            "kind": "persisted",
+            "status": "OK",
+            "headline": f"the daemon started, wrote its port file where the client reads it, answered, and was still running after {persist_seconds:.0f}s",
+            "fix": (
+                "The daemon is fine in this project. If real sessions still find it unreachable, the difference is "
+                "the session's own environment (CLAUDE_PROJECT_DIR, the hook's cwd, the plugin root) - see the root "
+                "checks above - and the time is going elsewhere: run Diagnostics option 5 (hook timing)."
+            ),
+        }
+    if port_appeared and alive_after_wait and not client_read_ok:
+        return {
+            "kind": "mismatch",
+            "status": "ERROR",
+            "headline": "the daemon is running and wrote a port file, but the client cannot read it back from the same root",
+            "fix": (
+                "A port file the client will not read is a daemon nobody reaches: every call spawns another and "
+                "falls back to a cold start. Check the file's owner (the client ignores a port file owned by another "
+                "account), its permissions, and that the client's project root names the same directory."
+            ),
+        }
+    if (
+        (port_appeared or exit_code is not None)
+        and not alive_after_wait
+        and (port_appeared or not err)
+    ):
+        detail = f" Its last words: {tail}" if tail else " It left nothing on stderr."
+        return {
+            "kind": "vanished",
+            "status": "ERROR",
+            "headline": (
+                f"the daemon started{' and wrote its port file' if port_appeared else ''}, then was gone within "
+                f"{persist_seconds:.0f}s (exit code {exit_code})." + detail
+            ),
+            "fix": (
+                "Something ends the backgrounded process: endpoint security acting on a detached, windowless "
+                "Python that opens a listening socket, or a Windows job-object teardown when the parent goes. "
+                "Fix: an AV exclusion for the interpreter directory and the project (Advanced menu #9 covers Git; "
+                'extend it), or run with the daemon disabled ("guard_daemon": false). Plainly: a daemon that '
+                "never persists costs MORE than none, because every hook call then pays a spawn attempt plus the "
+                "cold-start fallback."
+            ),
+        }
+    # never started: no port file, and it is gone (or never came up) with an error to show
+    if "permission" in lower or "errno 13" in lower or "winerror 5" in lower:
+        fix = "Permission denied while starting: the project's .claude directory (or the interpreter) is not writable or executable by this account. See the writable check above."
+    elif "address" in lower or "bind" in lower or "10013" in lower or "10048" in lower:
+        fix = "The daemon could not bind a loopback port. A firewall or endpoint policy is refusing a listening socket on 127.0.0.1 for this interpreter; an exception for it, or the daemon disabled."
+    elif (
+        "no module named" in lower
+        or "modulenotfounderror" in lower
+        or "cannot open file" in lower
+        or "no such file" in lower
+    ):
+        fix = "The module root has no scripts/ package: the plugin root and the project root are crossed (the root-mismatch class run-guard.sh records). See the root checks above for which path is wrong."
+    elif err:
+        fix = "Read the captured stderr above; the daemon says why it stopped. Production never shows this line."
+    else:
+        fix = "No port file and no error output within the wait. If the process is still running it may be slow to bind (a scanned first spawn); rerun with a longer wait, and check the AV context below."
+    return {
+        "kind": "never-started",
+        "status": "ERROR",
+        "headline": (
+            "the daemon never wrote its port file"
+            + (
+                f" (exit code {exit_code})"
+                if exit_code is not None
+                else " (still running, not yet bound)"
+            )
+            + (f". Captured stderr: {tail}" if tail else "")
+        ),
+        "fix": fix,
+    }
+
+
+def _load_daemon_client_module(repo_root: Path):
+    """The real guard_daemon_client.py from this clone, by file path, or None."""
+    import importlib.util
+
+    path = repo_root / "scripts" / "guard_daemon_client.py"
+    if not path.is_file():
+        return None
+    try:
+        spec = importlib.util.spec_from_file_location("_vsit_daemon_client_diag", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)  # type: ignore[union-attr]
+        return module
+    except Exception:  # noqa: BLE001 - reported as "client not importable", not a crash
+        return None
+
+
+def _daemon_answers(client, state_root: Path, payload_text: str) -> tuple:
+    """(answered, detail): ask the daemon named by state_root's port file exactly as a
+    client would. The real client module when present; an inline reader otherwise."""
+    import socket
+
+    if client is not None:
+        try:
+            port, token = client.read_port_and_token(str(state_root))
+        except Exception as exc:  # noqa: BLE001
+            return False, f"client.read_port_and_token raised {type(exc).__name__}: {exc}"
+        if port is None:
+            return (
+                False,
+                "client.read_port_and_token returned nothing for a port file that exists (owner or format)",
+            )
+        try:
+            answer = client._try_daemon(str(state_root), "bash_hook_dispatcher", payload_text)
+        except Exception as exc:  # noqa: BLE001
+            return False, f"client._try_daemon raised {type(exc).__name__}: {exc}"
+        if answer is None:
+            return False, f"port {port} read from the file, but the connection or answer failed"
+        return True, f"answered on port {port}: exit_code={answer[0]}"
+    port_file = state_root / ".claude" / ".guard-daemon-port"
+    try:
+        lines = port_file.read_text(encoding="utf-8").splitlines()
+        port, token = int(lines[0]), lines[1]
+        with socket.create_connection(("127.0.0.1", port), timeout=2) as sock:
+            sock.settimeout(5)
+            req = (
+                json.dumps(
+                    {"token": token, "target": "bash_hook_dispatcher", "payload": payload_text}
+                )
+                + "\n"
+            )
+            sock.sendall(req.encode("utf-8"))
+            sock.shutdown(socket.SHUT_WR)
+            chunks = []
+            while True:
+                chunk = sock.recv(65536)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+        resp = json.loads(b"".join(chunks).decode("utf-8"))
+    except (OSError, ValueError, IndexError) as exc:
+        return False, f"inline read/connect failed: {type(exc).__name__}: {exc}"
+    return "exit_code" in resp, f"answered (inline protocol, client module not found): {resp}"
+
+
+def _daemon_real_project_check(
+    style: Style,
+    record,
+    repo_root: Path,
+    project_root: Path,
+    daemon_py: Path,
+    persist_seconds: float = 5.0,
+    port_wait_seconds: float = 10.0,
+) -> dict:
+    """Check C. Returns the classification dict (see _classify_daemon_persistence)."""
+    print(
+        style.dim(
+            "\n  Check C - the REAL project (scratch state under its .claude, live port file untouched):"
+        )
+    )
+    record("project root", "OK", str(project_root))
+
+    # -- the real .claude directory and the zone it lives in
+    ok, detail = _claude_dir_writable(project_root)
+    claude_dir_existed = (project_root / ".claude").is_dir()
+    record(
+        ".claude writable", "OK" if ok else ("WARN" if not claude_dir_existed else "ERROR"), detail
+    )
+    for label, status, text in _path_zone_facts(project_root):
+        record(label, status, text)
+
+    # -- roots: where a hook process would read, and where the plugin's scripts are
+    env_project = os.environ.get("CLAUDE_PROJECT_DIR")
+    if not env_project:
+        record(
+            "CLAUDE_PROJECT_DIR",
+            "WARN",
+            "unset here. In a hook process run-guard.sh then uses '.', the hook's own cwd, as the "
+            f"project root: a daemon started from one cwd writes {Path('<cwd>') / '.claude' / '.guard-daemon-port'} "
+            f"and a call from another cwd reads a different file. This check used {project_root}.",
+        )
+    else:
+        env_resolved = Path(env_project).resolve()
+        if env_resolved != project_root.resolve():
+            record(
+                "CLAUDE_PROJECT_DIR",
+                "WARN",
+                f"{env_project} (resolves to {env_resolved}) differs from the project checked here ({project_root}); "
+                "a hook process reads its port file under the former",
+            )
+        else:
+            record("CLAUDE_PROJECT_DIR", "OK", env_project)
+    env_plugin = os.environ.get("CLAUDE_PLUGIN_ROOT")
+    module_root = repo_root
+    if env_plugin:
+        plugin_path = Path(env_plugin)
+        if (plugin_path / "scripts" / "bash_hook_dispatcher.py").is_file():
+            record(
+                "CLAUDE_PLUGIN_ROOT", "OK", f"{env_plugin} carries scripts/bash_hook_dispatcher.py"
+            )
+        else:
+            record(
+                "CLAUDE_PLUGIN_ROOT",
+                "ERROR",
+                f"{env_plugin} has no scripts/bash_hook_dispatcher.py - a daemon given this module root "
+                f"cannot import its targets and exits at once (root mismatch: this clone is {repo_root})",
+            )
+    if not (module_root / "scripts" / "bash_hook_dispatcher.py").is_file():
+        record("module root", "ERROR", f"{module_root} has no scripts/bash_hook_dispatcher.py")
+
+    # -- is a live daemon already answering for this project? (read-only)
+    client = _load_daemon_client_module(repo_root)
+    payload_text = json.dumps(
+        {
+            "session_id": f"daemon-diag-{os.getpid()}-{int(time.time())}",
+            "tool_name": "Read",
+            "tool_input": {"file_path": str(project_root / "README.md")},
+        }
+    )
+    live_port_file = project_root / ".claude" / ".guard-daemon-port"
+    if live_port_file.is_file():
+        answered, detail = _daemon_answers(client, project_root, payload_text)
+        record(
+            "live daemon for this project",
+            "OK" if answered else "WARN",
+            (f"{live_port_file} present and {detail}")
+            if answered
+            else f"{live_port_file} present but {detail} - a stale file from a daemon that is gone",
+        )
+    else:
+        record(
+            "live daemon for this project",
+            "WARN",
+            f"no {live_port_file} - nothing is answering hook calls here right now",
+        )
+    backoff = project_root / ".claude" / ".guard-daemon-start-backoff"
+    if backoff.is_file():
+        try:
+            streak = backoff.read_text(encoding="utf-8").strip()
+        except OSError:
+            streak = "?"
+        record(
+            "daemon start back-off marker",
+            "WARN",
+            f"{backoff} present (streak {streak}): the client has already tried and failed to start a daemon here repeatedly",
+        )
+
+    # -- the spawn: production's Popen, stderr captured, in a scratch state root under .claude
+    scratch = (
+        project_root / ".claude" / f"{_DAEMON_DIAG_SCRATCH_PREFIX}{os.getpid()}-{int(time.time())}"
+    )
+    try:
+        (scratch / ".claude").mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        record("scratch state root", "ERROR", f"cannot create {scratch}: {exc}")
+        return _classify_daemon_persistence(exc, False, False, None, "", False, persist_seconds)
+    record(
+        "scratch state root", "OK", f"{scratch} (same drive and permissions as the live .claude)"
+    )
+    port_file = scratch / ".claude" / ".guard-daemon-port"
+    log_path = scratch / "daemon-stderr.log"
+    argv = [sys.executable, str(daemon_py), str(module_root), str(scratch), "--idle-timeout", "60"]
+    kwargs = {}
+    if sys.platform == "win32":
+        kwargs["creationflags"] = (
+            subprocess.DETACHED_PROCESS
+            | subprocess.CREATE_NO_WINDOW
+            | subprocess.CREATE_BREAKAWAY_FROM_JOB
+        )
+    else:
+        kwargs["start_new_session"] = True
+    record(
+        "spawn",
+        "OK",
+        "production's detached Popen (same argv shape, same flags: "
+        + (
+            "DETACHED_PROCESS | CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB"
+            if sys.platform == "win32"
+            else "start_new_session"
+        )
+        + f") with stderr captured to {log_path.name} instead of DEVNULL; --idle-timeout 60 so the scratch daemon leaves on its own",
+    )
+    spawn_error = None
+    proc = None
+    log_handle = None
+    try:
+        log_handle = open(log_path, "w", encoding="utf-8", errors="replace")  # noqa: SIM115 - handed to Popen
+        proc = subprocess.Popen(  # nosec B603 - fixed argv, shell=False, the team's own daemon
+            argv, stdin=subprocess.DEVNULL, stdout=log_handle, stderr=log_handle, **kwargs
+        )
+    except OSError as exc:
+        spawn_error = exc
+    finally:
+        if log_handle is not None:
+            try:
+                log_handle.close()
+            except OSError:
+                pass
+
+    port_appeared = False
+    alive_after_wait = False
+    exit_code = None
+    client_read_ok = False
+    if spawn_error is None and proc is not None:
+        deadline = time.monotonic() + port_wait_seconds
+        while time.monotonic() < deadline:
+            if port_file.is_file():
+                port_appeared = True
+                break
+            if proc.poll() is not None:
+                break
+            time.sleep(0.1)
+        port_appeared = port_appeared or port_file.is_file()
+        record(
+            "port file appeared",
+            "OK" if port_appeared else "ERROR",
+            f"{port_file}"
+            if port_appeared
+            else f"not within {port_wait_seconds:.0f}s at {port_file}",
+        )
+        if port_appeared:
+            client_read_ok, detail = _daemon_answers(client, scratch, payload_text)
+            record("client reads and reaches it", "OK" if client_read_ok else "ERROR", detail)
+        # hold, then look again: a process that dies here is the invisible production failure
+        deadline = time.monotonic() + persist_seconds
+        while time.monotonic() < deadline and proc.poll() is None:
+            time.sleep(0.2)
+        exit_code = proc.poll()
+        alive_after_wait = exit_code is None
+        record(
+            f"process still alive after {persist_seconds:.0f}s",
+            "OK" if alive_after_wait else "ERROR",
+            f"pid {proc.pid} running" if alive_after_wait else f"gone, exit code {exit_code}",
+        )
+        if alive_after_wait:
+            try:
+                proc.kill()
+                proc.wait(timeout=5)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+    stderr_text = ""
+    try:
+        stderr_text = log_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        stderr_text = ""
+    if stderr_text.strip():
+        shown = "\n".join(stderr_text.strip().splitlines()[-25:])
+        record("captured stderr", "WARN" if alive_after_wait else "ERROR", "\n" + shown)
+    else:
+        record("captured stderr", "OK" if alive_after_wait else "WARN", "empty")
+
+    verdict = _classify_daemon_persistence(
+        spawn_error,
+        port_appeared,
+        alive_after_wait,
+        exit_code,
+        stderr_text,
+        client_read_ok,
+        persist_seconds,
+    )
+    record(f"verdict: {verdict['kind']}", verdict["status"], verdict["headline"])
+    print(f"    fix: {verdict['fix']}")
+
+    # -- endpoint security and interpreter cache context, from the latency probe's own readers
+    probe_mod = _import_from_scripts("hook_latency_probe")
+    if probe_mod is not None:
+        try:
+            hints = probe_mod.av_hints()
+        except Exception:  # noqa: BLE001
+            hints = []
+        record(
+            "endpoint security (inferred)",
+            "WARN" if hints else "OK",
+            "; ".join(hints)
+            if hints
+            else "no product directories or Defender values readable without admin",
+        )
+        try:
+            cache = probe_mod.interpreter_cache_path(project_root)
+            cached = cache.read_text(encoding="utf-8").strip() if cache.is_file() else None
+        except OSError:
+            cache, cached = None, None
+        record(
+            "interpreter cache",
+            "OK" if cached else "WARN",
+            f"{cache} = {cached}"
+            if cached
+            else f"absent ({cache}) - the launcher probes interpreters on every call until it can write one",
+        )
+    else:
+        record(
+            "endpoint security (inferred)",
+            "SKIP",
+            "scripts/hook_latency_probe.py not importable from this clone",
+        )
+
+    # -- cleanup: the scratch daemon is dead or killed; remove the scratch state
+    for _attempt in range(5):
+        try:
+            shutil.rmtree(scratch)
+            break
+        except OSError:
+            time.sleep(0.2)
+    if not claude_dir_existed:
+        # The scratch needed a .claude that the project did not have (a run from a directory
+        # that is not a team project); leave the directory as it was found.
+        try:
+            (project_root / ".claude").rmdir()
+        except OSError:
+            pass
+    return verdict
+
+
 def run_daemon_start_diagnostic(
-    style: Style, mark_map: dict, repo_hint: Optional[str] = None
+    style: Style,
+    mark_map: dict,
+    repo_hint: Optional[str] = None,
+    project_hint: Optional[str] = None,
+    persist_seconds: float = 5.0,
+    port_wait_seconds: float = 10.0,
 ) -> int:
-    """Standalone diagnostic (--check-daemon-start / Diagnostics menu): actually starts the
-    REAL scripts/guard_daemon.py (not the archived docs/internal/adr-014-spike prototype -
-    see adr014_smoke_step for that) in a throwaway temp directory and reports exactly what
-    happens. Two checks, deliberately separated to isolate WHERE a failure is:
+    """Standalone diagnostic (--check-daemon-start / Diagnostics menu option 7): actually
+    starts the REAL scripts/guard_daemon.py (not the archived docs/internal/adr-014-spike
+    prototype - see adr014_smoke_step for that) and reports exactly what happens. Three
+    checks, deliberately separated to isolate WHERE a failure is:
 
       A. Foreground - runs guard_daemon.py as a plain, fully-captured subprocess. Proves
          the daemon's own code works (imports, binds a port, writes the port file,
@@ -11034,13 +11600,24 @@ def run_daemon_start_diagnostic(
          flag Windows on THIS host rejects, anything about detached/job-object behaviour
          that differs from a plain foreground run) surfaces instead of silently nothing.
 
+      C. The REAL project (2026-09-14, after A and B passed on a box whose daemon was
+         unreachable in every session): the project's own .claude directory and the zone
+         it lives in (network, OneDrive, junction), the roots a hook process would use,
+         whether a daemon is answering there right now, then production's detached Popen
+         again - with stderr captured to a log instead of DEVNULL - in a scratch state root
+         UNDER the real .claude (same drive, permissions and AV posture), followed by a
+         wait and a second look: still running, or gone, and what it said before it went.
+         A ranked verdict names the cause and the fix. See _daemon_real_project_check.
+
     Kept in sync with _start_daemon_detached() by comment, not code, same trade-off this
     file already accepts elsewhere (see prewarm_guard_cache's own docstring) - this
     diagnostic must never itself become the production spawn path, only mirror it closely
     enough to catch what production's fail-open design can't show.
 
-    Runs entirely in throwaway temp directories - never touches this project's own
-    .claude/.guard-daemon-port or any real daemon that might already be running."""
+    A and B run in throwaway temp directories. C uses the real project (project_hint, else
+    CLAUDE_PROJECT_DIR, else the current directory) but never writes the live
+    .claude/.guard-daemon-port: its daemon gets a scratch subdirectory, removed afterwards,
+    and the live daemon (if any) is only asked a question."""
     import socket
 
     ok, fail = mark_map["ok"], mark_map["fail"]
@@ -11054,8 +11631,12 @@ def run_daemon_start_diagnostic(
         mark = {"OK": ok, "SKIP": style.dim("-"), "WARN": style.yellow("!")}.get(status, fail)
         print(f"  {mark} {label}: {detail}", flush=True)
 
+    project_root = Path(
+        project_hint or os.environ.get("CLAUDE_PROJECT_DIR") or Path.cwd()
+    ).resolve()
     print(style.bold("Guard daemon start diagnostic (production module, not the archived spike)"))
     print(style.dim(f"  Repo root: {repo_root}"))
+    print(style.dim(f"  Project:   {project_root}"))
 
     daemon_py = repo_root / "scripts" / "guard_daemon.py"
     if not daemon_py.is_file():
@@ -11236,13 +11817,19 @@ def run_daemon_start_diagnostic(
                     "just not spawned the detached way, so compare the two results)",
                 )
 
+    # --- Check C: the real project, production's spawn with its stderr captured ---
+    _daemon_real_project_check(
+        style, record, repo_root, project_root, daemon_py, persist_seconds, port_wait_seconds
+    )
+
     _print_diagnostic_summary(style, mark_map, rows)
 
     ts = datetime.now().strftime("%Y%m%dT%H%M%S")
     bundle_path = Path.cwd() / f"virt-surv-daemon-start-diagnostic-{ts}.txt"
     header = (
         "virt-surv-it guard daemon start diagnostic\n"
-        f"Python: {sys.version}\nPlatform: {sys.platform}\nRepo root: {repo_root}\n\n"
+        f"Python: {sys.version}\nPlatform: {sys.platform}\nRepo root: {repo_root}\n"
+        f"Project root: {project_root}\n\n"
     )
     try:
         bundle_path.write_text(header + "\n".join(bundle_lines), encoding="utf-8")
@@ -11719,12 +12306,12 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument(
         "--check-daemon-start",
         action="store_true",
-        help="standalone: starts the REAL PRODUCTION scripts/guard_daemon.py (foreground, "
-        "fully captured, AND the exact detached spawn production uses) in a throwaway "
-        "temp directory and reports exactly what happens, and exit. Built because a "
-        "failed detached spawn is silent by design in production (must never brick a "
-        "hook call) - use this when the daemon simply never starts and there's no other "
-        "clue why. Writes a debug bundle either way",
+        help="standalone: starts the REAL PRODUCTION scripts/guard_daemon.py three ways - "
+        "foreground and detached in a temp directory, then in the current project "
+        "(CLAUDE_PROJECT_DIR or cwd) with production's detached spawn and its stderr "
+        "captured - and reports whether it persisted, vanished or never started, with the "
+        "fix, and exit. Built because a detached death is silent by design in production. "
+        "Writes a debug bundle either way",
     )
     parser.add_argument(
         "--configure",
