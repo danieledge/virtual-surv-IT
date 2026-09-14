@@ -361,7 +361,10 @@ _TEAM_SCRIPT_NAMES = (
     # signatures; it executes nothing under review and writes nothing. Same reasoning as
     # tier_probe - without the entry, a plugin-mode user is asked for execution consent to
     # run a tool whose whole job is answering a question about the plugin itself.
-    r"|launch_terminal|tier_probe|audit_screens)\.py"
+    # 2026-09-14: hook_latency_probe, the "why are Bash/Read calls slow?" diagnostic
+    # (Diagnostics menu option 5). It times the team's OWN launcher and `python -c pass`;
+    # nothing under review runs. Same reasoning as tier_probe and audit_screens.
+    r"|launch_terminal|tier_probe|audit_screens|hook_latency_probe)\.py"
 )
 
 # NEVER consent-free, checked BEFORE the allow-list (2026-09-12 audit, H-2 and H-4).

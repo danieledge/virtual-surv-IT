@@ -121,12 +121,15 @@ _CHECKS = (
     # infra polarity (fail_open on a missing/broken file) - it is a cost rule,
     # not a safety wall; the module itself returns 2 to deny when armed.
     ("enumeration_redirect", _SCRIPTS_DIR / "enumeration_redirect.py", {"Bash"}, False),
-    # Exploration redirect (2026-08-26): the sibling of enumeration_redirect for the two
-    # habits that actually cost the tokens - a whole-file Read of a large file, and an
-    # unbounded content-mode Grep. Same advisory infra polarity (fail_open), same
-    # engaged-sessions-only arming, and it redirects each target ONCE so a deliberate full
-    # read still succeeds on the repeat. Prose said this already; prose did not do it.
-    ("exploration_redirect", _SCRIPTS_DIR / "exploration_redirect.py", {"Read", "Grep"}, False),
+    # Exploration redirect (2026-08-26): the sibling of enumeration_redirect for the
+    # habits that actually cost the tokens - a whole-file Read of a large file, an
+    # unbounded content-mode Grep, and (2026-09-14) a Bash whole-file read of a large file
+    # (`cat`/`less`/`more`/`Get-Content FILE`), the silent hole the Read rule left on the
+    # Bash side. Same advisory infra polarity (fail_open), same engaged-sessions-only
+    # arming, and it redirects each target ONCE so a deliberate full read still succeeds on
+    # the repeat. Prose said this already; prose did not do it. Bash joined the tool set
+    # here; the top-level matcher already carries Bash, so no matcher change is needed.
+    ("exploration_redirect", _SCRIPTS_DIR / "exploration_redirect.py", {"Read", "Grep", "Bash"}, False),
     # 2026-09-13 framework review, step 2.3: the locked-menu guard was the only reason
     # PreToolUse carried a SECOND matcher (AskUserQuestion) and a second process per menu
     # call. It runs here instead, on the same `*` matcher. Fail-open, exactly as its own

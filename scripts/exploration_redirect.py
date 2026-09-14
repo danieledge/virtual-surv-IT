@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exploration redirect - Read/Grep PreToolUse rule, ENGAGED SESSIONS ONLY (advisory tier).
+"""Exploration redirect - Read/Grep/Bash PreToolUse rule, ENGAGED SESSIONS ONLY (advisory tier).
 
 WHY THIS EXISTS AS CODE AND NOT AS PROSE (2026-08-26). The exploration rules were already
 written, and written well: `docs/team-operating-guide-orchestration.md` Exploration
@@ -19,6 +19,12 @@ WHAT IT DOES
   Read with offset/limit for a known region.
 - A content-mode Grep with no head_limit is redirected once, naming `output_mode: "count"`
   first. Two greps in that review returned 80 and 50 near-identical config lines.
+- A Bash whole-file read of a LARGE file (`cat`/`less`/`more`/`bat`/`Get-Content FILE`) with
+  no pipe, redirect or chain is redirected once, the same way a whole-file Read is. Added
+  2026-09-14 after the corporate-Windows session showed the model reaching for `cat
+  big.scala` where a `Read` would have been nudged - the Read rule had a silent hole on the
+  Bash side, exactly the gap `enumeration_redirect` already closed for `find`/`ls`. A piped
+  or redirected form (`cat f | grep`, `> out`) is already targeted and passes untouched.
 
 REDIRECTED ONCE, NOT BLOCKED. Each distinct target gets exactly one redirect per session;
 repeating the call goes straight through. Sometimes the full read IS right - that review's
@@ -37,6 +43,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shlex
 import sys
 
 # A Read above this many lines should be a deliberate act. Chosen from the live evidence:
@@ -170,6 +177,57 @@ def _line_count(path: str) -> int | None:
         return None
 
 
+# Bash verbs that print a WHOLE file to stdout by default (so, into the model's context),
+# with no built-in windowing: `cat`, the pagers `less`/`more`, `bat`, and PowerShell's
+# `Get-Content`/`gc`. Deliberately NOT `head`/`tail` (bounded to ~10 lines by default - the
+# targeted form already) nor `sed`/`awk`/`grep` (whose common forms window or filter). A
+# conservative list keeps this to the one habit that actually dumps a large file whole.
+_WHOLE_FILE_VERBS = ("cat", "less", "more", "bat")
+_WHOLE_FILE_VERBS_PS = ("get-content", "gc")
+# Any of these means the command is NOT a plain whole-file read - it pipes, redirects,
+# chains or substitutes, which are the targeted forms shunt-style gates already let through.
+_NOT_A_PLAIN_READ = ("|", ">", "<", ";", "&", "$(", "`", "\n")
+
+
+def _bash_whole_file_target(command: str) -> str | None:
+    """The single file a plain `cat`/`less`/`more`/`bat`/`Get-Content FILE` would read whole,
+    or None when the command is anything else - piped, redirected, chained, multi-file, or
+    carrying a flag that changes the behaviour. Conservative by design: a false negative
+    (missing a nudge) only costs tokens; a false positive interrupts correct targeted work.
+    """
+    if not command or any(token in command for token in _NOT_A_PLAIN_READ):
+        return None
+    try:
+        parts = shlex.split(command, posix=True)
+    except ValueError:
+        return None
+    if not parts:
+        return None
+    verb = os.path.basename(parts[0]).lower()
+    is_ps = verb in _WHOLE_FILE_VERBS_PS
+    if verb not in _WHOLE_FILE_VERBS and not is_ps:
+        return None
+    operands = []
+    take_value = False
+    for arg in parts[1:]:
+        if take_value:
+            operands.append(arg)
+            take_value = False
+            continue
+        if arg.startswith("-"):
+            # PowerShell names the file with -Path/-LiteralPath; every other flag changes
+            # what the verb does (line numbers, encoding, ranges), so be conservative and
+            # decline rather than guess.
+            if is_ps and arg.lower() in ("-path", "-literalpath"):
+                take_value = True
+                continue
+            return None
+        operands.append(arg)
+    if len(operands) != 1:
+        return None
+    return operands[0]
+
+
 # `--slice` is exact only for Python (stdlib ast); for other languages it is best-effort and
 # usually the wrong tool, and for control-flow-heavy code (SQL stored procedures, say) the whole
 # body is the review unit. So the advice is tailored by language: Python leads with --slice, other
@@ -206,6 +264,31 @@ def _read_advice(path: str, lines: int) -> str:
     return head + body + tail
 
 
+def _bash_read_advice(target: str, path: str, lines: int) -> str:
+    base = os.path.basename(path)
+    head = (
+        f"`{target}` reads {base} whole ({lines} lines) into context. During an engagement, "
+        "a Read with offset/limit or the skeleton is cheaper (exploration discipline, "
+        "docs/team-operating-guide-orchestration.md):\n"
+    )
+    if os.path.splitext(path)[1].lower() in _PY_EXT:
+        body = (
+            f"  - ONE symbol: `<python> -m scripts.repo_skeleton --slice {path}:<symbol> .` "
+            "(exact for Python, ~1% of a whole-file read)\n"
+            f"  - a known region: Read {base} with offset/limit\n"
+        )
+    else:
+        body = (
+            f"  - a known region: Read {base} with offset/limit\n"
+            "  - a known anchor: Grep with -C for the surrounding window\n"
+        )
+    tail = (
+        "If the whole file really is the answer, repeat this exact command and it goes "
+        "through. This redirect fires ONCE per file per session."
+    )
+    return head + body + tail
+
+
 def _grep_advice(pattern: str) -> str:
     return (
         f"Grep for {pattern!r} is running in content mode with no head_limit. During an "
@@ -224,7 +307,7 @@ def main() -> int:
     except Exception:
         return 0
     tool = payload.get("tool_name")
-    if tool not in ("Read", "Grep"):
+    if tool not in ("Read", "Grep", "Bash"):
         return 0
     tool_input = payload.get("tool_input") or {}
     if not isinstance(tool_input, dict):
@@ -251,6 +334,25 @@ def main() -> int:
             if _already_nudged(root, sid, f"read:{path}"):
                 return 0
             sys.stderr.write(_read_advice(path, lines) + "\n")
+            return 2
+
+        if tool == "Bash":
+            command = tool_input.get("command")
+            if not isinstance(command, str) or not command:
+                return 0
+            threshold = _prefs_int(root, "read_nudge_lines", _DEFAULT_LARGE_FILE_LINES)
+            if threshold <= 0:
+                return 0  # project opted out (same key as the Read rule)
+            target = _bash_whole_file_target(command)
+            if not target:
+                return 0
+            abspath = target if os.path.isabs(target) else os.path.join(root, target)
+            lines = _line_count(abspath)
+            if lines is None or lines <= threshold:
+                return 0
+            if _already_nudged(root, sid, f"bash-read:{target}"):
+                return 0
+            sys.stderr.write(_bash_read_advice(target, abspath, lines) + "\n")
             return 2
 
         pattern = tool_input.get("pattern")
