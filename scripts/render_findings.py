@@ -153,10 +153,14 @@ def render(pack: dict) -> str:
         "## Scoreboard",
         scoreboard,
         "",
-        f"**Tooling coverage:** {pack['tooling_coverage']}" if pack.get("tooling_coverage") else "",
-        "",
-        "## Findings",
     ]
+    if pack.get("tooling_coverage"):
+        # A SECTION, not a bold line (2026-09-13): the DoD gate looks for a
+        # '## 🔬 Tooling coverage' heading (check_artifacts FINDINGS-NO-TOOLING-COVERAGE), so a
+        # report rendered from a pack that named its analysers used to fail the very gate the
+        # pack exists to satisfy. Found by the first token-free try run.
+        lines += ["## 🔬 Tooling coverage", pack["tooling_coverage"], ""]
+    lines += ["## Findings"]
     if ordered:
         for f in ordered:
             lines.append("")

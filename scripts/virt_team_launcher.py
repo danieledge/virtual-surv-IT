@@ -5390,6 +5390,19 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except Exception:  # noqa: BLE001 - older/odd streams may not support it  # nosec B110 - older/odd streams may not support reconfigure
         pass
+    if "--try" in sys.argv[1:]:
+        # `virt-surv try` (2026-09-13 framework review, step 8.1): one command, one minute, a
+        # finished synthetic engagement with its evidence room open in the browser, and no
+        # model call. The work is scripts/try_engagement.py; this is only the verb.
+        import subprocess  # nosec B404 - fixed argv, shell=False: the team's own script
+
+        script = Path(__file__).resolve().parent / "try_engagement.py"
+        extra = [a for a in sys.argv[1:] if a != "--try"]
+        # No terminal input: the try run asks nothing (stdin detached, the no-prompt env), so
+        # the launcher's own background-probe rule holds for it too.
+        return subprocess.run(  # nosec B603
+            [sys.executable, str(script), *extra], **_quiet_kwargs()
+        ).returncode
     if "--configure" in sys.argv[1:]:
         # `virt-surv configure` on an already-configured project lands here (2026-08-19
         # user request): the same banner + settings editor `go`'s [c] opens, then out -

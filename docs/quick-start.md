@@ -47,7 +47,8 @@ full set, or read `docs/operating-guide.d/command-index.md`.
 
 | When | Command | What it does |
 |---|---|---|
-| Have a look first | `/demo` | the whole team on synthetic data, every decision narrated |
+| Have a look first | `virt-surv try` | one minute, zero tokens: a closed synthetic review engagement with its evidence room, opened in your browser (`python scripts/try_engagement.py` from the clone) |
+| | `/demo` | the whole team on synthetic data, every decision narrated |
 | | `/team` | who the 13 specialists are and what each owns (`--preferences`, `--dashboard` for the utilities) |
 | Before any real data | `/prepare-data` | safe data first: synthetic, or masked by approved tooling. Its own masking is a best-effort aid, not an anonymisation pipeline; masked output is still personal data |
 | The everyday work | `/review` | a proper review of existing code, before a PR or an audit (`--depth`, `--focus`, `--fix`) |

@@ -11882,6 +11882,7 @@ _FOLDER_SUBCOMMANDS = (
     "evidence",
     "setup-alias",
     "go",
+    "try",  # 2026-09-13 (step 8.1): one minute, zero tokens, a finished synthetic engagement
 )
 
 
@@ -12000,6 +12001,26 @@ def _run_launcher_settings(target: Path, style: Style):
             [interpreter, str(launcher), "--configure", str(target.expanduser().resolve())],
         )
         return proc.returncode
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _run_try(style: Style):
+    """`virt-surv try` (2026-09-13 framework review, step 8.1): run scripts/try_engagement.py
+    from the real clone - a throwaway project, a complete synthetic review engagement through
+    the team's own state machine and gate, the evidence room opened in the browser, no model
+    call. Returns the exit code, or None when the script or an interpreter cannot be found."""
+    script = clone_asset("scripts", "try_engagement.py")
+    if not script.is_file():
+        print(style.dim(f"  try: {script} not found - is the clone complete?"))
+        return None
+    _, interpreter = _check_interpreters(
+        ["python", "py", "python3"] if sys.platform == "win32" else ["python3", "python", "py"]
+    )
+    if not interpreter:
+        return None
+    try:
+        return subprocess.run([interpreter, str(script)]).returncode  # nosec B603 - fixed argv
     except (OSError, subprocess.SubprocessError):
         return None
 
@@ -12177,6 +12198,12 @@ def _dispatch_folder_subcommand(argv: list) -> Optional[int]:
     if subcommand == "setup-alias":
         return run_setup_alias(style, marks(), assume_yes, demo)
     target = Path(paths[0]) if paths else Path(".")
+    if subcommand == "try":
+        rc = _run_try(style)
+        if rc is None:
+            print("  try could not start: run `python scripts/try_engagement.py` from the clone")
+            return 1
+        return rc
     if subcommand in ("go", "engage"):
         # 'engage' LAUNCHES, same as 'go' (2026-08-19 user ruling). It used to mean
         # project setup, which read as the exact opposite of /engage in a session and of

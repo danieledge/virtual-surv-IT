@@ -126,6 +126,7 @@ scripts` on a checkout is the authoritative inventory if this table and the tree
 |---|---|
 | `scripts/release_gate.py` | The mechanical dev → main promotion gate: version/badge/CHANGELOG consistency + a current eval baseline |
 | `scripts/dashboard.py` | Local observability page: engagement inventory, DoD gate, map hygiene, consent highlight, measured token cost - run `python -m scripts.dashboard` |
+| `scripts/try_engagement.py` | `virt-surv try`: one command, one minute, a closed synthetic review engagement in a throwaway project with its evidence room opened in the browser; every step is a team script, no model call (2026-09-13) |
 | `scripts/armed_check.py` | Proves the guards fire in a project: synthetic tool calls through the real launcher and dispatcher expecting the raw-data block, the execution gate and the plugin enabled; the installer's last step and `--selftest` print its one line (2026-09-13) |
 | `scripts/prune_eval_runs.py` | The eval-run retention rule as a command: keeps cited and recent runs, trims sandboxes from the rest, purges old uncited runs; dry run by default, `--apply` deletes |
 | `scripts/keep_golden_run.py` | Copies one passing eval run's scoring inputs and workspace subset into `evals/golden-runs/` for CI's token-free replay; refuses a run the current scorer would fail |
