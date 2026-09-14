@@ -24,7 +24,7 @@ import pytest
 from _staging import staged_or_live  # staged copy while pending, else live (step 3.6)
 
 REPO = Path(__file__).resolve().parents[1]
-REDIRECT = REPO / "scripts" / "exploration_redirect.py"
+REDIRECT = staged_or_live("exploration_redirect.py")
 
 
 @pytest.fixture()
@@ -177,7 +177,7 @@ def test_it_is_dispatched_for_read_and_grep_and_fails_open():
     entry = [c for c in module._CHECKS if c[0] == "exploration_redirect"]
     assert entry, "exploration_redirect is not wired into the dispatcher"
     _name, path, tools, fail_closed = entry[0]
-    assert tools == {"Read", "Grep"}
+    assert tools == {"Read", "Grep", "Bash"}
     assert fail_closed is False, "advisory tier: a cost rule must never fail closed"
     assert path.name == "exploration_redirect.py"
 
@@ -193,3 +193,112 @@ def test_advice_is_language_tailored():
     sql = er._read_advice("/x/proc.sql", 500)
     assert "Python-only" in sql  # --slice flagged as not the cheap path here
     assert "reviewing this code" in sql
+
+
+# ------------------------------------------------------------------ Bash whole-file reads
+# 2026-09-14: the Read rule had a silent hole - `cat big.scala` in Bash got no nudge where a
+# Read of the same file would. These pin the closed hole and, as strictly, its bounds: a
+# piped, redirected, chained or multi-file command is targeted work and must pass untouched.
+
+
+def _bash(command: str, session: str = "S1") -> dict:
+    return {
+        "session_id": session,
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": command},
+    }
+
+
+def test_a_bash_cat_of_a_large_file_is_redirected(armed):
+    code, err = _run(_bash("cat big.py"), armed)
+    assert code == 2
+    assert "big.py" in err and "reads" in err
+
+
+def test_a_bash_cat_of_a_small_file_is_untouched(armed):
+    code, _ = _run(_bash("cat small.py"), armed)
+    assert code == 0
+
+
+def test_a_piped_bash_read_is_untouched(armed):
+    # `cat big.py | grep line` is already targeted work; never redirect it.
+    code, _ = _run(_bash("cat big.py | grep line"), armed)
+    assert code == 0
+
+
+def test_a_redirected_bash_read_is_untouched(armed):
+    code, _ = _run(_bash("cat big.py > out.txt"), armed)
+    assert code == 0
+
+
+def test_head_and_tail_are_not_redirected(armed):
+    # head/tail are bounded by default - the targeted form already.
+    assert _run(_bash("head big.py"), armed)[0] == 0
+    assert _run(_bash("tail big.py"), armed)[0] == 0
+
+
+def test_a_multi_file_cat_is_untouched(armed):
+    code, _ = _run(_bash("cat big.py small.py"), armed)
+    assert code == 0
+
+
+def test_a_flagged_cat_is_untouched(armed):
+    # `cat -n` changes the behaviour; be conservative and decline rather than guess.
+    code, _ = _run(_bash("cat -n big.py"), armed)
+    assert code == 0
+
+
+def test_powershell_get_content_of_a_large_file_is_redirected(armed):
+    # A second large file, because the -Path form resolves to the same target as the bare
+    # form and the redirect fires once per file - reusing big.py would just prove the de-dup.
+    big2 = armed / "big2.py"
+    big2.write_text("\n".join(f"row {i}" for i in range(900)), encoding="utf-8")
+    assert _run(_bash("Get-Content big.py"), armed)[0] == 2
+    assert _run(_bash("Get-Content -Path big2.py"), armed)[0] == 2
+
+
+def test_the_second_identical_bash_read_goes_through(armed):
+    # Redirect ONCE, exactly like the Read rule: a deliberate re-run costs a turn, no more.
+    assert _run(_bash("cat big.py"), armed)[0] == 2
+    assert _run(_bash("cat big.py"), armed)[0] == 0
+
+
+def test_a_bash_read_is_silent_in_a_dormant_session(armed):
+    code, _ = _run(_bash("cat big.py", session="OTHER"), armed)
+    assert code == 0
+
+
+def test_a_project_can_opt_out_of_the_bash_read_nudge(armed):
+    (armed / ".claude").mkdir()
+    (armed / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"read_nudge_lines": 0}), encoding="utf-8"
+    )
+    code, _ = _run(_bash("cat big.py"), armed)
+    assert code == 0
+
+
+def _load_staged_redirect():
+    spec = importlib.util.spec_from_file_location(
+        "staged_exploration_redirect", staged_or_live("exploration_redirect.py")
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_bash_whole_file_target_parsing():
+    er = _load_staged_redirect()
+    t = er._bash_whole_file_target
+    assert t("cat big.scala") == "big.scala"
+    assert t("less src/App.java") == "src/App.java"
+    assert t("more notes.txt") == "notes.txt"
+    assert t("Get-Content -Path a.sql") == "a.sql"
+    assert t("cat a.py | grep x") is None  # piped
+    assert t("cat a.py > b") is None  # redirected
+    assert t("cat a.py && echo done") is None  # chained
+    assert t("cat $(ls)") is None  # substitution
+    assert t("cat a b") is None  # multi-file
+    assert t("head a.py") is None  # not a whole-file verb
+    assert t("grep x a.py") is None  # a filter, not a whole read
+    assert t("python -m scripts.convert_file a.xlsx") is None  # team tooling untouched
