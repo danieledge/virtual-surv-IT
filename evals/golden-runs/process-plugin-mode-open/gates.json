@@ -1,0 +1,65 @@
+{
+  "consent_granted": false,
+  "exchanges": [
+    {
+      "question": "Should the team execute the code under review (run tests / profile)?",
+      "header": "Execution",
+      "answer": "No - don't run it"
+    },
+    {
+      "question": "What depth of code review?",
+      "header": "Depth",
+      "answer": "Deep"
+    },
+    {
+      "question": "Also run a performance & scalability review?",
+      "header": "Performance",
+      "answer": "No"
+    },
+    {
+      "question": "After the review, what should happen to the findings?",
+      "header": "Fix-cycle",
+      "answer": "Fix \u2192 re-review loop"
+    },
+    {
+      "question": "How did this code come to be?",
+      "header": "Origin",
+      "answer": "Mixed"
+    },
+    {
+      "question": "Which jurisdiction(s) apply to this reporting decision?",
+      "header": "Jurisdiction",
+      "answer": "US (BSA / FinCEN)"
+    },
+    {
+      "question": "Proceed as briefed?",
+      "header": "Go-ahead",
+      "answer": "Proceed as briefed"
+    },
+    {
+      "question": "What does this module's output actually drive?",
+      "header": "Purpose",
+      "answer": "Both, from one bool"
+    },
+    {
+      "question": "Is the institution a New York regulated entity, bringing NYDFS Part 504 into scope?",
+      "header": "NYDFS",
+      "answer": "No / not NY-regulated"
+    },
+    {
+      "question": "Does the calling job already scope the transactions list to one person, one business day, and currency transactions only?",
+      "header": "Upstream",
+      "answer": "Not sure / can't see it"
+    },
+    {
+      "question": "How invasive should Kenji's fixes be?",
+      "header": "Fix scope",
+      "answer": "Safe fixes only, plus tests"
+    },
+    {
+      "question": "What would you like next?",
+      "header": "Next step",
+      "answer": "Install renderer, then I close"
+    }
+  ]
+}

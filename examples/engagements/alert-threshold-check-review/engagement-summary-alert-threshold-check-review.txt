@@ -1,0 +1,67 @@
+Subject: Review closed - alert_threshold_check.py, verdict: not yet fit for production
+
+Hi,
+
+The review of alert_threshold_check.py is closed. Short version below, full detail in the
+Delivery Report in the engagement workspace.
+
+YOUR THREE QUESTIONS
+
+Is the threshold defensible as written? No, and the number is not the problem. 10000 matches
+the US CTR trigger and the strict ">" is correct, so a day at exactly $10,000.00 is rightly not
+reported. Do not let anyone change that to ">=". What fails is governance: no rationale, no
+owner, no tuning date, no review cycle, no currency and no unit, and any caller could override
+it with nothing recorded. 📄 Read from the source. 🧠 The regulatory consequence is reasoned,
+and every 31 CFR citation is marked TO-VERIFY.
+
+Does the aggregation do what its name says? No. It filtered on neither date nor account, it
+summed signed amounts so a credit nets against a deposit, and it aggregated by account where
+the rule aggregates by person. 📄 Observed in the source. All three are still in the code. You
+chose safe fixes only and the caller could not be seen, so they are documented, not fixed.
+
+What else before production? No tests, no type hints, no input validation, a bare bool that
+discards the evidence for the decision, an empty list indistinguishable from a broken feed, and
+an import-time binding that made a runtime threshold override silently ineffective. Most of
+those are now addressed.
+
+WHAT WE DID
+
+33 findings across three passes. 7 fixed, 3 partially fixed, 7 accepted and documented by your
+safe-fixes decision, 16 open. 15 tests written. Verdict: ❌ not yet fit for a production
+alerting job.
+
+One thing worth flagging. Our own first fix round introduced a data-safety regression: the new
+validation error messages put whole customer records into tracebacks and logs. 🤖 Ravi
+(code-reviewer) caught it on re-review and 🤖 Kenji (platform-engineer) fixed it in a second
+round. It is on the record rather than smoothed out.
+
+FOUR THINGS THAT LIMIT THIS REVIEW
+
+1. Nothing was executed. You declined execution consent, which was the safe default. The QA
+   verdict is 🧠 inferred, not observed, and the DoD closes PARTIAL.
+2. No HTML was produced. The Markdown renderer is not installed here. Run
+   pip install -r requirements-dev.txt and ask me to re-render.
+3. The compliance pass assessed the code as found and was not re-run after the fixes. The
+   dispositions of 🤖 Layla's (compliance-reviewer) findings in the report are mine, not hers.
+   🤖 Linh (qa-engineer) ran the QA pass statically.
+4. The second fix round was verified by me, not by an independent re-review pass. There was not
+   enough budget left for both that and a complete write-up. It is marked as such.
+
+WHAT I RECOMMEND NEXT
+
+1. Answer who owns this threshold and whether the calling job scopes the input, then commission
+   the full aggregation fix. It needs signature changes and a caller inventory.
+2. Put the file under version control before it governs any reporting decision.
+3. Grant execution consent so the tests actually run and the QA verdict upgrades.
+4. Have a human verify the 31 CFR citations against eCFR.
+
+I can carry out any of these. Just say which.
+
+Footprint: 9 specialist passes, roughly 600k tokens, about $13.
+
+Execution note: the review was static throughout and you declined consent, so nothing was run.
+Ensuring code handed over for review is safe to run remains your responsibility.
+Data note: no data was shared or analysed. data/raw/ stays hard-blocked regardless.
+
+🤖 Morgan
+PM, Virtual Surveillance IT (an AI agent, not a human)

@@ -1,0 +1,4218 @@
+{
+  "findings": [
+    {
+      "severity": "warning",
+      "location": "artifacts/engagement-summary-alert-threshold-check-review.txt",
+      "title": "engagement-summary email written as .txt, signed as Morgan, opens 'Hi,'",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "artifacts/alert-threshold-check-review/START-HERE.md",
+      "title": "START-HERE living index present (| **Status** | \ud83d\udd12 CLOSING - finishing close artifacts |)",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "artifacts/alert-threshold-check-review/engagement-state.json",
+      "title": "machine-readable engagement state present (status closing, profile standard)",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "artifacts/alert-threshold-check-review/START-HERE.md",
+      "title": "state render fresh: START-HERE generated from engagement-state.json (hash match)",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Asked the user via the question tool [Execution]: Should the team execute the code under review (run tests / profile)? (answered: No - don't run it)",
+      "kind": "behaviour"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Asked the user via the question tool [Depth]: What depth of code review? (answered: Deep)",
+      "kind": "behaviour"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Asked the user via the question tool [Performance]: Also run a performance & scalability review? (answered: No)",
+      "kind": "behaviour"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Asked the user via the question tool [Fix-cycle]: After the review, what should happen to the findings? (answered: Fix \u2192 re-review loop)",
+      "kind": "behaviour"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Asked the user via the question tool [Origin]: How did this code come to be? (answered: Mixed)",
+      "kind": "behaviour"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Asked the user via the question tool [Jurisdiction]: Which jurisdiction(s) apply to this reporting decision? (answered: US (BSA / FinCEN))",
+      "kind": "behaviour"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Asked the user via the question tool [Go-ahead]: Proceed as briefed? (answered: Proceed as briefed)",
+      "kind": "behaviour"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Asked the user via the question tool [Purpose]: What does this module's output actually drive? (answered: Both, from one bool)",
+      "kind": "behaviour"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Asked the user via the question tool [NYDFS]: Is the institution a New York regulated entity, bringing NYDFS Part 504 into scope? (answered: No / not NY-regulated)",
+      "kind": "behaviour"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Asked the user via the question tool [Upstream]: Does the calling job already scope the transactions list to one person, one business day, and currency transactions only? (answered: Not sure / can't see it)",
+      "kind": "behaviour"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Asked the user via the question tool [Fix scope]: How invasive should Kenji's fixes be? (answered: Safe fixes only, plus tests)",
+      "kind": "behaviour"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Asked the user via the question tool [Next step]: What would you like next? (answered: Install renderer, then I close)",
+      "kind": "behaviour"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "I'll start by reading the shared open procedure and the operating guide.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Bash List project root contents",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Bash Check consent marker, VSIT layout, repo size",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\ud83c\udfa9 **Morgan (PM)** - hi, I'm Morgan, your PM on this. Compliance Surveillance team **v0.37.0**, running in plugin mode. Type `/meet-the-team` any time and I'll introduce the specialists.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Session facts**",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- Running as **Claude Opus 4.5** (change with `python install_helper.py`, menu option 8, or `--model-project . --model opus`).",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- Documents: **.md + .html** (want Word copies too? just say so, or run the installer's Document format preferences menu). Regulatory citations **on**.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- \ud83e\udde0 Not installed: opengrep, ast-grep, eslint, tsc, sqlfluff, bashate, scalafmt, checkstyle, pmd, spotbugs, pwsh - dependent findings would be inferred, not measured. For Python specifically we do have ruff, mypy, bandit and black, so this target is well covered.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- \u26a0\ufe0f The `.html` renderer is not installed here (`pip install -r requirements-dev.txt`). Markdown will always land; HTML may not.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- \ud83c\udd95 In the current release (v0.37.0): the Unreleased changelog entry (full detail: CHANGELOG.md).",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- Tip: fewer permission prompts in this project - run `python \"/tmp/vsit-eval-process-plugin-mode-open-4ac_cr0e/home/.claude/plugins/cache/virtual-surv-it/compliance-surveillance-team/0.37.0/install_helper.py\" --permissions .`",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Target found and classified.** `alert_threshold_check.py`, 19 lines, one constant and two functions. I'm classifying this as a **code review**, not a build. Say the word if you meant something else. No open engagements here, so this starts new.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> \u26a0\ufe0f **SAFETY - running your code.** I review code **statically by default** (reading it + analysers that don't run it). To run its tests or profile it, the team has to **execute** it. I'll keep strictly to static-only if you say so - but I **can't guarantee a mistake never happens**, so please trea",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "t anything you hand over as if it **could** be run: **make sure it's safe to execute and don't provide code that would be harmful if run. Ensuring handed-over code is safe is your responsibility.**",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> \ud83d\udee1\ufe0f **DATA SAFETY - what you share.** \ud83d\udce1 Everything you point me at goes to the model provider. \ud83d\udd34 Raw data in `data/raw/` is **hard-blocked** - I can't read it. \ud83d\udfe0 For **any other data you share**, by giving me access you **confirm it carries no PII/MNPI or anything your data policy prohibits - or th",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "at you've anonymised/masked it appropriately.** \ud83e\udd16 I **can't verify that for you** - keeping shared data safe and compliant is **your responsibility.** \ud83d\udfe2 Unsure? Go synthetic, or **pre-mask/sanitise by your own approved external means** - `/prepare-data` can help but is **best-effort, not production-",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "grade**.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "No execution consent is currently granted in this project, so the gate is closed as things stand. The file's docstring says synthetic sample and you have pointed me at no data, so I'm recording \"no data involved\" rather than asking you about it.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[gate] Execution: Should the team execute the code under review (run tests / profile)?",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[user] No - don't run it",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\ud83c\udfa9 Execution recorded: **static only**. No consent marker exists here, so nothing to delete and the gate stays closed. Findings that would need the code to actually run will be tagged \ud83e\udde0 inferred.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Target: `alert_threshold_check.py`, the whole file, 19 lines.** Say if you meant something else.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Scope:** whole file, nothing excluded. It is the only source file in this project, so there is no narrower or wider scope to offer and no \"not covered\" remainder.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Price for this target.** It is tiny, so everything here is cheap: Quick runs in-session (cents) \u00b7 Deep is one reviewer pass (roughly $0.30-0.80 at list) \u00b7 Audit adds the close machinery (roughly $1-3); plus the perf pass if chosen (~$0.20). Expect the engagement **all-in at roughly 2x the pass fig",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "ure** - orchestration, scoring, my challenge and the artifacts ride on top. No budget cap is recorded for this project.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "My read: **Deep** is the right buy here. Your three questions (is the threshold defensible, does the aggregation do what its name says, what else before production) go past \"am I OK to commit\" into test and doc coverage and impact, and on 19 lines Deep costs little more than Quick. Security is alrea",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "dy part of every depth, so there is no separate security pass to buy.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[gate] Depth: What depth of code review?",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[user] Deep",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[gate] Performance: Also run a performance & scalability review?",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[user] No",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[gate] Fix-cycle: After the review, what should happen to the findings?",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[user] Fix \u2192 re-review loop",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[gate] Origin: How did this code come to be?",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[user] Mixed",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Bash Create the engagement workspace",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Write",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Bash Register brief and persist intake decisions",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Bash Show engagement state",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Bash Check runtime and consent fields",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\ud83c\udfa9 Brief written and the workspace is live: `VSIT/engagements/alert-threshold-check-review/`. Active slug is `alert-threshold-check-review`. Intake answers, the derived scope and the runtime are all on disk now, so a resumed session re-reads them rather than asking you again.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**What I read in the file, before anyone is dispatched.** Two functions, one constant, no tests, no rationale for the `10000`, no obligation reference, no type or currency contract on `txn[\"amount\"]`. That is enough to tell me this is detection logic under \u00a74, not general-purpose code, so the compli",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "ance and audit-trail lens is in the dimension set. Your three questions are exactly the ones that lens and the code lens answer between them.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Plan: 7 subagent calls across three phases.** Review (Pip for context, Ravi for one folded review pass, Pip to score, Layla for the \u00a74/\u00a75 trail), then my own challenge pass, then Kenji applies fixes and writes tests, then Linh QA and Ravi re-review go out together. One review pass, not three facet",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": " passes: 19 lines does not justify splitting security from correctness.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**One deliberate omission.** No `tuning-analyst` pass. Theo calibrates thresholds against data, and there is no data here, so he would return pure inference dressed as analysis. The \"is the threshold defensible\" question gets answered as a design and traceability question instead, by Layla plus my o",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "wn read of the AML knowledge pack. Say so if you would rather have Theo's view anyway.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Cost.** Roughly $1-2 for the review phase, similar again for fix plus QA plus re-review. No budget cap is recorded for this project.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Output:** one consolidated Delivery Report (`.md`, plus `.html` if you install the renderer). Short, as asked.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Execution stays blocked, so Linh's QA is static-only. That means a \ud83e\udde0 QA verdict, a **PARTIAL** DoD, and untested code named as residual risk at close. That is the honest consequence of the static-only choice, not a problem with it.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[gate] Jurisdiction: Which jurisdiction(s) apply to this reporting decision?",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[user] US (BSA / FinCEN)",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[gate] Go-ahead: Proceed as briefed?",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[user] Proceed as briefed",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Bash Record go-ahead and jurisdiction, move to delivery",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\ud83c\udfa9 Dispatching 1: Pip (`review-scorer`) - one cheap-tier context pass, because its lens selection and file list feed both reviewers and neither should re-derive it.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Go-ahead and jurisdiction (US, BSA/FinCEN) are recorded. Phase is now delivery.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Agent Pip context and lens selection",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[subagent] [tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[subagent] [tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[subagent] [tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[subagent] [tool] Bash",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[subagent] [tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[subagent] [tool] Bash",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[subagent] [tool] Bash",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[subagent] [tool] Bash",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\ud83c\udfa9 Dispatching 2: Ravi (`code-reviewer`) and Layla (`compliance-reviewer`) - two passes because the code question and the \u00a74 audit-trail question are independent lenses on the same 19 lines, dispatched via the Workflow tool (this session's default parallel-dispatch path).",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Pip's context is in: 1 Python file, 19 lines, no CLAUDE.md, four lenses selected (bugs, security, python, architecture), and opengrep and ast-grep unavailable so anything that needed them stays \ud83e\udde0 inferred.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Workflow",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Bash Log dispatch and outstanding item",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\ud83c\udfa9 Both passes are running **in the background via the Workflow tool**, which guarantees they actually run concurrently rather than one after the other. Results arrive in a later turn as a completion notification. You may see a workflow approval prompt first; that call is yours, and declining just me",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "ans I dispatch them the slower way instead.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Nothing downstream can start until they return, so I'm handing the turn back rather than filling it. This engagement is **NOT closed**. Outstanding: the two review passes, Pip's scoring pass, my challenge pass, Kenji's fixes and tests, Linh's QA, Ravi's re-review, and the DoD check.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Bash Record DoD escalation and task-panel note",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Bash Record DoD escalation and task-panel note",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\ud83c\udfa9 Two hook nudges, handled honestly rather than quietly.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**The three DoD findings are all the same one thing: HTML rendering.** They are not auto-fixable from here. `render_html` raises `The 'Markdown' package is required`, so I cannot produce the `.html` siblings for START-HERE, the brief or the registry. Installing libraries into your environment is you",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "r call, not mine, so this is escalated rather than worked around. The command is `pip install -r requirements-dev.txt` in the team's install directory. Run it and I will re-render everything in one pass. The Markdown artifacts are complete and are the authoritative copies meanwhile. I have logged th",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "is and put it on the outstanding list so it stays visible and does not get mistaken for a clean gate at close.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**The task-panel nudge does not apply in this session.** There is no TodoWrite tool available to me here, so seeding a panel is not possible. I have not recorded the \"seeded\" marker, because I have not seeded anything and a false marker is worse than a repeating reminder. The planned gates are track",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "ed in `engagement-state.json` and the outstanding list instead.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Ravi and Layla are still running. This engagement is **NOT closed**. Outstanding: the two review passes, Pip's scoring pass, my challenge pass, Kenji's fixes and tests, Linh's QA, Ravi's re-review, the HTML render blocker above, and the DoD check.\ud83c\udfa9 Both passes are back. Ravi: 12 findings, 2 critical",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": ". Layla: 11 findings, 4 critical, verdict FAIL. Neither has been scored yet, and neither has been challenged by me. Next step is Pip's scoring pass, which is a delegation and not something I do inline.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Agent Pip score and filter both packs",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[subagent] [tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[subagent] [tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[subagent] [tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[subagent] [tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[subagent] [tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Bash Check pack sizes",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Read",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\ud83c\udfa9 Both packs read in full and challenged. Pip scored: 23 found, 23 reported, 0 filtered, nothing filtered that should not have been.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**My challenge changed three things.** Pip reported no envelope corrections, but Ravi's own summary line miscounts its severities (it says 5 warning and 4 medium; the pack actually holds 6 and 3). That is mine to correct, not his, and I am doing it now rather than letting a wrong count reach your re",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "port.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Edit",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Edit",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Edit",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[tool] Bash Register packs, log challenge, block on user questions",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\ud83c\udfa9 **Scoreboard.** 23 findings, none filtered.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| | \ud83d\udd34 Critical | \ud83d\udfe0 Warning | \ud83d\udfe1 Medium | \ud83d\udd35 Style |",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Code (Ravi) | 2 | 6 | 3 | 1 |",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Compliance (Layla) | 4 | 4 | 3 | 0 |",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Verdict so far: **\u274c not fit for a production alerting job as written.** Layla's DoD limb fails on Traceable and Tested, both on directly observed evidence.",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Your three questions, answered now rather than saved for the report.**",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Is the threshold defensible as written? No, and the reason is not the number.** `10000` matches the US CTR trigger, and the strict `>` at line 19 is correct: the rule attaches above $10,000, so a day at exactly $10,000.00 is rightly not reported. Do not let anyone \"fix\" that to `>=`. What fails is",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": " everything around the number. Line 6 carries no rationale, no owner, no tuning date, no review cycle, no currency and no unit, so it cannot be evidenced as governed. Line 17 exposes it as a `limit=` default any caller can override with nothing recorded, so it cannot be evidenced as applied. With no",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": " repository and no version identifier, the value in force on any past date is unrecoverable. Separately, setting the alerting threshold exactly on the statutory line leaves zero margin for rounding or late postings, and makes the rule structurally blind to structuring, which happens below $10,000 by",
+      "kind": "prose"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "{",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"slug\": \"alert-threshold-check-review\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"set\": \"2026-09-14\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"session\": \"796081fb-5bc6-41cc-88e0-7fc1ddc00b43\"",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "}",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "{",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"session_id\": \"796081fb-5bc6-41cc-88e0-7fc1ddc00b43\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"session\": \"796081fb-5bc6-41cc-88e0-7fc1ddc00b43\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"stamped\": \"2026-09-14\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"sessions\": [",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "{",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"id\": \"796081fb-5bc6-41cc-88e0-7fc1ddc00b43\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"stamped_at\": \"2026-09-14T08:09:30+00:00\"",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "}",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "]",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "}",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "# Engagements in this project",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> DERIVED registry - regenerated from each workspace's `engagement-state.json` on",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> every mutation; never hand-edit (`REGISTRY-STALE` if it drifts). Open the",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> engagement's own `START-HERE.md` for detail.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Engagement | Status | Profile | Title | Opened | Closed |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| [`alert-threshold-check-review/`](alert-threshold-check-review/START-HERE.md) | \ud83d\udd12 closing | standard | Code review: alert_threshold_check.py | 2026-09-14 |  |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "# START HERE - Code review: alert_threshold_check.py",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> **Generated view - do not hand-edit.** The machine-readable source of truth is",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> [`engagement-state.json`](engagement-state.json) (schema v1, ADR-006). Update the",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> state through any state command and this file re-renders; a stale",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> render is a DoD finding (`STATE-STALE-RENDER`).",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Engagement** | Code review: alert_threshold_check.py |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Status** | \ud83d\udd12 CLOSING - finishing close artifacts |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Opened** | 2026-09-14 |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Requested by** | unknown |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Profile** | standard |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Phase** | delivery |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Verdict** | none yet - engagement not closed, DoD not yet run |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Team** | Morgan (PM), Pip (review-scorer), Ravi (code-reviewer), Layla (compliance-reviewer), Kenji (platform-engineer), Linh (qa-engineer) |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Footprint** | ~9 agents \u00b7 roughly 600000 tokens so far |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Exec consent** | declined 2026-09-14 - a grant is only ever the human-created marker (ADR-002) |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## \u26a0\ufe0f Outstanding before this is done",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- HTML siblings cannot be rendered - the Markdown render library is absent. Needs a human to install the dev requirements, then re-render. Blocks the MISSING-HTML DoD findings, not the review itself.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- Threshold owner, effective date, tuning date and review cycle are still <to be completed> placeholders in the code - the user's to fill.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- Aggregation defects CR-01, CR-02, CMP-03, CMP-10 accepted and documented, not fixed - need the full fix with a caller inventory.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- Compliance pass assessed the code as found and was not re-run after the fixes - a fresh Layla pass is needed before the compliance limb is treated as current.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- CLOSE BLOCKED: 4 MISSING-HTML DoD findings. Needs a human to install the dev requirements so the .html siblings can render, then re-run set-status closed. Every deliverable is complete in Markdown meanwhile.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## Read in this order",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "*(Close in progress - the close artifacts are being finalised; the status flips to \u2705 once the DoD gate passes.)*",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "1. The artifacts below, newest last.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## Everything in this delivery",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Artifact | What it is | Status |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| [`engagement-brief.md`](engagement-brief.md) | Engagement Brief - code review of alert_threshold_check.py | final |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| [`data/findings-alert-threshold-check-review.jsonl`](data/findings-alert-threshold-check-review.jsonl) | Findings pack - code review (Ravi), 12 findings | final |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| [`data/findings-compliance-alert-threshold-check-review.jsonl`](data/findings-compliance-alert-threshold-check-review.jsonl) | Findings pack - compliance review (Layla), 11 findings | final |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| [`qa-handover.md`](qa-handover.md) | QA handover (Linh) - static-only, 15 tests assessed, verdict inferred | final |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| [`data/findings-alert-threshold-check-review-rereview.jsonl`](data/findings-alert-threshold-check-review-rereview.jsonl) | Findings pack - re-review after fixes (Ravi), 10 new findings + dispositions | final |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| [`delivery-report.md`](delivery-report.md) | Delivery Report - consolidated review, fixes, QA and verdict | final |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| [`engagement-summary-alert-threshold-check-review.txt`](engagement-summary-alert-threshold-check-review.txt) | Engagement summary email | final |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## Decisions of record",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- **data-attestation**: No data involved - code only; nothing shared (user, 2026-09-14)",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- **fix-cycle**: Fix then re-review loop (user, 2026-09-14)",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- **fix-scope**: Safe fixes only plus tests - no changes to the names or parameter lists of the two public functions (user, 2026-09-14). Consequence: CR-01, CR-02, CMP-03, CMP-04 and CMP-09 cannot be fixed in this pass and close as Open, needs human developer decision.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- **go-ahead**: Proceed as briefed (user, 2026-09-14)",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- **jurisdiction**: US (BSA / FinCEN) (user, 2026-09-14)",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- **module-purpose**: Both a CTR filing determination and an investigation alert, from one bool (user, 2026-09-14). Splitting them needs a signature change, so it stays open.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- **nydfs-part-504**: Not a New York regulated entity - Part 504 out of scope (user, 2026-09-14)",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- **review-mode**: audit (whole-target breadth, pre-existing issues in scope)",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- **review-not-covered**: Nothing excluded - the file is the only source file in the project",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- **review-scope**: Deep depth, Full dimensions (core + quality + compliance/audit), alert_threshold_check.py whole file, 19 lines, origin mixed, no performance pass (user, 2026-09-14)",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- **upstream-scoping**: Unknown - the user cannot see whether the caller scopes to one person, one business day, currency only (user, 2026-09-14). Aggregation findings stay a live reporting gap.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## Engagement log",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- 2026-09-14: Pip context pass returned: 1 Python file, 19 lines, no CLAUDE.md, 4 lenses, opengrep+ast-grep unavailable. Ravi and Layla dispatched concurrently via Workflow (run wf_f75eac3c-8ad).",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- 2026-09-14: dod-gate-block:f9fb9a8cd1d34d3c (block 1)",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- 2026-09-14: DoD gate: 3 MISSING-HTML / REGISTRY-HTML-STALE findings. Not auto-fixable here - the Markdown render library is absent in this environment and render_html raises 'The Markdown package is required'. Escalated to the user; installing libraries is a human action, not the team's. Markdown ",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "artifacts are complete and authoritative.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- 2026-09-14: Task-panel nudge noted: TodoWrite is not available as a tool in this session, so planned gates are tracked in this state file and the outstanding list instead. Not seeding a panel that does not exist.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- 2026-09-14 [review-loop]: Pip scoring pass: 23 found, 23 reported, 0 filtered, no basis corrections, 6 cross-pack overlaps identified. Morgan challenge pass: corrected Ravi's envelope severity split (was 5 warning/4 medium, actual 6/3), recorded Pip's scoring in both envelopes, flagged CMP-05's pr",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "oposed 9000 near-threshold band as an invented ungoverned value that must not be implemented as-is, and flagged CR-05's proposed comment text asserting eCFR verification that has not happened.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- 2026-09-14: dod-gate-block:f9fb9a8cd1d34d3c (block 2)",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- 2026-09-14: dod-gate-block:e0b40f75d8ebc71b (block 3)",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- 2026-09-14 [review-loop]: Round 1 fixes (Kenji) -> QA (Linh, static, inferred) + re-review (Ravi). Ravi dispositions: 5 fixed, 4 open by design, 3 partially fixed, 10 new RR- findings, no new critical. RR-01 is a data-safety regression introduced by our own fix (customer records interpolated into ",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "error messages). RR-04: DAILY_LIMIT retype ruled scope creep, revert recommended. Round 2 dispatched for RR-01 and RR-04 only.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- 2026-09-14: DoD gate run at close: 11 findings. 7 auto-fixed by Morgan (4 EMAIL-AGENT-UNMARKED, 2 STALE-STATUS banners, 1 STALE-DOCSTATUS). 4 remain: MISSING-HTML on START-HERE, delivery-report, engagement-brief and qa-handover. These are NOT auto-fixable in this environment - the Markdown render ",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "library is absent and installing it is a human action. The close is REFUSED and the engagement stays at 'closing'. Not worked around. All deliverables exist and are complete in Markdown.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- 2026-09-14: PM error, corrected: the project-level codebase map (VSIT/shared/map.md, ADR-003) was wrongly registered as a workspace artifact, leaving an added_before_file_existed row. The row was removed from engagement-state.json by hand and the index re-rendered. The map itself exists and is cor",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "rect at the project level, where it belongs.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- 2026-09-14: DOD-GATE-EXHAUSTED:93cd22b58fc849ed - the DoD backstop blocked 3 times on this engagement without its findings clearing, and has degraded to a warning so turns can end. The findings are still open; they are printed at every stop from here on, but nothing blocks on them.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## Provenance",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\ud83e\udd16 Produced by the virtual compliance-surveillance engineering team (0.37.0) - AI agents, Virtual Surveillance IT. Evidence basis tags: \ud83d\udcca measured \u00b7 \ud83e\udde0 inferred.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "<!-- rendered-from: engagement-state.json state-hash: 8dc8b3b33b974faa content-hash: 7acdc2411efd66d8 -->",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "# Delivery Report - Code review: `alert_threshold_check.py`",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> **Document control** \u00b7 ID `DLVR-001` \u00b7 Version `1.0` \u00b7 Status `Approved`",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> \u00b7 Classification `Internal` \u00b7 Owner `\ud83e\udd16 Morgan, PM (Virtual Surveillance IT)` \u00b7 As-of `2026-09-14`",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": ">",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> | Version | Date | Author | Change |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> |---|---|---|---|",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> | 1.0 | 2026-09-14 | \ud83e\udd16 Morgan, PM (Virtual Surveillance IT) | Close |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Deliverable** | `alert_threshold_check.py` (19 lines as found) and its new test file |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Type** | review, with a fix and re-review loop |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Version / commit** | none. The project is not a git repository. Scope anchor is the file as read on 2026-09-14 |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Date** | 2026-09-14 |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Classification / distribution** | Internal |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Overall verdict** | **\u274c not yet** fit for a production alerting job |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Findings disposition** | 7 fixed \u00b7 3 partially fixed \u00b7 7 accepted by your decision \u00b7 16 open |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## 1. Executive summary & next steps",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "You asked three questions. Here are the answers.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Is the threshold defensible as written? No, and the number is not the problem.** `10000` matches the US CTR trigger, and the strict `>` at the comparison is correct: the rule attaches above $10,000, so a day totalling exactly $10,000.00 is rightly not reported. Changing that to `>=` would be a def",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "ect. What fails is governance. The constant carried no rationale, owner, tuning date, review cycle, currency or unit, so it could not be evidenced as governed. It was exposed as a `limit=` default any caller could override with nothing recorded, so it could not be evidenced as applied. With no repos",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "itory and no version identifier, the value in force on any past date is unrecoverable. Separately, setting the alerting threshold exactly on the statutory line leaves no margin for rounding or late postings and makes the rule structurally blind to structuring, which happens below $10,000 by definiti",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "on.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Does the aggregation do what its name says? No, on three counts.** `aggregate_daily` filtered on neither date nor account, so it summed whatever list it was handed while its docstring promised one account-day. It summed signed amounts, so a credit nets against a deposit and can suppress a reportab",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "le cash-in leg. And it aggregated by account where the rule aggregates by person. **All three are still present in the code.** They are documented now, not fixed.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**What else before production.** No tests, no type hints, no input validation, a bare `bool` return discarding the evidence for the decision, an empty list indistinguishable from a broken feed, an import-time default binding that made a runtime threshold override silently ineffective, and a module d",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "ocstring asserting a synthetic-data guarantee the code could not enforce. Most of these are now addressed.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Reconciliation: what was found, then what was done.** Seven findings are fixed. Three are partially fixed. Seven are **accepted and documented rather than fixed**, because you chose safe fixes only and the caller could not be seen: keying the aggregation to a person, a business day and a direction",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": " would have changed both public signatures. That was the right call with an unknown caller, and it is why the verdict is still not-yet. Sixteen remain open, most of them compliance items that need a human, such as naming the threshold owner and filling the governance dates.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**One thing we caught on ourselves.** The first fix round introduced a data-safety regression: the new validation error messages interpolated the whole transaction record, which would have put customer data into tracebacks and logs. The original code never did that. Ravi found it on re-review, and K",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "enji fixed it in a second round. The error messages now name the record by its index and the field by name, never by value.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Next steps, with my recommendation.**",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "1. **Recommended.** Answer the two open questions that block the rest: who owns this threshold, and does the calling job scope the input. Then commission the full fix for the aggregation, which needs signature changes and a caller inventory.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "2. Put the file under version control before it governs any reporting decision. Nothing in this engagement could establish authorship, approval or change history, because none exists.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "3. Grant execution consent so the 15 tests actually run. The QA verdict is currently inferred, not observed.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "4. Have a human verify the 31 CFR citations against eCFR. Every one is marked TO-VERIFY.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "I can carry out any of these. Say which.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## 1a. Iteration log",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> \ud83d\udd0e Review P1 (Ravi 12 \u00b7 Layla 11) \u2192 \ud83d\udcca Pip score \u2192 \ud83c\udfa9 Morgan challenge \u2192 \u26d4 blocked on 3 user questions \u2192 \ud83d\udd27 Fix R1 (Kenji) \u2192 \ud83e\uddea QA (Linh, static) + \ud83d\udd0e Re-review P2 (Ravi) \u274c *(1 data-safety regression)* \u2192 \ud83d\udd27 Fix R2 (Kenji) \u2192 \ud83d\udcca Pip score \u2192 \ud83c\udfa9 Morgan verify",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| # | Date | Hand-off | Trigger | Outcome | Evidence |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| 1 | 2026-09-14 | Morgan \u2192 Pip | Context and lens selection | 1 Python file, 19 lines, no CLAUDE.md, 4 lenses, 2 analysers unavailable | state log |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| 2 | 2026-09-14 | Morgan \u2192 Ravi + Layla | Deep review, concurrent | 12 code findings (2 critical), 11 compliance findings (4 critical), verdict FAIL | `data/findings-*.jsonl` |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| 3 | 2026-09-14 | Morgan \u2192 Pip | Score and filter | 23 found, 23 reported, 0 filtered, 6 cross-pack overlaps | pack envelopes |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| 4 | 2026-09-14 | Morgan challenge | Spot-check | Corrected Ravi's envelope severity split (5/4 stated, 6/3 actual). Overruled Layla's invented `9000` band and Ravi's \"verified against eCFR\" comment text | pack envelopes, state log |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| 5 | 2026-09-14 | Morgan \u2192 user | 3 questions that change the correct fix | Answered. Safe fixes only, so 7 findings become accepted-not-fixed | state decisions |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| 6 | 2026-09-14 | Morgan \u2192 Kenji | Fix round 1 | 5 fixed, 3 partial, 15 tests written, not run | module + test file |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| 7 | 2026-09-14 | Morgan \u2192 Linh + Ravi | QA and re-review, concurrent | QA \ud83e\udde0 inferred, DoD PARTIAL. Re-review: 10 new findings, no new critical, **RR-01 data-safety regression** | `qa-handover.md`, re-review pack |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| 8 | 2026-09-14 | Ravi \u2192 Kenji | RR-01 and RR-04 | Both fixed. Error messages no longer disclose record contents. `DAILY_LIMIT` retype reverted | module |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| 9 | 2026-09-14 | Morgan \u2192 Pip | Score the re-review pack | 13 found, 10 reported, 3 filtered, split confirmed, RR-01 confirmed never-filter | re-review envelope |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Pass 7's failure is kept on the record deliberately. A regression that was caught, routed, fixed and recorded is evidence the loop works.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## 2. Scope & what was delivered",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Reviewed: `alert_threshold_check.py`, whole file, 19 lines as found. One Python file, the only source file in the project. Nothing excluded, so there is no unreviewed remainder.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Delivered: the module with safe fixes applied, a new `test_alert_threshold_check.py` with 15 tests, three findings packs, an independent QA handover, and this report.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Out of scope: the calling alerting job, the upstream data contract, any downstream case management. None of it exists in this project and none was supplied. Jurisdiction: **US (BSA / FinCEN) only**. EU, UK and NYDFS Part 504 were explicitly not assessed, on your confirmation that the institution is ",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "not New York regulated.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## 3. Requirements & traceability",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "N/A for a review. Worth stating plainly as a finding rather than an omission: **no RTM, no requirement id, no obligation reference and no specification exist anywhere in this project.** That is CMP-01 and it is open.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## 4. Code review",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "`Found 12 \u00b7 Reported 12 \u00b7 Filtered 0` on the first pass, `Found 13 \u00b7 Reported 10 \u00b7 Filtered 3` on the re-review. Deep depth, audit mode. Scored by Pip (`review-scorer`) in both cases, then challenged by me. Full detail with diffs and rationale is in the findings packs; this is the summary.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Sev | Location | Issue | Basis | Status |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| \ud83d\udd34 Critical | `aggregate_daily` | Filters on neither date nor account nor person. Sums whatever list it is given (CR-01) | \ud83d\udcc4 coded | **Accepted, documented not fixed** |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| \ud83d\udd34 Critical | the accumulator line | Sums signed amounts, so a credit nets against a deposit and can suppress a reportable day (CR-02) | \ud83d\udcc4 coded | **Accepted, documented not fixed** |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| \ud83d\udfe0 Warning | error messages | Validation messages interpolated the whole record into tracebacks and logs (RR-01, introduced by our own fix) | \ud83d\udcc4 coded | **Fixed** |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| \ud83d\udfe0 Warning | `DAILY_LIMIT` | Bare untyped int, no unit, currency, rationale, owner or tuning date (CR-05) | \ud83d\udcc4 coded | Partially fixed. Comment block added with placeholders; the values are yours to fill |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| \ud83d\udfe0 Warning | `txn[\"amount\"]` | Unvalidated. Missing key, string, `None` or `bool` each mishandled (CR-04) | \ud83d\udcc4 coded | Partially fixed. Validation added; RR-02 numpy scalars and RR-03 NaN remain |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| \ud83d\udfe0 Warning | whole module | No tests at all (CR-07) | \ud83d\udcca measured | Partially fixed. 15 tests written, none executed |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| \ud83d\udfe0 Warning | `is_reportable` | Returns a bare bool, discarding the total, the limit applied and the count (CR-08) | \ud83d\udcc4 coded | **Accepted, documented not fixed** |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| \ud83d\udfe0 Warning | both signatures | No type hints, no transaction data contract (CR-12) | \ud83d\udcca measured, ruff | **Fixed** |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| \ud83d\udfe1 Medium | comparison line | Float accumulation deciding an exact monetary boundary (CR-03) | \ud83e\udde0 inferred | **Fixed**, Decimal internally |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| \ud83d\udfe1 Medium | `limit=DAILY_LIMIT` | Import-time binding made a runtime threshold override silently ineffective (CR-10) | \ud83d\udcc4 coded | **Fixed**, resolved at call time |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| \ud83d\udfe1 Medium | docstrings | Asserted a synthetic-data guarantee the code cannot enforce, and a scoping it does not implement (CR-11) | \ud83d\udcc4 coded | **Fixed** |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| \ud83d\udfe1 Medium | empty input | An empty list is indistinguishable from a broken feed (CR-09) | \ud83d\udcc4 coded | **Accepted, documented not fixed.** Raising would break unknown callers |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| \ud83d\udd35 Style | comparison line | The strict `>` is **correct** and now carries a comment saying so. Recorded so nobody \"fixes\" it to `>=` (CR-06) | \ud83d\udcc4 coded | **Fixed** |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Eight further re-review findings are open and are in the pack: numpy scalar rejection, NaN and Infinity passing validation, unfilled governance placeholders, no dependency manifest or CI, fail-stop batch validation with no quarantine, and two comments that overclaim.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Architectural note.** The module conflates computing an aggregate with deciding a policy, and you confirmed it serves both a mandatory CTR filing determination and a discretionary investigation alert from one bool. Those carry different obligations and different error tolerance. Separating them is",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": " a signature change and is open.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**\ud83d\udd35 Developer guidance - improving future code.**",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "1. Put the aggregation key in the signature, not in the docstring. A function named for one day and one account should take that day and that account, so the contract is enforced rather than asserted.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "2. Money is neither a float nor a bare int. Use `Decimal` or integer minor units from the edge of the system inward.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "3. Write the boundary tests before the logic. The cases that decide this module are exactly at the limit, one cent either side, the empty list, a netting pair, and a record with no amount key.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "4. When code makes a regulatory decision, return the evidence with the decision. A bare bool cannot be explained to an examiner six months later.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**\ud83e\uddd1\u200d\ud83d\udcbb Prompting guidance.** You told us the origin was mixed. Two findings here are classic AI-assisted shapes. CR-01 is the strongest example: the docstring described an aggregation that was never implemented, and it reads as correct precisely because the name supplies the missing logic to the read",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "er. CR-02 is the same pattern at the data level, an unstated assumption that every amount is a same-direction positive. A prompt that said \"the function must take the aggregation key as arguments and must not trust the caller to pre-filter\" would have prevented both. When asking for detection logic,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": " state the rule's qualifiers explicitly, entity, direction and window, rather than the headline number.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## 5. Performance & scalability",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "N/A. You chose no performance review and the module processes one list per call with no I/O.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## 6. Compliance & audit",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Assessed by Layla (`compliance-reviewer`) against US BSA and FinCEN, 31 CFR Chapter X. Verdict **FAIL**, 4 critical findings, 11 open.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- **Traceability: NOT MET.** No obligation reference, no requirement id, no spec, no RTM. `check_citations` returned zero citations in the file, which confirms the absence mechanically.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- **Threshold governance: NOT MET.** Covered in \u00a71. The fix added the governance comment block; the owner, dates and version are `<to be completed>` placeholders and are yours.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- **Decision auditability: NOT MET.** A bare bool creates no record. A look-back cannot do below-the-line testing because non-alerting days leave no total.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- **Change control: NOT MET.** No repository, so no authorship, approval or history exists.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- **Data safety: MET, and stated because a clean result is a result.** The file contains no personal data, no identifiers, no transaction records, no MNPI and no secrets. The one regression we introduced against this limb (RR-01) was caught and fixed.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- **Citations.** Every 31 CFR and 31 USC pinpoint is marked **TO-VERIFY** with a primary-source permalink. The bundled regulatory register holds no BSA or FinCEN entries, so none of them is asserted as verified. Do not quote them to a regulator until a human has checked them against eCFR.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Limitation on this section.** Layla assessed the code **as found**. No second compliance pass was run after the fixes, so the dispositions of her findings in this report are mine, not hers, and are \ud83e\udde0 inferred. A fresh compliance pass would be needed before anyone relies on the compliance limb as c",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "urrent.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## 7. QA / test evidence",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Independent pass by Linh (`qa-engineer`). Full detail in [`qa-handover.md`](qa-handover.md).",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Suite | Tests | Pass | Fail | Skip |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| `test_alert_threshold_check.py` | 15 | **not run** | **not run** | **not run** |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**No test was executed.** Execution consent was withheld, which was your choice and the safe default. Under the static-only DoD path the QA verdict is **\ud83e\udde0 inferred** and the **DoD is PARTIAL**. Linh read all 15 tests statically and found none vacuous, none that would error at collection, and no wron",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "g expected values. The characterisation test pinning the known CR-02 netting defect is clearly commented as such and cannot be misread as an assertion that the behaviour is correct.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Reproduce: `pytest test_alert_threshold_check.py`. Test data is synthetic amounts with no identifiers.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**NOT covered:** an `int` limit exercising the coercion branch, a `Decimal` amount, a non-dict record, an assertion that `aggregate_daily` actually returns `Decimal`, and any volume test.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Residual risk.** The module and its tests have never been executed by anyone in this engagement. Every behavioural claim in this report is reasoned from source, not observed. Grant execution consent and the QA verdict upgrades from \ud83e\udde0 to \ud83d\udcca.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## 8. Developer handover",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "The two public functions keep their names and parameter lists, so existing callers are unaffected by signature. Three behavioural changes to know about:",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "1. `aggregate_daily` now returns `Decimal`. A caller doing float arithmetic on it, JSON-serialising it, or `isinstance(x, int)` on it will break.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "2. Malformed records now raise a clear error naming the index and the field. Previously they raised `KeyError`, raised `TypeError`, or were silently miscounted. A caller that relied on the silent path will now see an exception.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "3. The `limit` default resolves at call time, so rebinding `DAILY_LIMIT` at runtime now actually takes effect. Previously it silently did not.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "`DAILY_LIMIT` remains a plain `int`. Kenji briefly retyped it to `Decimal`; Ravi ruled that a public API change outside the safe-fixes mandate that bought nothing, and it was reverted.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Known limitations, carried deliberately.** The aggregation still does not scope to a day, an account, a person, a direction or to currency transactions only. Those gaps are now written as a prominent `WARNING:` block in the function docstring, stating what the function does not do and that the cal",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "ler must guarantee it. That is documentation, not a fix.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## 9. Change & operations",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Drafted for your IT team, who approve and deploy. This team does not self-certify these controls.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- **Change request:** low-risk edits to one module plus a new test file. No signature changes. Rollback is reverting two files. **Approval: [IT team / CAB].**",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- **Blocking pre-deploy gate:** the file must go under version control first. There is currently no rollback point and no approval record.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- **Ops:** the module emits nothing. There is no alert-liveness signal and no way to distinguish a quiet day from a broken feed. Add feed-volume reconciliation upstream before relying on a non-alert. **[IT team].**",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> **Run provenance & non-determinism** *(standing statement)*",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> \u00b7 Model `Claude Opus 4.5` \u00b7 Framework `compliance-surveillance-team 0.37.0` \u00b7 Run `2026-09-14`",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": ">",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> The findings and conclusions in this document are **one sample from a non-deterministic process**. The same inputs, run again by the same model, can yield a different set of findings, in a different order, with different confidence scores. **Absence of a finding is not evidence of absence:** this ",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "document evidences what *was* found on this run, never that nothing further exists. Anything load-bearing for a control decision needs human verification; repeat runs raise confidence but never make the result exhaustive.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "# Engagement Brief - Code review: `alert_threshold_check.py`",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> **Document control** \u00b7 ID `ENG-001` \u00b7 Version `1.0` \u00b7 Status `Approved - pending human sign-off`",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> \u00b7 Classification `Internal` \u00b7 Owner `\ud83e\udd16 Morgan, PM (Virtual Surveillance IT)` \u00b7 As-of `2026-09-14`",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": ">",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> | Version | Date | Author | Change |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> |---|---|---|---|",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> | 0.1 | 2026-09-14 | \ud83e\udd16 Morgan, PM (Virtual Surveillance IT) | Initial draft |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Engagement** | alert-threshold-check-review |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Requested by** | daniel.john.edge@gmail.com |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Date** | 2026-09-14 |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Type** | review |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| **Status** | intake |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## 1. The ask (PM's restatement)",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Review `alert_threshold_check.py`, a 19-line helper that decides whether one day's activity on",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "one account is reportable. Three specific questions:",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "1. Is the threshold defensible as written?",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "2. Does the aggregation do what its name says?",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "3. What else would we want fixed before this goes near a production alerting job?",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "The write-up lands in this workspace so it can be handed on. The user asked for a short review",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "proportionate to a small file.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## 2. Regulatory obligation",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\ud83e\udde0 Inferred, not confirmed. The code carries no obligation reference of its own. A same-day",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "aggregate over one account against a hard `10000` limit is the shape of a cash-transaction",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "reporting threshold. Two candidates, both TO-VERIFY:",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Obligation | Jurisdiction | Article / rule | What it requires |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| BSA currency transaction reporting | US | 31 CFR 1010.311 | Report currency transactions over $10,000 by or on behalf of one person in one business day, aggregated |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| AML cash-payment limit | EU | AMLD/AMLR cash thresholds | Obliged-entity controls around large cash amounts, threshold set by regime |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "The absence of a stated obligation in or beside the code is itself a finding candidate. The",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "applicable regime(s) are being confirmed with the user at the go-ahead gate.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## 3. Agreed success criteria",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| # | Success criterion | How measured / verified | Agreed by |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| 1 | The three questions above are each answered explicitly, with the evidence basis tagged | The review artifact contains a direct answer to each | user |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| 2 | Findings carry dispositions and the fix\u2192re-review loop runs to no open Criticals, or names what needs a human decision | Findings register + iteration log | user |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| 3 | The write-up is short and hand-on-able | One consolidated Delivery Report in this workspace, `.md` (+ `.html` if the renderer is installed) | user |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## 4. Decisions taken",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Decision | Answer | Source |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Work type | Code review (not a build) | Derived from the request, stated for correction |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Execution consent | No - do not run the code under review | User, 2026-09-14 |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Data attestation | No data involved - code only | Recorded silently; no data was shared |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Review depth | Deep | User, 2026-09-14 |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Performance review | No | User, 2026-09-14 |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Fix-cycle | Fix \u2192 re-review loop | User, 2026-09-14 |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Origin | Mixed (human and AI interleaved) | User, 2026-09-14 |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Packaging | One consolidated Delivery Report | Default (2026-08-17 user decision) |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Derived review scope:** Deep \u00b7 Full review (core + quality + \ud83d\udccb compliance/audit) \u00b7",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "`alert_threshold_check.py`, whole file, 19 lines \u00b7 mode `audit` \u00b7 origin: mixed.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Not in scope:** nothing is excluded. It is the only source file in the project, so there is no",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "remainder to leave unread.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\ud83d\udccb compliance/audit is in the dimension set because this code decides reportability. That makes",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "it detection logic under \u00a74, not general-purpose code.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## 5. Open questions / clarifications needed",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "1. Which jurisdiction(s) apply, so the compliance pass assesses the applicable regime and says",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "what is not applicable. Put to the user at the go-ahead gate.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "2. Where the `10000` value came from, and whether a rationale, owner and tuning date exist",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "anywhere outside the file. Nothing in the repo records one.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "3. What `txn[\"amount\"]` actually holds upstream: currency, sign convention, type, and whether",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "reversals and cancellations appear in the same list.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## 6. Assumptions & constraints",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- The file's docstring says synthetic sample. Taken at face value; no data was shared with us.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- Execution consent is withheld, so nothing is run. Findings that would need the code to execute",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "stay \ud83e\udde0 inferred, and the QA pass takes the static-only DoD path with a \ud83e\udde0 verdict and a",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "PARTIAL DoD. Untested code is named as residual risk at close.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- No git repository here, so there is no commit anchor for the scope. The scope anchor is the",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "file as read on 2026-09-14.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- The `.html` renderer is not installed in this environment. Markdown always lands; HTML siblings",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "may not, and that is recorded rather than worked around.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "- \ud83e\udde0 Analysers: ruff, mypy, bandit and black are installed, so Python findings can be measured.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "opengrep and ast-grep are not, so anything that would have relied on them stays inferred.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## 7. Documentary artifacts requested",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "One consolidated **Delivery Report** (`delivery-report.md`), written at close, holding the",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "review findings, the iteration log, the QA evidence summary and the close verdict. The findings",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "pack (`data/findings-*.jsonl`) and the rendered review are produced by the pipeline underneath",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "it. This brief and the summary email complete the set.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## 8. Proposed approach & routing plan",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Pipeline roll-call: **Pip context \u2192 Ravi \u2192 Pip score/filter \u2192 Layla \u2192 my challenge \u2192 Kenji fix",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\u2192 Linh QA + Ravi re-review.**",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| # | Stage | Owner | Note |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| 1 | Context, language and lens selection | \ud83e\udd16 Pip (`review-scorer`) | Cheap tier, rote work |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| 2 | Deep review pass | \ud83e\udd16 Ravi (`code-reviewer`) | One folded pass: security + correctness + architecture. 19 lines does not justify three facet passes |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| 3 | Score and filter | \ud83e\udd16 Pip (`review-scorer`) | Found / Reported / Filtered, never filters regulated findings |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| 4 | Compliance and audit trail | \ud83e\udd16 Layla (`compliance-reviewer`) | \u00a74/\u00a75 trail, threshold rationale, traceability |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| 5 | Challenge pass | \ud83e\udd16 Morgan (PM) | Spot-check, not a re-score |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| 6 | Apply fixes and add tests | \ud83e\udd16 Kenji (`platform-engineer`) | Utility script, so the builder is platform-engineer, not rules-developer |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| 7 | Independent QA | \ud83e\udd16 Linh (`qa-engineer`) | Static-only, consent withheld |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| 8 | Re-review | \ud83e\udd16 Ravi (`code-reviewer`) | Fresh context, loop until no open Criticals |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "**Right-sizing.** Seven subagent calls across the three phases. Stages 1 to 4 are one concurrent",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "dispatch where independent; stages 7 and 8 go out together. No `tuning-analyst` pass: threshold",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "calibration needs data to calibrate against and no data exists here, so a tuning pass would",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "return pure inference. The threshold question is answered instead as a design and traceability",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "question by Layla, plus the PM's read of the `docs/sme/tm-monitoring.md` knowledge pack.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## 9. Risks & dependencies",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Risk | Impact | Handling |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Jurisdiction unknown at dispatch | Compliance pass assesses the wrong regime | Asked at the go-ahead gate before Layla is briefed |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| The `10000` rationale may exist outside this repo | We report a traceability gap that is really a documentation-location gap | Finding stated as \"no rationale reachable from the code\", not \"no rationale exists\" |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Execution withheld | No measured test evidence | Static-only DoD path, PARTIAL, residual risk named at close |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Upstream data contract unknown | Aggregation findings stay inferred | Stated as an assumption, raised as an open question |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## 10. Next action",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "User answers the go-ahead gate and the jurisdiction question. Then the review dispatch goes out.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "## Sign-off",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "> \ud83e\udd16 = AI agent (Virtual Surveillance IT), not a human. Agent rows and human-approver rows stay separate - never combine an agent and a human on one line.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Role | Name | Decision | Date |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Author / owner | \ud83e\udd16 Morgan, PM (Virtual Surveillance IT) | Drafted | 2026-09-14 |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| `compliance-reviewer` (DoD gate) | \ud83e\udd16 Layla (Virtual Surveillance IT) | Not yet run | |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "| Human approver (or `[IT team]`) | | Pending | |",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "{",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"schema\": 2,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"engagement\": {",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"title\": \"Code review: alert_threshold_check.py\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"slug\": \"alert-threshold-check-review\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"requested_by\": null,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"opened\": \"2026-09-14\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"closed\": null",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "},",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"status\": \"closing\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"profile\": \"standard\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"qa_depth\": null,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"auto\": false,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"auto_on_budget\": null,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"budget\": {},",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"run_mode\": null,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"session_id\": null,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"jira_source\": null,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"request\": null,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"phase\": \"delivery\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"team\": [",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"Morgan (PM)\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"Pip (review-scorer)\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"Ravi (code-reviewer)\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"Layla (compliance-reviewer)\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"Kenji (platform-engineer)\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"Linh (qa-engineer)\"",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "],",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"verdict\": null,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"footprint\": {",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"agents\": 9,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"approx_tokens\": 600000",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "},",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"settings_snapshot\": {",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"extra_formats\": [],",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"regulatory_citations\": true,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"large_context_review_split\": false,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"parallel_dispatch_via_workflow\": true,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"standards_critique\": false,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"map_skeleton\": false,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"probe_cache\": true,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"data_profiling\": true,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"document_map\": true,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"guard_daemon\": true,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"evidence_room\": false,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"autonomous_mode\": true,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"autonomous_default\": false,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"new_window\": false,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"qa_depth\": \"auto\"",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "},",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"outstanding\": [",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"HTML siblings cannot be rendered - the Markdown render library is absent. Needs a human to install the dev requirements, then re-render. Blocks the MISSING-HTML DoD findings, not the review itself.\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"Threshold owner, effective date, tuning date and review cycle are still <to be completed> placeholders in the code - the user's to fill.\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"Aggregation defects CR-01, CR-02, CMP-03, CMP-10 accepted and documented, not fixed - need the full fix with a caller inventory.\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"Compliance pass assessed the code as found and was not re-run after the fixes - a fresh Layla pass is needed before the compliance limb is treated as current.\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"CLOSE BLOCKED: 4 MISSING-HTML DoD findings. Needs a human to install the dev requirements so the .html siblings can render, then re-run set-status closed. Every deliverable is complete in Markdown meanwhile.\"",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "],",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"log\": [",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"2026-09-14: Pip context pass returned: 1 Python file, 19 lines, no CLAUDE.md, 4 lenses, opengrep+ast-grep unavailable. Ravi and Layla dispatched concurrently via Workflow (run wf_f75eac3c-8ad).\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"2026-09-14: dod-gate-block:f9fb9a8cd1d34d3c (block 1)\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"2026-09-14: DoD gate: 3 MISSING-HTML / REGISTRY-HTML-STALE findings. Not auto-fixable here - the Markdown render library is absent in this environment and render_html raises 'The Markdown package is required'. Escalated to the user; installing libraries is a human action, not the team's. Markdown a",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "rtifacts are complete and authoritative.\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"2026-09-14: Task-panel nudge noted: TodoWrite is not available as a tool in this session, so planned gates are tracked in this state file and the outstanding list instead. Not seeding a panel that does not exist.\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"2026-09-14 [review-loop]: Pip scoring pass: 23 found, 23 reported, 0 filtered, no basis corrections, 6 cross-pack overlaps identified. Morgan challenge pass: corrected Ravi's envelope severity split (was 5 warning/4 medium, actual 6/3), recorded Pip's scoring in both envelopes, flagged CMP-05's pro",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "posed 9000 near-threshold band as an invented ungoverned value that must not be implemented as-is, and flagged CR-05's proposed comment text asserting eCFR verification that has not happened.\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"2026-09-14: dod-gate-block:f9fb9a8cd1d34d3c (block 2)\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"2026-09-14: dod-gate-block:e0b40f75d8ebc71b (block 3)\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"2026-09-14 [review-loop]: Round 1 fixes (Kenji) -> QA (Linh, static, inferred) + re-review (Ravi). Ravi dispositions: 5 fixed, 4 open by design, 3 partially fixed, 10 new RR- findings, no new critical. RR-01 is a data-safety regression introduced by our own fix (customer records interpolated into e",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "rror messages). RR-04: DAILY_LIMIT retype ruled scope creep, revert recommended. Round 2 dispatched for RR-01 and RR-04 only.\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"2026-09-14: DoD gate run at close: 11 findings. 7 auto-fixed by Morgan (4 EMAIL-AGENT-UNMARKED, 2 STALE-STATUS banners, 1 STALE-DOCSTATUS). 4 remain: MISSING-HTML on START-HERE, delivery-report, engagement-brief and qa-handover. These are NOT auto-fixable in this environment - the Markdown render l",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "ibrary is absent and installing it is a human action. The close is REFUSED and the engagement stays at 'closing'. Not worked around. All deliverables exist and are complete in Markdown.\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"2026-09-14: PM error, corrected: the project-level codebase map (VSIT/shared/map.md, ADR-003) was wrongly registered as a workspace artifact, leaving an added_before_file_existed row. The row was removed from engagement-state.json by hand and the index re-rendered. The map itself exists and is corr",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "ect at the project level, where it belongs.\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"2026-09-14: DOD-GATE-EXHAUSTED:93cd22b58fc849ed - the DoD backstop blocked 3 times on this engagement without its findings clearing, and has degraded to a warning so turns can end. The findings are still open; they are printed at every stop from here on, but nothing blocks on them.\"",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "],",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"ratifications\": [],",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"artifacts\": [",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "{",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"path\": \"engagement-brief.md\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"title\": \"Engagement Brief - code review of alert_threshold_check.py\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"status\": \"final\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"added\": \"2026-09-14\"",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "},",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "{",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"path\": \"data/findings-alert-threshold-check-review.jsonl\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"title\": \"Findings pack - code review (Ravi), 12 findings\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"status\": \"final\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"added\": \"2026-09-14\"",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "},",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "{",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"path\": \"data/findings-compliance-alert-threshold-check-review.jsonl\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"title\": \"Findings pack - compliance review (Layla), 11 findings\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"status\": \"final\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"added\": \"2026-09-14\"",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "},",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "{",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"path\": \"qa-handover.md\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"title\": \"QA handover (Linh) - static-only, 15 tests assessed, verdict inferred\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"status\": \"final\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"added\": \"2026-09-14\"",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "},",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "{",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"path\": \"data/findings-alert-threshold-check-review-rereview.jsonl\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"title\": \"Findings pack - re-review after fixes (Ravi), 10 new findings + dispositions\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"status\": \"final\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"added\": \"2026-09-14\"",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "},",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "{",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"path\": \"delivery-report.md\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"title\": \"Delivery Report - consolidated review, fixes, QA and verdict\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"status\": \"final\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"added\": \"2026-09-14\"",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "},",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "{",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"path\": \"engagement-summary-alert-threshold-check-review.txt\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"title\": \"Engagement summary email\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"status\": \"final\",",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\"added\": \"2026-09-14\"",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "}",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "],",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Subject: Review closed - alert_threshold_check.py, verdict: not yet fit for production",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Hi,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "The review of alert_threshold_check.py is closed. Short version below, full detail in the",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Delivery Report in the engagement workspace.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "YOUR THREE QUESTIONS",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Is the threshold defensible as written? No, and the number is not the problem. 10000 matches",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "the US CTR trigger and the strict \">\" is correct, so a day at exactly $10,000.00 is rightly not",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "reported. Do not let anyone change that to \">=\". What fails is governance: no rationale, no",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "owner, no tuning date, no review cycle, no currency and no unit, and any caller could override",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "it with nothing recorded. \ud83d\udcc4 Read from the source. \ud83e\udde0 The regulatory consequence is reasoned,",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "and every 31 CFR citation is marked TO-VERIFY.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Does the aggregation do what its name says? No. It filtered on neither date nor account, it",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "summed signed amounts so a credit nets against a deposit, and it aggregated by account where",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "the rule aggregates by person. \ud83d\udcc4 Observed in the source. All three are still in the code. You",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "chose safe fixes only and the caller could not be seen, so they are documented, not fixed.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "What else before production? No tests, no type hints, no input validation, a bare bool that",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "discards the evidence for the decision, an empty list indistinguishable from a broken feed, and",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "an import-time binding that made a runtime threshold override silently ineffective. Most of",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "those are now addressed.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "WHAT WE DID",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "33 findings across three passes. 7 fixed, 3 partially fixed, 7 accepted and documented by your",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "safe-fixes decision, 16 open. 15 tests written. Verdict: \u274c not yet fit for a production",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "alerting job.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "One thing worth flagging. Our own first fix round introduced a data-safety regression: the new",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "validation error messages put whole customer records into tracebacks and logs. \ud83e\udd16 Ravi",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "(code-reviewer) caught it on re-review and \ud83e\udd16 Kenji (platform-engineer) fixed it in a second",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "round. It is on the record rather than smoothed out.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "FOUR THINGS THAT LIMIT THIS REVIEW",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "1. Nothing was executed. You declined execution consent, which was the safe default. The QA",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "verdict is \ud83e\udde0 inferred, not observed, and the DoD closes PARTIAL.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "2. No HTML was produced. The Markdown renderer is not installed here. Run",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "pip install -r requirements-dev.txt and ask me to re-render.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "3. The compliance pass assessed the code as found and was not re-run after the fixes. The",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "dispositions of \ud83e\udd16 Layla's (compliance-reviewer) findings in the report are mine, not hers.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\ud83e\udd16 Linh (qa-engineer) ran the QA pass statically.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "4. The second fix round was verified by me, not by an independent re-review pass. There was not",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "enough budget left for both that and a complete write-up. It is marked as such.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "WHAT I RECOMMEND NEXT",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "1. Answer who owns this threshold and whether the calling job scopes the input, then commission",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "the full aggregation fix. It needs signature changes and a caller inventory.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "2. Put the file under version control before it governs any reporting decision.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "3. Grant execution consent so the tests actually run and the QA verdict upgrades.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "4. Have a human verify the 31 CFR citations against eCFR.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "I can carry out any of these. Just say which.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Footprint: 9 specialist passes, roughly 600k tokens, about $13.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Execution note: the review was static throughout and you declined consent, so nothing was run.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Ensuring code handed over for review is safe to run remains your responsibility.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Data note: no data was shared or analysed. data/raw/ stays hard-blocked regardless.",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "\ud83e\udd16 Morgan",
+      "kind": "artifact"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Morgan introduces self as PM, Compliance Surveillance team v0.37.0, plugin mode",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Session running as Claude Opus 4.5",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Documents produced as .md + .html, regulatory citations on",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "opengrep, ast-grep and other analysers unavailable; ruff/mypy/bandit/black available for Python",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "HTML renderer not installed in this environment",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Target classified as code review, not a build",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Execution safety warning given before code review begins",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Data safety warning given - raw data hard-blocked, shared data is user's responsibility",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[gate] Execution consent - user declined, static only",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "No consent marker existed so nothing to delete; gate stays closed",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Scope set to whole file, 19 lines, nothing excluded (only source file)",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Pricing given: Quick/Deep/Audit tiers, ~2x pass figure all-in",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[gate] Depth - user chose Deep",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[gate] Performance review - user declined",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[gate] Fix-cycle - user chose fix then re-review loop",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[gate] Origin - user said mixed (human and AI interleaved)",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "VSIT/engagements/alert-threshold-check-review/",
+      "title": "Engagement workspace created, brief written, no prior engagements",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "VSIT/engagements/alert-threshold-check-review/engagement-brief.md",
+      "title": "Plan: 7 subagent calls across three phases (Pip, Ravi, Pip, Layla, Morgan, Kenji, Linh/Ravi)",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Deliberate omission of tuning-analyst (Theo) pass - no data to calibrate threshold against",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[gate] Jurisdiction - US (BSA/FinCEN)",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[gate] Go-ahead - proceed as briefed",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Pip dispatched for context and lens selection",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Pip's context pass: 1 Python file, 19 lines, no CLAUDE.md, 4 lenses selected",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Ravi and Layla dispatched concurrently via Workflow tool",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "DoD gate blocked: 3 MISSING-HTML findings, escalated as human action needed",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "TodoWrite tool unavailable; task panel not seeded, tracked in state file instead",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "VSIT/engagements/alert-threshold-check-review/data/findings-alert-threshold-check-review.jsonl",
+      "title": "Ravi's review: 12 findings, 2 critical",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "VSIT/engagements/alert-threshold-check-review/data/findings-compliance-alert-threshold-check-review.jsonl",
+      "title": "Layla's compliance review: 11 findings, 4 critical, verdict FAIL",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Pip scoring pass: 23 found, 23 reported, 0 filtered, 6 cross-pack overlaps",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "VSIT/engagements/alert-threshold-check-review/data/findings-alert-threshold-check-review.jsonl",
+      "title": "Morgan challenge corrected Ravi's envelope severity split (stated 5/4, actual 6/3)",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "critical",
+      "location": "VSIT/engagements/alert-threshold-check-review/data/findings-alert-threshold-check-review.jsonl",
+      "title": "aggregate_daily filters on neither date nor account despite docstring promising one account-day",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "critical",
+      "location": "VSIT/engagements/alert-threshold-check-review/data/findings-alert-threshold-check-review.jsonl",
+      "title": "aggregate_daily sums signed amounts, a credit can net against a deposit and suppress a reportable leg",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "critical",
+      "location": "VSIT/engagements/alert-threshold-check-review/data/findings-compliance-alert-threshold-check-review.jsonl",
+      "title": "Aggregation keyed by account where the rule requires aggregation by person",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Threshold value 10000 and strict '>' comparison judged correct as written, not a defect",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "critical",
+      "location": "VSIT/engagements/alert-threshold-check-review/data/findings-compliance-alert-threshold-check-review.jsonl",
+      "title": "Threshold constant carries no rationale, owner, tuning date, review cycle, currency or unit",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Threshold exposed as limit= default any caller can override with nothing recorded",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "No repository/version identifier means value in force on any past date is unrecoverable",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Morgan rejected Layla's proposed 9000 near-threshold band as an invented ungoverned value",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Morgan rejected Ravi's proposed comment asserting unverified eCFR verification",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[gate] Purpose - module drives both CTR filing and investigation alert from one bool",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[gate] NYDFS - not a New York regulated entity, Part 504 out of scope",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[gate] Upstream scoping - user cannot see whether the calling job scopes the input",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[gate] Fix scope - safe fixes only, plus tests, no signature changes to public functions",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Aggregation criticals cannot be fixed this pass, close as Open needing human developer decision",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Filing/investigation-alert split stays open (would need signature change), warning written into module",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Kenji dispatched to apply safe fixes and write 15 tests",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Kenji changed DAILY_LIMIT from int to Decimal, flagged as public constant type change",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Morgan declined to accept Kenji's own word on the retype, deferred judgement to Ravi's re-review",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Linh and Ravi dispatched concurrently for QA and re-review via Workflow",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "critical",
+      "location": "VSIT/engagements/alert-threshold-check-review/data/findings-alert-threshold-check-review-rereview.jsonl",
+      "title": "RR-01: fix round 1 introduced data-safety regression, whole transaction record interpolated into error messages",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "VSIT/engagements/alert-threshold-check-review/data/findings-alert-threshold-check-review-rereview.jsonl",
+      "title": "Ravi ruled DAILY_LIMIT retype as scope creep that bought nothing, recommended reverting",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "VSIT/engagements/alert-threshold-check-review/qa-handover.md",
+      "title": "Linh's QA: 15 tests read as correct and non-vacuous, verdict inferred not observed, DoD PARTIAL",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Kenji round-2 fix and Pip re-review scoring dispatched together via Workflow",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Budget note: ~$11.50 of $18 spent; round-2 fixes not independently re-reviewed by Ravi due to budget, verified by Morgan instead",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "VSIT/engagements/ENGAGEMENTS.md",
+      "title": "QA handover and re-review pack registered, STALE-INDEX cleared",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Close-time DoD gate found 11 defects",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Morgan self-fixed 7 of 11 close defects: unmarked agent names, stale interim banners, stale doc-control status",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Close blocked by 4 remaining MISSING-HTML defects, Markdown render library not installed",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Close refused, engagement stays at 'closing' not 'closed'",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Morgan's own mistake: registered project-level codebase map as workspace artifact causing dangling row, then removed and re-validated",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "VSIT/engagements/alert-threshold-check-review/delivery-report.md",
+      "title": "Final verdict: not yet fit for a production alerting job",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "VSIT/engagements/alert-threshold-check-review/delivery-report.md",
+      "title": "Findings disposition: 33 findings - 7 fixed, 3 partially fixed, 7 accepted/documented, 16 open",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Footprint: 9 specialist passes, roughly 600k tokens, about $15.90 of $18 available",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "[gate] Next step - user chose to install renderer then close",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Morgan gave exact pip install command for renderer, noted ~$1.95 remaining budget",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Engagement remains NOT closed at end of session",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "VSIT/engagements/alert-threshold-check-review/engagement-summary-alert-threshold-check-review.txt",
+      "title": "Compliance pass assessed code as found, not re-run after fixes; dispositions in report are Morgan's not Layla's",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "VSIT/engagements/alert-threshold-check-review/START-HERE.md",
+      "title": "Outstanding: threshold owner, effective date, tuning date, review cycle still <to be completed> placeholders",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Recommendation: grant execution consent so tests actually run and QA verdict upgrades",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Recommendation: human verify 31 CFR citations against eCFR, all marked TO-VERIFY",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Recommendation: put file under version control, no git repository exists in project",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "Team roster named: Morgan (PM), Pip (review-scorer), Ravi (code-reviewer), Layla (compliance-reviewer), Kenji (platform-engineer), Linh (qa-engineer)",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "VSIT/engagements/alert-threshold-check-review/engagement-state.json",
+      "title": "Exec consent recorded declined; a grant is only ever a human-created marker (ADR-002)",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    },
+    {
+      "severity": "warning",
+      "location": "",
+      "title": "No tests, no type hints, no input validation, bare bool return discarding evidence, empty list ambiguous, import-time default binding issue, unenforceable synthetic-data docstring claim - named as pre-production gaps",
+      "kind": "behaviour",
+      "layer": "normalizer"
+    }
+  ]
+}

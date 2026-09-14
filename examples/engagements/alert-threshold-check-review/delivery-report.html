@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delivery Report - Code review: `alert_threshold_check.py`</title>
+<style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
+  color: #1a1a1a; background: #fff; }
+.letterhead { border-bottom: 2px solid #0969da; margin: 0 -1.25rem 1.5rem; padding: .7rem 1.25rem;
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+  font-size: .8rem; color: #57606a; }
+.letterhead .brand { font-weight: 600; color: #0969da; letter-spacing: .02em; }
+h1, h2, h3 { line-height: 1.25; margin-top: 1.8em; }
+h1 { border-bottom: 2px solid #e3e3e3; padding-bottom: .3em; }
+h2 { border-bottom: 1px solid #ececec; padding-bottom: .2em; }
+/* An H1 inside a callout blockquote should not look like a second document title. */
+blockquote h1, blockquote h2 { border: 0; font-size: 1.05em; margin: .2em 0; padding: 0; }
+code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto;
+  border: 1px solid #eaecef; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+th, td { border: 1px solid #dcdcdc; padding: .5em .7em; text-align: left; vertical-align: top; }
+th { background: #f6f8fa; }
+tbody tr:nth-child(even) { background: #fafbfc; }
+blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #4a5158; }
+a { color: #0969da; }
+.footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ececec;
+  color: #595959; font-size: .8rem; }
+/* In-progress status pulse - CSS-only (no JS: bleach strips script elements from body content
+   by design, see _sanitise()'s docstring). #status-in-progress is set by engagement_state.py's
+   render_markdown() only while status == in_progress; never applied to blocked/closing/closed. */
+#status-in-progress { display: inline-block; animation: status-pulse 1.8s ease-in-out infinite; }
+@keyframes status-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { #status-in-progress { animation: none; } }
+@media (prefers-color-scheme: dark) {
+  body { background: #0d1117; color: #e6edf3; }
+  h1, h2 { border-color: #30363d; }
+  .letterhead { border-color: #1f6feb; color: #9da7b3; }
+  code, pre { background: #161b22; } pre { border-color: #30363d; }
+  th { background: #161b22; } th, td { border-color: #30363d; }
+  tbody tr:nth-child(even) { background: #11161d; }
+  blockquote { color: #9da7b3; border-color: #30363d; }
+  a { color: #539bf5; } .footer { color: #8b949e; border-color: #30363d; }
+}
+@media print {
+  body { max-width: none; font-size: 11pt; }
+  a { color: inherit; text-decoration: none; }
+  @page { margin: 18mm; }
+  h1, h2, h3 { break-after: avoid; }
+  tr, pre, table, blockquote { break-inside: avoid; }
+  thead { display: table-header-group; }   /* repeat table headers on each page */
+  .letterhead { position: running(head); }
+}</style>
+</head>
+<body>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-09-14</span></header>
+<h1 id="delivery-report-code-review-alert_threshold_checkpy">Delivery Report - Code review: <code>alert_threshold_check.py</code></h1>
+<blockquote>
+<p><strong>Document control</strong> · ID <code>DLVR-001</code> · Version <code>1.0</code> · Status <code>Approved</code>
+· Classification <code>Internal</code> · Owner <code>🤖 Morgan, PM (Virtual Surveillance IT)</code> · As-of <code>2026-09-14</code></p>
+<table>
+<thead>
+<tr>
+<th>Version</th>
+<th>Date</th>
+<th>Author</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1.0</td>
+<td>2026-09-14</td>
+<td>🤖 Morgan, PM (Virtual Surveillance IT)</td>
+<td>Close</td>
+</tr>
+</tbody>
+</table>
+</blockquote>
+<table>
+
+<tbody>
+<tr>
+<td><strong>Deliverable</strong></td>
+<td><code>alert_threshold_check.py</code> (19 lines as found) and its new test file</td>
+</tr>
+<tr>
+<td><strong>Type</strong></td>
+<td>review, with a fix and re-review loop</td>
+</tr>
+<tr>
+<td><strong>Version / commit</strong></td>
+<td>none. The project is not a git repository. Scope anchor is the file as read on 2026-09-14</td>
+</tr>
+<tr>
+<td><strong>Date</strong></td>
+<td>2026-09-14</td>
+</tr>
+<tr>
+<td><strong>Classification / distribution</strong></td>
+<td>Internal</td>
+</tr>
+<tr>
+<td><strong>Overall verdict</strong></td>
+<td><strong>❌ not yet</strong> fit for a production alerting job</td>
+</tr>
+<tr>
+<td><strong>Findings disposition</strong></td>
+<td>7 fixed · 3 partially fixed · 7 accepted by your decision · 16 open</td>
+</tr>
+</tbody>
+</table>
+<h2 id="1-executive-summary-next-steps">1. Executive summary &amp; next steps</h2>
+<p>You asked three questions. Here are the answers.</p>
+<p><strong>Is the threshold defensible as written? No, and the number is not the problem.</strong> <code>10000</code> matches the US CTR trigger, and the strict <code>&gt;</code> at the comparison is correct: the rule attaches above $10,000, so a day totalling exactly $10,000.00 is rightly not reported. Changing that to <code>&gt;=</code> would be a defect. What fails is governance. The constant carried no rationale, owner, tuning date, review cycle, currency or unit, so it could not be evidenced as governed. It was exposed as a <code>limit=</code> default any caller could override with nothing recorded, so it could not be evidenced as applied. With no repository and no version identifier, the value in force on any past date is unrecoverable. Separately, setting the alerting threshold exactly on the statutory line leaves no margin for rounding or late postings and makes the rule structurally blind to structuring, which happens below $10,000 by definition.</p>
+<p><strong>Does the aggregation do what its name says? No, on three counts.</strong> <code>aggregate_daily</code> filtered on neither date nor account, so it summed whatever list it was handed while its docstring promised one account-day. It summed signed amounts, so a credit nets against a deposit and can suppress a reportable cash-in leg. And it aggregated by account where the rule aggregates by person. <strong>All three are still present in the code.</strong> They are documented now, not fixed.</p>
+<p><strong>What else before production.</strong> No tests, no type hints, no input validation, a bare <code>bool</code> return discarding the evidence for the decision, an empty list indistinguishable from a broken feed, an import-time default binding that made a runtime threshold override silently ineffective, and a module docstring asserting a synthetic-data guarantee the code could not enforce. Most of these are now addressed.</p>
+<p><strong>Reconciliation: what was found, then what was done.</strong> Seven findings are fixed. Three are partially fixed. Seven are <strong>accepted and documented rather than fixed</strong>, because you chose safe fixes only and the caller could not be seen: keying the aggregation to a person, a business day and a direction would have changed both public signatures. That was the right call with an unknown caller, and it is why the verdict is still not-yet. Sixteen remain open, most of them compliance items that need a human, such as naming the threshold owner and filling the governance dates.</p>
+<p><strong>One thing we caught on ourselves.</strong> The first fix round introduced a data-safety regression: the new validation error messages interpolated the whole transaction record, which would have put customer data into tracebacks and logs. The original code never did that. Ravi found it on re-review, and Kenji fixed it in a second round. The error messages now name the record by its index and the field by name, never by value.</p>
+<p><strong>Next steps, with my recommendation.</strong>
+1. <strong>Recommended.</strong> Answer the two open questions that block the rest: who owns this threshold, and does the calling job scope the input. Then commission the full fix for the aggregation, which needs signature changes and a caller inventory.
+2. Put the file under version control before it governs any reporting decision. Nothing in this engagement could establish authorship, approval or change history, because none exists.
+3. Grant execution consent so the 15 tests actually run. The QA verdict is currently inferred, not observed.
+4. Have a human verify the 31 CFR citations against eCFR. Every one is marked TO-VERIFY.</p>
+<p>I can carry out any of these. Say which.</p>
+<h2 id="1a-iteration-log">1a. Iteration log</h2>
+<blockquote>
+<p>🔎 Review P1 (Ravi 12 · Layla 11) → 📊 Pip score → 🎩 Morgan challenge → ⛔ blocked on 3 user questions → 🔧 Fix R1 (Kenji) → 🧪 QA (Linh, static) + 🔎 Re-review P2 (Ravi) ❌ <em>(1 data-safety regression)</em> → 🔧 Fix R2 (Kenji) → 📊 Pip score → 🎩 Morgan verify</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Date</th>
+<th>Hand-off</th>
+<th>Trigger</th>
+<th>Outcome</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>2026-09-14</td>
+<td>Morgan → Pip</td>
+<td>Context and lens selection</td>
+<td>1 Python file, 19 lines, no CLAUDE.md, 4 lenses, 2 analysers unavailable</td>
+<td>state log</td>
+</tr>
+<tr>
+<td>2</td>
+<td>2026-09-14</td>
+<td>Morgan → Ravi + Layla</td>
+<td>Deep review, concurrent</td>
+<td>12 code findings (2 critical), 11 compliance findings (4 critical), verdict FAIL</td>
+<td><code>data/findings-*.jsonl</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td>2026-09-14</td>
+<td>Morgan → Pip</td>
+<td>Score and filter</td>
+<td>23 found, 23 reported, 0 filtered, 6 cross-pack overlaps</td>
+<td>pack envelopes</td>
+</tr>
+<tr>
+<td>4</td>
+<td>2026-09-14</td>
+<td>Morgan challenge</td>
+<td>Spot-check</td>
+<td>Corrected Ravi's envelope severity split (5/4 stated, 6/3 actual). Overruled Layla's invented <code>9000</code> band and Ravi's "verified against eCFR" comment text</td>
+<td>pack envelopes, state log</td>
+</tr>
+<tr>
+<td>5</td>
+<td>2026-09-14</td>
+<td>Morgan → user</td>
+<td>3 questions that change the correct fix</td>
+<td>Answered. Safe fixes only, so 7 findings become accepted-not-fixed</td>
+<td>state decisions</td>
+</tr>
+<tr>
+<td>6</td>
+<td>2026-09-14</td>
+<td>Morgan → Kenji</td>
+<td>Fix round 1</td>
+<td>5 fixed, 3 partial, 15 tests written, not run</td>
+<td>module + test file</td>
+</tr>
+<tr>
+<td>7</td>
+<td>2026-09-14</td>
+<td>Morgan → Linh + Ravi</td>
+<td>QA and re-review, concurrent</td>
+<td>QA 🧠 inferred, DoD PARTIAL. Re-review: 10 new findings, no new critical, <strong>RR-01 data-safety regression</strong></td>
+<td><code>qa-handover.md</code>, re-review pack</td>
+</tr>
+<tr>
+<td>8</td>
+<td>2026-09-14</td>
+<td>Ravi → Kenji</td>
+<td>RR-01 and RR-04</td>
+<td>Both fixed. Error messages no longer disclose record contents. <code>DAILY_LIMIT</code> retype reverted</td>
+<td>module</td>
+</tr>
+<tr>
+<td>9</td>
+<td>2026-09-14</td>
+<td>Morgan → Pip</td>
+<td>Score the re-review pack</td>
+<td>13 found, 10 reported, 3 filtered, split confirmed, RR-01 confirmed never-filter</td>
+<td>re-review envelope</td>
+</tr>
+</tbody>
+</table>
+<p>Pass 7's failure is kept on the record deliberately. A regression that was caught, routed, fixed and recorded is evidence the loop works.</p>
+<h2 id="2-scope-what-was-delivered">2. Scope &amp; what was delivered</h2>
+<p>Reviewed: <code>alert_threshold_check.py</code>, whole file, 19 lines as found. One Python file, the only source file in the project. Nothing excluded, so there is no unreviewed remainder.</p>
+<p>Delivered: the module with safe fixes applied, a new <code>test_alert_threshold_check.py</code> with 15 tests, three findings packs, an independent QA handover, and this report.</p>
+<p>Out of scope: the calling alerting job, the upstream data contract, any downstream case management. None of it exists in this project and none was supplied. Jurisdiction: <strong>US (BSA / FinCEN) only</strong>. EU, UK and NYDFS Part 504 were explicitly not assessed, on your confirmation that the institution is not New York regulated.</p>
+<h2 id="3-requirements-traceability">3. Requirements &amp; traceability</h2>
+<p>N/A for a review. Worth stating plainly as a finding rather than an omission: <strong>no RTM, no requirement id, no obligation reference and no specification exist anywhere in this project.</strong> That is CMP-01 and it is open.</p>
+<h2 id="4-code-review">4. Code review</h2>
+<p><code>Found 12 · Reported 12 · Filtered 0</code> on the first pass, <code>Found 13 · Reported 10 · Filtered 3</code> on the re-review. Deep depth, audit mode. Scored by Pip (<code>review-scorer</code>) in both cases, then challenged by me. Full detail with diffs and rationale is in the findings packs; this is the summary.</p>
+<table>
+<thead>
+<tr>
+<th>Sev</th>
+<th>Location</th>
+<th>Issue</th>
+<th>Basis</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>🔴 Critical</td>
+<td><code>aggregate_daily</code></td>
+<td>Filters on neither date nor account nor person. Sums whatever list it is given (CR-01)</td>
+<td>📄 coded</td>
+<td><strong>Accepted, documented not fixed</strong></td>
+</tr>
+<tr>
+<td>🔴 Critical</td>
+<td>the accumulator line</td>
+<td>Sums signed amounts, so a credit nets against a deposit and can suppress a reportable day (CR-02)</td>
+<td>📄 coded</td>
+<td><strong>Accepted, documented not fixed</strong></td>
+</tr>
+<tr>
+<td>🟠 Warning</td>
+<td>error messages</td>
+<td>Validation messages interpolated the whole record into tracebacks and logs (RR-01, introduced by our own fix)</td>
+<td>📄 coded</td>
+<td><strong>Fixed</strong></td>
+</tr>
+<tr>
+<td>🟠 Warning</td>
+<td><code>DAILY_LIMIT</code></td>
+<td>Bare untyped int, no unit, currency, rationale, owner or tuning date (CR-05)</td>
+<td>📄 coded</td>
+<td>Partially fixed. Comment block added with placeholders; the values are yours to fill</td>
+</tr>
+<tr>
+<td>🟠 Warning</td>
+<td><code>txn["amount"]</code></td>
+<td>Unvalidated. Missing key, string, <code>None</code> or <code>bool</code> each mishandled (CR-04)</td>
+<td>📄 coded</td>
+<td>Partially fixed. Validation added; RR-02 numpy scalars and RR-03 NaN remain</td>
+</tr>
+<tr>
+<td>🟠 Warning</td>
+<td>whole module</td>
+<td>No tests at all (CR-07)</td>
+<td>📊 measured</td>
+<td>Partially fixed. 15 tests written, none executed</td>
+</tr>
+<tr>
+<td>🟠 Warning</td>
+<td><code>is_reportable</code></td>
+<td>Returns a bare bool, discarding the total, the limit applied and the count (CR-08)</td>
+<td>📄 coded</td>
+<td><strong>Accepted, documented not fixed</strong></td>
+</tr>
+<tr>
+<td>🟠 Warning</td>
+<td>both signatures</td>
+<td>No type hints, no transaction data contract (CR-12)</td>
+<td>📊 measured, ruff</td>
+<td><strong>Fixed</strong></td>
+</tr>
+<tr>
+<td>🟡 Medium</td>
+<td>comparison line</td>
+<td>Float accumulation deciding an exact monetary boundary (CR-03)</td>
+<td>🧠 inferred</td>
+<td><strong>Fixed</strong>, Decimal internally</td>
+</tr>
+<tr>
+<td>🟡 Medium</td>
+<td><code>limit=DAILY_LIMIT</code></td>
+<td>Import-time binding made a runtime threshold override silently ineffective (CR-10)</td>
+<td>📄 coded</td>
+<td><strong>Fixed</strong>, resolved at call time</td>
+</tr>
+<tr>
+<td>🟡 Medium</td>
+<td>docstrings</td>
+<td>Asserted a synthetic-data guarantee the code cannot enforce, and a scoping it does not implement (CR-11)</td>
+<td>📄 coded</td>
+<td><strong>Fixed</strong></td>
+</tr>
+<tr>
+<td>🟡 Medium</td>
+<td>empty input</td>
+<td>An empty list is indistinguishable from a broken feed (CR-09)</td>
+<td>📄 coded</td>
+<td><strong>Accepted, documented not fixed.</strong> Raising would break unknown callers</td>
+</tr>
+<tr>
+<td>🔵 Style</td>
+<td>comparison line</td>
+<td>The strict <code>&gt;</code> is <strong>correct</strong> and now carries a comment saying so. Recorded so nobody "fixes" it to <code>&gt;=</code> (CR-06)</td>
+<td>📄 coded</td>
+<td><strong>Fixed</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Eight further re-review findings are open and are in the pack: numpy scalar rejection, NaN and Infinity passing validation, unfilled governance placeholders, no dependency manifest or CI, fail-stop batch validation with no quarantine, and two comments that overclaim.</p>
+<p><strong>Architectural note.</strong> The module conflates computing an aggregate with deciding a policy, and you confirmed it serves both a mandatory CTR filing determination and a discretionary investigation alert from one bool. Those carry different obligations and different error tolerance. Separating them is a signature change and is open.</p>
+<p><strong>🔵 Developer guidance - improving future code.</strong>
+1. Put the aggregation key in the signature, not in the docstring. A function named for one day and one account should take that day and that account, so the contract is enforced rather than asserted.
+2. Money is neither a float nor a bare int. Use <code>Decimal</code> or integer minor units from the edge of the system inward.
+3. Write the boundary tests before the logic. The cases that decide this module are exactly at the limit, one cent either side, the empty list, a netting pair, and a record with no amount key.
+4. When code makes a regulatory decision, return the evidence with the decision. A bare bool cannot be explained to an examiner six months later.</p>
+<p><strong>🧑‍💻 Prompting guidance.</strong> You told us the origin was mixed. Two findings here are classic AI-assisted shapes. CR-01 is the strongest example: the docstring described an aggregation that was never implemented, and it reads as correct precisely because the name supplies the missing logic to the reader. CR-02 is the same pattern at the data level, an unstated assumption that every amount is a same-direction positive. A prompt that said "the function must take the aggregation key as arguments and must not trust the caller to pre-filter" would have prevented both. When asking for detection logic, state the rule's qualifiers explicitly, entity, direction and window, rather than the headline number.</p>
+<h2 id="5-performance-scalability">5. Performance &amp; scalability</h2>
+<p>N/A. You chose no performance review and the module processes one list per call with no I/O.</p>
+<h2 id="6-compliance-audit">6. Compliance &amp; audit</h2>
+<p>Assessed by Layla (<code>compliance-reviewer</code>) against US BSA and FinCEN, 31 CFR Chapter X. Verdict <strong>FAIL</strong>, 4 critical findings, 11 open.</p>
+<ul>
+<li><strong>Traceability: NOT MET.</strong> No obligation reference, no requirement id, no spec, no RTM. <code>check_citations</code> returned zero citations in the file, which confirms the absence mechanically.</li>
+<li><strong>Threshold governance: NOT MET.</strong> Covered in §1. The fix added the governance comment block; the owner, dates and version are <code>&lt;to be completed&gt;</code> placeholders and are yours.</li>
+<li><strong>Decision auditability: NOT MET.</strong> A bare bool creates no record. A look-back cannot do below-the-line testing because non-alerting days leave no total.</li>
+<li><strong>Change control: NOT MET.</strong> No repository, so no authorship, approval or history exists.</li>
+<li><strong>Data safety: MET, and stated because a clean result is a result.</strong> The file contains no personal data, no identifiers, no transaction records, no MNPI and no secrets. The one regression we introduced against this limb (RR-01) was caught and fixed.</li>
+<li><strong>Citations.</strong> Every 31 CFR and 31 USC pinpoint is marked <strong>TO-VERIFY</strong> with a primary-source permalink. The bundled regulatory register holds no BSA or FinCEN entries, so none of them is asserted as verified. Do not quote them to a regulator until a human has checked them against eCFR.</li>
+</ul>
+<p><strong>Limitation on this section.</strong> Layla assessed the code <strong>as found</strong>. No second compliance pass was run after the fixes, so the dispositions of her findings in this report are mine, not hers, and are 🧠 inferred. A fresh compliance pass would be needed before anyone relies on the compliance limb as current.</p>
+<h2 id="7-qa-test-evidence">7. QA / test evidence</h2>
+<p>Independent pass by Linh (<code>qa-engineer</code>). Full detail in <a href="qa-handover.html"><code>qa-handover.md</code></a>.</p>
+<table>
+<thead>
+<tr>
+<th>Suite</th>
+<th>Tests</th>
+<th>Pass</th>
+<th>Fail</th>
+<th>Skip</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>test_alert_threshold_check.py</code></td>
+<td>15</td>
+<td><strong>not run</strong></td>
+<td><strong>not run</strong></td>
+<td><strong>not run</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>No test was executed.</strong> Execution consent was withheld, which was your choice and the safe default. Under the static-only DoD path the QA verdict is <strong>🧠 inferred</strong> and the <strong>DoD is PARTIAL</strong>. Linh read all 15 tests statically and found none vacuous, none that would error at collection, and no wrong expected values. The characterisation test pinning the known CR-02 netting defect is clearly commented as such and cannot be misread as an assertion that the behaviour is correct.</p>
+<p>Reproduce: <code>pytest test_alert_threshold_check.py</code>. Test data is synthetic amounts with no identifiers.</p>
+<p><strong>NOT covered:</strong> an <code>int</code> limit exercising the coercion branch, a <code>Decimal</code> amount, a non-dict record, an assertion that <code>aggregate_daily</code> actually returns <code>Decimal</code>, and any volume test.</p>
+<p><strong>Residual risk.</strong> The module and its tests have never been executed by anyone in this engagement. Every behavioural claim in this report is reasoned from source, not observed. Grant execution consent and the QA verdict upgrades from 🧠 to 📊.</p>
+<h2 id="8-developer-handover">8. Developer handover</h2>
+<p>The two public functions keep their names and parameter lists, so existing callers are unaffected by signature. Three behavioural changes to know about:</p>
+<ol>
+<li><code>aggregate_daily</code> now returns <code>Decimal</code>. A caller doing float arithmetic on it, JSON-serialising it, or <code>isinstance(x, int)</code> on it will break.</li>
+<li>Malformed records now raise a clear error naming the index and the field. Previously they raised <code>KeyError</code>, raised <code>TypeError</code>, or were silently miscounted. A caller that relied on the silent path will now see an exception.</li>
+<li>The <code>limit</code> default resolves at call time, so rebinding <code>DAILY_LIMIT</code> at runtime now actually takes effect. Previously it silently did not.</li>
+</ol>
+<p><code>DAILY_LIMIT</code> remains a plain <code>int</code>. Kenji briefly retyped it to <code>Decimal</code>; Ravi ruled that a public API change outside the safe-fixes mandate that bought nothing, and it was reverted.</p>
+<p><strong>Known limitations, carried deliberately.</strong> The aggregation still does not scope to a day, an account, a person, a direction or to currency transactions only. Those gaps are now written as a prominent <code>WARNING:</code> block in the function docstring, stating what the function does not do and that the caller must guarantee it. That is documentation, not a fix.</p>
+<h2 id="9-change-operations">9. Change &amp; operations</h2>
+<p>Drafted for your IT team, who approve and deploy. This team does not self-certify these controls.</p>
+<ul>
+<li><strong>Change request:</strong> low-risk edits to one module plus a new test file. No signature changes. Rollback is reverting two files. <strong>Approval: [IT team / CAB].</strong></li>
+<li><strong>Blocking pre-deploy gate:</strong> the file must go under version control first. There is currently no rollback point and no approval record.</li>
+<li><strong>Ops:</strong> the module emits nothing. There is no alert-liveness signal and no way to distinguish a quiet day from a broken feed. Add feed-volume reconciliation upstream before relying on a non-alert. <strong>[IT team].</strong></li>
+</ul>
+<blockquote>
+<p><strong>Run provenance &amp; non-determinism</strong> <em>(standing statement)</em>
+· Model <code>Claude Opus 4.5</code> · Framework <code>compliance-surveillance-team 0.37.0</code> · Run <code>2026-09-14</code></p>
+<p>The findings and conclusions in this document are <strong>one sample from a non-deterministic process</strong>. The same inputs, run again by the same model, can yield a different set of findings, in a different order, with different confidence scores. <strong>Absence of a finding is not evidence of absence:</strong> this document evidences what <em>was</em> found on this run, never that nothing further exists. Anything load-bearing for a control decision needs human verification; repeat runs raise confidence but never make the result exhaustive.</p>
+<p><strong>Known gap in this engagement.</strong> The <code>.html</code> renderer is not installed in this environment, so no artifact here has an HTML sibling. Markdown is complete and authoritative. Install the dev requirements and re-render to close it.</p>
+<p><strong>Independence gap, stated plainly.</strong> The second fix round (RR-01, RR-04) was verified by me, the PM, not by an independent re-review pass. There was not enough budget headroom to buy both that pass and a complete close. Treat those two fixes as 🧠 PM-verified, not independently reviewed.</p>
+</blockquote>
+<h2 id="sign-off">Sign-off</h2>
+<blockquote>
+<p>🤖 = AI agent (Virtual Surveillance IT), not a human. Agent rows and human-approver rows stay separate.</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Name</th>
+<th>Decision</th>
+<th>Date</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Author / owner</td>
+<td>🤖 Morgan, PM (Virtual Surveillance IT)</td>
+<td>Delivered</td>
+<td>2026-09-14</td>
+</tr>
+<tr>
+<td>PM (<code>Morgan</code>)</td>
+<td>🤖 Morgan, PM (Virtual Surveillance IT)</td>
+<td>Verdict: not yet</td>
+<td>2026-09-14</td>
+</tr>
+<tr>
+<td><code>code-reviewer</code></td>
+<td>🤖 Ravi (Virtual Surveillance IT)</td>
+<td>Reviewed, 2 passes</td>
+<td>2026-09-14</td>
+</tr>
+<tr>
+<td><code>compliance-reviewer</code> (DoD gate)</td>
+<td>🤖 Layla (Virtual Surveillance IT)</td>
+<td>FAIL, as-found only, not re-run after fixes</td>
+<td>2026-09-14</td>
+</tr>
+<tr>
+<td><code>qa-engineer</code></td>
+<td>🤖 Linh (Virtual Surveillance IT)</td>
+<td>🧠 inferred, DoD PARTIAL, no test executed</td>
+<td>2026-09-14</td>
+</tr>
+<tr>
+<td>Human approver (or <code>[IT team]</code>)</td>
+<td></td>
+<td>Pending</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr>
+<blockquote>
+<p><strong>Code-execution note.</strong> Review was <strong>static by default</strong>, and you declined execution consent, so nothing in the reviewed code or its tests was ever run. <strong>Ensuring code handed over for review is safe to run remains your responsibility</strong> (CLAUDE.md §7).</p>
+<p><strong>Data note.</strong> <code>data/raw/</code> is hard-blocked from agents. No data was shared in this engagement and none was analysed. <strong>Ensuring shared data is safe and policy-compliant remains your responsibility</strong> (CLAUDE.md §5).</p>
+</blockquote>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: delivery-report.md &middot; 2026-09-14</div>
+</body>
+</html>

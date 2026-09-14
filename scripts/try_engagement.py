@@ -3,12 +3,19 @@
 
     python scripts/try_engagement.py            # a temp project; opens the evidence room
     python scripts/try_engagement.py --dir ~/vsit-try --no-open
+    python scripts/try_engagement.py --replay   # the shipped sample engagement, as it was
 
 Creates a throwaway project, runs a complete synthetic review engagement through the team's own
 state machine (init, a findings pack rendered to a review report, the summary email, the close
 sequence and the mechanical Definition-of-Done gate, which renders the evidence room), and opens
 the evidence room in the browser. Every step is a vendored team script; no model is called and
 nothing leaves the machine. The findings are planted and say so.
+
+`--replay` (step 8.2 / 1.7, 2026-09-14) opens the SHIPPED sample instead: a real engagement the
+team ran on synthetic data, frozen under `examples/engagements/` with its state, findings pack,
+summary email, START-HERE page and evidence room. It is copied into the throwaway project
+unchanged and opened; nothing is regenerated and no model is called. The `/demo` Replay flavour
+is this command.
 
 If the close gate refuses (it should not; when it does, that is a real defect worth reporting)
 the refusal is printed verbatim, the room is rendered anyway so there is still something to look
@@ -28,6 +35,55 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 SLUG = "spoofing-review"
+SAMPLES = REPO / "examples" / "engagements"
+
+
+def shipped_samples(root: Path | None = None) -> list[Path]:
+    """The frozen sample engagements, oldest name first: every directory under
+    examples/engagements/ that carries an engagement-state.json."""
+    base = root or SAMPLES
+    if not base.is_dir():
+        return []
+    return sorted(p for p in base.iterdir() if (p / "engagement-state.json").is_file())
+
+
+def replay(
+    project: Path, open_browser: bool = True, log=print, samples: Path | None = None
+) -> tuple[int, Path | None]:
+    """Copy the shipped sample engagement into `project` and open its evidence room.
+
+    A copy, not a link, so the viewer can poke at it freely and the shipped copy stays what it
+    was. Returns (exit code, room); 1 with no room when nothing is shipped or the sample has no
+    evidence room, both of which are packaging defects worth reporting."""
+    import shutil
+
+    found = shipped_samples(samples)
+    if not found:
+        log(f"no sample engagement is shipped under {samples or SAMPLES}")
+        return 1, None
+    sample = found[0]
+    project.mkdir(parents=True, exist_ok=True)
+    (project / "README.md").write_text("# replay project (synthetic)\n", encoding="utf-8")
+    pack_dir = project / "VSIT" / "engagements" / sample.name
+    shutil.copytree(sample, pack_dir, dirs_exist_ok=True)
+    room = next(iter(sorted(pack_dir.glob("EVIDENCE-ROOM-*.html"))), None)
+    start = next(iter(sorted(pack_dir.glob("START-HERE*.md"))), None)
+    log(
+        f"Replay: the shipped sample engagement '{sample.name}', copied as it was, no tokens spent."
+    )
+    log(f"  workspace: {pack_dir}")
+    if start:
+        log(f"  start here: {start}")
+    if room is None:
+        log("  the sample ships no evidence room - a packaging defect worth reporting")
+        return 1, None
+    log(f"  evidence room: {room}")
+    if open_browser:
+        try:
+            webbrowser.open(room.as_uri())
+        except Exception:  # noqa: BLE001 - a browser that will not open is not a failure of the run
+            log("  (could not open a browser here; open the file above by hand)")
+    return 0, room
 
 
 def _plugin_version() -> str:
@@ -252,8 +308,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--no-open", action="store_true", help="do not open the evidence room in a browser"
     )
+    parser.add_argument(
+        "--replay",
+        action="store_true",
+        help="open the shipped sample engagement (examples/engagements/) instead of building one",
+    )
     args = parser.parse_args(argv)
     project = args.dir or Path(tempfile.mkdtemp(prefix="virt-surv-try-"))
+    if args.replay:
+        print(f"virt-surv try --replay: opening the shipped sample engagement under {project}")
+        code, _room = replay(project.resolve(), open_browser=not args.no_open)
+        return code
     print(f"virt-surv try: building a synthetic review engagement under {project}")
     code, _room = run(project.resolve(), open_browser=not args.no_open)
     return code

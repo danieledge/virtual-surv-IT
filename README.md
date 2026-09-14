@@ -102,6 +102,7 @@ The team builds the tooling; a person signs off every step.
 > **Install:** `git clone https://github.com/danieledge/virtual-surv-IT.git && cd virtual-surv-IT && python install_helper.py`, then enable
 > the plugin in each project that uses it (`/plugin`). Needs Python 3.9+ and, on Windows, Git Bash or WSL. Full steps: [Quick start](#-quick-start).
 > **See a finished engagement in one minute, no tokens:** `python scripts/try_engagement.py` (or `virt-surv try`) closes a synthetic review in a throwaway project and opens its evidence room.
+> **Or read a real one:** `virt-surv try --replay` (in a session, `/demo replay`) opens the shipped sample engagement, a real run the team did on synthetic data, frozen under [`examples/engagements/`](examples/README.md) with its START-HERE page, state, findings, summary email and evidence room.
 
 **New to AI agents?** Start with [`docs/OVERVIEW.md`](docs/OVERVIEW.md), a plain-English tour.
 **See it work:** the [review demo](docs/demos/review-demo.md) transcript, and a full-lifecycle

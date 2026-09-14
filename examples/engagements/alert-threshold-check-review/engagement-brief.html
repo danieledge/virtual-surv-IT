@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Engagement Brief - Code review: `alert_threshold_check.py`</title>
+<style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
+  color: #1a1a1a; background: #fff; }
+.letterhead { border-bottom: 2px solid #0969da; margin: 0 -1.25rem 1.5rem; padding: .7rem 1.25rem;
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+  font-size: .8rem; color: #57606a; }
+.letterhead .brand { font-weight: 600; color: #0969da; letter-spacing: .02em; }
+h1, h2, h3 { line-height: 1.25; margin-top: 1.8em; }
+h1 { border-bottom: 2px solid #e3e3e3; padding-bottom: .3em; }
+h2 { border-bottom: 1px solid #ececec; padding-bottom: .2em; }
+/* An H1 inside a callout blockquote should not look like a second document title. */
+blockquote h1, blockquote h2 { border: 0; font-size: 1.05em; margin: .2em 0; padding: 0; }
+code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto;
+  border: 1px solid #eaecef; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+th, td { border: 1px solid #dcdcdc; padding: .5em .7em; text-align: left; vertical-align: top; }
+th { background: #f6f8fa; }
+tbody tr:nth-child(even) { background: #fafbfc; }
+blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #4a5158; }
+a { color: #0969da; }
+.footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ececec;
+  color: #595959; font-size: .8rem; }
+/* In-progress status pulse - CSS-only (no JS: bleach strips script elements from body content
+   by design, see _sanitise()'s docstring). #status-in-progress is set by engagement_state.py's
+   render_markdown() only while status == in_progress; never applied to blocked/closing/closed. */
+#status-in-progress { display: inline-block; animation: status-pulse 1.8s ease-in-out infinite; }
+@keyframes status-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { #status-in-progress { animation: none; } }
+@media (prefers-color-scheme: dark) {
+  body { background: #0d1117; color: #e6edf3; }
+  h1, h2 { border-color: #30363d; }
+  .letterhead { border-color: #1f6feb; color: #9da7b3; }
+  code, pre { background: #161b22; } pre { border-color: #30363d; }
+  th { background: #161b22; } th, td { border-color: #30363d; }
+  tbody tr:nth-child(even) { background: #11161d; }
+  blockquote { color: #9da7b3; border-color: #30363d; }
+  a { color: #539bf5; } .footer { color: #8b949e; border-color: #30363d; }
+}
+@media print {
+  body { max-width: none; font-size: 11pt; }
+  a { color: inherit; text-decoration: none; }
+  @page { margin: 18mm; }
+  h1, h2, h3 { break-after: avoid; }
+  tr, pre, table, blockquote { break-inside: avoid; }
+  thead { display: table-header-group; }   /* repeat table headers on each page */
+  .letterhead { position: running(head); }
+}</style>
+</head>
+<body>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-09-14</span></header>
+<h1 id="engagement-brief-code-review-alert_threshold_checkpy">Engagement Brief - Code review: <code>alert_threshold_check.py</code></h1>
+<blockquote>
+<p><strong>Document control</strong> · ID <code>ENG-001</code> · Version <code>1.0</code> · Status <code>Approved - pending human sign-off</code>
+· Classification <code>Internal</code> · Owner <code>🤖 Morgan, PM (Virtual Surveillance IT)</code> · As-of <code>2026-09-14</code></p>
+<table>
+<thead>
+<tr>
+<th>Version</th>
+<th>Date</th>
+<th>Author</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.1</td>
+<td>2026-09-14</td>
+<td>🤖 Morgan, PM (Virtual Surveillance IT)</td>
+<td>Initial draft</td>
+</tr>
+</tbody>
+</table>
+</blockquote>
+<table>
+
+<tbody>
+<tr>
+<td><strong>Engagement</strong></td>
+<td>alert-threshold-check-review</td>
+</tr>
+<tr>
+<td><strong>Requested by</strong></td>
+<td> (the eval harness's account; replaced when the run was frozen as the shipped sample)</td>
+</tr>
+<tr>
+<td><strong>Date</strong></td>
+<td>2026-09-14</td>
+</tr>
+<tr>
+<td><strong>Type</strong></td>
+<td>review</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>intake</td>
+</tr>
+</tbody>
+</table>
+<h2 id="1-the-ask-pms-restatement">1. The ask (PM's restatement)</h2>
+<p>Review <code>alert_threshold_check.py</code>, a 19-line helper that decides whether one day's activity on
+one account is reportable. Three specific questions:</p>
+<ol>
+<li>Is the threshold defensible as written?</li>
+<li>Does the aggregation do what its name says?</li>
+<li>What else would we want fixed before this goes near a production alerting job?</li>
+</ol>
+<p>The write-up lands in this workspace so it can be handed on. The user asked for a short review
+proportionate to a small file.</p>
+<h2 id="2-regulatory-obligation">2. Regulatory obligation</h2>
+<p>🧠 Inferred, not confirmed. The code carries no obligation reference of its own. A same-day
+aggregate over one account against a hard <code>10000</code> limit is the shape of a cash-transaction
+reporting threshold. Two candidates, both TO-VERIFY:</p>
+<table>
+<thead>
+<tr>
+<th>Obligation</th>
+<th>Jurisdiction</th>
+<th>Article / rule</th>
+<th>What it requires</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BSA currency transaction reporting</td>
+<td>US</td>
+<td>31 CFR 1010.311</td>
+<td>Report currency transactions over $10,000 by or on behalf of one person in one business day, aggregated</td>
+</tr>
+<tr>
+<td>AML cash-payment limit</td>
+<td>EU</td>
+<td>AMLD/AMLR cash thresholds</td>
+<td>Obliged-entity controls around large cash amounts, threshold set by regime</td>
+</tr>
+</tbody>
+</table>
+<p>The absence of a stated obligation in or beside the code is itself a finding candidate. The
+applicable regime(s) are being confirmed with the user at the go-ahead gate.</p>
+<h2 id="3-agreed-success-criteria">3. Agreed success criteria</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Success criterion</th>
+<th>How measured / verified</th>
+<th>Agreed by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>The three questions above are each answered explicitly, with the evidence basis tagged</td>
+<td>The review artifact contains a direct answer to each</td>
+<td>user</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Findings carry dispositions and the fix→re-review loop runs to no open Criticals, or names what needs a human decision</td>
+<td>Findings register + iteration log</td>
+<td>user</td>
+</tr>
+<tr>
+<td>3</td>
+<td>The write-up is short and hand-on-able</td>
+<td>One consolidated Delivery Report in this workspace, <code>.md</code> (+ <code>.html</code> if the renderer is installed)</td>
+<td>user</td>
+</tr>
+</tbody>
+</table>
+<h2 id="4-decisions-taken">4. Decisions taken</h2>
+<table>
+<thead>
+<tr>
+<th>Decision</th>
+<th>Answer</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Work type</td>
+<td>Code review (not a build)</td>
+<td>Derived from the request, stated for correction</td>
+</tr>
+<tr>
+<td>Execution consent</td>
+<td>No - do not run the code under review</td>
+<td>User, 2026-09-14</td>
+</tr>
+<tr>
+<td>Data attestation</td>
+<td>No data involved - code only</td>
+<td>Recorded silently; no data was shared</td>
+</tr>
+<tr>
+<td>Review depth</td>
+<td>Deep</td>
+<td>User, 2026-09-14</td>
+</tr>
+<tr>
+<td>Performance review</td>
+<td>No</td>
+<td>User, 2026-09-14</td>
+</tr>
+<tr>
+<td>Fix-cycle</td>
+<td>Fix → re-review loop</td>
+<td>User, 2026-09-14</td>
+</tr>
+<tr>
+<td>Origin</td>
+<td>Mixed (human and AI interleaved)</td>
+<td>User, 2026-09-14</td>
+</tr>
+<tr>
+<td>Packaging</td>
+<td>One consolidated Delivery Report</td>
+<td>Default (2026-08-17 user decision)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Derived review scope:</strong> Deep · Full review (core + quality + 📋 compliance/audit) ·
+<code>alert_threshold_check.py</code>, whole file, 19 lines · mode <code>audit</code> · origin: mixed.</p>
+<p><strong>Not in scope:</strong> nothing is excluded. It is the only source file in the project, so there is no
+remainder to leave unread.</p>
+<p>📋 compliance/audit is in the dimension set because this code decides reportability. That makes
+it detection logic under §4, not general-purpose code.</p>
+<h2 id="5-open-questions-clarifications-needed">5. Open questions / clarifications needed</h2>
+<ol>
+<li>Which jurisdiction(s) apply, so the compliance pass assesses the applicable regime and says
+   what is not applicable. Put to the user at the go-ahead gate.</li>
+<li>Where the <code>10000</code> value came from, and whether a rationale, owner and tuning date exist
+   anywhere outside the file. Nothing in the repo records one.</li>
+<li>What <code>txn["amount"]</code> actually holds upstream: currency, sign convention, type, and whether
+   reversals and cancellations appear in the same list.</li>
+</ol>
+<h2 id="6-assumptions-constraints">6. Assumptions &amp; constraints</h2>
+<ul>
+<li>The file's docstring says synthetic sample. Taken at face value; no data was shared with us.</li>
+<li>Execution consent is withheld, so nothing is run. Findings that would need the code to execute
+  stay 🧠 inferred, and the QA pass takes the static-only DoD path with a 🧠 verdict and a
+  PARTIAL DoD. Untested code is named as residual risk at close.</li>
+<li>No git repository here, so there is no commit anchor for the scope. The scope anchor is the
+  file as read on 2026-09-14.</li>
+<li>The <code>.html</code> renderer is not installed in this environment. Markdown always lands; HTML siblings
+  may not, and that is recorded rather than worked around.</li>
+<li>🧠 Analysers: ruff, mypy, bandit and black are installed, so Python findings can be measured.
+  opengrep and ast-grep are not, so anything that would have relied on them stays inferred.</li>
+</ul>
+<h2 id="7-documentary-artifacts-requested">7. Documentary artifacts requested</h2>
+<p>One consolidated <strong>Delivery Report</strong> (<code>delivery-report.md</code>), written at close, holding the
+review findings, the iteration log, the QA evidence summary and the close verdict. The findings
+pack (<code>data/findings-*.jsonl</code>) and the rendered review are produced by the pipeline underneath
+it. This brief and the summary email complete the set.</p>
+<h2 id="8-proposed-approach-routing-plan">8. Proposed approach &amp; routing plan</h2>
+<p>Pipeline roll-call: <strong>Pip context → Ravi → Pip score/filter → Layla → my challenge → Kenji fix
+→ Linh QA + Ravi re-review.</strong></p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Stage</th>
+<th>Owner</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Context, language and lens selection</td>
+<td>🤖 Pip (<code>review-scorer</code>)</td>
+<td>Cheap tier, rote work</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Deep review pass</td>
+<td>🤖 Ravi (<code>code-reviewer</code>)</td>
+<td>One folded pass: security + correctness + architecture. 19 lines does not justify three facet passes</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Score and filter</td>
+<td>🤖 Pip (<code>review-scorer</code>)</td>
+<td>Found / Reported / Filtered, never filters regulated findings</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Compliance and audit trail</td>
+<td>🤖 Layla (<code>compliance-reviewer</code>)</td>
+<td>§4/§5 trail, threshold rationale, traceability</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Challenge pass</td>
+<td>🤖 Morgan (PM)</td>
+<td>Spot-check, not a re-score</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Apply fixes and add tests</td>
+<td>🤖 Kenji (<code>platform-engineer</code>)</td>
+<td>Utility script, so the builder is platform-engineer, not rules-developer</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Independent QA</td>
+<td>🤖 Linh (<code>qa-engineer</code>)</td>
+<td>Static-only, consent withheld</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Re-review</td>
+<td>🤖 Ravi (<code>code-reviewer</code>)</td>
+<td>Fresh context, loop until no open Criticals</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Right-sizing.</strong> Seven subagent calls across the three phases. Stages 1 to 4 are one concurrent
+dispatch where independent; stages 7 and 8 go out together. No <code>tuning-analyst</code> pass: threshold
+calibration needs data to calibrate against and no data exists here, so a tuning pass would
+return pure inference. The threshold question is answered instead as a design and traceability
+question by Layla, plus the PM's read of the <code>docs/sme/tm-monitoring.md</code> knowledge pack.</p>
+<h2 id="9-risks-dependencies">9. Risks &amp; dependencies</h2>
+<table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Impact</th>
+<th>Handling</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Jurisdiction unknown at dispatch</td>
+<td>Compliance pass assesses the wrong regime</td>
+<td>Asked at the go-ahead gate before Layla is briefed</td>
+</tr>
+<tr>
+<td>The <code>10000</code> rationale may exist outside this repo</td>
+<td>We report a traceability gap that is really a documentation-location gap</td>
+<td>Finding stated as "no rationale reachable from the code", not "no rationale exists"</td>
+</tr>
+<tr>
+<td>Execution withheld</td>
+<td>No measured test evidence</td>
+<td>Static-only DoD path, PARTIAL, residual risk named at close</td>
+</tr>
+<tr>
+<td>Upstream data contract unknown</td>
+<td>Aggregation findings stay inferred</td>
+<td>Stated as an assumption, raised as an open question</td>
+</tr>
+</tbody>
+</table>
+<h2 id="10-next-action">10. Next action</h2>
+<p>User answers the go-ahead gate and the jurisdiction question. Then the review dispatch goes out.</p>
+<h2 id="sign-off">Sign-off</h2>
+<blockquote>
+<p>🤖 = AI agent (Virtual Surveillance IT), not a human. Agent rows and human-approver rows stay separate - never combine an agent and a human on one line.</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Name</th>
+<th>Decision</th>
+<th>Date</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Author / owner</td>
+<td>🤖 Morgan, PM (Virtual Surveillance IT)</td>
+<td>Drafted</td>
+<td>2026-09-14</td>
+</tr>
+<tr>
+<td><code>compliance-reviewer</code> (DoD gate)</td>
+<td>🤖 Layla (Virtual Surveillance IT)</td>
+<td>Not yet run</td>
+<td></td>
+</tr>
+<tr>
+<td>Human approver (or <code>[IT team]</code>)</td>
+<td></td>
+<td>Pending</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: engagement-brief.md &middot; 2026-09-14</div>
+</body>
+</html>

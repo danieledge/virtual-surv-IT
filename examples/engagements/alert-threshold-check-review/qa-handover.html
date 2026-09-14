@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QA Handover - Test Evidence - alert_threshold_check.py (CTR daily aggregate and reporting threshold)</title>
+<style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
+  color: #1a1a1a; background: #fff; }
+.letterhead { border-bottom: 2px solid #0969da; margin: 0 -1.25rem 1.5rem; padding: .7rem 1.25rem;
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+  font-size: .8rem; color: #57606a; }
+.letterhead .brand { font-weight: 600; color: #0969da; letter-spacing: .02em; }
+h1, h2, h3 { line-height: 1.25; margin-top: 1.8em; }
+h1 { border-bottom: 2px solid #e3e3e3; padding-bottom: .3em; }
+h2 { border-bottom: 1px solid #ececec; padding-bottom: .2em; }
+/* An H1 inside a callout blockquote should not look like a second document title. */
+blockquote h1, blockquote h2 { border: 0; font-size: 1.05em; margin: .2em 0; padding: 0; }
+code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto;
+  border: 1px solid #eaecef; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+th, td { border: 1px solid #dcdcdc; padding: .5em .7em; text-align: left; vertical-align: top; }
+th { background: #f6f8fa; }
+tbody tr:nth-child(even) { background: #fafbfc; }
+blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #4a5158; }
+a { color: #0969da; }
+.footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ececec;
+  color: #595959; font-size: .8rem; }
+/* In-progress status pulse - CSS-only (no JS: bleach strips script elements from body content
+   by design, see _sanitise()'s docstring). #status-in-progress is set by engagement_state.py's
+   render_markdown() only while status == in_progress; never applied to blocked/closing/closed. */
+#status-in-progress { display: inline-block; animation: status-pulse 1.8s ease-in-out infinite; }
+@keyframes status-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { #status-in-progress { animation: none; } }
+@media (prefers-color-scheme: dark) {
+  body { background: #0d1117; color: #e6edf3; }
+  h1, h2 { border-color: #30363d; }
+  .letterhead { border-color: #1f6feb; color: #9da7b3; }
+  code, pre { background: #161b22; } pre { border-color: #30363d; }
+  th { background: #161b22; } th, td { border-color: #30363d; }
+  tbody tr:nth-child(even) { background: #11161d; }
+  blockquote { color: #9da7b3; border-color: #30363d; }
+  a { color: #539bf5; } .footer { color: #8b949e; border-color: #30363d; }
+}
+@media print {
+  body { max-width: none; font-size: 11pt; }
+  a { color: inherit; text-decoration: none; }
+  @page { margin: 18mm; }
+  h1, h2, h3 { break-after: avoid; }
+  tr, pre, table, blockquote { break-inside: avoid; }
+  thead { display: table-header-group; }   /* repeat table headers on each page */
+  .letterhead { position: running(head); }
+}</style>
+</head>
+<body>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-09-14</span></header>
+<blockquote>
+<p>As-found QA evidence. The as-delivered view is in <a href="delivery-report.html"><code>delivery-report.md</code></a>.</p>
+</blockquote>
+<h1 id="qa-handover-test-evidence-alert_threshold_checkpy-ctr-daily-aggregate-and-reporting-threshold">QA Handover - Test Evidence - alert_threshold_check.py (CTR daily aggregate and reporting threshold)</h1>
+<blockquote>
+<p>Produced by <code>qa-engineer</code> (independent of the builder). Evidences what was tested, the
+results, what is <strong>not</strong> covered, and what the QA team should note or re-verify. Authored
+in <code>.md</code>, rendered to <code>.html</code>.</p>
+<p><strong>QA level for this pass:</strong> <code>deep</code> (no level stated in the dispatch brief; deep is the
+default). This pass is additionally constrained to <strong>static-only</strong>, per explicit
+instruction in the dispatch: execution consent is withheld for this engagement, so no test
+was run. This is not a QA-level reduction (quick vs deep); it is the static-only DoD path,
+orthogonal to level. Verdict is 🧠 inferred throughout, never 📊 observed.</p>
+<p><strong>Document control</strong> · ID <code>QAH-001</code> · Version <code>0.1</code> · Status <code>Draft</code>
+· Classification <code>Internal</code> · Owner <code>Linh (qa-engineer)</code> · As-of <code>2026-09-14</code></p>
+<table>
+<thead>
+<tr>
+<th>Version</th>
+<th>Date</th>
+<th>Author</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.1</td>
+<td>2026-09-14</td>
+<td>Linh (qa-engineer)</td>
+<td>Initial static-only QA pass</td>
+</tr>
+</tbody>
+</table>
+</blockquote>
+<table>
+
+<tbody>
+<tr>
+<td><strong>Deliverable</strong></td>
+<td><code>alert_threshold_check.py</code> (safe-fix pass) + <code>test_alert_threshold_check.py</code> (Kenji, 15 tests, unexecuted)</td>
+</tr>
+<tr>
+<td><strong>Version / commit</strong></td>
+<td>none - project has no git repository (confirmed absence of <code>.git</code> at project root by the code-review and compliance-review packs)</td>
+</tr>
+<tr>
+<td><strong>Traces to</strong></td>
+<td>Findings pack <code>findings-alert-threshold-check-review.jsonl</code> (Ravi, code-reviewer) and <code>findings-compliance-alert-threshold-check-review.jsonl</code> (Layla, compliance-reviewer). No BRD/FSD/RTM exists in this project (see CMP-01).</td>
+</tr>
+<tr>
+<td><strong>Tested by</strong></td>
+<td>Linh, qa-engineer</td>
+</tr>
+<tr>
+<td><strong>Date</strong></td>
+<td>2026-09-14</td>
+</tr>
+<tr>
+<td><strong>Overall</strong></td>
+<td>not ready - static-only, unexecuted. Test <em>content</em> is adequate on inspection; genuine coverage gaps remain; nothing here is execution-confirmed.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="1-test-cycles-append-only">1. Test cycles <em>(append-only)</em></h2>
+<table>
+<thead>
+<tr>
+<th>Pass</th>
+<th>Date</th>
+<th>Scope</th>
+<th>Verdict</th>
+<th>Defects raised</th>
+<th>Routed to</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>2026-09-14</td>
+<td>Static read of all 15 tests in <code>test_alert_threshold_check.py</code> against <code>alert_threshold_check.py</code> and the two findings packs. No execution (consent withheld).</td>
+<td>🧠 Inferred - no fail/pass observed; see §2-§5</td>
+<td>None in the tests themselves (all 15 read as internally correct and non-vacuous). Coverage gaps noted (§4), not filed as defects, since nothing was found to be <em>wrong</em>.</td>
+<td>n/a</td>
+</tr>
+</tbody>
+</table>
+<h2 id="2-test-execution-summary">2. Test execution summary</h2>
+<p><strong>NO TEST WAS EXECUTED.</strong> Execution consent for this engagement is withheld (per dispatch:
+"EXECUTION CONSENT IS WITHHELD. THIS IS A STATIC-ONLY QA PASS"). No <code>pytest</code>, no import, no
+exec of the module or the test file happened at any point in this pass. This is the
+static-only DoD path described in <code>docs/DEFINITION-OF-DONE.md</code>: the module is read and the
+tests are read; nothing is run.</p>
+<table>
+<thead>
+<tr>
+<th>Suite</th>
+<th>Tests</th>
+<th>Passed</th>
+<th>Failed</th>
+<th>Skipped</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>unit (<code>test_alert_threshold_check.py</code>)</td>
+<td>15 (assessed statically)</td>
+<td>0 observed</td>
+<td>0 observed</td>
+<td>n/a - not collected</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Acceptance threshold not evaluable this pass.</strong> Zero-failed-tests and coverage-floor
+acceptance criteria require an execution result that does not exist here. The best available
+substitute is a static correctness read of each test's assertions against the module's own
+documented behaviour (below), which is 🧠 inferred, not 📊 observed.</p>
+<p>How to reproduce, once consent is granted (not run in this pass):</p>
+<pre><code class="language-bash">cd /tmp/vsit-eval-process-plugin-mode-open-4ac_cr0e/proj
+/tmp/vsit-eval-process-plugin-mode-open-4ac_cr0e/home/.local/bin/python3 -m pytest test_alert_threshold_check.py -v
+</code></pre>
+<p>Static tooling that WAS run this pass (ruff is allow-listed team tooling, not a code-execution
+gate item):</p>
+<pre><code class="language-bash">cd /tmp/vsit-eval-process-plugin-mode-open-4ac_cr0e/proj
+ruff check alert_threshold_check.py test_alert_threshold_check.py
+</code></pre>
+<p>📊 observed result: <code>All checks passed!</code> - no lint findings on either file.</p>
+<h2 id="3-environment-test-data">3. Environment &amp; test data</h2>
+<ul>
+<li>Environment: interpreter <code>/tmp/vsit-eval-process-plugin-mode-open-4ac_cr0e/home/.local/bin/python3</code>; project root <code>/tmp/vsit-eval-process-plugin-mode-open-4ac_cr0e/proj</code>; no <code>pyproject.toml</code>/<code>requirements.txt</code> present (confirmed by both findings packs), so the interpreter's ambient <code>pytest</code>/<code>decimal</code> (stdlib) are the only dependencies the test file needs.</li>
+<li>Test data: all 15 tests use synthetic literal amounts (e.g. <code>10000</code>, <code>9999.99</code>, <code>-6000</code>) with no customer, account or transaction identifiers, consistent with the module docstring's disclaimer and with both findings packs' clean data-handling verdicts. No fixtures, no files, nothing loaded from disk. §5 of CLAUDE.md is satisfied by construction.</li>
+</ul>
+<h2 id="4-coverage">4. Coverage</h2>
+<p><strong>Test adequacy assessment (all 15 tests, static read against the module source):</strong></p>
+<p>All 15 tests read as internally correct: each asserts a specific, non-trivial expected value
+or exception message that is derivable from the module's own documented contract, and each
+would plausibly <strong>fail</strong> if the specific defect or fix it targets were reintroduced. None is
+vacuous (e.g. <code>assert True</code>, or an assertion with no discriminating power), and none would
+error at collection - the imports (<code>DAILY_LIMIT</code>, <code>Transaction</code>, <code>aggregate_daily</code>,
+<code>is_reportable</code>) all exist in the module with matching names. Detail:</p>
+<ul>
+<li>Boundary quartet (<code>exactly_at_limit</code>, <code>one_cent_above</code>, <code>one_cent_below</code>, <code>empty_list</code>):
+  each pins a distinct point on the strict-<code>&gt;</code> boundary; reintroducing a <code>&gt;=</code> regression
+  (CR-06/CMP-05's "no defect, correct as written" line) would flip <code>test_exactly_at_limit_is_not_reportable</code>. Correct and load-bearing.</li>
+<li>Validation quintet (<code>missing_amount_key</code>, <code>string_amount</code>, <code>none_amount</code>, <code>bool_amount</code>
+  True and False cases, <code>error_names_the_offending_record_and_index</code>): each <code>pytest.raises(...,
+  match=...)</code> string matches the exact wording in <code>_validated_amount</code>'s raise statements
+  (checked line-by-line against the source). The bool True/False pair is specifically valuable:
+  a naive <code>isinstance(x, (int, float))</code> fix would pass a True-only test but fail on <code>False</code>,
+  and this suite has both. Correct and load-bearing.</li>
+<li>Decimal-precision pair (<code>float_amounts_sum_exactly_at_the_boundary</code>,
+  <code>float_amount_one_cent_past_boundary_via_decimal_conversion</code>): arithmetic checked by hand -
+  <code>0.1+0.2+9999.7 = 10000.0</code> and <code>0.1+0.2+9999.71 = 10000.01</code> via <code>Decimal(str(x))</code> conversion,
+  both correct. These would fail if the code reverted to <code>Decimal(float_value)</code> (importing
+  binary rounding error) or to a plain float accumulator. Correct and load-bearing.</li>
+<li><code>test_credit_nets_against_debit_CR_02_known_defect</code>: see the dedicated assessment below.
+  Correct, and unambiguous about what it is pinning.</li>
+<li><code>test_runtime_rebind_of_daily_limit_takes_effect</code> (CR-10): sets <code>module.DAILY_LIMIT</code>,
+  calls <code>module.is_reportable</code> (not the imported name) so the rebind is actually exercised
+  through the module namespace, and restores the original value in a <code>finally</code> block so it
+  cannot leak state into other tests. Correctly exercises the "resolved inside the function
+  body, not captured at import time" fix described in the module docstring.</li>
+<li><code>test_explicit_limit_argument_still_overrides</code>: correct, but narrower than its own import
+  list suggests - see gap below.</li>
+</ul>
+<p><strong>Coverage gaps - NOT tested, and why this matters given the module now decides regulatory
+reportability:</strong></p>
+<ol>
+<li><strong><code>limit</code> passed as a plain <code>int</code>.</strong> <code>is_reportable</code>'s signature is
+   <code>limit: Decimal | int | None = None</code>, and the body has a dedicated branch
+   (<code>if isinstance(effective_limit, int): effective_limit = Decimal(effective_limit)</code>,
+   lines 171-172) to handle it. None of the 15 tests exercises this branch: the one test that
+   passes an explicit <code>limit</code> (<code>test_explicit_limit_argument_still_overrides</code>) passes
+   <code>Decimal("10")</code> and <code>DAILY_LIMIT</code> (already a <code>Decimal</code>), never a bare <code>int</code>. This is a real,
+   specific gap in a documented, typed code path, not a hypothetical one.</li>
+<li><strong><code>amount</code> supplied as a <code>Decimal</code>.</strong> The <code>Transaction</code> TypedDict declares
+   <code>amount: int | float | Decimal</code>, and <code>_validated_amount</code> has an explicit
+   <code>isinstance(amount, (int, float, Decimal))</code> branch. No test supplies a <code>Decimal</code>-typed
+   amount (only <code>int</code>, <code>float</code>, <code>str</code>, <code>None</code>, <code>bool</code> are exercised). The <code>Decimal(str(Decimal(...)))</code>
+   round trip is very likely fine, but it is untested, and it is one of the three types the
+   module's own type contract names.</li>
+<li><strong>A malformed (non-dict) transaction record</strong>, e.g. a bare string, <code>None</code>, or a list in the
+   position of a <code>Transaction</code>. <code>_validated_amount</code> does <code>"amount" not in txn</code>; if <code>txn</code> is not
+   a mapping this raises a raw <code>TypeError: argument of type 'X' is not iterable</code> (or similar)
+   that does <strong>not</strong> match the documented, index-naming error contract the other validation
+   tests pin. This failure mode is untested and, if hit in production, would surface a
+   confusing error rather than the documented one.</li>
+<li><strong>No test asserts the <em>type</em> of <code>aggregate_daily</code>'s return value.</strong> Every boundary/precision
+   test checks <code>aggregate_daily(txns) == Decimal("...")</code> , which is value equality and would
+   also pass if the function returned a plain <code>int</code> or <code>float</code> of the same value (<code>Decimal("10000") == 10000</code> is <code>True</code> regardless of the left-hand type). The module docstring makes an
+   explicit contractual claim ("Returns a Decimal, not a float or int..."); no test does
+   <code>isinstance(total, Decimal)</code> or <code>type(total) is Decimal</code> to pin that contract directly. The
+   two float-precision tests exercise the <em>consequence</em> of Decimal conversion but do not assert
+   the return type itself.</li>
+<li><strong>Volume/representative-size input.</strong> All 15 tests use one or two transactions. No test
+   exercises a larger, more representative list (tens to hundreds of records) to check
+   <code>aggregate_daily</code>'s summation loop at scale, or a list mixing valid and multiple different
+   invalid records (only the two-record <code>missing/bad-index</code> case is close to this, and it uses
+   exactly one bad record).</li>
+<li><strong>CR-01/CR-02/CMP-03/CMP-10 breadth is out of scope by design</strong>, and is correctly left
+   untested per the safe-fixes-only constraint: no test asserts multi-day filtering, multi-account
+   scoping, or currency-instrument exclusion, because <code>aggregate_daily</code>'s signature was
+   deliberately not changed to accept those parameters. This is not a gap in Kenji's tests; it
+   is the documented, warned-about shape of the module itself (see the module and function
+   docstrings' WARNING blocks). Flagging it here only so the QA team does not mistake "no test
+   for multi-day scoping" for an oversight.</li>
+</ol>
+<h2 id="5-defects-known-issues">5. Defects &amp; known issues</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Severity</th>
+<th>Description</th>
+<th>Raised in pass</th>
+<th>Routed to</th>
+<th>Fix evidence</th>
+<th>Verified fixed in pass</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>(none)</td>
+<td>-</td>
+<td>No defect was found <strong>in the 15 tests themselves</strong> on static read: all assert meaningful, correctly-derived expected values, none is vacuous, none would error at collection. Coverage gaps are listed in §4 as gaps, not defects, since nothing is asserted incorrectly.</td>
+<td>1</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>Not raised</td>
+</tr>
+</tbody>
+</table>
+<p>No row is added for the module's own known/documented defects (CR-01, CR-02, CMP-03, CMP-04,
+CMP-09, CMP-10): these were deliberately left unfixed under the user's safe-fixes-only
+constraint and are already recorded as open, disposed findings in the two findings packs. They
+are not re-raised here as QA defects; re-raising a documented, intentionally-deferred finding
+as a fresh QA defect would misrepresent a scoping decision as a regression.</p>
+<h2 id="6-items-for-the-qa-team-to-note-re-verify">6. Items for the QA team to note / re-verify</h2>
+<ol>
+<li>
+<p><strong>The characterisation test is correctly guarded.</strong> <code>test_credit_nets_against_debit_CR_02_known_defect</code>
+   is unambiguously commented: its docstring opens "Pins the CR-02 defect: this is the CURRENT
+   WRONG behaviour, not the desired one," its inline comment above the final assertion says
+   "Wrong from a regulatory standpoint... This assertion documents that the current code does
+   not do that," and its own name embeds <code>CR_02_known_defect</code>. A reader cannot mistake this test
+   as asserting correct behaviour. <strong>No action needed</strong>, recorded here only because the brief
+   asked for explicit confirmation.</p>
+</li>
+<li>
+<p><strong>Blast radius of the Decimal-return and <code>DAILY_LIMIT</code> type change</strong> (🧠 inferred from
+   Python's documented <code>decimal</code> module semantics, not executed this pass): <code>aggregate_daily</code>
+   now returns <code>Decimal</code> (previously plain <code>int</code>/<code>float</code>-typed arithmetic), and <code>DAILY_LIMIT</code>
+   is now <code>Decimal("10000")</code> rather than a bare <code>int</code>. An unknown caller is broken by this if
+   it does any of the following, none of which this module can detect or guard against:
+   - <strong>Arithmetic mixing the return value (or <code>DAILY_LIMIT</code>) with a <code>float</code></strong> - <code>Decimal + float</code>,
+     <code>Decimal - float</code>, etc. raise <code>TypeError: unsupported operand type(s)</code> in the stdlib
+     <code>decimal</code> module; a caller doing <code>total + 0.5</code> or <code>DAILY_LIMIT * 1.1</code> breaks outright.
+     (Comparison operators <code>==</code>/<code>&lt;</code>/<code>&gt;</code> between <code>Decimal</code> and <code>float</code> are supported by the
+     stdlib since Python 3.2 and would not break; only the arithmetic operators are the risk.)
+   - <strong>JSON-serializing the value directly</strong> - <code>json.dumps(total)</code> or
+     <code>json.dumps({"limit": DAILY_LIMIT})</code> raises <code>TypeError: Object of type Decimal is not
+     JSON serializable</code> unless the caller supplies a custom encoder or converts with <code>str()</code>/
+     <code>float()</code> first. This is the most plausible real-world breakage for a logging or
+     alerting pipeline downstream of this module.
+   - <strong><code>isinstance(x, int)</code> type-branching</strong> on <code>DAILY_LIMIT</code> or the aggregate total - any such
+     check now evaluates <code>False</code> where it previously (when these were <code>int</code>) evaluated <code>True</code>.
+   - <strong>Assuming <code>aggregate_daily</code>/<code>is_reportable</code> never raise.</strong> The validation fix (CR-04) is a
+     deliberate contract change: a malformed record now raises <code>ValueError</code>/<code>TypeError</code> naming
+     the index, where before it may have crashed differently or been silently miscounted (per
+     the findings packs). A caller that wraps these calls in no <code>try</code>/<code>except</code>, or catches a
+     narrower exception type than it now needs to, will see a previously-absent exception
+     propagate. This is very likely the correct new behaviour (silent miscounting is worse),
+     but it is a breaking change to the function's failure contract that an unmonitored batch
+     job could be unprepared for.
+   - Callers doing plain comparisons against <code>int</code>/<code>Decimal</code> literals (<code>total &gt; 10000</code>,
+     <code>DAILY_LIMIT == 10000</code>) are <strong>not</strong> broken - <code>Decimal</code>-to-<code>int</code> comparison and arithmetic
+     are both fully supported.</p>
+</li>
+<li>
+<p><strong>Re-verify by executing the suite once consent is granted.</strong> Every result in this handover
+   is 🧠 inferred from source reading, never 📊 observed from a run. The static read found the
+   tests internally consistent with the source, but a static read cannot catch an environment-
+   or interpreter-specific surprise (e.g. an unexpected <code>decimal</code> context precision setting).
+   Run <code>pytest test_alert_threshold_check.py -v</code> as the first action once authorised, before
+   treating this module as verified.</p>
+</li>
+<li>
+<p><strong>The five coverage gaps in §4</strong> should be added as new tests before this module is relied
+   on for a live CTR determination, specifically the int-<code>limit</code> branch (gap 1) and the
+   malformed-non-dict-record path (gap 3), since both are reachable through documented,
+   typed entry points that a real caller could hit.</p>
+</li>
+<li>
+<p><strong>CR-01, CR-02, CMP-03, CMP-04, CMP-09, CMP-10 remain open by design</strong>, not by omission.
+   They are unchanged from the two findings packs and are not re-litigated by this QA pass;
+   see those packs for the regulatory-completeness analysis (multi-day/multi-account scoping,
+   credit/debit netting, the conflated CTR-vs-alert bool, and the undefined business-day window).</p>
+</li>
+</ol>
+<p><strong>Disposition tally:</strong> ✅ 0 Fixed/Answered · 🔴 0 Open (no QA-raised defects) · ⏭️ 6 Deferred/Needs-input (coverage gaps in §4, all "should add before production reliance", none blocking this pass's own scope) · ⚖️ 6 Accepted (CR-01/CR-02/CMP-03/CMP-04/CMP-09/CMP-10, accepted as out-of-scope per the safe-fixes-only constraint, not re-verified here) - reconciles with the 🧠 inferred, non-executed verdict: nothing is a confirmed Pass.</p>
+<blockquote>
+<p><strong>Run provenance &amp; non-determinism</strong>
+· Model <code>claude-sonnet-5</code> · Framework <code>compliance-surveillance-team 0.37.0</code> · Run <code>2026-09-14</code></p>
+<p>The findings and conclusions in this document are one sample from a non-deterministic
+process. The same inputs, run again by the same model, can yield a different set of
+findings, in a different order, with different confidence scores. Absence of a finding is
+not evidence of absence: this document evidences what was found on this run, never that
+nothing further exists. Anything load-bearing for a control decision needs human
+verification; repeat runs raise confidence but never make the result exhaustive.</p>
+</blockquote>
+<h2 id="sign-off">Sign-off</h2>
+<blockquote>
+<p>🤖 = AI agent (Virtual Surveillance IT), not a human. Agent rows and human-approver rows stay separate.</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Name</th>
+<th>Decision</th>
+<th>Date</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Author / owner</td>
+<td>🤖 Linh, QA (Virtual Surveillance IT)</td>
+<td>Static-only pass complete; DoD PARTIAL - untested-in-execution code is residual risk</td>
+<td>2026-09-14</td>
+</tr>
+<tr>
+<td><code>compliance-reviewer</code> (DoD gate)</td>
+<td>-</td>
+<td>Not run this pass</td>
+<td>-</td>
+</tr>
+<tr>
+<td>Human approver (or <code>[IT team]</code>)</td>
+<td>-</td>
+<td>Pending - execution consent required before this can move past PARTIAL</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: qa-handover.md &middot; 2026-09-14</div>
+</body>
+</html>

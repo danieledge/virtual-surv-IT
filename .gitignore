@@ -10,6 +10,11 @@ secrets/
 data/
 *.csv
 *.parquet
+# ...but the shipped sample engagement's findings packs are a frozen record of a real run on
+# synthetic input, committed on purpose (2026-09-14, step 8.2); the same exception is declared
+# to CI's raw-data gate in .github/workflows/ci.yml.
+!examples/engagements/*/data/
+!examples/engagements/*/data/**
 
 # Generated deliverables (engagement briefs, BRDs, FSDs, review reports, audit packs).
 # Authored as .md and rendered to .html; may contain engagement specifics — keep out of git.

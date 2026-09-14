@@ -5864,6 +5864,21 @@ def test_dispatch_folder_subcommand_rejects_unknown_flag(monkeypatch, capsys):
     assert "unknown option '--branch'" in out
 
 
+def test_try_replay_passes_through_and_stays_a_try_only_flag(monkeypatch, capsys):
+    """`virt-surv try --replay` (step 1.7, 2026-09-14) hands the flag to
+    scripts/try_engagement.py; on any other subcommand it is still an unknown option."""
+    import install_helper as ih
+
+    seen = []
+    monkeypatch.setattr(ih, "_run_try", lambda style, extra=None: seen.append(extra) or 0)
+    assert ih._dispatch_folder_subcommand(["try", "--replay"]) == 0
+    assert ih._dispatch_folder_subcommand(["try"]) == 0
+    assert seen == [["--replay"], []]
+    monkeypatch.setattr(ih, "run_configure", lambda *a, **k: 0)
+    assert ih._dispatch_folder_subcommand(["configure", "--replay"]) == 1
+    assert "unknown option '--replay'" in capsys.readouterr().out
+
+
 def test_dispatch_folder_subcommand_configure_routes_correctly(tmp_path, monkeypatch):
     import install_helper as ih
 

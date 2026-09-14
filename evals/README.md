@@ -280,8 +280,12 @@ repo copy, never `data/`). Keep one with:
 A run qualifies only if it PASSES under the current scorer and tripwires (`--rescore
 --replay` on it exits 0). The three passing runs on the record as of 2026-09-13 all predate
 the guard false-positive fixes of that day and trip `benign-command-blocked` on replay, so
-the directory starts empty and is populated from the first clean runs after those fixes are
-applied (plan step 5.2). The job skips cleanly while it is empty.
+the directory started empty (plan step 5.2). The first kept run is
+`process-plugin-mode-open` from `20260914T072757Z` (2026-09-14: 27 turns, no tripwire, the
+first clean run after the fixes were applied). A plugin-mode run builds its layout outside
+the run directory, so that kept run carries no `sandbox/` subset; its workspace lives on as
+the shipped sample under `examples/engagements/`. The job skips cleanly while the directory
+is empty.
 
 ## The tracked results log (`evals/results.jsonl`)
 

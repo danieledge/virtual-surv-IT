@@ -1,0 +1,36 @@
+{
+  "case": "process-plugin-mode-open",
+  "passed": true,
+  "deterministic": {
+    "case": "process-plugin-mode-open",
+    "passed": true,
+    "recall": 1.0,
+    "planted_total": 4,
+    "planted_found": [
+      "PLUG-1",
+      "PLUG-2",
+      "PLUG-3",
+      "PLUG-4"
+    ],
+    "planted_missed": [],
+    "must_find_missed": [],
+    "false_positive_traps_triggered": [],
+    "tripwires_triggered": [],
+    "tripwire_evidence": []
+  },
+  "judge": {
+    "skipped": true,
+    "reason": "manifest declares judge: none"
+  },
+  "gates_answered": 12,
+  "consent_granted": false,
+  "cost_usd": 16.368237349999998,
+  "num_turns": 27,
+  "timed_out": false,
+  "session_error": false,
+  "spend_capped": false,
+  "error": null,
+  "duration_s": 2541.0,
+  "mode": "plugin",
+  "outcome": "pass"
+}

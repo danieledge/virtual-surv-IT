@@ -12061,11 +12061,12 @@ def _run_launcher_settings(target: Path, style: Style):
         return None
 
 
-def _run_try(style: Style):
+def _run_try(style: Style, extra: Optional[list] = None):
     """`virt-surv try` (2026-09-13 framework review, step 8.1): run scripts/try_engagement.py
     from the real clone - a throwaway project, a complete synthetic review engagement through
     the team's own state machine and gate, the evidence room opened in the browser, no model
-    call. Returns the exit code, or None when the script or an interpreter cannot be found."""
+    call. `extra` carries `--replay` (step 1.7): the shipped sample engagement, opened as it
+    was. Returns the exit code, or None when the script or an interpreter cannot be found."""
     script = clone_asset("scripts", "try_engagement.py")
     if not script.is_file():
         print(style.dim(f"  try: {script} not found - is the clone complete?"))
@@ -12076,7 +12077,9 @@ def _run_try(style: Style):
     if not interpreter:
         return None
     try:
-        return subprocess.run([interpreter, str(script)]).returncode  # nosec B603 - fixed argv
+        return subprocess.run(  # nosec B603 - fixed argv
+            [interpreter, str(script), *(extra or [])]
+        ).returncode
     except (OSError, subprocess.SubprocessError):
         return None
 
@@ -12229,7 +12232,10 @@ def _dispatch_folder_subcommand(argv: list) -> Optional[int]:
     rest = argv[1:]
     demo = "--demo" in rest
     assume_yes = "--yes" in rest
-    paths = [a for a in rest if a not in ("--demo", "--yes")]
+    # `try --replay` (2026-09-14, step 1.7): the one flag that belongs to a single subcommand,
+    # passed through to scripts/try_engagement.py rather than parsed here.
+    replay = subcommand == "try" and "--replay" in rest
+    paths = [a for a in rest if a not in ("--demo", "--yes") and not (replay and a == "--replay")]
     style = Style(supports_color())
     # Any OTHER dash-prefixed token (a typo, or a flag from the main parser that doesn't
     # apply here) used to be silently treated as the target directory - live report
@@ -12237,9 +12243,10 @@ def _dispatch_folder_subcommand(argv: list) -> Optional[int]:
     # <cwd>/--branch" instead of a clear "that flag isn't supported here" error.
     unknown_flags = [p for p in paths if p.startswith("-")]
     if unknown_flags:
+        supported = "[DIR], --demo, --yes" + (", --replay" if subcommand == "try" else "")
         print(
             f"{marks()['fail']} unknown option {unknown_flags[0]!r} for '{subcommand}' "
-            f"(supported: [DIR], --demo, --yes)"
+            f"(supported: {supported})"
         )
         return 1
     # A one-line Morgan strapline, not the full boxed banner - user request, 2026-08-05
@@ -12255,7 +12262,7 @@ def _dispatch_folder_subcommand(argv: list) -> Optional[int]:
         return run_setup_alias(style, marks(), assume_yes, demo)
     target = Path(paths[0]) if paths else Path(".")
     if subcommand == "try":
-        rc = _run_try(style)
+        rc = _run_try(style, ["--replay"] if replay else [])
         if rc is None:
             print("  try could not start: run `python scripts/try_engagement.py` from the clone")
             return 1

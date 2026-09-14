@@ -1,6 +1,6 @@
 ---
 description: Guided end-to-end demo - Morgan runs a full engagement on safe synthetic data, narrating every decision and agent
-argument-hint: <optional - "review", "build", or "data" to pick the demo>
+argument-hint: <optional - "review", "build", "data" or "replay" to pick the demo>
 disable-model-invocation: true
 ---
 
@@ -23,6 +23,17 @@ question tool (`multiSelect: false`) unless the arg already says which - default
   (it's the heavy demo).
 - **Data safety** - show `/prepare-data` and the raw-data guard *actually blocking* a read; shows
   the §5 keystone.
+- **Replay** - **no tokens.** Open the shipped sample engagement: a real engagement the team ran
+  on synthetic data, frozen under `examples/engagements/` with its START-HERE page, engagement
+  state, findings pack, review report, summary email and evidence room. Run
+  `<python> <PLUGIN_ROOT>/scripts/try_engagement.py --replay` (`<python>` and `<PLUGIN_ROOT>`
+  are the step-0 probe's `INTERPRETER=` and `PLUGIN_ROOT=` words, verbatim; from the repo as a
+  project, `python scripts/try_engagement.py --replay`), which copies the sample into a throwaway
+  project and opens the evidence room. Then walk the user through what they are looking at from
+  the START-HERE page it printed: what was asked, who did what, what was found, how it closed.
+  **Skip steps 1 to 4** - nothing runs, nothing is re-generated, and the sample is not to be
+  edited or re-closed; it is a record. Close with step 5. The same page is one command outside a
+  session: `virt-surv try --replay`.
 
 **1. Narrate the intake - answer your own questions, out loud.** Show the safety disclaimers
 (execution + data) as a real engagement would, then **answer them yourself with the reasoning**.

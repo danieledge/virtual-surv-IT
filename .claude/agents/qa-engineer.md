@@ -58,7 +58,10 @@ When invoked:
    plugin-root copy from your brief) - DoD PARTIAL, untested code as residual risk.
 3. **Assess coverage** - what is covered, and crucially **what is NOT** and why; residual
    risk; anything that can only be checked manually.
-4. **Evidence** - produce the QA handover (`docs/templates/qa-handover.md`): execution
+4. **Evidence** - produce the QA handover (`docs/templates/qa-handover.md` in the team repo;
+   in a plugin install the bundled copy at `<PLUGIN_ROOT>/docs/templates/qa-handover.md`, the
+   root your brief names - never search the client project or the filesystem for it, and if
+   the bundled copy is missing write the documented structure from memory): execution
    summary, how to reproduce, environment, test data provenance, defects/known issues, and
    an explicit list of **items the QA team should note or re-verify**.
 

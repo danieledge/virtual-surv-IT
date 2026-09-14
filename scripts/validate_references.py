@@ -215,6 +215,9 @@ _SCAN_FILES = ("CLAUDE.md", "README.md", "CONTRIBUTING.md", "SECURITY.md")
 # that makes it worth keeping.
 _SKIP_PARTS = (
     "/runs/",
+    # Kept golden runs (step 5.1) are saved runs too: a transcript names the files of its
+    # sandbox, which do not exist here.
+    "/golden-runs/",
     "/cases/",
     "/node_modules/",
     "/__pycache__/",

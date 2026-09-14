@@ -12,7 +12,8 @@
 - `/engage` - front door: intake + orchestration for any request (problem, review or build);
   `--light` is the low-ceremony profile (same safety gates + code chain, 2-3 agents, refuses
   detection logic, upgrades to standard)
-- `/demo` - guided end-to-end demo on synthetic data, every decision narrated
+- `/demo` - guided end-to-end demo on synthetic data, every decision narrated; `/demo replay`
+  opens the shipped sample engagement (`examples/engagements/`) with no tokens
 - `/review` - every code review: `--depth quick|deep|audit`, `--focus security|performance|quantexa`,
   `--fix` for the assess-fix-re-review loop on legacy code
 - `/build` - end-to-end build from a requirements pack; `--scenario` for a single detection

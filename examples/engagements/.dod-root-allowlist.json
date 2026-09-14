@@ -1,0 +1,4 @@
+{
+  "grandfathered": [],
+  "note": "pre-existing artifacts-root files exempt from ORPHAN-ARTIFACT (D2 ruling 2026-07-29); new work goes in artifacts/<slug>/"
+}

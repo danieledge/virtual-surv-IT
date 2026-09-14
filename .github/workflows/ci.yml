@@ -255,6 +255,10 @@ jobs:
             ':!evals/results.jsonl'
             ':!evals/cases/*/fixtures/**'
             ':!evals/golden-runs/**'
+            # 2026-09-14 (step 8.2): the shipped sample engagement's findings packs, a frozen
+            # record of one eval run on synthetic input; .gitignore un-ignores exactly this
+            # directory shape for the same reason.
+            ':!examples/engagements/*/data/**'
           )
           if git ls-files "${PATHSPEC[@]}" | grep -q .; then
             echo "::error::Raw data files committed. Use synthetic data only (CLAUDE.md §5)."
