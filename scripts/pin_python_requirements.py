@@ -110,8 +110,10 @@ def build_lock(requirements: Path) -> tuple[str, list[str]]:
         "# regenerate. Install with: pip install --require-hashes -r "
         + requirements.stem
         + ".lock",
-        "# Every file PyPI publishes for each pinned version is listed, so one lock serves",
-        "# Linux, macOS and Windows.",
+        "# Every file PyPI publishes for each pinned version is listed; the RESOLUTION (which",
+        "# versions, which conditional dependencies) is this interpreter's and platform's, so",
+        "# installers use --require-hashes only where the target below matches (2026-09-14).",
+        f"# lock-target: python={sys.version_info.major}.{sys.version_info.minor} platform={sys.platform}",
         "",
     ]
     for name in sorted(pinned):

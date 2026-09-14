@@ -29,6 +29,7 @@ def test_the_lock_unions_platforms_and_lists_every_pypi_digest(monkeypatch, tmp_
     assert "pluggy==1.6.0 \\" in text and "pytest==9.1.1 \\" in text
     assert text.count("--hash=sha256:") == 6
     assert "--require-hashes -r requirements-dev.lock" in text
+    assert "# lock-target: python=" in text and "platform=" in text
     assert warnings == []
 
 

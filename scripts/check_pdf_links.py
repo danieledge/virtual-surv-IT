@@ -39,7 +39,7 @@ def local_link_targets(pdf: Path) -> list[str]:
         for ref in annots:
             try:
                 annot = ref.get_object()
-            except Exception:  # noqa: BLE001 - a broken annotation is not a local link
+            except Exception:  # noqa: BLE001  # nosec B112 - an unreadable annotation cannot be a local link; the check is for links that resolve, and skipping a broken object is the fail-safe direction for a link scan
                 continue
             if annot.get("/Subtype") != "/Link":
                 continue
@@ -48,7 +48,7 @@ def local_link_targets(pdf: Path) -> list[str]:
                 continue
             try:
                 action = action.get_object()
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001  # nosec B112 - same: an action object that will not resolve carries no URI to judge
                 continue
             uri = action.get("/URI")
             if uri is None:

@@ -2,6 +2,7 @@
 # regenerate. Install with: pip install --require-hashes -r requirements-review.lock
 # Every file PyPI publishes for each pinned version is listed, so one lock serves
 # Linux, macOS and Windows.
+# lock-target: python=3.12 platform=linux  (resolved here; hashes cover every published file of each pinned version, but the RESOLUTION is this interpreter's and platform's)
 
 ast-grep-cli==0.45.3 \
     --hash=sha256:13dfb43b2028bb585f41b2f399e8b30bf0310e9bbeff2369d60a2e36accbb2e6 \

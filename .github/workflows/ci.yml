@@ -52,7 +52,17 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5 (SHA-pinned)
         with:
           python-version: ${{ matrix.python }}
-      - run: pip install --require-hashes -r requirements-dev.lock
+      # The hash-pinned lock is resolved on one interpreter and platform (its header names
+      # them: python 3.12 on linux); pip's --require-hashes refuses a wheel outside that set,
+      # and a Windows-only dependency the resolver never met is not in it at all. So the leg
+      # that matches the lock installs from it with hashes, and the other legs install the
+      # plain requirements (2026-09-14, after seven red runs since aec58ae).
+      - name: Install dev requirements (hash-verified lock on the leg it was resolved for)
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+        run: pip install --require-hashes -r requirements-dev.lock
+      - name: Install dev requirements (plain, on legs the lock was not resolved for)
+        if: ${{ !(matrix.os == 'ubuntu-latest' && matrix.python == '3.12') }}
+        run: pip install -r requirements-dev.txt
       # Coverage measurement (T-9, 2026-09-12 test-quality audit): the ubuntu py3.12 leg
       # only, so the same numbers aren't uploaded three times over. No threshold gate yet -
       # this turns "which modules are referenced by a test file" (a static, this-audit-style

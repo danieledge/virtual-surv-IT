@@ -10161,7 +10161,12 @@ def test_the_cli_accepts_no_downloads():
 def test_dev_requirements_install_from_the_hash_pinned_lock_when_present(monkeypatch, tmp_path):
     """requirements-dev.lock (scripts/pin_python_requirements.py) carries every package of the
     closure with sha256 hashes for every file PyPI publishes; the installer passes
-    --require-hashes so pip refuses a substituted wheel. Without the lock, the old path."""
+    --require-hashes so pip refuses a substituted wheel - but only on the interpreter and
+    platform the lock was RESOLVED for (its lock-target header, 2026-09-14): elsewhere pip
+    would refuse wheels outside that set and miss conditional dependencies entirely, so the
+    plain requirements install instead."""
+    import sys as _sys
+
     import install_helper as ih
 
     seen = []
@@ -10169,14 +10174,27 @@ def test_dev_requirements_install_from_the_hash_pinned_lock_when_present(monkeyp
         ih, "run_cmd", lambda argv, **k: seen.append(list(argv)) or _proc(returncode=0)
     )
     (tmp_path / "requirements-dev.txt").write_text("pytest>=8.0\n", encoding="utf-8")
+    here = f"# lock-target: python={_sys.version_info.major}.{_sys.version_info.minor} platform={_sys.platform}\n"
     (tmp_path / "requirements-dev.lock").write_text(
-        "pytest==9.1.1 --hash=sha256:00\n", encoding="utf-8"
+        here + "pytest==9.1.1 --hash=sha256:00\n", encoding="utf-8"
     )
     inst = ih.Installer(_args(yes=True, pip=True), ih.Style(False), ih.marks(), subset="full")
     inst.repo = tmp_path
     inst.optional_pip()
     assert seen and "--require-hashes" in seen[0]
     assert seen[0][-1] == tmp_path / "requirements-dev.lock"
+
+    seen.clear()
+    (tmp_path / "requirements-dev.lock").write_text(
+        "# lock-target: python=2.7 platform=plan9\npytest==9.1.1 --hash=sha256:00\n",
+        encoding="utf-8",
+    )
+    inst.optional_pip()
+    assert (
+        seen
+        and "--require-hashes" not in seen[0]
+        and seen[0][-1] == tmp_path / "requirements-dev.txt"
+    )
 
     seen.clear()
     (tmp_path / "requirements-dev.lock").unlink()

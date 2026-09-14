@@ -3198,12 +3198,16 @@ class Installer:
         if not wanted:
             self.step_skip("Dev requirements", "skipped - the plugin works without them")
             return
-        if lock.exists():
+        if lock.exists() and _lock_matches_this_interpreter(lock):
             argv = [sys.executable, "-m", "pip", "install", "--require-hashes", "-r", lock]
             how = " (hash-verified from requirements-dev.lock)"
         else:
             argv = [sys.executable, "-m", "pip", "install", "-r", req]
-            how = ""
+            how = (
+                " (the lock was resolved for another interpreter or platform)"
+                if lock.exists()
+                else ""
+            )
         proc = run_cmd(argv, timeout=600)
         if proc.returncode == 0:
             self.step_ok("Dev requirements " + self.did("installed", "would be installed") + how)
@@ -9936,6 +9940,28 @@ def downloads_disabled(args=None) -> bool:
     if args is not None and getattr(args, "no_downloads", False):
         return True
     return os.environ.get(_NO_DOWNLOADS_ENV, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _lock_matches_this_interpreter(lock: Path) -> bool:
+    """A hash-pinned lock is only valid where it was RESOLVED (2026-09-14): its header names
+    the interpreter and platform; pip's --require-hashes refuses anything outside that set
+    and a conditional dependency the resolver never met is missing entirely. Elsewhere the
+    plain requirements install. No header (an older lock) means no match."""
+    try:
+        for line in lock.read_text(encoding="utf-8").splitlines()[:12]:
+            if line.startswith("# lock-target:"):
+                fields = dict(
+                    part.split("=", 1)
+                    for part in line.split(":", 1)[1].split("(")[0].split()
+                    if "=" in part
+                )
+                want_py = f"{sys.version_info.major}.{sys.version_info.minor}"
+                return fields.get("python") == want_py and sys.platform.startswith(
+                    fields.get("platform", "")[:5]
+                )
+    except OSError:
+        pass
+    return False
 
 
 def _sha256_of(path: Path) -> str:
