@@ -677,6 +677,7 @@ TEAM_SCRIPT_NAMES = (
     "launch_terminal",
     "tier_probe",
     "audit_screens",
+    "hook_latency_probe",
 )
 _GATE_BLOCK_MARKER = "blocked (code-execution gate"
 

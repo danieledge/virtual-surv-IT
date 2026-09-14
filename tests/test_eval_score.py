@@ -668,9 +668,12 @@ def test_team_script_names_match_the_guards_own_list():
     to edit), so this cross-check is what keeps the duplication safe: a new scripts/ tool added
     to the guard and not here would silently stop being watched.
     """
-    source = (REPO_ROOT / ".claude" / "hooks" / "guard-code-execution.py").read_text(
-        encoding="utf-8"
-    )
+    # The staged copy while one is pending, else the live guard (tests/_staging.py): a name
+    # added to the scorer alongside a staged allow-list edit is judged against the guard
+    # the human is about to apply, not the one it replaces.
+    from _staging import staged_or_live
+
+    source = staged_or_live("guard-code-execution.py").read_text(encoding="utf-8")
     block = re.search(r"_TEAM_SCRIPT_NAMES = \((.*?)\n\)\n", source, re.S)
     assert block, "the guard no longer declares _TEAM_SCRIPT_NAMES the way this test reads it"
     literal = "".join(re.findall(r'r?"([^"]*)"', re.sub(r"#[^\n]*", "", block.group(1))))

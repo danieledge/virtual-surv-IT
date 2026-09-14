@@ -126,8 +126,9 @@ signed as Morgan), and human sign-off.
   `calibrate_spoofing`, `check_artifacts`, `engagement_state`, `extensions`,
   `convert_sarif`, `engage_probe`, `repo_skeleton`, `explain_rule` (the "why did this NOT
   alert?" per-condition trace - `/why-no-alert` step (c)), `render_evidence_room`,
-  `launch_terminal` (opens a session in its own window), `tier_probe` and `audit_screens`
-  (read-only support/diagnostic tools that execute nothing under review). (Adding a new
+  `launch_terminal` (opens a session in its own window), `tier_probe`, `audit_screens` and
+  `hook_latency_probe` (read-only support/diagnostic tools that execute nothing under review;
+  the last one times the team's own launcher to answer "why are Bash/Read calls slow?"). (Adding a new
   `scripts/` tool means adding its basename to the
   staged guard and having the human apply it - otherwise plugin-mode users get a consent prompt
   for the team's own tooling. A live instance of exactly that was found on 2026-08-01: the probe
