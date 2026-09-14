@@ -2515,8 +2515,14 @@ class Installer:
             self.step_fail("git", "git is required - install it and re-run")
         # Step 7.4 (2026-09-13): no POSIX sh means no hooks, and an inert guard looks exactly
         # like a healthy one. Fatal, with the fix named, before anything is installed.
-        if shutil.which("sh"):
-            self.step_ok("POSIX sh found (the hook launcher runs through it)")
+        # 2026-09-14: resolve through _resolve_sh, not PATH alone. A corporate Windows
+        # PowerShell session has Git Bash installed and still no `sh` on PATH (the
+        # resolver's own docstring records the live case), and the first cut of this check
+        # hard-failed an update on exactly that box. Claude Code finds Git Bash the same
+        # way the resolver does, so PATH is the wrong question.
+        sh_path = _resolve_sh()
+        if sh_path:
+            self.step_ok(f"POSIX sh found at {sh_path} (the hook launcher runs through it)")
         elif self.demo:
             self.step_skip("POSIX sh", "not found - a real run needs Git Bash or WSL on Windows")
         else:

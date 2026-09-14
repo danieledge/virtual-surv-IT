@@ -10284,3 +10284,62 @@ def test_the_install_ends_by_proving_the_guards_are_armed(monkeypatch, tmp_path,
     )
     inst.armed_step()  # a red line, never a crash and never fatal to the install
     assert "GUARDS NOT PROVEN" in capsys.readouterr().out
+
+
+# ---- preflight: the POSIX sh check resolves like the hook launcher does (2026-09-14)
+
+
+class _StopAtClaude(Exception):
+    """Raised from a patched find_claude so a test can stop preflight right after the sh
+    step and inspect what was recorded, without exercising the claude and git probes."""
+
+
+def _preflight_until_claude(monkeypatch, *, demo, resolved_sh):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: "/usr/bin/git" if name == "git" else None)
+    monkeypatch.setattr(ih, "_resolve_sh", lambda: resolved_sh)
+
+    def _stop(*_a, **_k):
+        raise _StopAtClaude()
+
+    monkeypatch.setattr(ih, "find_claude", _stop)
+    inst = ih.Installer(_args(yes=True, demo=demo), ih.Style(False), ih.marks())
+    inst.demo = demo
+    return inst
+
+
+def test_preflight_accepts_sh_that_only_the_resolver_can_see(monkeypatch):
+    """Regression: the first cut asked PATH alone, and a corporate Windows PowerShell
+    session has Git Bash installed with no `sh` on PATH, so a routine update was refused
+    with 'POSIX sh not found'. The launcher resolves through _resolve_sh (env override,
+    PATH, then the Git for Windows install locations); the preflight must ask the same
+    question or an installed shell reads as missing."""
+    import install_helper as ih
+
+    inst = _preflight_until_claude(
+        monkeypatch, demo=False, resolved_sh=r"C:\Program Files\Git\bin\sh.exe"
+    )
+    with pytest.raises(_StopAtClaude):
+        inst.preflight()
+    sh_steps = [s for s in inst.tracker.steps if s[0].startswith("POSIX sh")]
+    assert sh_steps == [(r"POSIX sh found at C:\Program Files\Git\bin\sh.exe (the hook launcher runs through it)", "ok", "")]
+
+
+def test_preflight_still_fails_hard_when_no_shell_resolves_at_all(monkeypatch):
+    import install_helper as ih
+
+    inst = _preflight_until_claude(monkeypatch, demo=False, resolved_sh=None)
+    with pytest.raises(ih.InstallAbort):
+        inst.preflight()
+    fails = [s for s in inst.tracker.steps if s[0] == "POSIX sh" and s[1] == "fail"]
+    assert len(fails) == 1
+    assert "Git for Windows" in fails[0][2]
+
+
+def test_preflight_demo_downgrades_a_missing_shell_to_a_skip(monkeypatch):
+    inst = _preflight_until_claude(monkeypatch, demo=True, resolved_sh=None)
+    with pytest.raises(_StopAtClaude):
+        inst.preflight()
+    skips = [s for s in inst.tracker.steps if s[0] == "POSIX sh" and s[1] == "skip"]
+    assert len(skips) == 1
