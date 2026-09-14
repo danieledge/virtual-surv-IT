@@ -338,7 +338,12 @@ _INLINE_CODE_RE = re.compile(
 #     was missing, so /engage step 0 tripped the gate on its own front door.
 _TEAM_SCRIPT_NAMES = (
     r"(?:render_html|render_findings|render_docx|convert_file|ingest|gen_synthetic|synthesise"
-    r"|validate_masking|validate_manifest|validate_rtm|validate_references|check_citations|eval_score"
+    # 2026-09-14: validate_findings, the findings-pack schema check the reviewers run on
+    # their own pack before close (documented in docs/EXTENDING.md and scripts-reference).
+    # It ships, it reads a JSONL file and writes nothing, and eval run 20260914T063800Z
+    # was refused it as untrusted code because this list never gained it.
+    r"|validate_masking|validate_manifest|validate_rtm|validate_references|validate_findings"
+    r"|check_citations|eval_score"
     r"|calibrate_spoofing|check_artifacts|engagement_state|extensions|convert_sarif"
     r"|engage_probe|repo_skeleton|explain_rule|render_evidence_room"
     # 2026-08-25: launch_terminal, which opens a session in its own window. Without it a
