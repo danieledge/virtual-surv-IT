@@ -9366,8 +9366,8 @@ def run_hook_latency_diagnostic(
     current directory so the numbers can leave the box whole.
 
     This replaced the 2026-08 prototype (repeated cold starts plus a fan-out burst, a total
-    with no attribution) on 2026-09-14, when a live report of 2.4 to 4.4 seconds per call on
-    a corporate Windows box needed a root cause by layer, not another total."""
+    with no attribution) on 2026-09-14, when a live report of hook calls taking seconds each
+    needed a root cause by layer, not another total."""
     repo_root = _resolve_repo_root(repo_hint) or Path(__file__).resolve().parent
     probe = repo_root / "scripts" / "hook_latency_probe.py"
     launcher = repo_root / ".claude" / "hooks" / "run-guard.sh"
@@ -11036,11 +11036,11 @@ def _report_extensions_contents(path: Path, style: Style, mark_map: dict) -> Non
 
 # ------------------------------------------------------------------ guard daemon: the REAL project
 #
-# 2026-09-14 (owner's corporate Windows box): the daemon was unreachable in every real session
-# while Diagnostics option 7 reported every check PASS. The two checks above run in a throwaway
-# temp directory on purpose, so they never met the real project's .claude directory, its
-# permissions, a network or OneDrive-backed path, the session's plugin and project roots, or
-# the endpoint security that was killing the detached process. And production's spawn
+# 2026-09-14: a live report of a daemon unreachable in every real session while Diagnostics
+# option 7 reported every check PASS. The two checks above run in a throwaway temp directory
+# on purpose, so they never met the real project's .claude directory, its permissions, a
+# network or OneDrive-backed path, the session's plugin and project roots, or whatever on the
+# host ends a background process. And production's spawn
 # (guard_daemon_client._start_daemon_detached) points the child's stderr at DEVNULL, so a real
 # detached death leaves nothing behind. Check C below runs against the real project, in a
 # scratch directory UNDER its .claude (same drive, same permissions, same AV posture; the

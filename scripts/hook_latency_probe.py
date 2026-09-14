@@ -6,11 +6,11 @@
 Run it ON THE MACHINE THAT IS SLOW, from the project directory the slow session runs in.
 Every number below is measured in this process, on this box, against the real launcher.
 
-The report it answers (corporate Windows, 2026-09): every PreToolUse safety hook costs 2.4
-to 4.4 seconds per Bash and Read call, which dominates a parallel review. The code that runs
-on each call has four suspects in its own comments (the Git Bash `sh` spawn, the Python cold
-start, the fan-out lock, endpoint-security scanning of each new process) and no way to tell
-them apart on the affected box. A total is not a root cause. This tool reproduces the total
+The report it answers: every PreToolUse safety hook costing seconds per Bash and Read call,
+enough to dominate a parallel review. The code that runs on each call has four suspects in
+its own comments (the Git Bash `sh` spawn, the Python cold start, the fan-out lock,
+endpoint-security scanning of each new process) and no way to tell them apart on the
+affected box. A total is not a root cause. This tool reproduces the total
 with the real launcher, then times each layer of the path on its own and attributes the
 milliseconds, so the layers add up to something close to the total and the biggest one is
 named, with the specific fix that exists for it.

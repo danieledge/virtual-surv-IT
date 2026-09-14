@@ -7622,7 +7622,7 @@ def test_diagnostics_menu_lists_hook_timing_above_the_prototype_divider():
     label_at = source.index('("5", "Hook timing (why are Bash/Read calls slow?)")')
     # Option 7 joined the user-facing rows on 2026-09-14 (it now runs against the real
     # project and captures the daemon's death); key 7 is unchanged, only its row moved.
-    daemon_start_at = source.index('("7", "Why won\'t the guard daemon start (in this project')
+    daemon_start_at = source.index("\"Why won't the guard daemon start (in this project")
     divider_at = source.index('("", "-- internal / prototype diagnostics --")')
     daemon_row_at = source.index('("6", "Guard daemon prototype test')
     assert label_at < daemon_start_at < divider_at < daemon_row_at
