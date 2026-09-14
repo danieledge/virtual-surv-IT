@@ -1,0 +1,651 @@
+#!/bin/sh
+# Portable launcher for the PreToolUse safety guards.
+#
+# Claude Code runs hook commands in a POSIX shell (sh/bash on Linux & macOS, Git Bash on
+# Windows). The bare `python3` used previously is not present on Windows, where the interpreter
+# is `python` or the `py` launcher - so the guard failed to start there ("python3: command not
+# found") and, worse, did not run at all. This finds whichever interpreter exists and runs it
+# (as a foreground child, not `exec` - see the locking comment below for why), so the guard's
+# stdin (the tool payload) and exit code (2 = block) pass through unchanged either way.
+#
+# This wrapper is intentionally tiny and holds NO guard logic - the guards themselves
+# (guard-raw-data.py, guard-code-execution.py) are unchanged. It selects an interpreter and
+# (2026-08-10) serializes concurrent launches under subagent fan-out - see the lock section
+# below for why and how.
+#
+# Interpreters are version-probed: the guards need Python >= 3.9 (pathlib.Path.is_relative_to);
+# an older interpreter would crash at runtime, and we'd rather skip it and try the next one than
+# exec into a known crash.
+#
+# If no suitable Python is found we exit 0 (allow). In repo-as-project mode the OS-level
+# permissions.deny list in .claude/settings.json still backs Read/Grep/Glob for data/raw and
+# secrets - but a plugin install ships no deny list (recreate it in the host project, see
+# ADR-002 rec 10), and there are no Bash() deny entries either, so on a Python-less host the
+# guards are inert (see ADR-002 §launcher trade-off). A hard block here would brick every tool
+# call on a Python-less host, which is not the guard's job.
+#
+# Cache the resolved interpreter (2026-07-30 corporate report): FIVE hooks match Bash, so
+# this loop runs 5x per Bash call, all session long. On a Windows box where `python3.exe`
+# is the App Execution Alias stub (present via `command -v` but not a real interpreter),
+# actually EXECUTING it to version-check triggers a multi-second Microsoft Store redirect
+# check EVERY time - "several minutes" for a single /engage turned out to be that stub hang
+# repeated dozens of times. `command -v` alone (existence, no execution) is cheap and safe
+# to redo every call; only the EXECUTION probe needs to happen once and be trusted after.
+#
+# REDIRECTION ORDER (2026-09-14 live report, a four-reviewer fan-out on a corporate Windows
+# box): "run-guard.sh: line 552: .../.claude/.guard-lock/acquired-at: No such file or
+# directory" leaked into the session as a raw shell error. The fail-open was working; the
+# message was the shell's own. A redirection failure (`<file` on a stamp the holder's EXIT
+# trap had just removed, or `>file` into a lock directory a reclaimer had just torn down) is
+# reported by the shell BEFORE it applies any later `2>/dev/null` on the same command,
+# because redirections are processed left to right. So every file redirection below whose
+# target can vanish or be unwritable puts `2>/dev/null` FIRST. Same semantics, no leak.
+
+# UTF-8 pin (2026-07-31 corporate report): the guards' stdin is the tool-call JSON payload,
+# which can carry non-ASCII (the Fix-cycle arrow "→" in locked_menu_guard.py's canonical
+# labels, curly quotes, section signs). Python 3 decodes stdin/stdout/stderr using the
+# platform's default text encoding unless told otherwise - on native Windows Python that's
+# the console codepage (e.g. cp1252), not UTF-8. Unlike a strict codec, cp1252 rarely raises
+# on decode; it silently mis-decodes multi-byte UTF-8 sequences into different-but-valid
+# characters, so a correctly-formed answer compares unequal to the guard's UTF-8 constant
+# and trips a false "drift" block instead of erroring loudly. Pin both interpreter env vars
+# before every exec path below (cache hit and full probe alike) so the guard always reads
+# and writes UTF-8 regardless of OS locale/console codepage.
+export PYTHONIOENCODING=utf-8
+export PYTHONUTF8=1
+
+# Serialize concurrent invocations (corp report, 2026-08-10): a Workflow-tool fan-out fires
+# several subagents' tool calls within the same instant, each independently spawning this
+# launcher - normally hidden (one spawn finishes before the next tool call starts), but under
+# real concurrency N interpreter cold-starts hit CPU scheduling and endpoint-security scanning
+# on a Windows box AT ONCE, measured live turning ~50-100ms hook latency into 2,000-8,000ms
+# across the board. An mkdir-based lock (atomic and portable - no flock dependency, which Git
+# Bash is not guaranteed to ship) queues concurrent launches instead of letting them all spawn
+# simultaneously; total process-creation work is unchanged, but it stops happening in one
+# contended burst. Two failure modes are handled explicitly rather than left implicit, because
+# this gates every tool call in the session - a bug here is worse than the slowness it fixes:
+#   - Bounded wait, not indefinite: give up and proceed WITHOUT the lock (fail open) after
+#     LOCK_WAIT_BUDGET_MS rather than risk hanging every tool call on a stuck lock. Same
+#     "launcher-level infrastructure problems fail open" posture as the no-interpreter-found
+#     case below - a missing/broken serialization mechanism is not a reason to brick the
+#     session, only a reason to lose the (purely perf) benefit of serializing.
+#   - Stale-lock reclaim: a lock older than LOCK_MAX_AGE_SECONDS is treated as abandoned (its
+#     holder crashed or was SIGKILLed - not catchable by the EXIT trap below) and is removed
+#     immediately rather than waited out, so one dead holder can't starve every call behind it
+#     for the rest of the session.
+# Strip trailing slash(es) from the resolved root (2026-08-11 corp report): a
+# CLAUDE_PLUGIN_ROOT ending in "/" produces a doubled "//" in LOCK_DIR/CACHE below. mkdir
+# tolerates that fine, but on at least one real Windows/Git-Bash environment the SUBSEQUENT
+# `date +%s >"$LOCK_STAMP"` write does not - it fails silently, which permanently disables
+# the stale-lock reclaim below (a lock with no stamp can never be recognised as stale) for
+# the rest of the session. POSIX parameter expansion only, no external command.
+# 2026-08-13 (reported via log analysis of a real session): $CLAUDE_PLUGIN_ROOT can be
+# genuinely unset in THIS process even when Claude Code's hook templating correctly
+# substituted it into the command line that invoked us - the substitution is a
+# command-construction-time string replacement, which does not guarantee the variable is
+# also exported into the spawned process's own environment. Live case: $_root fell back
+# to $CLAUDE_PROJECT_DIR, and DAEMON_CLIENT then resolved to
+# <project>/scripts/guard_daemon_client.py - a file that only ever lives in the PLUGIN's
+# own install tree, never copied into a consuming project, so it silently didn't exist.
+#
+# Derive $_root from $0 first wherever possible: this script's own invocation path IS the
+# one thing Claude Code's templating already resolved correctly (it had to, to find THIS
+# file and run it) - unlike an env var read after the fact, it cannot be silently empty
+# while the invocation still worked. $0 is always ".../.claude/hooks/run-guard.sh" (the
+# one documented invocation shape, matched by every hooks.json/settings.json entry and
+# this repo's own test suite), so stripping that fixed suffix gives the plugin/project
+# root directly. Pure parameter expansion (no dirname/readlink subprocess) - deliberately
+# as cheap as the trailing-slash strip below, not another unconditional process spawn to
+# add to the exact Windows overhead problem the rest of this file already works to
+# minimise. A relative $0 (rare - every real invocation of this launcher passes an
+# absolute path) is anchored to the shell's own cwd first so the suffix-strip still has
+# something absolute to work with.
+_self="$0"
+case "$_self" in
+	/*) : ;;
+	*) _self="$(pwd)/$_self" ;;
+esac
+_self_root="${_self%/.claude/hooks/run-guard.sh}"
+if [ "$_self_root" != "$_self" ] && [ -f "$_self_root/.claude/hooks/run-guard.sh" ]; then
+	_root="$_self_root"
+else
+	# Self-location didn't pan out (unusual invocation, sourced rather than run, or this
+	# copy genuinely isn't at the expected .claude/hooks/ path) - fall back to the env-var
+	# approach exactly as before. Same fail-open posture as everywhere else in this file:
+	# a broken fast path must never brick the guard, only cost it this one optimisation.
+	_root="${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}"
+fi
+while [ "${_root%/}" != "$_root" ] && [ -n "$_root" ]; do
+	_root="${_root%/}"
+done
+[ -n "$_root" ] || _root="/"
+
+# 2026-08-13 live report: team-preferences.json, the interpreter cache, the fan-out lock
+# and the cold-start cache are all PER-PROJECT state (install_helper.py's own
+# write_guard_interpreter_cache() writes .guard-interpreter under the PROJECT directory,
+# never a plugin install directory) - but until now they were resolved via the SAME
+# $_root as DAEMON_CLIENT below, which is deliberately CLAUDE_PLUGIN_ROOT-first (correct
+# for THAT one case: bash_hook_dispatcher.py is a file the plugin itself ships, genuinely
+# found under the plugin's own install directory). In plugin-install mode, whenever
+# CLAUDE_PLUGIN_ROOT happens to be set in the hook's own process (probe-contract.md
+# already documents this exact env var as "not reliably expanded" - sometimes it is,
+# sometimes it silently isn't), that conflation pointed all four project-state paths at
+# the plugin's own directory instead of the project's. Confirmed live: a project's
+# team-preferences.json had "guard_daemon": true recorded, but the daemon never
+# activated - the hook was checking a team-preferences.json under the plugin's install
+# path, which does not exist, not the one under the actual project. A separate root,
+# CLAUDE_PROJECT_DIR only (deliberately never CLAUDE_PLUGIN_ROOT as a fallback here -
+# unlike $_root, there is no correct case where a project's own state should live under
+# the plugin's install directory instead of the project itself), same trailing-slash
+# treatment as $_root above and for the identical reason.
+#
+# 2026-08-13 follow-up (live audit caught one instance this fix missed the first time):
+# DAEMON_CLIENT itself has the exact same conflation one layer down - it was invoked
+# with only $_root, which it needs correctly to locate the real bash_hook_dispatcher.py,
+# but was ALSO using that same value to place ITS OWN per-project port file
+# (.claude/.guard-daemon-port) and to decide which project's exec-consent marker a
+# spawned daemon evaluates requests against. Now invoked with BOTH roots -
+# guard_daemon_client.py's own docstring has the full rationale.
+_project_root="${CLAUDE_PROJECT_DIR:-.}"
+while [ "${_project_root%/}" != "$_project_root" ] && [ -n "$_project_root" ]; do
+	_project_root="${_project_root%/}"
+done
+[ -n "$_project_root" ] || _project_root="/"
+
+# Daemon path (ADR-014, docs/adr/ADR-014-persistent-guard-daemon.md) - checked once here,
+# used at both invocation points below. Deliberately narrow: only ever engages when the
+# target script ($1 - this launcher's own usage is always `run-guard.sh <script>`, never a
+# flag first) is EXACTLY one of the daemon-servable set by basename - any OTHER target
+# this launcher is used for is completely unaffected, identical cold-start path as always.
+# Off by default (no team-preferences.json, or an explicit false): this whole block
+# resolves to _use_daemon=0 and NOTHING else in this file's behaviour changes, not even
+# one byte - opt-in via .claude/team-preferences.json "guard_daemon": true
+# (scripts/guard_daemon.py + scripts/guard_daemon_client.py, promoted 2026-08-12 from the
+# design spike after live validation on the actual reporting Windows box - 8/8 smoke-test
+# checks passed, including genuinely concurrent request safety).
+#
+# 2026-08-14 multi-target extension: originally bash_hook_dispatcher.py alone. Five more
+# hook scripts fire on their own PreToolUse/PostToolUse/Stop/UserPromptSubmit matchers
+# via this SAME launcher and paid the identical cold-start cost with zero daemon benefit
+# - added here after an audit (guard_daemon.py's own module docstring has the full
+# rationale, including persona_anchor.py's two fixes before it was safe to include).
+# $_daemon_target names which one for DAEMON_CLIENT below - a case match, not basename
+# compared six times, and ${1##*/} instead of a basename subprocess call (this check
+# runs unconditionally on every single call regardless of daemon status, so it's worth
+# the same subprocess-avoidance care as the rest of this file).
+# F1 (2026-08-26 perf audit): read a boolean out of a small JSON file using SHELL BUILTINS
+# ONLY - no grep, no fork. This check runs BEFORE the daemon fast path, unconditionally, on
+# every daemon-servable call, and it was three `grep` spawns per tool call when both files
+# exist (the common case). Measured on Linux that is 5.07ms - 79% of this launcher's entire
+# shell layer - and on the corporate Git-Bash/AV host each spawn is the very thing the rest
+# of this file works to avoid. The 2026-08-14 pass replaced `cat` with `read` for exactly
+# this reason, on the very next code path, and left these standing upstream of it.
+#
+# Equivalence with the `grep '"key" *: *value'` patterns it replaces: whitespace is removed
+# everywhere (word-splitting each line and re-joining with no separator), then a single
+# `case` looks for the literal `"key":value`. That accepts any run of spaces around the
+# colon, exactly as ` *` did, and still refuses a key merely ENDING in the name -
+# `{"other_guard_daemon": false}` has no `"` before `guard_daemon`, so it does not match,
+# in both the old and the new form. Verified equivalent against the live grep patterns
+# across the spacing, embedded-key, multi-key, glob-character and empty-object cases.
+#
+# ONE DELIBERATE DIFFERENCE, found by that comparison: grep is line-based, so it could not
+# see a value sitting on the line AFTER its key -
+#     {"guard_daemon":
+#        false}
+# which is valid JSON a formatter can produce, and which grep silently ignored - leaving
+# the daemon on against the user's explicit setting. Joining the lines fixes that. It is
+# safe to fix here and nowhere near a security decision: this switch chooses between the
+# daemon and the cold-start fallback, which run the SAME guard code (see the fail-safe note
+# below), so both directions are a performance posture, never a weaker check.
+#
+# `set -f` around the split: word splitting also performs pathname expansion, so an
+# unguarded `set -- $line` would glob a `*` appearing in JSON text against the filesystem.
+# The previous flag state is restored rather than assumed.
+_json_has() {
+	_jf=$1 _jk=$2 _jv=$3 _jc=""
+	case $- in
+		*f*) _jg=1 ;;
+		*) _jg=0 ;;
+	esac
+	set -f
+	while IFS= read -r _jl || [ -n "$_jl" ]; do
+		# shellcheck disable=SC2086 # deliberate word-split; globbing disabled above
+		set -- $_jl
+		for _jw in "$@"; do
+			_jc="$_jc$_jw"
+		done
+	done 2>/dev/null <"$_jf"
+	[ "$_jg" = 1 ] || set +f
+	case "$_jc" in
+		*"\"$_jk\":$_jv"*) return 0 ;;
+	esac
+	return 1
+}
+
+_use_daemon=0
+_daemon_target=""
+case "${1##*/}" in
+	bash_hook_dispatcher.py) _daemon_target="bash_hook_dispatcher" ;;
+	locked_menu_guard.py) _daemon_target="locked_menu_guard" ;;
+	post_edit_lint.py) _daemon_target="post_edit_lint" ;;
+	subagent_return_budget.py) _daemon_target="subagent_return_budget" ;;
+	stop_hook_dispatcher.py) _daemon_target="stop_hook_dispatcher" ;;
+	prompt_hook_dispatcher.py) _daemon_target="prompt_hook_dispatcher" ;;
+	persona_anchor.py) _daemon_target="persona_anchor" ;;
+	engage_probe_prefetch.py) _daemon_target="engage_probe_prefetch" ;;
+esac
+if [ -n "$_daemon_target" ]; then
+	# ON BY DEFAULT since 2026-08-25 (owner decision), with the same two-tier,
+	# project-wins precedence the Python preferences use. It was opt-in while it was new;
+	# it has since been measured at ~625ms non-daemon against ~211ms daemon-served per
+	# invocation on Windows, and both every-prompt hooks now route through it, so the
+	# default was costing every user that difference on every call to protect against a
+	# risk that has not materialised.
+	#
+	# Fail-safe direction is deliberate: anything unreadable, absent or unparseable leaves
+	# the daemon ON, because the fallback path it replaces is slower, never unsafe - the
+	# daemon runs the SAME guard code in a persistent process. Only an explicit false
+	# turns it off.
+	_use_daemon=1
+	_inst="${XDG_CONFIG_HOME:-$HOME/.config}/virt-surv-it/installer.json"
+	if [ -f "$_inst" ] && _json_has "$_inst" default_guard_daemon false; then
+		_use_daemon=0
+	fi
+	_prefs="$_project_root/.claude/team-preferences.json"
+	# 2026-09-12 audit (H-32): team-preferences.json is model-writable and this key chooses
+	# which path the guards take. Only the OFF direction is gated - turning the daemon off
+	# costs performance, never a check, but a file this process cannot attribute to the user
+	# should not be the thing that changes guard routing. `-O` (owned by the effective user)
+	# is a bash/ksh/zsh test operator that dash does not have, so it is probed first: if the
+	# operator is unavailable the preference is honoured exactly as before, which is the
+	# brief's own instruction for the unavailable case. `-h` (symlink) is POSIX.
+	_prefs_trusted=1
+	if [ -f "$_prefs" ]; then
+		if [ -h "$_prefs" ]; then
+			_prefs_trusted=0
+		elif { [ -O "$_prefs" ] || [ ! -O "$_prefs" ]; } 2>/dev/null; then
+			[ -O "$_prefs" ] 2>/dev/null || _prefs_trusted=0
+		fi
+	fi
+	if [ -f "$_prefs" ]; then
+		if [ "$_prefs_trusted" = 1 ] && _json_has "$_prefs" guard_daemon false; then
+			_use_daemon=0
+		elif _json_has "$_prefs" guard_daemon true; then
+			_use_daemon=1
+		fi
+	fi
+fi
+DAEMON_CLIENT="$_root/scripts/guard_daemon_client.py"
+
+# 2026-08-13 fast path (reported via log analysis of a real session): the lock/coldstart
+# machinery below exists solely to serialize concurrent COLD STARTS - many interpreters
+# racing to start at once under subagent fan-out. A daemon-routed call has no cold-start
+# race to serialize against: every such call shares ONE persistent daemon process that
+# already serializes its own requests internally (guard_daemon.py's own _dispatch_lock).
+# Paying the lock-acquisition/coldstart-measurement overhead unconditionally on a
+# daemon-routed call is pure waste - on a corporate Windows/Git-Bash host under AV
+# scanning, each step below is its own process spawn (mkdir x2, date, cat, rm - roughly
+# 3+ seconds stacked up under real conditions), swamping whatever latency benefit the
+# daemon exists to provide, and paid BEFORE this launcher even reaches the daemon
+# decision. Steady state (interpreter already cached from a prior call - the
+# overwhelmingly common case in a real session) skips straight to the daemon invocation
+# here. A cold cache (this project's very first call) falls through to the full machinery
+# below unchanged - it still finds and caches an interpreter, and its own
+# daemon-invocation branch further down handles that first call correctly; this fast path
+# only ever engages once the interpreter is already known, never before.
+#
+# 2026-08-26 perf audit: the daemon removes the guard WORK from each call but not the
+# Python START-UP that carries the request to it - the client is still a fresh interpreter
+# per tool call. `-S` skips `site` (site-packages scanning and sitecustomize), which is the
+# bulk of that start-up: measured here 93ms -> 31ms for `python3 -c pass`, i.e. roughly a
+# third, on every single daemon-routed call. Every script this launcher runs imports the
+# standard library only, or inserts its own path explicitly (persona_anchor.py and
+# engage_probe_prefetch.py both do; verified byte-identical output under -S), so nothing
+# needs the paths `site` would have added.
+#
+# `-E` is NOT used and must not be: it would also ignore PYTHONIOENCODING/PYTHONUTF8, the
+# UTF-8 pin set at the top of this file - measured, `-S` alone keeps utf8_mode=1 while
+# `-S -E` drops it to 0, which is precisely the silent cp1252 mis-decode that produced
+# false "drift" blocks in the 2026-07-31 corporate report. The pin costs nothing to keep.
+#
+# 2026-08-14 perf audit (live corp-Windows measurement, guard-daemon roundtrip
+# investigation): this fast path is the highest-frequency code path in the whole guard
+# system (every daemon-routed PreToolUse call), so its own process-spawn count matters
+# more than anywhere else in this script. `cat "$_fastcache"` forked a process just to
+# read one line from a file - `read` is a shell builtin, same job, zero forks. IFS=
+# preserves the same "only the trailing newline is stripped" behavior $(cat ...) had
+# (a bare `read` would otherwise also trim leading/trailing whitespace via word-splitting).
+# Is this cached string actually a python interpreter?
+#
+# WHY (2026-09-11 review). The cache holds a command name that this script EXECUTES and
+# whose exit code it returns. Nothing checked what it was. A file containing `/bin/true`
+# made every hook exit 0 - the raw-data wall included - in every session, silently, and the
+# cache files were not write-protected either. A full disarm through a file nobody looks at.
+#
+# Basename test only, deliberately: executing the candidate to prove it is python is exactly
+# the App Execution Alias hang this cache exists to avoid (see the note at the top of this
+# file). This does not make the cache trustworthy, it removes the one-line disarm; the
+# write-protection in guard-consent-writes is the other half.
+_looks_like_python() {
+	case "${1##*/}" in
+	python | python[0-9] | python[0-9].[0-9] | python[0-9].[0-9][0-9] | py) return 0 ;;
+	python.exe | python[0-9].exe | python[0-9].[0-9].exe | py.exe) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
+	# Same two-location rule as CACHE below; resolved here too because this fast path
+	# runs before CACHE is set (it exits before reaching it on a hit).
+	_fastcache="$_project_root/VSIT/local/guard-interpreter"
+	if [ ! -f "$_fastcache" ]; then
+		_fastcache="$_project_root/.claude/.guard-interpreter"
+	fi
+	if [ -f "$_fastcache" ]; then
+		IFS= read -r _fastcached 2>/dev/null <"$_fastcache"
+		if [ -n "$_fastcached" ] && _looks_like_python "$_fastcached" &&
+			command -v "$_fastcached" >/dev/null 2>&1; then
+			"$_fastcached" -S "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
+			exit $?
+		fi
+	fi
+fi
+
+LOCK_DIR="$_project_root/.claude/.guard-lock"
+LOCK_STAMP="$LOCK_DIR/acquired-at"
+# Same normalized root as LOCK_DIR above - defined here (once) rather than at its original,
+# later point of use, so the cold-start probe below and the real interpreter-cache lookup
+# further down read and write the exact same path instead of two independently-computed
+# variables that could silently diverge the same way LOCK_DIR/LOCK_STAMP just did.
+#
+# VSIT LAYOUT (2026-08-28). Two locations, and this file has to know both by hand: it runs
+# BEFORE any interpreter is chosen - finding one is its whole job - so it cannot import
+# scripts/vsit_paths.py to be told where its own cache lives. Read whichever EXISTS,
+# preferring the new one; write to the new one only when that directory is already there,
+# so this launcher never creates VSIT/ as a side effect of a hook call. Keep in step with
+# vsit_paths.local_file("guard_interpreter") - the duplication is unavoidable, so it is
+# flagged rather than hidden.
+CACHE="$_project_root/VSIT/local/guard-interpreter"
+if [ ! -f "$CACHE" ]; then
+	if [ -f "$_project_root/.claude/.guard-interpreter" ] || [ ! -d "$_project_root/VSIT/local" ]; then
+		CACHE="$_project_root/.claude/.guard-interpreter"
+	fi
+fi
+# 2026-09-12 audit (H-20). This was 10 seconds, four lines below this file's OWN recorded
+# measurement that cold starts on a corp-AV-scanned Windows box run "2-9s normally, 25-90s
+# under fan-out contention" - so a genuinely working holder was declared abandoned, its lock
+# directory removed, and its own EXIT trap then deleted whichever OTHER process's lock
+# directory existed by then. Age is now the BACKSTOP, not the primary signal: the holder
+# writes its pid into the stamp and a lock is only reclaimed when that pid is gone, or when
+# the lock is older than this (for a stamp with no pid - an older holder, or a stamp write
+# that half-succeeded).
+LOCK_MAX_AGE_SECONDS=120
+
+# LOCK_WAIT_BUDGET_MS must exceed real interpreter cold-start time on THIS host, or a
+# waiting caller gives up and races ahead unlocked before the current holder could
+# realistically finish - defeating serialization for exactly the slow-host case it exists
+# for (2026-08-11 corp report: this was a flat 1500ms while observed cold starts on a
+# corp-AV-scanned Windows box ran 2-9s normally, 25-90s under fan-out contention). The floor
+# stays the original 1500ms, NOT tied to LOCK_MAX_AGE_SECONDS - an earlier version of this
+# fix raised the floor above LOCK_MAX_AGE_SECONDS*1000 reasoning a waiter should always be
+# able to reach the stale-lock reclaim check, but that reasoning was wrong and conflicted
+# with this launcher's own deliberate design: the reclaim check compares the LOCK's absolute
+# age each poll, not the waiter's own elapsed time, so a short budget does not block reclaim
+# - and test_run_guard_lock.py::test_a_genuinely_held_lock_fails_open_within_the_wait_budget
+# already encodes the correct intent here on purpose: a genuinely (non-stale) held lock
+# should fail this caller open QUICKLY, not wait around hoping it goes stale. Only the
+# ADAPTIVE part (scaling with measured cold start) is this fix; the floor for a fast host or
+# a not-yet-cached one is unchanged from before it. Measured using the ALREADY-CACHED interpreter
+# only (.guard-interpreter, populated by the selection loop further down) - never a fresh,
+# unvalidated probe here, which would risk reintroducing the exact Windows "python3
+# resolves to the Store stub" multi-second hang that selection loop is specifically ordered
+# to avoid. On a session's very first call (no cache yet) this measurement is skipped and
+# the floor below applies - that first call already pays its own one-time
+# interpreter-resolution cost separately; a second, possibly stub-prone probe here would
+# only add to it, not save anything.
+COLDSTART_CACHE="$_project_root/.claude/.guard-coldstart-ms"
+_measured_ms=""
+if [ -f "$COLDSTART_CACHE" ]; then
+	_measured_ms=$(cat "$COLDSTART_CACHE" 2>/dev/null)
+fi
+case "$_measured_ms" in
+	''|*[!0-9]*) _measured_ms="" ;;  # missing, empty or non-numeric cache -> (re)measure
+esac
+if [ -z "$_measured_ms" ] && [ -f "$CACHE" ]; then
+	_known_good=$(cat "$CACHE" 2>/dev/null)
+	if [ -n "$_known_good" ] && _looks_like_python "$_known_good" &&
+		command -v "$_known_good" >/dev/null 2>&1; then
+		# Whole-second `date +%s` only, matching the rest of this script - `%N` (sub-second)
+		# is a GNU extension BSD/macOS `date` does not reliably support, and the costs this
+		# measures are already multi-second under the conditions that motivate this fix, so
+		# second-level precision is coarse but adequate; it only ever errs toward the floor
+		# on a genuinely fast host, which is the safe direction to be wrong in.
+		_t0=$(date +%s 2>/dev/null) || _t0=""
+		"$_known_good" -S -c 'pass' >/dev/null 2>&1
+		_t1=$(date +%s 2>/dev/null) || _t1=""
+		if [ -n "$_t0" ] && [ -n "$_t1" ] && [ "$_t1" -ge "$_t0" ] 2>/dev/null; then
+			_measured_ms=$(( (_t1 - _t0) * 1000 ))
+		else
+			_measured_ms=0
+		fi
+		mkdir -p "$(dirname "$COLDSTART_CACHE")" 2>/dev/null
+		printf '%s' "$_measured_ms" 2>/dev/null >"$COLDSTART_CACHE"
+	fi
+fi
+[ -n "$_measured_ms" ] || _measured_ms=0
+# Budget = 4x measured cold start (headroom for AV-scan variance and shallow queueing under
+# fan-out), floored at the original 1500ms (never LESS generous than before this fix - a
+# fast host or one with no measurement yet behaves exactly as it did previously) and capped
+# so a wait this long stops being "serialization" and starts being a hang - the reclaim and
+# the budget-exhausted fail-open below both still apply as backstops beyond this cap either
+# way.
+LOCK_WAIT_BUDGET_MS=$(( _measured_ms * 4 ))
+[ "$LOCK_WAIT_BUDGET_MS" -ge 1500 ] 2>/dev/null || LOCK_WAIT_BUDGET_MS=1500
+[ "$LOCK_WAIT_BUDGET_MS" -le 20000 ] 2>/dev/null || LOCK_WAIT_BUDGET_MS=20000
+
+# Ensure the PARENT exists once, up front - mkdir "$LOCK_DIR" below deliberately has no -p
+# (an existing target must make it fail, that failure IS the "someone else holds it" signal
+# the loop polls on); without this, a missing .claude/ would make every acquisition attempt
+# fail the same way as real contention, silently wasting the full wait budget every call
+# before falling through to fail-open, rather than succeeding immediately as it should.
+mkdir -p "$(dirname "$LOCK_DIR")" 2>/dev/null
+
+# How long a poll REALLY takes (2026-09-12 audit, H-20). `_elapsed_ms` was incremented by a
+# constant LOCK_POLL_MS regardless of what the sleep actually cost, and the fallback `sleep 1`
+# - taken whenever fractional sleep is unsupported, as on some BSD/busybox `sleep` - still
+# counted as 25ms. Exhausting a 1500ms budget therefore took 60 REAL seconds, on every
+# contended tool call.
+#
+# Probed LAZILY, inside the loop, at the first poll - not here. An unconditional probe costs a
+# real 25ms sleep on every invocation, contended or not, and this launcher runs on every tool
+# call: measured, that alone pushed a 5-way fan-out past its own wait budget and broke the
+# serialization the lock exists for (tests/test_run_guard_lock.py::
+# test_concurrent_calls_are_actually_serialized, caught before this shipped). A caller that
+# reaches the first poll was about to sleep anyway, so there the probe is free.
+LOCK_POLL_MS=25
+_lock_sleep=""
+
+_lock_acquired=0
+_elapsed_ms=0
+while [ "$_elapsed_ms" -lt "$LOCK_WAIT_BUDGET_MS" ]; do
+	if mkdir "$LOCK_DIR" 2>/dev/null; then
+		# The pid goes in alongside the timestamp so a waiter can tell a working holder
+		# from an abandoned lock directly, instead of guessing from an age threshold.
+		# `2>/dev/null` BEFORE the target: a reclaimer tearing the directory down between
+		# our mkdir and this write would otherwise put the shell's own error on the
+		# session's console (2026-09-14, see the redirection-order note at the top).
+		if { date +%s; echo "$$"; } 2>/dev/null >"$LOCK_STAMP"; then
+			_lock_acquired=1
+		else
+			# Stamp write failed even though mkdir succeeded (2026-08-11 corp report: seen
+			# with a trailing-slash root producing a doubled "//" before the strip above
+			# existed - kept as a defensive backstop in case another path-translation edge
+			# case on Windows/Git Bash produces the same mkdir/write asymmetry some other
+			# way). A lock with no stamp can NEVER be recognised as stale by the reclaim
+			# logic below, so holding it would risk exactly the stuck-lock-for-the-rest-
+			# of-the-session failure the reclaim exists to prevent - worse than just not
+			# serializing this one call. Visible (stderr, never stdout - this script's
+			# stdout must stay clean for the wrapped guard's own output), then release and
+			# fail open rather than risk a lock nobody can ever reclaim.
+			echo "run-guard.sh: warning: lock acquired but stale-lock stamp write failed" \
+				"($LOCK_STAMP) - releasing lock, proceeding without serialization for" \
+				"this call" >&2
+			rm -rf "$LOCK_DIR" 2>/dev/null
+		fi
+		break
+	fi
+	if [ -f "$LOCK_STAMP" ]; then
+		_stamp=""
+		_holder=""
+		_line=""
+		# The holder's EXIT trap can remove the stamp between the -f test above and this
+		# read; with `2>/dev/null` first the failed open is silent and the loop polls again,
+		# instead of the shell printing "acquired-at: No such file or directory".
+		while IFS= read -r _line || [ -n "$_line" ]; do
+			if [ -z "$_stamp" ]; then _stamp="$_line"; else _holder="$_line"; fi
+		done 2>/dev/null <"$LOCK_STAMP"
+		_now=$(date +%s 2>/dev/null)
+		_reclaim=0
+		if [ -n "$_holder" ]; then
+			# A live holder is never reclaimed, however long it has been working - the
+			# whole point of the 2026-09-12 fix. `kill -0` is a shell builtin: no fork,
+			# and it only reports whether the process exists. A pid we cannot signal
+			# (another user's) counts as alive, which is the safe direction.
+			if ! kill -0 "$_holder" 2>/dev/null; then
+				_reclaim=1
+			fi
+		elif [ -n "$_stamp" ] && [ -n "$_now" ] &&
+			[ "$((_now - _stamp))" -gt "$LOCK_MAX_AGE_SECONDS" ] 2>/dev/null; then
+			# No pid in the stamp (an older holder, or a half-written stamp): fall back to
+			# the age backstop.
+			_reclaim=1
+		fi
+		if [ "$_reclaim" = 1 ]; then
+			# RE-READ before removing. The reclaim tears down a directory another process
+			# may have created in the microseconds since the read above - the holder's own
+			# EXIT trap removes its lock, the next caller immediately creates a fresh one,
+			# and a reclaimer acting on the OLD read then deletes that caller's live lock
+			# and runs alongside it. The audit named this shape for the age-based reclaim
+			# ("its own trap then deletes whichever OTHER process's lock dir exists by
+			# then"); making the dead-pid check fast enough to actually fire turned it from
+			# theoretical into reproducible - measured, 1-2 of 5 fan-out calls overlapping.
+			# A lock recreated by someone else carries THEIR pid, so requiring the stamp to
+			# still name the same dead holder is what distinguishes the two.
+			_stamp2=""
+			_holder2=""
+			_line=""
+			while IFS= read -r _line || [ -n "$_line" ]; do
+				if [ -z "$_stamp2" ]; then _stamp2="$_line"; else _holder2="$_line"; fi
+			done 2>/dev/null <"$LOCK_STAMP"
+			if [ "$_holder2" != "$_holder" ] || [ "$_stamp2" != "$_stamp" ]; then
+				_elapsed_ms=$((_elapsed_ms + LOCK_POLL_MS))
+				continue  # someone else owns it now - poll again, do not tear it down
+			fi
+			rm -rf "$LOCK_DIR" 2>/dev/null
+			# Counted against the budget too (H-20): the reclaim path used to `continue`
+			# without advancing, so a lock being re-created as fast as it was removed
+			# looped unbounded.
+			_elapsed_ms=$((_elapsed_ms + LOCK_POLL_MS))
+			continue
+		fi
+	fi
+	if [ -z "$_lock_sleep" ]; then
+		# First poll: probe fractional-sleep support by USING it. The probe's own sleep is
+		# this poll's sleep, so it costs nothing extra.
+		if sleep 0.025 2>/dev/null; then
+			LOCK_POLL_MS=25
+			_lock_sleep="sleep 0.025"
+		else
+			LOCK_POLL_MS=1000
+			_lock_sleep="sleep 1"
+		fi
+	else
+		$_lock_sleep 2>/dev/null || true
+	fi
+	_elapsed_ms=$((_elapsed_ms + LOCK_POLL_MS))
+done
+if [ "$_lock_acquired" != 1 ] && [ "$_elapsed_ms" -ge "$LOCK_WAIT_BUDGET_MS" ]; then
+	# Visible, on stderr (this script's stdout belongs to the guard it wraps). Failing open
+	# here is deliberate and long-standing - a stuck serialization mechanism must not brick
+	# every tool call - but it was silent, so a session paying it had no way to know.
+	echo "run-guard.sh: note: waited ${LOCK_WAIT_BUDGET_MS}ms for the guard lock and" \
+		"proceeded without serialization for this call (performance only; the guard" \
+		"itself still runs)" >&2
+fi
+if [ "$_lock_acquired" = 1 ]; then
+	# Covers the interpreter (or crash/kill) exiting abnormally; SIGKILL still can't be
+	# trapped by design (POSIX), which is exactly why the stale-lock reclaim above exists as
+	# the backstop for that one case this trap cannot cover.
+	trap 'rm -rf "$LOCK_DIR" 2>/dev/null' EXIT INT TERM
+fi
+
+# Below: same interpreter resolution as before, just "run and wait" instead of "exec" (exec
+# replaces this process image, which would skip the lock-release above entirely - it must
+# run after the guard completes, not instead of this script continuing). CACHE is already
+# set above (same normalized $_project_root as LOCK_DIR).
+
+if [ -f "$CACHE" ]; then
+	cached=$(cat "$CACHE" 2>/dev/null)
+	if [ -n "$cached" ] && _looks_like_python "$cached" &&
+		command -v "$cached" >/dev/null 2>&1; then
+		if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
+			"$cached" -S "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
+			exit $?
+		fi
+		"$cached" -S "$@"
+		exit $?
+	fi
+fi
+# Probe order (2026-07-31 corporate report, P2): the loop below still EXECUTES the first
+# name command -v resolves, to version-check it, before any cache exists - on Windows,
+# "python3" resolving to the Store stub means that first, uncached call pays the multi-
+# second stub hang even though `python`/`py` were sitting right behind it. $OS is set to
+# "Windows_NT" by the OS itself and inherited into Git Bash, so this is a real, not
+# heuristic, signal - try the real interpreters first there and leave the stub for last.
+if [ "${OS:-}" = "Windows_NT" ]; then
+	order="python py python3"
+else
+	order="python3 python py"
+fi
+for interpreter in $order; do
+	if command -v "$interpreter" >/dev/null 2>&1; then
+		# 3.10, matching pyproject.toml's requires-python (2026-09-12 audit, H-28). This
+		# accepted 3.9 on the grounds that the guard FILES are 3.9-safe, which they are -
+		# but guard_daemon.py imports the whole `scripts` package into the daemon and
+		# nothing pins those modules to 3.9. On a 3.9-only host the mismatch surfaces as
+		# "the daemon won't start" plus a permanent cold-start penalty on every call,
+		# rather than as an error anyone can act on.
+		if "$interpreter" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' >/dev/null 2>&1; then
+			mkdir -p "$(dirname "$CACHE")" 2>/dev/null
+			# F6 (2026-08-26 perf audit): cache the RESOLVED PATH, not the bare name.
+			# The fast path re-runs `command -v "$_fastcached"` on every single call, and
+			# the note above ("cheap and safe to redo every call") holds for a resolved
+			# absolute path but NOT for a bare name: resolving `python` walks every PATH
+			# entry, probing executable extensions. On a corporate Windows box - where
+			# this project's own environment notes record the PATH as stale - one dead
+			# network-drive entry ahead of the Python directory turns that into an SMB
+			# timeout on EVERY tool call. install_helper.py and virt_team_launcher.py both
+			# already write an absolute sys.executable here; only this self-warm path
+			# wrote the bare name, so a project warmed by the launcher itself was the one
+			# left on the slow form.
+			#
+			# Behaviour: `command -v` on an absolute path still validates existence, so
+			# the fast path's check is unchanged in kind, only in cost. The one real
+			# difference is that a mid-session PATH change is no longer picked up - which
+			# is arguably the point of a cache that exists to pin a version-probed
+			# interpreter. Falls back to the bare name if resolution fails, so this can
+			# never leave the cache empty.
+			_resolved=$(command -v "$interpreter" 2>/dev/null) || _resolved=""
+			[ -n "$_resolved" ] || _resolved="$interpreter"
+			printf '%s' "$_resolved" 2>/dev/null >"$CACHE"
+			if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
+				"$interpreter" -S "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
+				exit $?
+			fi
+			"$interpreter" -S "$@"
+			exit $?
+		fi
+	fi
+done
+exit 0

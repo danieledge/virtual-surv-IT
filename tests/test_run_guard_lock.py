@@ -239,3 +239,43 @@ def test_lock_dir_matches_the_documented_gitignore_entry():
         ".claude/.guard-lock (transient, environment-specific) should be gitignored, same "
         "treatment as .guard-interpreter and .raw-data-present"
     )
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads a chmod 000 file anyway")
+def test_a_stamp_the_shell_cannot_open_leaks_no_raw_shell_error(tmp_path):
+    """Live report, 2026-09-14 (four parallel reviewers on a corporate Windows box):
+    "run-guard.sh: line 552: .../.claude/.guard-lock/acquired-at: No such file or directory"
+    reached the session as raw text. The fail-open was right; the shell's own redirection
+    error was the leak, because `<file 2>/dev/null` reports the failed open BEFORE the
+    stderr redirect applies. A stamp that exists but cannot be opened reproduces the same
+    shell path deterministically."""
+    lock = tmp_path / ".claude" / ".guard-lock"
+    lock.mkdir(parents=True)
+    stamp = lock / "acquired-at"
+    stamp.write_text(f"{int(time.time())}\n{os.getpid()}\n", encoding="utf-8")  # a live holder
+    (tmp_path / ".claude" / ".guard-coldstart-ms").write_text("0", encoding="utf-8")
+    stamp.chmod(0)
+    try:
+        r = _run(tmp_path, timeout=60)
+    finally:
+        stamp.chmod(0o644)
+    assert r.returncode == 0  # the guard still ran (fail-open)
+    assert "acquired-at" not in r.stderr, r.stderr
+    assert "No such file" not in r.stderr and "Permission denied" not in r.stderr, r.stderr
+    assert "proceeded without serialization" in r.stderr  # the deliberate note stays
+
+
+def test_every_lock_and_cache_redirection_silences_stderr_first():
+    """The order is the fix: `2>/dev/null` must come before a `<file`/`>file` whose target
+    can vanish or be unwritable, or the shell prints the failed open itself."""
+    import re
+
+    text = LAUNCHER.read_text(encoding="utf-8")
+    for var in ("LOCK_STAMP", "CACHE", "COLDSTART_CACHE", "_fastcache", "_jf"):
+        for m in re.finditer(r"[<>]\"\$" + var + r"\"", text):
+            line = text[text.rfind("\n", 0, m.start()) + 1 : text.find("\n", m.end())]
+            if line.strip().startswith("#"):
+                continue  # prose about a redirection, not one
+            assert "2>/dev/null" in line and line.index("2>/dev/null") < line.index(m.group(0)), (
+                f"redirection to ${var} without a leading 2>/dev/null: {line.strip()}"
+            )
