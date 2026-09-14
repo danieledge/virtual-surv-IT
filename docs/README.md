@@ -37,8 +37,8 @@ tracked document nothing links to, so a new page is added here or to its folder'
 - [`docs/token-usage.md`](token-usage.md) - what an engagement costs and how the load is kept down
 - [`docs/roadmap.md`](roadmap.md)
 - [`examples/README.md`](../examples/README.md) - the shipped sample engagement, a real run on synthetic data, opened by `virt-surv try --replay`
-- [`docs/releases/unreleased-notes-2026-09.md`](releases/unreleased-notes-2026-09.md) and
-  [`docs/releases/archive-0.36-and-earlier.md`](releases/archive-0.36-and-earlier.md) - the changelog's working notes and its archive
+- [`docs/releases/0.38.0.md`](releases/0.38.0.md) and
+  [`docs/releases/archive-0.36-and-earlier.md`](releases/archive-0.36-and-earlier.md) - the 0.38.0 working notes and the changelog's archive
 - [`docs/releases/0.33.md`](releases/0.33.md) - the 0.33 cycle overview, with the point releases
   [0.33.0](docs/releases/0.33.0.md) (`docs/releases/0.33.0.md`) and [0.33.1](docs/releases/0.33.1.md) (`docs/releases/0.33.1.md`)
 - [`docs/demos/review-demo.md`](demos/review-demo.md) - a captured review engagement

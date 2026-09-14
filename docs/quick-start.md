@@ -1,6 +1,6 @@
 # Quick start: the Compliance Surveillance Engineering Team
 
-> Version 0.37.0. One page: the mental model, the three steps to a first engagement, the
+> Version 0.38.0. One page: the mental model, the three steps to a first engagement, the
 > commands worth knowing, and the three safety rules that are enforced in code. The
 > rendered copies (`docs/quick-start.html`, `docs/quick-start.pdf`) are produced from this
 > file; edit here.

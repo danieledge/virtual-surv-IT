@@ -5,7 +5,34 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 
 ## [Unreleased]
 
-Framework review of 2026-09-13 (plan v2, phases 0 to 4 in progress). In user terms:
+Nothing yet.
+
+## [0.38.0] - 2026-09-14 - Guards applied, plugin mode proven live, a sample engagement shipped
+
+The 2026-09-13 framework review, executed. Why a version bump now: plugin.json's version is what
+`claude plugin update` keys on, so with 0.37.0 unchanged every install ran a stale cache while
+reporting "updated"; the guard changes below had to ship under a new number. The eval baseline
+(`evals/eval-baseline-0.38.0.md`) records one case still failing (`process-review-scorer-delegation`,
+run `20260913T130835Z`) and says the release ships with it open. In user terms:
+
+- **Plugin mode proven live:** the install-shaped eval case (marketplace cache copy, client
+  project, hooks through `hooks/hooks.json`) passed in 27 turns with no tripwire; the run is the
+  first golden replay in CI and its workspace is the shipped sample engagement
+  (`examples/engagements/`), opened by `virt-surv try --replay` or `/demo replay` for no tokens.
+- **Installer:** `update` compares the installed cache against the marketplace clone and reinstalls
+  when the version did not move; preflight and the armed check resolve `sh` the way the hooks do,
+  so Git Bash without `sh` on PATH no longer fails an update.
+- **Guards, applied:** `validate_findings` runs consent-free; the enumeration redirect says what
+  was blocked and the one command to run in two sentences; the DoD stop gate names the pack its
+  findings came from; the guard launcher no longer leaks a shell error under a parallel review;
+  the persona anchor and the resume brief name `VSIT/engagements/<slug>/`, the workspace projects
+  really have.
+- **Sessions without TodoWrite** mirror the gates into the state file and say so once; a box with
+  no spend telemetry gets a stated pacing rule instead of an invented one.
+- **`repo_skeleton` on a non-code repository** rolls symbol-less directories up to one line and
+  counts placeholders and archives in a footer, so the inventory fits its budget.
+- **CI:** green on Linux and Windows for the first time in the recent history; the Windows leg's
+  ten platform failures fixed at their causes.
 
 - **Install:** the five review analysers are downloaded at a pinned version and verified against
   a SHA-256 before install (`config/release-tools.json`); `--no-downloads` or `CST_NO_DOWNLOADS=1`
@@ -27,7 +54,7 @@ Framework review of 2026-09-13 (plan v2, phases 0 to 4 in progress). In user ter
   what leaves your machine, what it costs, what you need and Windows; house style enforced by
   a test; `SECURITY.md` states every byte that leaves the machine.
 
-The working notes behind each item: `docs/releases/unreleased-notes-2026-09.md`.
+The working notes behind each item: `docs/releases/0.38.0.md`.
 
 ## [0.37.0] - 2026-08-25 - Data tools, mail formats, and a performance pass that started by finding a hang
 

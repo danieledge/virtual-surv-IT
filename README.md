@@ -3,20 +3,27 @@
 # Virtual Surv-IT
 
 ![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green)
-![Version 0.37.0](https://img.shields.io/badge/version-0.37.0-blue)
+![Version 0.38.0](https://img.shields.io/badge/version-0.38.0-blue)
 ![Tests 3200+ passing](https://img.shields.io/badge/tests-3200%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 [![Quick start: one-page PDF](https://img.shields.io/badge/Quick%20start-one--page%20PDF-important)](docs/quick-start.pdf)
 
-<details><summary><b>What changed recently</b> (0.37.0 highlights; full history in the changelog)</summary>
+<details><summary><b>What changed recently</b> (0.38.0 highlights; full history in the changelog)</summary>
 
 <table>
 <tr><td>
 
-🏷️ **Current version: 0.37.0** (2026-08-25) · 📖 [0.33-cycle overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
+🏷️ **Current version: 0.38.0** (2026-09-14) · 📖 [0.38.0 working notes](docs/releases/0.38.0.md) · 📜 [Full changelog](CHANGELOG.md)
 
-**Biggest features this cycle: the front door became a launcher, and the token bill got engineered.**
+**0.38.0 in one paragraph.** The guard changes of the 2026-09-13 framework review are applied and
+ship under a new number (the version is what `claude plugin update` keys on; an unchanged number
+leaves every installed copy stale, which the installer now detects and refreshes). The plugin-mode
+open, the way the team is really installed, passed a live eval and its run is kept as the first
+golden replay and frozen as the shipped sample engagement (`virt-surv try --replay`). CI is green
+on Linux and Windows. One eval case is still failing and the baseline says so.
+
+**Biggest features of the 0.34 to 0.37 cycle: the front door became a launcher, and the token bill got engineered.**
 - 🛡️ **The safety gates were off in every new project, and now are not** (unreleased). The
   `VSIT/` layout became the default for new projects on 2026-08-28 and the three guard hooks
   were never told: they looked for the acting-session stamp under the old `artifacts/` path
