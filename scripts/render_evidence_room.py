@@ -97,7 +97,9 @@ _EVIDENCE_ITEMS = (
     ("START-HERE.md", "Living index", False),
 )
 
-_SEVERITY_ORDER = {"critical": 0, "high": 1, "warning": 2, "medium": 3, "low": 4, "style": 5}
+# Matches findings-schema.json's severity enum exactly - no "high"/"low" bucket exists in the
+# schema, so don't carry one here (dead weight left over from an earlier severity vocabulary).
+_SEVERITY_ORDER = {"critical": 0, "warning": 1, "medium": 2, "style": 3}
 
 
 def _read_json(path: Path):
@@ -149,8 +151,20 @@ def load_findings(workspace: Path) -> tuple[list[dict], dict]:
                 continue  # merged canonical pack + its component packs overlap by design
             seen_ids.add(fid)
             findings.append(obj)
-    findings.sort(key=lambda f: _SEVERITY_ORDER.get(str(f.get("severity", "")).lower(), 9))
+    findings.sort(key=_finding_sort_key)
     return findings, envelope
+
+
+def _finding_sort_key(f: dict) -> tuple:
+    """Fix-first, same idea as render_findings' at-a-glance line: an evidence-room reader
+    wants to see what's still OUTSTANDING before what's already settled. Open findings sort
+    before fixed/accepted/deferred; within each group, worst severity first, then highest
+    confidence - severity/confidence order alone (the old behaviour) let a fixed critical
+    from a past engagement sit ahead of an open one from this one."""
+    sev = _SEVERITY_ORDER.get(str(f.get("severity", "")).lower(), 9)
+    is_open = str(f.get("disposition", "")).lower() == "open"
+    confidence = f.get("confidence")
+    return (0 if is_open else 1, sev, -(confidence if isinstance(confidence, int) else 0))
 
 
 def completeness(workspace: Path, state: dict, findings: list[dict]) -> list[dict]:
@@ -332,6 +346,8 @@ def build_html(workspace: Path, state: dict, findings: list[dict], envelope: dic
     parts.append("<h2>Findings register</h2>")
     if findings:
         parts.append(
+            "<p class='dim'>Ordered fix-first: open findings before fixed/accepted/deferred, "
+            "worst severity first within each group.</p>"
             "<table><tr><th>ID</th><th>Severity</th><th>Title</th><th>Location</th>"
             "<th>Basis</th><th>Disposition</th></tr>"
         )
@@ -339,7 +355,7 @@ def build_html(workspace: Path, state: dict, findings: list[dict], envelope: dic
             sev = str(f.get("severity") or "")
             cls = (
                 "bad"
-                if sev.lower() in ("critical", "high")
+                if sev.lower() == "critical"
                 else ("warn" if sev.lower() in ("warning", "medium") else "dim")
             )
             parts.append(
