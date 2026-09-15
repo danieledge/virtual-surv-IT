@@ -78,9 +78,14 @@ tool outright). The human chose a rung at the pre-flight screen; it is on the st
   ceremony reading as a full one.
 - **`continue`** - carry on and record the overrun as an outstanding item. Never silently.
 
-Record which rung you applied as an assumption-ledger entry, with the figures. The ceiling is
-**advisory pacing, not a hard stop** - the org-side spend limit is the only real one, and
-attribution is project-wide, so treat the number as a signal to reach a gate, not a fence.
+Record which rung you applied as an assumption-ledger entry, with the figures.
+**The budget IS the hard cap** (2026-09-15) - at the ceiling, perform the chosen rung
+yourself, which is the normal path every time, not just for `stop`; a headless run also
+carries an OS-enforced `--max-budget-usd` backstop set headroom above that same ceiling, so
+a session that fails to self-regulate still gets stopped rather than running unwatched past
+the number the human agreed to. Attribution is project-wide too, and the org-side spend
+limit remains the outermost real one regardless - but this run's own ceiling is not merely
+advisory.
 
 ## Park, never guess
 

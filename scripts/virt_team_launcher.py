@@ -2355,18 +2355,22 @@ def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> s
     cap = answers.get("engagement_usd")
     if cap:
         enforced = answers.get("hard_cap_usd")
-        # "(enforced)" must mean it, not just sound reassuring. hard_cap_usd is ONLY ever
-        # set for headless mode (--max-budget-usd is a real OS-level stop on that detached
-        # subprocess); a window-mode run has no equivalent lever at all, so a ceiling there
-        # is the SESSION checking budget-status and choosing to comply - advisory, not
-        # enforced, however the rung is worded. Saying so here closes the silent half of
-        # the 2026-09-15 window-mode spend-ceiling gap (the other half is the arming
-        # refusal below).
+        rung = answers.get("on_budget", "park")
+        # THE BUDGET IS THE HARD CAP (2026-09-15, owner). At $cap, the session
+        # self-checks budget-status and performs the chosen rung - that is the normal
+        # path, for every rung, not just "stop". hard_cap_usd, when set, is the backstop
+        # BEHIND that: an OS-level --max-budget-usd kill, headroom above $cap, only for a
+        # session that fails to self-regulate. It is ONLY ever set for headless mode - a
+        # window-mode run has no equivalent lever at all (an ordinary interactive process,
+        # no --max-budget-usd), so a ceiling there is advisory-only, however the rung is
+        # worded; say so rather than let "it will park" read as a guarantee.
         how = (
-            "STOPS there (enforced)"
+            f"it will {rung} - backstop enforced at ${enforced}"
             if enforced
-            else (f"it will {answers.get('on_budget', 'park')} (advisory - not OS-enforced "
-                  "in window mode; only headless enforces via --max-budget-usd)")
+            else (
+                f"it will {rung} (advisory - not OS-enforced in window mode; only "
+                "headless enforces via --max-budget-usd)"
+            )
         )
         print(ink.dim(f"    ceiling ${cap} - at the cap {how}"), file=err)
     else:

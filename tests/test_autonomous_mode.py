@@ -558,7 +558,11 @@ def test_the_reference_tells_the_run_not_to_ask_at_the_ceiling():
     assert "auto_on_budget" in text
     for rung in ("`park`", "`light`", "`continue`"):
         assert rung in text
-    assert "advisory pacing, not a hard stop" in text
+    # "The budget IS the hard cap" (2026-09-15, owner) replaced "advisory pacing, not a
+    # hard stop" - the old wording contradicted "The spend ceiling is a precondition, not
+    # a preference" forty lines below it, and (once launcher_app.py's own rung == "stop"
+    # gate was removed) contradicted the actual enforced behaviour too.
+    assert "The budget IS the hard cap" in text
 
 
 def test_the_light_rung_cannot_be_reached_on_the_models_own_judgement():
@@ -1040,13 +1044,21 @@ def test_the_enforced_cap_is_separate_from_the_advisory_ceiling():
 
 def test_a_hard_cap_is_only_produced_when_it_can_actually_be_enforced():
     """--max-budget-usd exists in print mode only. Handing a caller a cap that nothing will
-    honour is the worst kind of setting: it reads as a guarantee and is a preference."""
+    honour is the worst kind of setting: it reads as a guarantee and is a preference.
+
+    NOT gated on rung == "stop" any more (2026-09-15, owner: "the budget is the hard cap").
+    That gate meant a park/light/continue choice - the SAFER, more conservative rungs - got
+    no enforced backstop at all, and a headless run with an explicit ceiling was refused at
+    launch entirely for "no spend cap" (2026-09-15 live report) unless the human happened
+    to pick "stop" specifically. Every rung now gets the same enforced backstop; the rung
+    only decides what the session does AT the ceiling, before the backstop would ever
+    fire."""
     src = _preflight_source()
     body = src.split("_PREFLIGHT_CAPS = ", 1)[1]
     # The value is a multi-line expression now (the wall carries headroom above the
     # ceiling), so read the whole block rather than the first line of it.
     condition = body.split('"hard_cap_usd":', 1)[1].split("}", 1)[0]
-    assert 'rung == "stop"' in condition
+    assert 'rung == "stop"' not in condition
     assert 'mode == "headless"' in condition
     assert "ceiling" in condition, "and only when a ceiling was actually set"
 

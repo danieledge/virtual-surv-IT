@@ -1791,18 +1791,29 @@ def _preflight_model() -> dict:
             "engagement_usd": ceiling,
             "on_budget": rung,
             "run_mode": mode,
-            # The ENFORCED cap, separate from the advisory ceiling on purpose - they are
-            # two different promises and the caller must not have to infer which was made.
-            # Only set when the human chose "stop" AND the run can actually be capped, so
-            # a caller passing this to --max-budget-usd never passes a limit nothing
-            # honours. HEADROOM above the pacing ceiling, not equal to it: a wall at the
-            # same number as the target kills a correctly-paced run inside its own closing
-            # sequence, which is what happened on 2026-08-26 - $5.08 against $5.00,
-            # terminated mid-close, twelve artifacts and no verdict.
+            # THE BUDGET IS THE HARD CAP (2026-09-15, owner: "the budget is the hard cap...
+            # if it approaches this it should perform the action specified in the
+            # preflight, eg park, etc"). One number, two jobs: the session self-checks
+            # budget-status and performs the chosen on_budget rung (park/light/continue/
+            # stop) AT the ceiling - that is the normal, expected path, for every rung, not
+            # just "stop" - and this hard_cap_usd is the backstop BEHIND it, enforced by
+            # --max-budget-usd, for a session that fails to self-regulate. Only possible
+            # for headless (the only mode with an OS-level enforcement lever at all - see
+            # _windowed_unattended_may_arm in virt_team_launcher.py); a set ceiling in
+            # window mode stays advisory-only, nothing this repo can enforce.
+            #
+            # HEADROOM above the ceiling, not equal to it, so the backstop is a safety net
+            # BEHIND the chosen rung's own graceful action, never a wall the rung's own
+            # closing sequence runs into: a wall at the same number as the target killed a
+            # correctly-paced run inside its own close on 2026-08-26 - $5.08 against $5.00,
+            # terminated mid-close, twelve artifacts and no verdict. Previously gated to
+            # rung == "stop" only, which meant a park/light/continue choice - the SAFER,
+            # more conservative rungs - got no enforced backstop at all and a headless run
+            # even with an explicit ceiling was refused at launch for "no spend cap"
+            # (2026-09-15 live report) - backwards: the gentler the choice, the less
+            # protection it had.
             "hard_cap_usd": (
-                round(ceiling * _WALL_HEADROOM, 2)
-                if (rung == "stop" and mode == "headless" and ceiling)
-                else None
+                round(ceiling * _WALL_HEADROOM, 2) if (mode == "headless" and ceiling) else None
             ),
         }
 
