@@ -330,9 +330,11 @@ def test_build_html_needs_no_optional_dependency(tmp_path):
     assert page.startswith("<!doctype html>") and page.rstrip().endswith("</html>")
 
 
-def test_an_absent_setting_renders_by_default(tmp_path):
-    """On by default since 2026-09-13 (step 8.5): a project that never set the key gets the room."""
+def test_an_absent_setting_renders_nothing_by_default(tmp_path):
+    """Off by default (reverted 2026-09-15): a project that never set the key gets no room -
+    briefly on by default from the 2026-09-13 framework review, reverted on user request."""
     ws = _workspace(tmp_path, opted_in=True)
     (ws.parent.parent / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
     code, message = render(ws)
-    assert code == 0 and list(ws.glob("EVIDENCE-ROOM-*.html")), message
+    assert code == 0 and not list(ws.glob("EVIDENCE-ROOM-*.html")), message
+    assert "evidence_room" in message and "--force" in message

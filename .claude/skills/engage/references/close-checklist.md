@@ -112,14 +112,16 @@ Then, and only then:
 Until the marker exists, the truthful close state is **PARTIAL with "human sign-off"
 outstanding** - say that plainly rather than implying the pack is signed.
 
-## Evidence Room (every close, unless the project opted out)
+## Evidence Room (only if the project opted in)
 
-Every close renders one self-contained HTML pack assembling the evidence this engagement
-already produced (completeness checklist, traceability, findings register, decisions, residual
-risk, SHA-256 manifest); it is the auditor-facing deliverable and the first thing the closing
-turn links (2026-09-13, on by default). A project opts out with `"evidence_room": false`.
-Run it **after the delivery report and summary email exist, before `finalise-artifacts`** so
-its manifest covers the finished pack:
+One self-contained HTML pack assembling the evidence this engagement already produced
+(completeness checklist, traceability, findings register, decisions, residual risk, SHA-256
+manifest) - the auditor-facing deliverable, and the first thing the closing turn links **when
+the project has opted in**. Off by default (reverted 2026-09-15, after a brief spell on by
+default from the 2026-09-13 framework review) - a project opts in with
+`"evidence_room": true` in `.claude/team-preferences.json`. Run it **after the delivery report
+and summary email exist, before `finalise-artifacts`** so its manifest covers the finished
+pack:
 
 ```
 <python> -m scripts.render_evidence_room VSIT/engagements/<slug>
@@ -127,12 +129,14 @@ its manifest covers the finished pack:
 
 Allow-listed, so no consent prompt. It is **derived, never authored** - do not hand-write or
 "improve" its contents; if it shows a gap, the gap is real and belongs in the close, not
-papered over. A project that opted out gets a one-line "off for this project" message and
-**no file**: that is a normal outcome, not a failure to fix, and it is never rendered with
-`--force` on the user's behalf. When it renders, list it like any other artifact
-(`add-artifact EVIDENCE-ROOM-<slug>.html --title "Evidence Room"`) so the index and the close
-gate see it. For a `--jira`-sourced engagement it is the natural attachment for the
-deliver-back comment (integrations reference, inbound section).
+papered over. A project that hasn't opted in gets a one-line "off by default" message and
+**no file**: that is the normal outcome, not a failure to fix, and it is never rendered with
+`--force` on the user's behalf - `--force` is for a one-off render in a project that hasn't
+opted in, a deliberate ask, not something to reach for automatically at close. When it
+renders, list it like any other artifact (`add-artifact EVIDENCE-ROOM-<slug>.html --title
+"Evidence Room"`) so the index and the close gate see it. For a `--jira`-sourced engagement it
+is the natural attachment for the deliver-back comment (integrations reference, inbound
+section).
 
 ## Finalise the state, in order (the close itself)
 

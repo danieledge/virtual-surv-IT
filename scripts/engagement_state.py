@@ -2197,15 +2197,19 @@ def _cmd_set_status(args: argparse.Namespace) -> int:
         )
         clear_active(args.dir.parent, args.dir.name)
         return 0
-    # Step 8.5 (2026-09-13 framework review): the evidence room is the auditor-facing
-    # deliverable and is rendered at EVERY close by default. It is derived, never authored, so
-    # the close produces it itself rather than refusing for its absence; a project that opted
-    # out ("evidence_room": false) gets no file and no finding. Any failure here is reported
-    # and left to the gate, which then names the missing room.
+    # The evidence room is the auditor-facing deliverable, derived rather than authored, so
+    # when a project has opted in the close produces it itself rather than refusing for its
+    # absence. Off by default (reverted 2026-09-15, user request; briefly on by default from
+    # the 2026-09-13 framework review, step 8.5) - a project that never opted in
+    # ("evidence_room": true not set) gets no file and no finding. This default MUST match
+    # check_artifacts._SETTING_CLOSE_DELIVERABLES's own "evidence_room" row and
+    # render_evidence_room.render()'s own gate, or a project that correctly gets no room here
+    # still fails the gate below with a false EVIDENCE-ROOM-MISSING. Any failure here is
+    # reported and left to the gate, which then names the missing room.
     try:
         toggle = getattr(ca, "_read_bool_toggle", None)
         wants_room = (
-            toggle(_project_root_for(args.dir), "evidence_room", "default_evidence_room", True)
+            toggle(_project_root_for(args.dir), "evidence_room", "default_evidence_room", False)
             if toggle
             else False
         )

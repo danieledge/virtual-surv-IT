@@ -181,7 +181,10 @@ _SETTING_CLOSE_DELIVERABLES = (
     (
         "evidence_room",
         "default_evidence_room",
-        True,  # on by default since 2026-09-13 (step 8.5): a close without the room is a defect
+        False,  # off by default (reverted 2026-09-15, user request); briefly True (on by
+        # default) from the 2026-09-13 framework review. Must track render_evidence_room.py's
+        # own gate default - a mismatch here means a project that never opted in gets no room
+        # (correct) but still fails close with a false EVIDENCE-ROOM-MISSING (wrong).
         "EVIDENCE-ROOM-*.html",
         "EVIDENCE-ROOM-MISSING",
         "render it with `python -m scripts.render_evidence_room <workspace>` before close",

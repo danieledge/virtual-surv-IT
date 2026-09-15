@@ -30,10 +30,11 @@ each load-bearing:
   work is contested (CLAUDE.md §8, and the repo already refuses "SR 11-7 compliant"), so
   a confident readiness percentage would be a claim this tool cannot support.
 
-Rendered at every close unless the working project opts out with `"evidence_room": false` in its
-.claude/team-preferences.json (off by default, no machine tier - whether a project wants
-an auditor-facing pack is a fact about that project's governance). `--force` renders
-anyway, for a one-off in a project that hasn't opted in.
+Off by default (reverted 2026-09-15; briefly on-by-default from the 2026-09-13 framework
+review). A project opts in with `"evidence_room": true` in its .claude/team-preferences.json -
+whether a project wants an auditor-facing pack rendered on every close is a fact about that
+project's governance, not something to assume. `--force` renders anyway, for a one-off in a
+project that hasn't opted in.
 
 Usage:
     python -m scripts.render_evidence_room artifacts/<slug>
@@ -454,14 +455,14 @@ def render(workspace: Path, force: bool = False) -> tuple[int, str]:
         # sits under it) rather than assuming a cwd.
         project = workspace.parent.parent if workspace.parent.name == "artifacts" else workspace
         prefs = _read_json(_vsit_paths().preferences_file(project)) or {}
-        # ON BY DEFAULT since 2026-09-13 (framework review, step 8.5): the room is the
-        # auditor-facing deliverable, so every close renders it unless the project opted out
-        # with '"evidence_room": false'.
-        if isinstance(prefs, dict) and prefs.get("evidence_room", True) is False:
+        # OFF BY DEFAULT (reverted 2026-09-15, user request - it had briefly been on-by-default
+        # since the 2026-09-13 framework review). A project must opt IN with
+        # '"evidence_room": true'; anything else (absent, false, unreadable prefs) skips.
+        if not (isinstance(prefs, dict) and prefs.get("evidence_room") is True):
             return 0, (
-                "evidence room is off for this project ('\"evidence_room\": false' in "
-                ".claude/team-preferences.json; remove it or set true to render at close), "
-                "or pass --force for a one-off"
+                "evidence room is off by default for this project (set "
+                "'\"evidence_room\": true' in .claude/team-preferences.json to render it at "
+                "close), or pass --force for a one-off"
             )
     findings, envelope = load_findings(workspace)
     out = (

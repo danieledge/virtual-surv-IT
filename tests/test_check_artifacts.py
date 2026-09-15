@@ -2894,9 +2894,10 @@ def test_evidence_room_present_or_setting_off_passes(tmp_path, monkeypatch):
     assert not any("EVIDENCE-ROOM-MISSING" in f and "rev-on" in f for f in run_check(art))
 
 
-def test_evidence_room_missing_fires_when_no_setting_is_recorded(tmp_path, monkeypatch):
-    """On by default since 2026-09-13 (step 8.5): a project that never set evidence_room still
-    owes the room at close; only an explicit false opts out."""
+def test_evidence_room_missing_does_not_fire_when_no_setting_is_recorded(tmp_path, monkeypatch):
+    """Off by default (reverted 2026-09-15, user request): a project that never set
+    evidence_room owes nothing at close; only an explicit true opts in. Briefly on by default
+    (2026-09-13, step 8.5) before the revert."""
     from scripts.check_artifacts import check as run_check
 
     monkeypatch.chdir(tmp_path)
@@ -2906,4 +2907,4 @@ def test_evidence_room_missing_fires_when_no_setting_is_recorded(tmp_path, monke
     art = tmp_path / "VSIT" / "engagements"
     _closed_pack_with_deliverable(art / "rev-default")
     findings = run_check(art)
-    assert any("EVIDENCE-ROOM-MISSING" in f for f in findings), findings
+    assert not any("EVIDENCE-ROOM-MISSING" in f for f in findings), findings
