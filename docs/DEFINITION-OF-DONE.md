@@ -221,6 +221,13 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       from the doc **alone** (no tribal knowledge, no unexplained jargon, commands
       copy-pastable). `compliance-reviewer` checks usability at this gate, not merely
       existence.
+- [ ] **No internal team-tooling mechanics in stakeholder-facing prose** (ISRT 2026-09-15) -
+      hook/guard names, write-scope workarounds, dispatch retries, model-provider quirks: none
+      of it belongs in a delivery report, a specialist memo or the summary email's lead
+      paragraph. That content, if worth recording at all, goes in §2a's iteration log or the
+      developer handover, never the reader-facing narrative. `compliance-reviewer` checks this
+      at the same gate as usability above - a live report found two memos both opening their
+      lead paragraph with a note about the write-tool guard.
 - [ ] **Indexed - a LIVING, GENERATED START-HERE entry point** - the workspace's
       `VSIT/engagements/<slug>/START-HERE.md` (render shape: `docs/templates/start-here.md`) is
       **rendered from `engagement-state.json` at engagement open** (`engagement_state init`)
@@ -317,6 +324,7 @@ State current as of 2026-09-12, after the audit-remediation pass.
 | Compliance-reviewed | ADVISORY | Routing prose. Conditional on deliverable type, which no checker can determine. |
 | Documented for handover | ADVISORY | Prose; `compliance-reviewer` reads it at the gate. |
 | Handover docs clear & usable | ADVISORY | Judgement by definition - a reviewer's read, never a checker's. |
+| No internal tooling mechanics in stakeholder prose | ADVISORY | `compliance-reviewer`'s read at the same gate. Nothing mechanical greps for hook/guard names in reader-facing sections. |
 | Indexed (living START-HERE) | HARD | `MISSING-INDEX`, `STALE-INDEX`, `STATE-STALE-RENDER`, `INDEX-HAND-EDITED`, `REGISTRY-STALE` (`scripts/check_artifacts.py`); the render is hash-verified. |
 | Stateful | HARD | `INDEX-NO-STATUS`, `FINAL-BEFORE-CLOSE`, `SUMMARY-BEFORE-CLOSE`, `STATE-INVALID`; `set-status closed` validates and rolls back. |
 | Distributable (.md + .html) | HARD | `MISSING-HTML` + `check_artifacts --fix` auto-renders. |

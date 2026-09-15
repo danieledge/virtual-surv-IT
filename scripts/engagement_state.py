@@ -1215,6 +1215,20 @@ def validate_state(state: dict) -> list[str]:
 # ---------------------------------------------------------------------------- rendering
 
 
+def _artifact_type_label(path) -> str:
+    """"report" (human-readable, open it) vs "data pack" (raw, don't) for the START-HERE
+    artifact table's Type column (ISRT 2026-09-15). A `data/` findings pack is machine-
+    readable single-line JSONL - listed as a "final artifact" right next to human-readable
+    .md reports with nothing distinguishing the two, a reader who opened one expecting a
+    report got a wall of unreadable JSON instead. Same rule check_artifacts.py already uses
+    to exclude `data/` from the .md/.html-sibling and index scans (CLAUDE.md §8's raw
+    findings-pack convention), applied here for the same "raw data lives under data/" reason."""
+    p = str(path or "")
+    if p.startswith("data/") or p.endswith(".jsonl"):
+        return "data pack - do not open directly"
+    return "report"
+
+
 def render_markdown(state: dict) -> str:
     """Build the START-HERE.md text from the state. Pure function - no I/O."""
     eng = state.get("engagement", {})
@@ -1327,16 +1341,17 @@ def render_markdown(state: dict) -> str:
     lines.append("")
     lines.append("## Everything in this delivery")
     lines.append("")
-    lines.append("| Artifact | What it is | Status |")
-    lines.append("|----------|------------|--------|")
+    lines.append("| Artifact | Type | What it is | Status |")
+    lines.append("|----------|------|------------|--------|")
     if artifacts:
         for art in artifacts:
+            path = art.get("path")
             lines.append(
-                f"| [`{art.get('path')}`]({art.get('path')}) | {art.get('title')} "
+                f"| [`{path}`]({path}) | {_artifact_type_label(path)} | {art.get('title')} "
                 f"| {art.get('status')} |"
             )
     else:
-        lines.append("| *(none yet)* | | |")
+        lines.append("| *(none yet)* | | | |")
     lines.append("")
 
     decisions = state.get("decisions") or {}

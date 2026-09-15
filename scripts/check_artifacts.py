@@ -1293,6 +1293,38 @@ def _check_map_dead_pointers(
     return findings
 
 
+def _check_map_history_artifacts(
+    map_path: Path, project_dir: Path, history_checks: list[tuple[int, str]]
+) -> list[str]:
+    """MAP-DEAD-ARTIFACT: a §3 Engagement history 'Key artifacts' cell names a path that no
+    longer resolves on disk. §2's MAP-DEAD-POINTER already checks `file:line` citations
+    inside an entry's own prose - §3's OWN cross-references rotted silently instead, because
+    its table has no Basis column, so the column-driven entry scan in check_map() skips it
+    entirely by design (a live report cited `interim-delivery-report.md` as a key artifact
+    when the file had been renamed to `delivery-report.md`, ISRT 2026-09-15). Toggle-gated
+    exactly like MAP-DEAD-POINTER (called only when map_skeleton is on) - deliberately, since
+    a Key artifacts cell most often points into `VSIT/engagements/<slug>/`, which is
+    gitignored and lives only on the box that ran the engagement; a fresh clone or a CI
+    fixture with no engagement workspaces present is not this check's failure mode."""
+    findings: list[str] = []
+    for lineno, cell in history_checks:
+        for raw_path in _split_paths_cell(cell):
+            candidate = raw_path.strip("`")
+            if not candidate or candidate in ("-", "N/A", "n/a"):
+                continue
+            try:
+                exists = (project_dir / candidate).exists()
+            except OSError:
+                exists = True  # an unresolvable path shape must never false-flag
+            if not exists:
+                findings.append(
+                    f"MAP-DEAD-ARTIFACT: {map_path}:{lineno} §3 'Key artifacts' cites "
+                    f"`{candidate}` which does not exist - renamed, moved or never "
+                    "committed; correct or remove the reference"
+                )
+    return findings
+
+
 def check_map(map_path: Path, project_dir: Path | None = None) -> list[str]:
     """Mechanical hygiene findings for a codebase map; empty means the gate is satisfied.
 
@@ -1384,16 +1416,31 @@ def check_map(map_path: Path, project_dir: Path | None = None) -> list[str]:
     # (an empty list either way costs nothing extra below when map_skeleton_on is False).
     drift_rows: list[tuple[int, str, list[str]]] = []  # lineno, area, globs
     citation_checks: list[tuple[int, str]] = []  # lineno, entry cell text
+    history_checks: list[tuple[int, str]] = []  # lineno, §3 Key artifacts cell text
     columns: dict[str, int] | None = None
+    history_columns: dict[str, int] | None = None
     found_entry_table = False
     for lineno, line in enumerate(lines, start=1):
         if not line.lstrip().startswith("|"):
             columns = None
+            history_columns = None
             continue
         cells = _split_cells(line)
         if not cells or set("".join(cells)) <= {"-", ":", " "}:
             continue  # |---| divider
         lowered = [c.lower() for c in cells]
+        # §3 Engagement history has no Basis column (by design - it's a log, not an entries
+        # table), so it's invisible to the basis-column detection just below. Tracked
+        # independently here so its own "Key artifacts" cross-references can still be
+        # checked (MAP-DEAD-ARTIFACT, ISRT 2026-09-15) without pulling it into the §2
+        # basis/anchor rules that don't apply to it.
+        if any("key artifacts" in c for c in lowered):
+            history_columns = {name: i for i, name in enumerate(lowered)}
+            continue
+        if history_columns is not None:
+            ka_idx = history_columns.get("key artifacts")
+            if ka_idx is not None and ka_idx < len(cells) and cells[ka_idx].strip():
+                history_checks.append((lineno, cells[ka_idx]))
         if any("basis" in c for c in lowered):
             columns = {name: i for i, name in enumerate(lowered)}
             found_entry_table = True
@@ -1487,6 +1534,7 @@ def check_map(map_path: Path, project_dir: Path | None = None) -> list[str]:
     if map_skeleton_on:
         findings.extend(_check_map_drift(map_path, project_dir, drift_rows))
         findings.extend(_check_map_dead_pointers(map_path, project_dir, citation_checks))
+        findings.extend(_check_map_history_artifacts(map_path, project_dir, history_checks))
 
     for pattern, label in _SECRET_PATTERNS:
         if pattern.search(text):

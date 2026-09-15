@@ -38,8 +38,15 @@ to-verify as a failure - it is the true state.
   incomplete/miscounted source index or a missing per-finding evidence tag → complete it ·
   `SEVERITY-ICON-MISSING` → add the matching legend emoji next to the bare severity word
   (docs/WAYS-OF-WORKING.md: 🔴 Critical · 🟠 High/Warning · 🟡 Medium · 🔵 Low/Style · 🔇
-  Filtered).
+  Filtered) · `AGENT-UNMARKED` → add the 🤖 marker to the roster-name mention · `AGENT-HUMAN-
+  COMBINED` → split an agent and a human off the shared `+`/`&` line, never one sign-off line
+  for both · `EMAIL-AGENT-UNMARKED` / `EMAIL-NOT-MORGAN` → the summary email's roster mentions
+  carry 🤖 and its `From:`/sign-off is always Morgan (ISRT 2026-09-15: these four were real,
+  active, auto-fix-class gate checks with no entry here - discovered only by hitting the
+  refusal, not by reading this checklist first).
   Re-run `check_artifacts` until only judgement items remain; note auto-corrections in one line.
+  (This bullet names the recurring/easy-to-miss codes, not every one `check_artifacts` emits -
+  the tool's own output always names the exact code and fix for anything not listed here.)
 - **ESCALATE via the question tool (do NOT self-fix):** a rationale contradicted by the evidence
   ("the email says X but the artifact says Y"), a closure/sign-off on authority you cannot verify
   (verbal only, no written authority), a scope/acceptance call. Pause and ask - these are real

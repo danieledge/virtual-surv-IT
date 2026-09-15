@@ -41,19 +41,23 @@
 1. [`engagement-summary-<slug>.txt`](engagement-summary-<slug>.txt) - the two-minute cover
    note (what was asked, what happened, where it stands). *Close only.*
 2. [`delivery-report.md`](delivery-report.md) - the consolidated report: iteration log
-   (§1a - how we got here), findings with dispositions, QA evidence, limitations. *Close only.*
+   (§2a - how we got here), findings with dispositions, QA evidence, limitations. *Close only.*
 3. *Then by interest:* the deep artifacts below.
 
 ## Everything in this delivery
 
 *One row appended per artifact, at the moment it is written - nothing in the folder goes
 unlisted. Interim artifacts carry pass-scoped names (`review-pass-1`, `qa-cycle-2`,
-`interim-*`) - `delivery-report.md` and `final-*` names are reserved for close.*
+`interim-*`) - `delivery-report.md` and `final-*` names are reserved for close.* **Type**
+distinguishes a human-readable report from a raw `data/` findings pack (ISRT 2026-09-15: a
+`.jsonl` pack listed with no signal next to a `.md` report reads as "open me too" - opening it
+directly shows a wall of single-line JSON, not something resembling a report).
 
-| Artifact | What it is | Status |
-|----------|------------|--------|
-| [`engagement-brief.md`](engagement-brief.md) | Scope, decisions, plan - the opening bookend | interim / final |
-| <...one row per artifact, appended as it lands> | | interim / final |
+| Artifact | Type | What it is | Status |
+|----------|------|------------|--------|
+| [`engagement-brief.md`](engagement-brief.md) | report | Scope, decisions, plan - the opening bookend | interim / final |
+| [`data/findings-<slug>.jsonl`](data/findings-<slug>.jsonl) | data pack - do not open directly | Structured findings, rendered by `REVIEW-<slug>.md` | interim / final |
+| <...one row per artifact, appended as it lands> | | | interim / final |
 
 ## Open items a reader should know about
 

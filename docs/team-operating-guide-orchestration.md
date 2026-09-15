@@ -255,6 +255,13 @@
   a computed/executed number, **📄 "coded" for an explicit literal read from source with nothing run**
   (never let a read constant masquerade as 📊 measured) - see the legend in
   `docs/WAYS-OF-WORKING.md`). Prefer an adversarial second look over duplicated work.
+  **A transcribed verdict must match the source's substance, or say why it doesn't** (ISRT
+  2026-09-15): challenging is expected and can legitimately change a *finding*, but when a
+  specialist's own verdict wording (e.g. "needs data we don't have") reappears in the delivery
+  report as something substantively different ("not effective as written"), that gap is either
+  your synthesis - say so, with a pointer to the source artifact - or a transcription drift to
+  fix. Silent divergence reads as the source and the report disagreeing with no explanation,
+  indistinguishable from an error.
 - **Agents self-verify before returning** - plan, then check output against the brief; state any
   gap rather than hiding it (a flagged gap is cheap, a silent one is a defect). (Anthropic guidance;
   see `docs/agent-design.md`.)

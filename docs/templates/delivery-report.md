@@ -25,6 +25,17 @@
 | **Overall verdict** | ready / ready with conditions / not yet |
 | **Findings disposition** | _N_ fixed · _N_ open · _N_ accepted · _N_ deferred |
 
+**Findings at a glance** _(the master index - every finding minted anywhere below, one row
+each; the same "scannable list before the detail" GitHub code scanning / SonarQube / SARIF all
+lead with, and `REVIEW-<slug>.md`'s own summary table already does - ISRT 2026-09-15: without
+this the report had per-section tables but no single place answering "what are ALL the
+findings". Populate from the underlying `id` each finding already carries in its source
+findings pack - never invent a new numbering scheme.)_
+
+| ID | Sev | Section | Location | Status |
+|----|-----|---------|----------|--------|
+| CR-01 | 🔴 Critical | §4 Code review | `path/file.py:12` | Open |
+
 **Contents** _(keep for a large multi-section report - `[TOC]` renders a clickable, internal-link
 section index in the `.html` via `render_html`; omit on a short report)_
 
@@ -37,7 +48,19 @@ mandatory: if the engagement found blocking issues **and** then fixed/reimplemen
 human developer review), so the verdict can't be read as "blocked" when it was actually resolved
 (or vice-versa). The **Overall verdict must match the disposition**: not-yet only if items are still
 Open; ready/ready-with-conditions once they're fixed or explicitly accepted. Then give **concrete
-next-step options with a recommendation** - never a dead end.
+next-step options with a recommendation** - never a dead end. **Name the finding ID** (e.g.
+"CR-01") for each blocking or otherwise notable item mentioned here - the detail sections below
+use IDs consistently (see the Findings at a glance table above); an exec summary that only
+narrates in prose forces the reader to go hunting for which detail row it means.
+
+**Iteration history:** how this outcome was reached (a failed pass caught and fixed, a
+clarification round) is in §2a below, not here - this section stays the outcome and the ask, not
+the journey.
+
+**Citing the codebase map:** a fact stated here (or anywhere in this report) that was sourced
+from the project's codebase map cites it inline, e.g. `(map §2 #4)` - the map's own `#` column
+is the anchor. Don't restate map content without pointing back to it; the map is the durable
+record and this report is one dated read of it.
 
 > **This is the "as-delivered / after" view.** Where it supersedes earlier *as-found* evidence
 > (e.g. a [`qa-handover`](qa-handover.md), a review report), **reference that evidence as the
@@ -47,7 +70,16 @@ next-step options with a recommendation** - never a dead end.
 > human sign-off) that are **correctly** open and out of scope for this stage. A report
 > showing the latter as open is *good*; a report that hides them to look "all green" is the failure.
 
-## 1a. Iteration log - how we got here *(always include)*
+## 2. Scope & what was delivered
+What was reviewed or built, the languages/components involved, and what's explicitly out of
+scope.
+
+## 2a. Iteration log - how we got here *(always include)*
+> Deliberately positioned AFTER Scope, not between the exec summary and it (ISRT 2026-09-15:
+> the section used to sit as "1a", directly interrupting the exec-summary → scope reading
+> path for a stakeholder who wants the outcome and what was covered before the process detail).
+> §1 links forward to this section rather than containing it.
+
 The engagement's journey at a glance, then the append-only pass record. **A failed pass that
 was caught, routed, fixed and re-verified is proof the control loop operates - show it, never
 smooth it into a clean narrative.** One row per gate-level hand-off (build, review pass, QA
@@ -61,10 +93,6 @@ pass, clarification round) - not per tool call. First-pass-clean is one strip an
 | 1 | <YYYY-MM-DD> | `qa-engineer` → `rules-developer` | QA pass 1: Fail (QAH-001 defects D-1, D-2) | Fixes applied to `<files>` | [`qa-handover`](qa-handover.md) (as-found) |
 | 2 | <YYYY-MM-DD> | `rules-developer` → `qa-engineer` | re-test request | QA pass 2: Pass | §7 below |
 
-## 2. Scope & what was delivered
-What was reviewed or built, the languages/components involved, and what's explicitly out of
-scope.
-
 ## 3. Requirements & traceability  *(builds; N/A for pure reviews)*
 | BRD | FSD | Code | Test | Obligation | Status |
 |-----|-----|------|------|------------|--------|
@@ -72,12 +100,13 @@ scope.
 ## 4. Code review
 `Found N · Reported R · Filtered F` (depth, mode - see `docs/code-review-method.md`).
 Each finding gets a `diff`-style fix + "why it works" **and a Status**; if none: *no
-significant issues*.
+significant issues*. **ID** carries the finding's own id from its source findings pack (never
+renumbered here) - it's what the Findings at a glance table above and the exec summary cite.
 
-| Sev | File:line | Issue | Conf. | Basis | Standard | Status |
-|-----|-----------|-------|-------|-------|----------|--------|
-| Critical | | | | 📊 measured / 🧠 inferred | CWE-... | Fixed / Open / Accepted |
-| Warning | | | | | | |
+| ID | Sev | File:line | Issue | Conf. | Basis | Standard | Status |
+|----|-----|-----------|-------|-------|-------|----------|--------|
+| CR-01 | Critical | | | | 📊 measured / 🧠 inferred | CWE-... | Fixed / Open / Accepted |
+| CR-02 | Warning | | | | | | |
 
 **Disposition:** _N_ fixed · _N_ open · _N_ accepted · _N_ deferred. A not-yet verdict lists
 the Open items. **No straightforward fix - mark Open (needs human developer review)** with the
@@ -105,8 +134,16 @@ the benchmark that would confirm it). The
 verdict for a static-only review must read "inferred - not profiled" rather than asserting
 scale as measured.
 
-| Location | Issue | Basis | Evidence | Impact at target | Sev | Fix |
-|----------|-------|-------|----------|------------------|-----|-----|
+| ID | Location | Issue | Basis | Evidence | Impact at target | Sev | Fix |
+|----|----------|-------|-------|----------|------------------|-----|-----|
+| PR-01 | | | | | | | |
+
+> **Table shape varies deliberately by section** (ISRT 2026-09-15) - §4/§5/§6 hold different
+> kinds of data (a code finding's `File:line` isn't a performance finding's `Location at
+> target volume`), so their columns differ; within one section every row uses the same shape.
+> What's constant across all three: the `ID` column, and (when a finding gets its own
+> block below the table, output-format.md's shape) the five NAMED fields - Standard, Problem,
+> Likely cause, Impact, Fix.
 
 ## 6. Compliance & audit
 Auditability (alert -> logic -> obligation), documented thresholds (§4), data safety (no

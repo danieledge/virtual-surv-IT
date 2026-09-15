@@ -9,6 +9,18 @@
 > **tuning decision register** instead - `docs/scope-and-stack.md` has the distinction and
 > whose call it is.
 
+> **Who authors what (ISRT 2026-09-15 - two agents' outputs feed this one shape, and they
+> were drifting apart with nothing reconciling them).** `model-validator` (`.claude/agents/
+> model-validator.md`) writes ONLY a findings-pack JSONL - `"kind": "model-validation"`,
+> shared severity lanes (critical/warning/medium/style, **never** a private scale) - which
+> `check_artifacts --fix` renders generically; that pack is the source for **§8** below (the
+> S1-S4 mapping under it is how those shared lanes read in model-risk terms). `ml-engineer`
+> (`.claude/agents/ml-engineer.md` step 4) authors the model DOCUMENTATION - **§1, §3, §9,
+> §10** - to this template's shape directly, so two models' write-ups stay structurally
+> comparable rather than one following this template and the other a free-form paragraph.
+> The PM assembles both into this one document at delivery (or keeps them as two per-model
+> artifacts pre-assembly - either way, the SECTION SHAPE below is what both sides write to).
+
 > **Document control** · ID `MVR-001` · Version `0.1` · Status `Draft | In review | Approved`
 > · Classification `Confidential` · Owner `<name / role>` · As-of `<YYYY-MM-DD>`
 >
@@ -58,11 +70,14 @@ Can each score/alert be explained and traced (§4)? Documentation completeness.
 
 ## 8. Findings & conditions
 
-**Severity taxonomy:**
-- **S1 - Critical:** blocks approval; model must not be deployed until resolved.
-- **S2 - Major:** approval with mandatory condition; must be resolved before next revalidation.
-- **S3 - Minor:** advisory; tracked but does not block approval.
-- **S4 - Observation:** informational; no required action.
+Sourced from `model-validator`'s findings-pack (`data/findings-model-validation-<slug>.jsonl`) -
+never re-scored or re-labelled here, only mapped to model-risk terms:
+
+**Severity taxonomy** (maps onto the pack's shared lanes - the pack itself never uses S1-S4):
+- **S1 - Critical** (pack: `critical`) - blocks approval; model must not be deployed until resolved.
+- **S2 - Major** (pack: `warning`) - approval with mandatory condition; must be resolved before next revalidation.
+- **S3 - Minor** (pack: `medium`) - advisory; tracked but does not block approval.
+- **S4 - Observation** (pack: `style`) - informational; no required action.
 
 **Disposition tally:**
 | Severity | Open | Resolved | Accepted (with rationale) | Total |

@@ -72,6 +72,11 @@ When invoked:
    This includes **handover-doc usability, not just existence**: a developer who has never seen
    the code should be able to build, run and safely change it from the doc alone. Flag tribal
    knowledge, unexplained jargon, or non-runnable commands as a DoD gap, and send it back.
+   Also flag **internal team-tooling mechanics leaking into stakeholder-facing prose**
+   (ISRT 2026-09-15) - a hook/guard name, a write-scope workaround, a dispatch-retry count, a
+   model-provider quirk, in a delivery report, a specialist memo or the summary email's lead
+   paragraph. That content belongs in the iteration log or developer handover, never the
+   reader-facing narrative - send it back the same way as a usability gap.
 
 Review checklist:
 - **Auditability:** every threshold/parameter has a recorded rationale and date; logic is

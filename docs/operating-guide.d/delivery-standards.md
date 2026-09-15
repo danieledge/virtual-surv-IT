@@ -33,7 +33,7 @@ spaced-hyphen asides, and no stock or filler phrases. Brief each specialist to w
 5. **Show the journey - iteration history is evidence, not noise.** When work loops (QA fail →
    fix → re-test, review → fix → re-review, BA question → SME answer → spec change), the
    documentation must show **each pass explicitly**: the Delivery Report's **iteration log**
-   (journey strip + append-only hand-off table, template §1a), the QA handover's **test
+   (journey strip + append-only hand-off table, template §2a), the QA handover's **test
    cycles** table (failed verdicts stay forever), and the elicitation **clarification
    rounds** register. The model's instinct is to present the polished end state - resist it: a
    caught-routed-fixed-re-verified failure is **proof the control loop operates**, and a

@@ -960,6 +960,66 @@ def test_map_dead_pointer_silent_when_citation_resolves(tmp_path):
     assert "MAP-DEAD-POINTER" not in codes
 
 
+# ---- §3 Engagement history "Key artifacts" (MAP-DEAD-ARTIFACT, ISRT 2026-09-15) --------
+# §3 has no Basis column, so it is invisible to the §2 entry scan by design - these test
+# ITS OWN cross-references specifically, independent of §2's MAP-DEAD-POINTER above.
+
+
+def _map_with_history(sha, key_artifacts):
+    return (
+        _good_map_with_paths(sha)
+        + "\n## 3. Engagement history\n\n"
+        "| Date | Engagement | Team ver | What was delivered | Key artifacts |\n"
+        "|------|-----------|----------|--------------------|---------------|\n"
+        f"| 2026-07-18 | code-review | v1.0.0 | one line | {key_artifacts} |\n"
+    )
+
+
+def test_map_dead_artifact_fires_on_renamed_history_reference(tmp_path):
+    """The exact live failure this closes: history cited `interim-delivery-report.md` after
+    the file was renamed to `delivery-report.md`."""
+    repo, sha = _map_repo(tmp_path)
+    (repo / "src").mkdir()
+    (repo / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _map_with_history(sha, "VSIT/engagements/x/interim-delivery-report.md"))
+    codes = "".join(check_map(m, project_dir=repo))
+    assert "MAP-DEAD-ARTIFACT" in codes
+
+
+def test_map_dead_artifact_silent_when_history_reference_resolves(tmp_path):
+    repo, sha = _map_repo(tmp_path)
+    (repo / "src").mkdir()
+    (repo / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    (repo / "VSIT" / "engagements" / "x").mkdir(parents=True)
+    (repo / "VSIT" / "engagements" / "x" / "delivery-report.md").write_text(
+        "# done\n", encoding="utf-8"
+    )
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _map_with_history(sha, "VSIT/engagements/x/delivery-report.md"))
+    codes = "".join(check_map(m, project_dir=repo))
+    assert "MAP-DEAD-ARTIFACT" not in codes
+
+
+def test_map_dead_artifact_off_by_default(tmp_path):
+    repo, sha = _map_repo(tmp_path)
+    (repo / "src").mkdir()
+    (repo / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    m = repo / "docs" / "codebase-map.md"
+    # No team-preferences.json - toggle defaults to off.
+    _touch(m, _map_with_history(sha, "VSIT/engagements/x/never-existed.md"))
+    codes = "".join(check_map(m, project_dir=repo))
+    assert "MAP-DEAD-ARTIFACT" not in codes
+
+
 def test_map_drift_and_dead_pointer_excluded_from_apply_fixes(tmp_path):
     repo, sha = _map_repo(tmp_path)
     (repo / ".claude").mkdir()

@@ -165,6 +165,30 @@ def test_render_lists_every_artifact():
     assert "review-pass-1.md" in md and "engagement-brief.md" in md
 
 
+def test_render_marks_a_data_pack_type_distinct_from_a_report(tmp_path):
+    """ISRT 2026-09-15: a raw findings-pack row and a rendered .md report both showed as
+    'final artifact' with nothing distinguishing them - opening the .jsonl directly is a
+    wall of single-line JSON, not something resembling a report. The Type column says so."""
+    state = _valid()
+    state["artifacts"].append(
+        {
+            "path": "data/findings-x.jsonl",
+            "title": "Findings pack",
+            "status": "final",
+            "added": "2026-07-26",
+        }
+    )
+    md = render_markdown(state)
+    pack_line = next(line for line in md.splitlines() if "findings-x.jsonl" in line)
+    assert "| data pack - do not open directly |" in pack_line
+    brief_line = next(
+        line
+        for line in md.splitlines()
+        if line.startswith("| [`engagement-brief.md`]")
+    )
+    assert "| report |" in brief_line
+
+
 # ------------------------------------------------------------------ CLI round-trip
 
 

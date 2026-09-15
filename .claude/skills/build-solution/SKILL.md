@@ -78,7 +78,7 @@ Run the **orchestrator-workers** pattern, agile and iterative:
    disposition stale, and compliance flagged the pack contradicting itself). If someone else
    must make the pack update, brief them with the decision text verbatim, the pack path, and
    the exact target value, so the call is a write, not a re-investigation.
-   **Record each pass/fix/re-review hand-off in the Delivery Report's iteration log (§1a)
+   **Record each pass/fix/re-review hand-off in the Delivery Report's iteration log (§2a)
    as it happens**, journey strip included.
 5. **Maintain the RTM** (`docs/templates/rtm.md`): every requirement → code → test →
    obligation. A gap is a blocker - surface it to the user. Record significant design decisions

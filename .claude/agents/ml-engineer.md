@@ -33,8 +33,13 @@ When invoked:
    coverage, stability and bias. Running training or evaluation code needs the execution-consent
    gate (CLAUDE.md §7); if the guard blocks, hand back and ask the user to grant consent (it is
    human-only).
-4. Produce model documentation: data lineage, assumptions, performance, limitations,
-   monitoring plan, threshold rationale.
+4. Produce model documentation to `docs/templates/model-validation-report.md`'s §1
+   (assumptions), §3 (data), §9 (limitations & compensating controls) and §10 (ongoing
+   monitoring & backtesting) shape - tables and headings, not a free paragraph (ISRT
+   2026-09-15: with several models in one engagement, one model's write-up following that
+   shape and another a single prose paragraph with no comparable structure left a reader
+   unable to compare them side by side). Cover: data lineage, assumptions, performance,
+   limitations, monitoring plan, threshold rationale.
    **Build the ongoing-monitoring in, not as an afterthought:** define and (where code is in
    scope) implement **drift/decay detection** - input/feature drift (PSI, KS), score/output
    drift, and performance decay vs a baseline - with the **retraining/recalibration triggers**

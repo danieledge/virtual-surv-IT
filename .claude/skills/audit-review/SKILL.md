@@ -63,7 +63,7 @@ Run an **evaluator-optimizer loop**:
    pass's** (2026-08-12): the fixes just applied changed the files, so any file list/language
    breakdown forwarded into the first pass is now stale - re-run `review-scorer`'s context step
    (or let `code-reviewer` derive it itself) rather than re-forwarding what step 1/2 used. **Record every pass as it happens** in the Delivery
-   Report's iteration log (§1a: journey strip + append-only hand-off row per review pass, fix
+   Report's iteration log (§2a: journey strip + append-only hand-off row per review pass, fix
    routing and re-review - operating guide, Outcome discipline 5); earlier pass verdicts are
    never rewritten. Loop until everything fixable is fixed; the only items left
    are those needing a **human decision** (mark 🔴 Open / needs human review, not "deferred").
