@@ -4434,7 +4434,11 @@ def _offer_update_if_behind() -> None:
             file=err,
         )
         if not sys.stdin.isatty():
-            print(ink.dim("      Run: virt-surv  ->  [u] update"), file=err)
+            # "[u]" was removed from the installer's menu 2026-09-15 - option 1 ("full")
+            # is now the only route, and it has always been able to bring an install up
+            # to date. `virt-surv update` still works too (the CLI's own positional mode,
+            # untouched).
+            print(ink.dim("      Run: virt-surv  ->  option 1, or: virt-surv update"), file=err)
             return
         # THE SCREEN THE INSTALLER ALREADY HAS FOR THIS EXACT QUESTION - version delta,
         # release notes, dirty-tree warning - rather than a [y/N] in front of the TUI. It
@@ -4454,7 +4458,10 @@ def _offer_update_if_behind() -> None:
                 return
             wants = "update" if answer in ("y", "yes") else "cancel"
         if wants != "update":
-            print(ink.dim("      skipped - 'virt-surv' then [u] whenever you want it."), file=err)
+            print(
+                ink.dim("      skipped - 'virt-surv' then option 1 whenever you want it."),
+                file=err,
+            )
             return
         installer = clone / "install_helper.py"
         if not installer.is_file():
@@ -4477,7 +4484,8 @@ def _offer_update_if_behind() -> None:
             )
         else:
             print(
-                ink.warn("      update did not complete - run 'virt-surv' and pick [u]."), file=err
+                ink.warn("      update did not complete - run 'virt-surv' and pick option 1."),
+                file=err,
             )
     except Exception:  # nosec B110 - an update offer must never cost a launch
         pass  # an update offer must never cost a launch

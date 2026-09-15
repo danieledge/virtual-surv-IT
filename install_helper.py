@@ -1576,11 +1576,13 @@ def check_for_update_upfront(cfg: dict, style: Style, args) -> None:
     # was option 3 (found 2026-08-25) - a number in prose is a number that goes stale the
     # first time the menu is reordered, and nothing tells you.
     _diag = next((k for k, v in MENU_ACTIONS.items() if v == "diagnostics"), "3")
-    _upd = next((k for k, v in MENU_ACTIONS.items() if v == "update"), "u")
+    # The quick-update key ("u") was removed from the menu 2026-09-15; "full" ("1") is now
+    # the only route from here, and it has always been able to bring an install up to date.
+    _full = next((k for k, v in MENU_ACTIONS.items() if v == "full"), "1")
     print(
         style.dim(
-            f"   Pick option {_upd} for a quick update (new code + plugin, keeps your "
-            f"settings), or Diagnostics ({_diag}) -> 1 to preview first."
+            f"   Pick option {_full} to update (keeps your settings), or Diagnostics "
+            f"({_diag}) -> 1 to preview first."
         )
     )
     print("")
@@ -1661,7 +1663,17 @@ MENU_ACTIONS = {
     # than they meant to - one landing on this very update step and running live git
     # operations until the suite hung. Renumbering a menu silently re-points every stored
     # keystroke: in tests, in documentation, and in muscle memory.
-    "u": "update",
+    #
+    # REMOVED FROM THE MENU (2026-09-15, owner request) - "u" is no longer a dispatchable
+    # key and _menu_key_hint() (derived from this dict) no longer lists it, so it is
+    # neither reachable nor displayed. The underlying quick-update code is UNTOUCHED and
+    # still reachable directly: `install_helper.py update` (the CLI's own
+    # choices=["install", "update"] positional, unrelated to this interactive dict) and
+    # the launcher's automatic "a newer version is available" offer
+    # (virt_team_launcher._offer_update_if_behind) both still call it exactly as before.
+    # Option "1" ("Install/update or reconfigure the team") is the retained path from this
+    # menu - it has always been able to bring an existing install up to date (2026-09-12
+    # relabel), so nothing is lost, only the second, quicker route into the same code.
     "q": "quit",
 }
 
@@ -2248,19 +2260,17 @@ def choose_action(style: Style) -> str:
     s = style
     while True:
         options = (
-            # NOT "update" (2026-08-29). Both this and [u] said it, and this one said it
-            # first and louder, so someone wanting to update reasonably picked the 14-step
-            # interactive run and met "which channel shall I track for you?" - a question
-            # the quick update deliberately never asks. The word now appears once, on the
-            # option that actually means it.
             # "Install/update" since 2026-09-12 (owner). The full run has always been able
             # to bring an existing install up to date; the label said only "Install", so
-            # someone updating had no reason to think this was their option either.
+            # someone updating had no reason to think this was their option either. This
+            # is now the ONLY menu route to an update (2026-09-15, owner request) - the
+            # separate quick-update row ("u") was removed from display and dispatch; the
+            # code behind it is untouched (MENU_ACTIONS's own comment) and still reachable
+            # via `install_helper.py update` and the launcher's automatic update offer.
             ("1", "Install/update or reconfigure the team (full run - asks everything)"),
             ("2", "Set up a project (turn the team on for one folder, and choose its settings)"),
             ("3", "Diagnostics..."),
             ("4", "Advanced and one-off settings..."),
-            ("u", "Update to the latest version (quick, and keeps every setting)"),
             ("q", "Quit"),
         )
         # THE TOP-LEVEL MENU GOES THROUGH THE PICKER TOO (2026-08-28). The submenus were

@@ -6299,7 +6299,10 @@ def test_top_level_menu_actions_are_the_expected_set():
     plugin' (Morgan's narrative) joins as item 5. 2026-08-25: a quick 'update' joins as a
     LETTER key. 2026-09-12: item 5 LEAVES - the day-to-day guide moved to the `virt-surv
     go` menu ([h]), where it is read daily, rather than behind an installer run once. It
-    was the last number, so nothing had to be renumbered to remove it."""
+    was the last number, so nothing had to be renumbered to remove it. 2026-09-15 (owner
+    request): 'u' LEAVES too - the quick-update code itself is untouched and still
+    reachable via `install_helper.py update` and the launcher's automatic update offer,
+    but it is no longer a menu key; option 1 ('full') is the only route from here now."""
     from install_helper import MENU_ACTIONS
 
     assert MENU_ACTIONS == {
@@ -6307,7 +6310,6 @@ def test_top_level_menu_actions_are_the_expected_set():
         "2": "configure",
         "3": "diagnostics",
         "4": "advanced",
-        "u": "update",
         "q": "quit",
     }
 
@@ -6954,10 +6956,11 @@ def test_invalid_menu_choice_reprompts_without_redrawing_menu(monkeypatch, tmp_p
     ih.main([])
     out = capsys.readouterr().out
     assert out.count("What can I do for you?") == 1  # drawn once, not once per bad keystroke
-    # Derived from MENU_ACTIONS now, so it names every valid key - "u" (update) was a
-    # real option this line had never mentioned.
-    assert out.count("1-4, u, q, please.") == 2  # one error per invalid attempt
-    assert "u" in ih._menu_key_hint()
+    # Derived from MENU_ACTIONS now, so it names every valid key. "u" (update) was removed
+    # from the menu 2026-09-15 (owner request) - it must not appear here either, since the
+    # hint would otherwise offer a key the menu no longer accepts.
+    assert out.count("1-4, q, please.") == 2  # one error per invalid attempt
+    assert "u" not in ih._menu_key_hint()
 
 
 # --- --demo must cover the WHOLE menu session, every action, not just one path ---------------

@@ -742,28 +742,25 @@ def test_it_falls_back_to_streaming_when_the_screen_cannot_run(monkeypatch):
     assert ih.run_update_in_app(_args(), ih.Style(False)) is None
 
 
-def test_only_one_menu_option_calls_itself_an_update():
-    """Two options said "update", and the one listed first was the 14-step interactive
-    run - so someone wanting to update reasonably picked it and met "which channel shall
-    I track for you?", a question the quick update deliberately never asks (live report,
-    2026-08-29: "should I be seeing this drop back on updating the team?").
-
-    Asserted on the LABELS because that is where the ambiguity lived - both flows were
-    working exactly as designed.
-
-    2026-09-12: option 1 became "Install/update or reconfigure" at the owner's request -
-    the full run has always been able to bring an existing install up to date, and saying
-    only "Install" gave someone updating no reason to think it was their option either. So
-    the property is no longer "one label mentions updating": it is that exactly one option
-    is NAMED as the update, and it is the quick one."""
+def test_no_menu_option_is_named_update_anymore():
+    """The quick-update row ("u", "Update to the latest version...") that this test used to
+    require was removed from the menu 2026-09-15 (owner request) - the code behind it is
+    untouched (install_helper.py update, and the launcher's automatic update offer both
+    still call it), but it is no longer displayed or dispatchable here. Option 1
+    ("Install/update or reconfigure") is the only route from this menu now, and has always
+    been able to bring an existing install up to date (2026-09-12 relabel) - so the
+    property this test pins is the mirror of what it used to pin: no option's label may
+    START with "Update", because there is exactly one road to an update from this menu and
+    it does not need to compete with a second one for the word."""
+    import install_helper as ih
 
     source = (REPO_ROOT / "install_helper.py").read_text(encoding="utf-8")
     start = source.index('("1", "Install/update or reconfigure')
     end = source.index('("q", "Quit")', start)
     labels = [line for line in source[start:end].split("\n") if '", "' in line]
     named = [line for line in labels if '", "Update' in line]
-    assert len(named) == 1, f"exactly one option may be NAMED the update:\n{named}"
-    assert '"u"' in named[0], "and it must be the quick update, not the full run"
+    assert named == [], f"no option may be NAMED the update any more:\n{named}"
+    assert "u" not in ih.MENU_ACTIONS, "the quick-update key must not come back as a menu entry"
 
 
 def test_the_output_pane_shows_text_not_escape_codes():
