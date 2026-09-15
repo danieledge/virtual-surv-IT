@@ -36,9 +36,12 @@ which only applies in change review.
 → audit review, however that breadth arose. Pairing a whole-target breadth with change mode
 makes the −50 "outside the diff" criterion apply to essentially every finding, filtering the
 review below threshold and reporting near-nothing from a pass that read everything. Note also
-that audit *mode* is not Audit *depth*: mode is only the pre-existing switch, while depth adds
-the architecture lens, Medium findings and the §4/§5 trail. `depth: deep, mode: audit` is a
-legitimate combination (a Deep review the user asked to run over the whole target).
+that audit *mode* is not Audit *depth*: mode is only the pre-existing switch (the criterion
+above), while depth is the separate axis that decides which severity bands are even in scope
+(next section), plus the architecture lens and the §4/§5 trail. `depth: deep, mode: audit` is a
+legitimate combination (a Deep review the user asked to run over the whole target) - and so is
+`depth: quick, mode: audit` or `depth: deep, mode: change`, so don't collapse the two into one
+choice.
 
 ## Confidence score (0-100)
 
@@ -56,12 +59,22 @@ Start at 50 and adjust:
 
 ## Report / filter thresholds
 
-| Score | Severity | Change review | Audit review |
+Gated by **depth**, not mode - matching turingmind's quick/deep split, and consistent with
+`docs/templates/review-report.md`'s "depth: quick / deep · mode: change / audit" (two axes,
+stated separately). Mode's only job is the "new vs pre-existing" scoring criterion above; it
+never itself turns a severity band on or off.
+
+| Score | Severity | Quick depth | Deep or Audit depth |
 |---|---|---|---|
 | 95-100 | 🔴 Critical | report | report |
 | 80-94 | 🟠 Warning | report | report |
 | 70-79 | 🟡 Medium | filter | report |
 | < 70 | - | filter | filter |
+
+A Quick review run in audit mode (`depth: quick, mode: audit`) still holds Medium to the
+filtered count - Quick means "Critical/Warning only," regardless of breadth; a Deep review run
+in change mode (`depth: deep, mode: change`) still reports Medium - it just also applies the
+pre-existing −50 penalty per finding. The two axes combine independently.
 
 > **Audit the filter, not just the report.** A real issue scored *just under* the threshold is a
 > **false negative** - the costliest miss in a regulated review, and the one mechanical scoring can

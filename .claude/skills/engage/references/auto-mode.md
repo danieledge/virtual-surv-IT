@@ -25,6 +25,19 @@ anything else**. Ask no questions at all - not the opening batch, not a clarific
   audit-readiness. Never silently Quick - nobody is here to ask for more. Record it as an
   assumed decision (`assumed-depth`).
 
+  **Mode is a second, independent decision - don't read it off the ticket's wording.**
+  `docs/code-review-method.md` is explicit that mode follows **breadth** (diff-scoped vs
+  whole-target), never depth or a keyword in the request: picking mode from "the ticket asks
+  for audit-readiness" is exactly the shortcut that doc warns against, because a ticket can say
+  "audit" and still name one file, or say nothing about audit and still name the whole repo.
+  In an attended run a wrong guess gets caught when the reviewer reports near-zero findings and
+  someone asks why; an unattended run has nobody to notice, so get it from the target itself -
+  let `review-scorer`'s own file-list detection say diff-scoped or whole-target, and set mode
+  from that, not from intent. Record it as its own ledger entry (`assumed-mode`), separate from
+  `assumed-depth`: a Deep+Audit combination (comprehensive review, whole target, pre-existing
+  issues in scope) is a legitimate and unremarkable outcome here, not a sign either assumption
+  was wrong.
+
 ## The assumption ledger - not optional
 
 Every question you WOULD have asked becomes a recorded decision **the moment you make it**:

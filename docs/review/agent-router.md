@@ -57,7 +57,9 @@ for the §4/§5 trail.
                         detected file list/language breakdown when their dispatch brief already
                         has it (the standard pipeline's step 1, see deep-review/SKILL.md) rather
                         than re-deriving it themselves via their own git diff (2026-08-12)
-2. Pick depth/mode    → quick (change) vs deep/audit (keep pre-existing, +architecture)
+2. Pick depth/mode    → depth (quick vs deep, +architecture) and mode (change vs audit, keep
+                        pre-existing) are independent axes - typically quick+change and
+                        deep+audit, but not fixed pairs (`docs/code-review-method.md`)
 3. Load minimum lenses→ core (bugs+security) + per-language + architecture (deep)
 4. Run analysers      → ONCE, up front, inside code-reviewer - only the tools the step-0
                         probe reported available (code-reviewer.md's table is the single
