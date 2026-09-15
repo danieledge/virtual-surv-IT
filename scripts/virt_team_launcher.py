@@ -2316,6 +2316,23 @@ def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> s
                 file=err,
             )
             session_id = ""
+    # RESOLVE THE HEADLESS BACKSTOP HERE, ONCE (2026-09-15, owner: "checking environment
+    # for spend ceiling variable is taking too long, just pass it as a param rather than
+    # an environment variable"). _preference_budget_cap does a project-file read to find
+    # the project's own headless_max_budget_usd default; before this it was left for
+    # _headless_budget_cap to redo at LAUNCH time, on every headless dispatch, including
+    # the new window-mode-with-no-ceiling fallback that now also reaches _start_headless.
+    # A human is already waiting on this screen for one file read; nothing is waiting at
+    # launch, where a fresh read is a needless delay AND a needless second place this can
+    # go wrong. Doing it once here and writing the answer means _headless_budget_cap's own
+    # read is only ever a defensive fallback for a pending file built some other way, never
+    # the normal path.
+    resolved_hard_cap = answers.get("hard_cap_usd")
+    resolved_hard_cap_source = "chosen at the pre-flight" if resolved_hard_cap else ""
+    if resolved_hard_cap is None and answers.get("run_mode") == "headless":
+        resolved_hard_cap = _preference_budget_cap(project_dir)
+        if resolved_hard_cap:
+            resolved_hard_cap_source = f"{_BUDGET_PREFERENCE_KEY} in team-preferences.json"
     try:
         handoff = project_dir / ".claude" / ".auto-pending.json"
         handoff.parent.mkdir(parents=True, exist_ok=True)
@@ -2335,7 +2352,8 @@ def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> s
                     # flag: engagement_state consumes all of it when it creates the pack, so
                     # the run never has to be told any of it.
                     "engagement_usd": answers.get("engagement_usd"),
-                    "hard_cap_usd": answers.get("hard_cap_usd"),
+                    "hard_cap_usd": resolved_hard_cap,
+                    "hard_cap_source": resolved_hard_cap_source,
                     "allow_web": bool(answers.get("allow_web")),
                     "run_mode": answers.get("run_mode") or "window",
                     "session_id": session_id,
@@ -5189,12 +5207,22 @@ def _uncapped_run_allowed() -> bool:
 def _headless_budget_cap(project_dir: Path, pending: dict) -> tuple:
     """The enforced ceiling for a headless run and where it came from, or (None, "").
 
-    Order: what the human chose at the pre-flight, then the project's own default. Nothing
-    else - a cap invented by this function would be a number nobody agreed to."""
+    DEFENSIVE FALLBACK ONLY in the normal case (2026-09-15): the arm-time code (where
+    .auto-pending.json is written) now resolves the full chain - the pre-flight's own
+    choice, else the project's headless_max_budget_usd default - ONCE, while a human is
+    already waiting on that screen, and writes both the resolved figure and its source
+    (hard_cap_usd / hard_cap_source) straight into the pending file. That means this
+    function's own project-file read below only ever fires for a pending file that predates
+    this change or was built some other way (a test, a hand-rolled handoff) - never on the
+    normal arm-then-launch path, which used to re-read the project's preference file from
+    disk at LAUNCH time on every headless dispatch for no reason: nothing new was learned
+    between arming and launching, and a fresh read there was a needless delay with no
+    human waiting on it (owner report, 2026-09-15: "taking too long")."""
     cap = pending.get("hard_cap_usd")
     try:
         if cap:
-            return float(cap), "chosen at the pre-flight"
+            source = pending.get("hard_cap_source") or "chosen at the pre-flight"
+            return float(cap), source
     except (TypeError, ValueError):
         pass
     fallback = _preference_budget_cap(project_dir)

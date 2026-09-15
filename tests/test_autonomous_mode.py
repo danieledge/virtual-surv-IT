@@ -1076,7 +1076,10 @@ def test_the_run_mode_reaches_the_workspace(tmp_path):
     mod = _load("virt_team_launcher")
     src = (REPO_ROOT / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
     assert '"run_mode": answers.get("run_mode") or "window"' in src
-    assert '"hard_cap_usd": answers.get("hard_cap_usd")' in src
+    # hard_cap_usd is resolved once at arm time now (2026-09-15, owner: avoid a needless
+    # disk/preference re-check at launch) - the literal written value is the resolved
+    # variable, not the raw preflight answer directly.
+    assert '"hard_cap_usd": resolved_hard_cap' in src
     assert mod is not None
 
 
