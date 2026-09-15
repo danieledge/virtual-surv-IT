@@ -141,8 +141,11 @@ def test_the_wrapper_is_told_to_stand_down_only_when_a_window_opened(tmp_path, m
     # the default changed - it went red instead, which is the behaviour worth keeping.
     project = _project(tmp_path, new_window=True)
     monkeypatch.chdir(project)
+    # engagement_usd present (2026-09-15): this test is about exit-code semantics for a
+    # window that DID open, not about the spend-ceiling gate - give it ceiling evidence so
+    # _windowed_unattended_may_arm doesn't refuse before _launch_in_window is even tried.
     (project / ".claude" / ".auto-pending.json").write_text(
-        json.dumps({"slug": "alpha", "auto": True}), encoding="utf-8"
+        json.dumps({"slug": "alpha", "auto": True, "engagement_usd": 25}), encoding="utf-8"
     )
     for name in (
         "_print_banner",
@@ -712,8 +715,15 @@ def test_an_unattended_run_with_no_window_goes_headless_not_in_place(tmp_path, m
     questions by definition, which is the only thing in-place would have offered."""
     mod = _load("virt_team_launcher")
     project = _project(tmp_path, new_window=True)
+    # engagement_usd present (2026-09-15): this test is specifically about the NO-WINDOW
+    # fallback, distinct from the no-ceiling fallback covered below - give it ceiling
+    # evidence so _windowed_unattended_may_arm allows the attempt and _launch_in_window's
+    # own False is what triggers the fallback, not the spend-ceiling gate.
     (project / ".claude" / ".auto-pending.json").write_text(
-        json.dumps({"slug": "alpha", "auto": True, "run_mode": "window"}), encoding="utf-8"
+        json.dumps(
+            {"slug": "alpha", "auto": True, "run_mode": "window", "engagement_usd": 25}
+        ),
+        encoding="utf-8",
     )
     monkeypatch.chdir(project)
     for name in (
@@ -736,6 +746,53 @@ def test_an_unattended_run_with_no_window_goes_headless_not_in_place(tmp_path, m
     assert mod.main() == mod._ABORT_EXIT_CODE
     assert started == ["/engage --new --auto"], "it must start headless rather than in place"
     assert "watch it here" in capsys.readouterr().err
+
+
+def test_an_unattended_run_with_no_ceiling_never_opens_an_unwatched_window(
+    tmp_path, monkeypatch, capsys
+):
+    """2026-09-15 live report: a window-mode unattended run was armed and started with no
+    spend ceiling of any kind, silently. Window mode has no --max-budget-usd equivalent, so
+    the fix is never attempting to open the window at all when there's no ceiling evidence
+    and no explicit uncapped-on-purpose flag - falling to the same headless refuse-or-enforce
+    gate _start_headless already had, rather than a bespoke check here."""
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path, new_window=True)
+    (project / ".claude" / ".auto-pending.json").write_text(
+        json.dumps({"slug": "alpha", "auto": True, "run_mode": "window"}), encoding="utf-8"
+    )
+    monkeypatch.chdir(project)
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)  # no machine-level cap default
+    for name in (
+        "_print_banner",
+        "_check_plugin_cache_lag",
+        "_print_project_defaults",
+        "_prewarm_guard_interpreter",
+        "_write_probe_cache",
+        "_refresh_tool_cache",
+        "_heal_stale_alias_once",
+        "_clear_request_handoff",
+    ):
+        if hasattr(mod, name):
+            monkeypatch.setattr(mod, name, lambda *a, **k: None)
+    monkeypatch.setattr(mod, "_resume_decision", lambda _d: "/engage --new --auto")
+    opened = []
+    monkeypatch.setattr(mod, "_launch_in_window", lambda *a: opened.append(a) or True)
+
+    mod.main()
+    assert not opened, "no ceiling evidence and no override must never even attempt a window"
+    err = capsys.readouterr().err
+    assert "window mode cannot enforce" in err
+    assert "no spend cap for this unattended run - NOT starting it" in err
+
+
+def test_windowed_unattended_may_arm_requires_ceiling_evidence_or_override(monkeypatch):
+    mod = _load("virt_team_launcher")
+    assert mod._windowed_unattended_may_arm({}) is False
+    assert mod._windowed_unattended_may_arm({"engagement_usd": 25}) is True
+    assert mod._windowed_unattended_may_arm({"hard_cap_usd": 25}) is True
+    monkeypatch.setattr(sys, "argv", ["virt-surv", "--no-budget-cap"])
+    assert mod._windowed_unattended_may_arm({}) is True
 
 
 def test_an_attended_run_with_no_window_still_falls_back_in_place(tmp_path, monkeypatch):

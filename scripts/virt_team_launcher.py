@@ -2355,12 +2355,27 @@ def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> s
     cap = answers.get("engagement_usd")
     if cap:
         enforced = answers.get("hard_cap_usd")
+        # "(enforced)" must mean it, not just sound reassuring. hard_cap_usd is ONLY ever
+        # set for headless mode (--max-budget-usd is a real OS-level stop on that detached
+        # subprocess); a window-mode run has no equivalent lever at all, so a ceiling there
+        # is the SESSION checking budget-status and choosing to comply - advisory, not
+        # enforced, however the rung is worded. Saying so here closes the silent half of
+        # the 2026-09-15 window-mode spend-ceiling gap (the other half is the arming
+        # refusal below).
         how = (
             "STOPS there (enforced)"
             if enforced
-            else (f"it will {answers.get('on_budget', 'park')}")
+            else (f"it will {answers.get('on_budget', 'park')} (advisory - not OS-enforced "
+                  "in window mode; only headless enforces via --max-budget-usd)")
         )
         print(ink.dim(f"    ceiling ${cap} - at the cap {how}"), file=err)
+    else:
+        # SAY SO (2026-09-15 report: an unattended run was armed with no ceiling printed
+        # and no refusal). Silence here is what let a window-mode run start completely
+        # uncapped and unremarked; the arming decision below now also refuses to open an
+        # unwatched window on this, but the human should see it here too, at the moment
+        # they made the choice.
+        print(ink.warn("    no spend ceiling set for this unattended run"), file=err)
     if answers.get("run_mode") == "headless":
         print(ink.dim("    headless - no window; watch it from here"), file=err)
     print(
@@ -5176,6 +5191,28 @@ def _headless_budget_cap(project_dir: Path, pending: dict) -> tuple:
     return None, ""
 
 
+def _windowed_unattended_may_arm(pending: dict) -> bool:
+    """Whether an unattended run may open in its own window with nothing else watching it.
+
+    Window mode has NO enforcement lever at all - it is an ordinary interactive `claude`
+    process in a new terminal, with no `--max-budget-usd` equivalent, unlike a headless run
+    (_start_headless / _headless_budget_cap). auto_preflight_screen's own answers() builder
+    only ever sets `hard_cap_usd` for headless mode BY DESIGN, so a window-mode run can never
+    reach _headless_budget_cap's "chosen at the pre-flight" branch - checking `engagement_usd`
+    (the advisory ceiling) here is deliberate, not a fallback for a missing enforced one.
+
+    2026-09-15 live report: a window-mode unattended run was armed and started with no
+    ceiling of any kind and no warning printed - the exact "never fall through to an uncapped
+    run" case auto-mode.md already rules out for headless, just never extended to this path.
+    Bar for opening the window at all: SOME ceiling was set (advisory, honestly labelled as
+    such at arm time above), or the human explicitly said uncapped-on-purpose
+    (_uncapped_run_allowed). Anything short of that is refused here, same principle as
+    _start_headless's refusal - never a silent arm."""
+    if _uncapped_run_allowed():
+        return True
+    return bool(pending.get("hard_cap_usd") or pending.get("engagement_usd"))
+
+
 def _start_headless(project_dir: Path, decision: str, pending: dict) -> bool:
     """Start the run with no terminal at all, and watch it. True if it started.
 
@@ -5644,27 +5681,47 @@ def main() -> int:
         if _start_headless(project_dir, decision, pending):
             return _ABORT_EXIT_CODE
     if _new_window_wanted(project_dir):
-        if _launch_in_window(project_dir, decision, pending.get("slug", "")):
+        # Window mode has no enforcement lever at all (_windowed_unattended_may_arm), so an
+        # unattended run with no ceiling evidence and no explicit uncapped-on-purpose flag
+        # never even attempts to open one - it falls straight to the same headless
+        # refuse-or-enforce gate below, exactly like "no window available" already did
+        # (2026-09-15: this was the missing case; a window used to open regardless).
+        windowed_may_arm = (not unattended) or _windowed_unattended_may_arm(pending)
+        opened = windowed_may_arm and _launch_in_window(
+            project_dir, decision, pending.get("slug", "")
+        )
+        if opened:
             return _ABORT_EXIT_CODE
         if unattended and decision:
-            # No window, and this run is UNATTENDED. Falling back in place would hand the
-            # terminal to Claude Code and take the launcher - and therefore the monitor -
-            # with it, leaving a run nobody can watch or stop (live report 2026-08-25: "it
-            # launched claude code in unattended mode and because no window manager it sat
-            # there ... how can I monitor it if I can't go to the TUI").
+            # Either no window, or windowed_may_arm refused outright - either way this run
+            # is UNATTENDED. Falling back in place would hand the terminal to Claude Code
+            # and take the launcher - and therefore the monitor - with it, leaving a run
+            # nobody can watch or stop (live report 2026-08-25: "it launched claude code in
+            # unattended mode and because no window manager it sat there ... how can I
+            # monitor it if I can't go to the TUI").
             #
             # Headless is CLOSER to what was asked for than in-place is. The human chose a
             # separate window so the launcher would survive to show them the run; if there
             # is no window, keeping the launcher is the part worth keeping. Nothing is lost:
             # an unattended run answers no questions by definition, which is the only thing
             # in-place would have given it.
-            print(
-                _Ink().warn(
-                    "    no window available - running headless instead so you can still "
-                    "watch it here"
-                ),
-                file=sys.stderr,
-            )
+            if windowed_may_arm:
+                print(
+                    _Ink().warn(
+                        "    no window available - running headless instead so you can "
+                        "still watch it here"
+                    ),
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    _Ink().warn(
+                        "    no spend ceiling for this unattended run, and window mode "
+                        "cannot enforce one even if set - trying headless instead so a "
+                        "real ceiling can apply"
+                    ),
+                    file=sys.stderr,
+                )
             if _start_headless(project_dir, decision, pending):
                 return _ABORT_EXIT_CODE
     else:
