@@ -2109,7 +2109,7 @@
     {
       "severity": "warning",
       "location": "",
-      "title": "| **Requested by** | daniel.john.edge@gmail.com |",
+      "title": "| **Requested by** | jo.bloggs@example.invalid |",
       "kind": "artifact"
     },
     {
