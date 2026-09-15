@@ -35,7 +35,10 @@ to-verify as a failure - it is the true state.
   invented; the role is the anchor) · `MISSING-INDEX`/`STALE-INDEX`/`INDEX-NO-STATUS` → fix the
   living index · a missing interim banner or a "final/v1.0" asserted while still open → set the
   correct state · a non-portable absolute source path → relativise or mark external · an
-  incomplete/miscounted source index or a missing per-finding evidence tag → complete it.
+  incomplete/miscounted source index or a missing per-finding evidence tag → complete it ·
+  `SEVERITY-ICON-MISSING` → add the matching legend emoji next to the bare severity word
+  (docs/WAYS-OF-WORKING.md: 🔴 Critical · 🟠 High/Warning · 🟡 Medium · 🔵 Low/Style · 🔇
+  Filtered).
   Re-run `check_artifacts` until only judgement items remain; note auto-corrections in one line.
 - **ESCALATE via the question tool (do NOT self-fix):** a rationale contradicted by the evidence
   ("the email says X but the artifact says Y"), a closure/sign-off on authority you cannot verify

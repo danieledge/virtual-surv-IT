@@ -141,18 +141,22 @@ def _finding_block(f: dict) -> str:
 
 
 def _transparency(pack: dict, findings: list) -> tuple[int, int, int] | None:
-    """Found / Reported / Filtered - false-positive transparency. Prefer explicit integer
-    fields on the pack; otherwise recover the numbers from the standardised 'scoring' line so
-    packs that only carry them in prose still surface them. Returns None when neither is present
-    (a pack that never scored), so nothing is invented."""
-    found, reported, filtered = pack.get("found"), pack.get("reported"), pack.get("filtered")
-    if reported is None:
-        reported = len(findings)
-    if isinstance(found, int) and isinstance(filtered, int) and isinstance(reported, int):
+    """Found / Reported / Filtered - false-positive transparency. `found` and `filtered` are
+    historical facts about the scoring pass and can only come from the pack (explicit integer
+    fields, else recovered from the standardised 'scoring' prose line). `reported` is always the
+    LIVE len(findings), never trusted from the pack/prose: a pack-supplied reported count is
+    review-scorer's count at scoring time, and goes stale the moment the PM edits, merges or
+    challenges findings afterwards - trusting it verbatim let the printed transparency line
+    silently disagree with a direct recount of the rendered rows (ISRT 2026-09-15). Returns None
+    when neither `found` nor a scoring line is present (a pack that never scored), so nothing is
+    invented."""
+    found, filtered = pack.get("found"), pack.get("filtered")
+    reported = len(findings)
+    if isinstance(found, int) and isinstance(filtered, int):
         return found, reported, filtered
     m = _FRF_RE.search(pack.get("scoring") or "")
     if m:
-        return int(m.group(1)), int(m.group(2)), int(m.group(3))
+        return int(m.group(1)), reported, int(m.group(3))
     return None
 
 

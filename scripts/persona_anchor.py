@@ -38,6 +38,14 @@ folder that does not exist. The workspace root is now taken from the layout reso
 printed as the project holds it (`VSIT/engagements` on the new layout, `artifacts` on a legacy
 one), never spelled by hand.
 
+2026-09-15 (ISRT): the anchor kept telling an ARMED `--auto` engagement to "ask EVERY
+clarification via AskUserQuestion" - unconditionally, every turn, with no read of the pack's own
+`auto` flag even though it is readable on disk. A live run parked on a jira-connectivity gap, the
+user pasted the missing content to unblock it, and the very next turn's re-anchor put the team
+right back into asking questions for the rest of the session - auto-mode's whole point defeated
+by this hook, not by the model forgetting. The anchor now reads `state["auto"]` (set by
+`mark-auto`) and swaps in an auto-mode variant that says the opposite: don't ask, park instead.
+
 Stdin: UserPromptSubmit JSON payload. Stdout (exit 0) is added to the model's context. Fails open
 on any error - a presentation aid must never break a prompt. UTF-8-forced (Windows-safe).
 
@@ -104,6 +112,36 @@ _ANCHOR_SHORT = """<persona-anchor>
 🎩 Morgan, PM (persona anchor, short form - full text already seeded this engagement): open
 every reply with 🎩, ask every clarification via AskUserQuestion (never buried in prose), name
 specialists by roster name. If blocked, say plainly "NOT closed - outstanding: ...".
+</persona-anchor>"""
+
+# Auto-mode variants (ISRT 2026-09-15): the whole point of --auto is an unattended run, so the
+# anchor must say the OPPOSITE of the interactive rule - never ask, park instead - or a
+# question-tool call re-blocks a run with nobody there to answer it. See auto-mode.md for the
+# park procedure (⛔/blocked status + a log-note naming what's missing).
+_ANCHOR_AUTO = """<persona-anchor>
+🎩 Engagement live - persona/discipline anchor (auto, survives compaction):
+- You are Morgan, the PM (opt-in team persona). Open every reply with 🎩. Name specialists by
+  their roster names (roster: team-operating-guide.md - $PLUGIN_ROOT/docs/ in plugin mode).
+- AUTO-MODE RUN - do NOT ask a clarifying question via AskUserQuestion or in prose. Anything
+  that would need one: park it instead (auto-mode.md - ⛔/blocked status + a log-note naming
+  what's missing) and keep moving on whatever else the engagement can still progress. Never
+  stall a whole run waiting on a question nobody unattended can answer.
+- Clean console (no code walls); artifacts ship .md + .html in {where}/<slug>/. STATUS lives
+  in the workspace's engagement-state.json - mutate via scripts.engagement_state; START-HERE
+  is generated, never hand-edit. On resume re-read the state (decisions, consent, runtime).
+- Close = set-status closing -> check_artifacts --fix -> summary email -> set-status closed
+  (the close gate refuses on findings; findings are a FIX-LIST). If blocked, say plainly
+  "NOT closed - outstanding: ...".
+Record `{log_note}` now so later turns get the short form of this reminder instead of this
+full one - the rules above stay true either way.
+</persona-anchor>"""
+
+_ANCHOR_SHORT_AUTO = """<persona-anchor>
+🎩 Morgan, PM (persona anchor, short form - full text already seeded this engagement): open
+every reply with 🎩, name specialists by roster name. AUTO-MODE RUN - do NOT ask a clarifying
+question; park per auto-mode.md instead (⛔/blocked status + a log-note) and keep moving on
+whatever else the engagement can still progress. If blocked, say plainly "NOT closed -
+outstanding: ...".
 </persona-anchor>"""
 
 _SEEDED_MARKER = "persona-anchor-seeded"
@@ -229,18 +267,32 @@ def _open_engagements(artifacts: Path, ca) -> list[tuple[str, str, Path]]:
     return out
 
 
-def _already_seeded(pack: Path) -> bool:
-    """True if the full anchor was already shown at least once for this pack - read-only,
-    mirrors todo_panel_nudge.py's marker check. Unreadable state or no marker means "not yet
-    seeded" (errs toward the full anchor, never toward silently under-anchoring)."""
+def _pack_state(pack: Path) -> dict:
+    """The pack's engagement-state.json, or {} when unreadable - shared by the
+    already-seeded and auto-mode checks below so each pack is read at most once per prompt."""
     try:
         state = json.loads((pack / "engagement-state.json").read_text(encoding="utf-8"))
     except Exception:
-        return False
+        return {}
+    return state if isinstance(state, dict) else {}
+
+
+def _already_seeded(state: dict) -> bool:
+    """True if the full anchor was already shown at least once for this pack - read-only,
+    mirrors todo_panel_nudge.py's marker check. Unreadable state or no marker means "not yet
+    seeded" (errs toward the full anchor, never toward silently under-anchoring)."""
     log = state.get("log")
     if not isinstance(log, list):
         return False
     return any(_SEEDED_MARKER in str(entry) for entry in log)
+
+
+def _is_auto(state: dict) -> bool:
+    """True when this engagement was armed with `--auto` (`mark-auto` writes `auto: true`).
+    The anchor must say the OPPOSITE of its interactive question-tool rule for an unattended
+    run - ISRT 2026-09-15: unconditionally telling an armed --auto engagement to "ask EVERY
+    clarification" put a parked run right back into asking questions on the very next turn."""
+    return bool(state.get("auto"))
 
 
 def _log_note_command(slug: str | None) -> str:
@@ -300,10 +352,13 @@ def main() -> int:
         next((o for o in opens if o[0] == active_slug), opens[0]),
     )
     slug = None if marker_name == "(flat)" else marker_name
-    if _already_seeded(marker_pack):
-        print(_ANCHOR_SHORT)
+    state = _pack_state(marker_pack)
+    auto = _is_auto(state)
+    if _already_seeded(state):
+        print(_ANCHOR_SHORT_AUTO if auto else _ANCHOR_SHORT)
     else:
-        print(_ANCHOR.format(log_note=_log_note_command(slug), where=where))
+        anchor = _ANCHOR_AUTO if auto else _ANCHOR
+        print(anchor.format(log_note=_log_note_command(slug), where=where))
 
     if len(opens) > 1 or (len(opens) == 1 and opens[0][0] != "(flat)"):
         marks = {"open": "⏳", "in_progress": "⏳", "blocked": "⛔", "closing": "🔒"}

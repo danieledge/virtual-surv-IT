@@ -533,3 +533,111 @@ def test_two_open_engagements_the_remediation_names_the_pack_with_the_findings(
     assert "the note claims was done" not in decision["reason"]
     assert "dod-gate-block:" in _w6_log(dirty)
     assert "dod-gate-block:" not in _w6_log(clean)
+
+
+# --- 2026-09-15 (ISRT): a CLOSED pack drifting after close must re-arm the gate for the
+# session's own ACTIVE engagement, and the persisted block note must carry a human-readable
+# excerpt, not just a hash + counter.
+
+_CLOSED_DRIFT_SID = "sess-closed-drift"
+
+
+def _close_cleanly(es, pack: Path, slug: str) -> None:
+    """A REAL close with nothing outstanding, so it stores a legitimate scan_fingerprint -
+    same recipe as test_engagement_state.py::test_set_status_closed_sets_date_clears_outstanding."""
+    assert es.main(["init", "--slug", slug, "--title", slug, "--dir", str(pack)]) == 0
+    assert es.main(["set-team", "Amara (BA)", "--dir", str(pack)]) == 0
+    (pack / f"engagement-summary-{slug}.txt").write_text(
+        f"Done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+        encoding="utf-8",
+    )
+    assert (
+        es.main(
+            [
+                "add-artifact",
+                f"engagement-summary-{slug}.txt",
+                "--title",
+                "Email",
+                "--final",
+                "--dir",
+                str(pack),
+            ]
+        )
+        == 0
+    )
+    assert es.main(["set-footprint", "--agents", "1", "--tokens", "10k", "--dir", str(pack)]) == 0
+    assert es.main(["set-status", "closed", "--verdict", "ready", "--dir", str(pack)]) == 0
+
+
+def test_closed_active_pack_reopens_gate_when_disk_moved_since_close(tmp_path, monkeypatch, capsys):
+    from scripts import engagement_state as es
+
+    art = tmp_path / "artifacts"
+    pack = art / "z1"
+    _close_cleanly(es, pack, "z1")
+    state_before = json.loads((pack / "engagement-state.json").read_text(encoding="utf-8"))
+    assert state_before["status"] == "closed" and state_before.get("scan_fingerprint")
+
+    # Post-close edit: add-artifact carries no closed-pack guard (that gap is real and
+    # deliberately NOT closed here - see the fix note) - a new FINAL .md (closed-status
+    # validation requires final, not interim) with no rendered .html sibling is registered
+    # after the close gate already ran and passed.
+    (pack / "NOTES.md").write_text("# late addition\n", encoding="utf-8")
+    assert (
+        es.main(
+            ["add-artifact", "NOTES.md", "--title", "Late notes", "--final", "--dir", str(pack)]
+        )
+        == 0
+    )
+
+    (art / ".active-engagement.json").write_text(
+        json.dumps({"slug": "z1", "session": _CLOSED_DRIFT_SID}), encoding="utf-8"
+    )
+    (art / ".team-session.json").write_text(
+        json.dumps({"session": _CLOSED_DRIFT_SID}), encoding="utf-8"
+    )
+    capsys.readouterr()
+    staged = _load_staged_gate()
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        "sys.stdin",
+        io.StringIO(json.dumps({"session_id": _CLOSED_DRIFT_SID, "cwd": str(tmp_path)})),
+    )
+    assert staged.main() == 0
+    decision = json.loads(capsys.readouterr().out)
+    assert decision["decision"] == "block"
+    assert "MISSING-HTML" in decision["reason"]
+
+    # The persisted block note carries a readable excerpt, not just a hash + counter.
+    log = json.loads((pack / "engagement-state.json").read_text(encoding="utf-8"))["log"]
+    block_entries = [e for e in log if "dod-gate-block:" in str(e)]
+    assert block_entries, "no dod-gate-block: entry was persisted"
+    assert "MISSING-HTML" in str(block_entries[-1]), (
+        "the persisted marker is still just a hash + counter - the human-readable excerpt "
+        "did not make it into the log"
+    )
+
+
+def test_closed_pack_untouched_since_close_stays_silent(tmp_path, monkeypatch, capsys):
+    """The counterpart guard: a closed pack nobody touched since close must NOT re-arm -
+    only actual drift (fingerprint mismatch) does."""
+    from scripts import engagement_state as es
+
+    art = tmp_path / "artifacts"
+    pack = art / "z2"
+    _close_cleanly(es, pack, "z2")
+    (art / ".active-engagement.json").write_text(
+        json.dumps({"slug": "z2", "session": _CLOSED_DRIFT_SID}), encoding="utf-8"
+    )
+    (art / ".team-session.json").write_text(
+        json.dumps({"session": _CLOSED_DRIFT_SID}), encoding="utf-8"
+    )
+    capsys.readouterr()
+    staged = _load_staged_gate()
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        "sys.stdin",
+        io.StringIO(json.dumps({"session_id": _CLOSED_DRIFT_SID, "cwd": str(tmp_path)})),
+    )
+    assert staged.main() == 0
+    assert capsys.readouterr().out == ""

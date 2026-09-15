@@ -56,9 +56,10 @@ them has hidden its judgement calls - and `check_artifacts` fails it (`AUTO-LEDG
 
 `budget-status` runs at every gate exactly as in an attended run. What differs is what you do
 with `HEADROOM=approaching` or `exceeded`: **do not offer the degrade ladder** - that is a
-question, and this run has nobody to ask (and `--permission-mode dontAsk` denies the question
-tool outright). The human chose a rung at the pre-flight screen; it is on the state as
-`auto_on_budget`:
+question, and this run has nobody to ask. (`--permission-mode dontAsk` does NOT enforce this -
+tried and reverted 2026-08-25, it also silently denied Write/Bash; enforcement is the
+persona-anchor hook reading the pack's `auto` flag and telling you not to ask, ISRT 2026-09-15.)
+The human chose a rung at the pre-flight screen; it is on the state as `auto_on_budget`:
 
 - **`park`** (the default) - park cleanly at the next gate, per the section below. The
   engagement resumes normally, which is why it is the default: a parked run is recoverable,

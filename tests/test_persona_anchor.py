@@ -207,3 +207,63 @@ def test_the_anchor_names_the_vsit_workspace_on_a_vsit_project(tmp_path, monkeyp
     out = capsys.readouterr().out
     assert "VSIT/engagements/<slug>/" in out
     assert "artifacts/<slug>/" not in out
+
+
+# ---- 2026-09-15 (ISRT): the anchor unconditionally told an armed --auto engagement to ask
+# clarifying questions - the opposite of what auto-mode needs. It must read state["auto"] and
+# swap in the auto-mode variant instead.
+
+
+def _write_pack(eng: Path, slug: str, *, auto: bool, seeded: bool = False):
+    pack = eng / slug
+    pack.mkdir(parents=True)
+    log = [pa._SEEDED_MARKER] if seeded else []
+    (pack / "engagement-state.json").write_text(
+        json.dumps({"schema": 2, "status": "in_progress", "auto": auto, "log": log}),
+        encoding="utf-8",
+    )
+    (eng / ".team-session.json").write_text(json.dumps({"session": _SID}), encoding="utf-8")
+
+
+def test_auto_engagement_gets_the_park_dont_ask_anchor(tmp_path, monkeypatch, capsys):
+    mod = _load_staged_anchor()
+    eng = tmp_path / "VSIT" / "engagements"
+    _write_pack(eng, "alpha", auto=True)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        "sys.stdin", io.StringIO(json.dumps({"cwd": str(tmp_path), "session_id": _SID}))
+    )
+    assert mod.main() == 0
+    out = capsys.readouterr().out
+    assert "AUTO-MODE" in out
+    assert "do NOT ask" in out
+    assert "Ask EVERY clarification" not in out
+
+
+def test_auto_engagement_short_form_also_says_dont_ask(tmp_path, monkeypatch, capsys):
+    mod = _load_staged_anchor()
+    eng = tmp_path / "VSIT" / "engagements"
+    _write_pack(eng, "alpha", auto=True, seeded=True)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        "sys.stdin", io.StringIO(json.dumps({"cwd": str(tmp_path), "session_id": _SID}))
+    )
+    assert mod.main() == 0
+    out = capsys.readouterr().out
+    assert "AUTO-MODE" in out
+    assert "do NOT ask" in out
+    assert "ask every clarification" not in out.lower()
+
+
+def test_non_auto_engagement_keeps_the_ask_every_clarification_rule(tmp_path, monkeypatch, capsys):
+    mod = _load_staged_anchor()
+    eng = tmp_path / "VSIT" / "engagements"
+    _write_pack(eng, "alpha", auto=False)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        "sys.stdin", io.StringIO(json.dumps({"cwd": str(tmp_path), "session_id": _SID}))
+    )
+    assert mod.main() == 0
+    out = capsys.readouterr().out
+    assert "Ask EVERY clarification" in out
+    assert "AUTO-MODE" not in out

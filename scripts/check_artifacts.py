@@ -61,6 +61,10 @@ the one-command check the PM runs at the gate instead (docs/DEFINITION-OF-DONE.m
      2026-08-08 after repeated prose fixes, and only a recorded attestation on disk is
      mechanically checkable; compliance/model-validation packs are exempt (their findings
      are never score-filtered).
+ 13. every severity label (Critical/Warning/High/Medium/Low) in a findings-bearing doc carries
+     its matching legend emoji, not bare text (`SEVERITY-ICON-MISSING`) -
+     docs/WAYS-OF-WORKING.md already defines the single canonical legend; nothing
+     mechanically enforced it (ISRT 2026-09-15).
 
 Exit 0 = gate satisfied; exit 1 = findings printed (one line each, machine-readable prefix).
 No third-party dependencies. Output is forced to UTF-8 so the emoji basis tags don't crash a
@@ -259,6 +263,59 @@ _DEV_GUIDANCE_HEADING_RE = re.compile(r"^## 🔵 Developer guidance\b.*$", re.M)
 # applicable" rather than silently dropped. A review-shaped artifact missing it overclaims.
 _TOOLING_HEADING_RE = re.compile(r"^#{2,4} 🔬 Tooling coverage\b.*$", re.M)
 _DEV_GUIDANCE_PLACEHOLDER = "_(none provided)_"
+
+# Severity-iconography consistency (ISRT 2026-09-15): docs/WAYS-OF-WORKING.md defines ONE
+# canonical legend - "Severity: 🔴 Critical · 🟠 High/Warning · 🟡 Medium · 🔵 Low/Style · 🔇
+# Filtered", word AND emoji together, "applied to every findings-bearing doc" - but nothing
+# mechanically checked it. A live delivery used bare "critical"/"warning" TEXT with no icon at
+# all alongside sections that did use the legend - the standard already exists; this is the
+# missing gate, not a doc change. Deliberately narrow: an earlier draft also flagged any of
+# ❌/⛔/🛑/etc. found anywhere in a findings-bearing doc as "nonstandard", but those are
+# legitimate multi-purpose team emoji outside severity too (⛔ = engagement status "blocked",
+# ❌ = an overall verdict/narrative marker - see docs/operating-guide.d/artifacts-lifecycle.md
+# and examples/engagements/*/delivery-report.md) - that check false-positived on the shipped
+# sample engagement and was dropped rather than trying to special-case every legitimate use.
+_APPROVED_SEV_EMOJI = "🔴🟠🟡🔵🔇"
+_SEV_LABEL_RE = re.compile(
+    r"\|\s*(Critical|Warning|High|Medium|Low)\s*\|"  # a table cell containing just the word,
+    # wherever the severity column sits in the row - not just the first cell
+    r"|\*\*(Critical|Warning|High|Medium|Low)\*\*"
+    r"|^#{1,4}\s*(Critical|Warning|High|Medium|Low)\b",
+    re.M,
+)
+# What the legend applies to: a rendered review-shaped artifact ('## Findings', same signal
+# FINDINGS-NO-DEV-GUIDANCE/FINDINGS-NO-TOOLING-COVERAGE already use), a delivery/review report
+# or analysis memo by filename convention (docs/templates/*.md naming), or anything that
+# already declares the legend inline.
+_FINDINGS_BEARING_NAME_RE = re.compile(r"delivery-report|review-report|^review-|analysis", re.I)
+
+
+def _is_findings_bearing(text: str, name: str) -> bool:
+    return bool(
+        _FINDINGS_SECTION_RE.search(text)
+        or _FINDINGS_BEARING_NAME_RE.search(name)
+        or "Severity:" in text
+    )
+
+
+def check_severity_iconography(text: str, md: Path) -> list[str]:
+    """SEVERITY-ICON-MISSING: a Critical/Warning/High/Medium/Low label with no matching emoji
+    on the same line - see module docstring item 13."""
+    if not _is_findings_bearing(text, md.name):
+        return []
+    missing = sum(
+        1
+        for line in text.splitlines()
+        if _SEV_LABEL_RE.search(line) and not any(e in line for e in _APPROVED_SEV_EMOJI)
+    )
+    if not missing:
+        return []
+    return [
+        f"SEVERITY-ICON-MISSING: {md} has {missing} severity label(s) (Critical/Warning/"
+        "High/Medium/Low) with no matching emoji - use the canonical legend (🔴 Critical · "
+        "🟠 High/Warning · 🟡 Medium · 🔵 Low/Style · 🔇 Filtered, docs/WAYS-OF-WORKING.md) "
+        "consistently, word AND emoji together"
+    ]
 
 # Roster gate: an artifact must not attribute work to a persona who is not on the team, or to
 # the wrong role. A live delivery report (2026-07-23) invented "Chidi (code-reviewer)" and
@@ -955,7 +1012,19 @@ def archived_open_packs(artifacts_dir: Path) -> list[str]:
 
 
 def find_codebase_map(project_dir: Path) -> Path | None:
-    """The map's conventional locations in a working project (ADR-003)."""
+    """The map's conventional locations in a working project (ADR-003).
+
+    Tries the current VSIT-layout default first (`VSIT/shared/map.md`, per
+    docs/templates/codebase-map.md and vsit_paths.map_file()) before falling back to the
+    pre-migration legacy locations. Without this, a project that follows the template's own
+    documented default gets its map silently, permanently unchecked - `map_file()` already
+    resolved this path correctly but nothing here called it (found 2026-09-15)."""
+    try:
+        vsit_map = _vsit_paths().map_file(project_dir)
+    except Exception:
+        vsit_map = None
+    if vsit_map is not None and vsit_map.is_file():
+        return vsit_map
     for candidate in (project_dir / "docs" / "codebase-map.md", project_dir / "CODEBASE-MAP.md"):
         if candidate.is_file():
             return candidate
@@ -2091,6 +2160,7 @@ def check(artifacts_dir: Path) -> list[str]:
                     )
         findings.extend(check_roster(text, md))
         findings.extend(check_agent_identity(text, md))
+        findings.extend(check_severity_iconography(text, md))
 
     # A wrongly-rendered email copy - the summary email is a .txt only, never an .html.
     for stray in sorted(artifacts_dir.rglob("engagement-summary-*.html")):

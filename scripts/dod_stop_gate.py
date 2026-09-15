@@ -76,6 +76,27 @@ Fail-open is unchanged: every new path is wrapped, an unreadable log counts as z
 (fail toward blocking, matching `_already_nudged`'s direction), and a failed log-note costs the
 record, never the block.
 
+2026-09-15 (ISRT), two independent fixes:
+  * A CLOSED pack was never re-armed by this gate - "closed" sits outside the gated statuses
+    below by design (a closed engagement is done). But `add-artifact` carries no guard against
+    writing to an already-closed pack, so an artifact added or edited AFTER close (reintroducing
+    e.g. MISSING-HTML) was never re-checked by anything automatic; it surfaced only when a
+    human happened to follow a dead link. The gate now re-arms the session's own ACTIVE pack,
+    even when closed, if its disk state has moved since the close-time `scan_fingerprint` was
+    taken (`_closed_active_pack_needs_recheck`) - a closed pack nobody touched stays silent,
+    and a closed SIBLING pack is still not this session's business, matching the open-pack
+    scoping below.
+  * The persisted `dod-gate-block:<hash>` note carried ONLY the hash and a block counter - the
+    human-readable reason existed solely in this hook's transient stdout for that one turn. A
+    resumed/compacted session, or an auditor reading engagement-state.json later, had no way to
+    recover what was actually blocked without re-running `check_artifacts` and hoping the
+    finding set still matched the recorded hash. The note now also carries the finding CODES
+    (`_findings_excerpt`) - codes only, never full finding text/paths: a first draft embedded
+    raw text, which round-tripped a filename through the rendered log back into START-HERE.md
+    and silently cleared a real STALE-INDEX finding on the next scan (caught in review before
+    staging). The hash is still what `_blocks_recorded`/`_already_nudged` match on; the codes
+    are read-only extra context, never part of the match.
+
 Stdin: the Stop-hook JSON payload. Stdout: a single JSON `{"decision":"block","reason":...}` for
 the one nudge (which feeds the findings back to the PM to act on), else nothing. Exit code is
 always 0.
@@ -201,6 +222,25 @@ def _exhausted_recorded(pack: Path) -> bool:
     return any(_EXHAUSTED_MARKER_PREFIX in str(entry) for entry in _log_entries(pack))
 
 
+def _findings_excerpt(findings: list[str], limit: int = 5) -> str:
+    """The finding CODES only - the human-readable half of a persisted block-marker note
+    (ISRT 2026-09-15). Deliberately codes only, never full finding text/paths: a finding's
+    raw text can name a file (MISSING-HTML always does), and a first draft of this fix
+    embedded that verbatim into the pack's log - which then rendered into START-HERE.md,
+    where the filename token-matched as "listed" and silently cleared a REAL STALE-INDEX
+    finding on the very next scan (caught in review before staging, same day). Same
+    reasoning `_summarise_pack_findings` already uses for OTHER packs' findings, applied
+    here too: codes are enough to know WHAT was blocked without re-running
+    `check_artifacts`, and never enough to leak content back into what the checker itself
+    scans. Read-only context either way - never part of what `_blocks_recorded`/
+    `_already_nudged` match on (both match the hash/prefix substrings before this)."""
+    codes = []
+    for f in findings[:limit]:
+        code = str(f).split(":", 1)[0].strip() or "FINDING"
+        codes.append(code)
+    return ", ".join(codes)
+
+
 def _engagement_state_module():
     """`engagement_state`, importable from a repo checkout AND from a plugin install.
 
@@ -230,6 +270,32 @@ def _engagement_state_module():
         except Exception:  # nosec B112 - a candidate that won't load must not stop the next
             continue
     return None
+
+
+def _closed_active_pack_needs_recheck(active_pack: Path, ca, es_mod) -> bool:
+    """True when a CLOSED engagement's own active pack has moved on disk since its close-time
+    fingerprint was taken - i.e. something (most commonly `add-artifact`, which carries no
+    closed-pack guard of its own) touched it after the close gate already ran and passed.
+    'closed' is deliberately NOT among the gated statuses in main(), so without this a
+    post-close edit - including one that reintroduces MISSING-HTML - was never re-checked by
+    anything automatic; it surfaced only when a human happened to follow a dead link (ISRT
+    2026-09-15). Scoped to the session's own ACTIVE pack only, called from inside main()'s
+    fail-open try block - a closed SIBLING pack drifting is still not this session's
+    business, matching the open-pack scoping there."""
+    if es_mod is None or ca.pack_status(active_pack) != "closed":
+        return False
+    try:
+        stored = json.loads(
+            (active_pack / "engagement-state.json").read_text(encoding="utf-8")
+        ).get("scan_fingerprint")
+    except Exception:
+        return False
+    if not stored:
+        return False
+    try:
+        return stored != es_mod.compute_fingerprint(active_pack)
+    except Exception:
+        return False
 
 
 def _log_note(pack: Path, text: str) -> bool:
@@ -524,6 +590,25 @@ def main() -> int:
         flat_status = ca.pack_status(artifacts)
         if flat_status in ("open", "blocked", "closing"):
             gated.append(("", artifacts))
+
+        # 2026-09-15 (ISRT): re-arm the session's own ACTIVE pack even when CLOSED, if its
+        # disk state moved since the close-time fingerprint - see
+        # _closed_active_pack_needs_recheck. Read early (normally this comes from the
+        # active-marker read further below) because it must be able to add to `gated`
+        # before the empty-gated short-circuit next.
+        try:
+            _active_probe = json.loads(
+                (artifacts / ".active-engagement.json").read_text(encoding="utf-8")
+            ).get("slug")
+        except Exception:
+            _active_probe = None
+        if _active_probe and not any(n == _active_probe for n, _ in gated):
+            _active_pack_probe = artifacts / _active_probe
+            if _closed_active_pack_needs_recheck(
+                _active_pack_probe, ca, _engagement_state_module()
+            ):
+                gated.append((_active_probe, _active_pack_probe))
+
         if not gated:
             return 0
 
@@ -535,7 +620,7 @@ def main() -> int:
         # re-close" with no scoping - the session got pulled into fixing unrelated,
         # unattended engagements it was never asked to touch. The SCAN stays broad on
         # purpose (that is the whole point of this backstop - catch a close that
-        # silently never ran, anywhere in the project) but the FIX instruction now only
+        # silently never ran, anywhere in the project) but the FIX instruction only
         # applies to the active engagement; other gated packs are surfaced, not
         # actioned. No active marker, or only one gated pack: no scoping question to
         # answer - falls back to the pre-fix, undifferentiated behaviour exactly.
@@ -663,7 +748,11 @@ def main() -> int:
         )
         return 0
 
-    _log_note(marker_pack, f"{_BLOCK_MARKER_PREFIX}{findings_hash} (block {blocks + 1})")
+    excerpt = _findings_excerpt(active_findings + other_findings)
+    _log_note(
+        marker_pack,
+        f"{_BLOCK_MARKER_PREFIX}{findings_hash} (block {blocks + 1}): {excerpt}",
+    )
     reason = _reason(
         active_findings,
         other_findings,

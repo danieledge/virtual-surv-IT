@@ -26,7 +26,7 @@ happens - state must be visible **between** gates.
   embeds a content hash; a hand-edit is an `INDEX-HAND-EDITED` finding, auto-fixed by
   re-render with the hand-edited text backed up). Create it with
   `<python> -m scripts.engagement_state init` at OPEN; update it only through the mutators
-  (`set-status` · `set-phase` · `set-profile` · `add-artifact` · `add-outstanding` ·
+  (`set-status` · `set-phase` · `set-profile` · `add-artifact` · `remove-artifact` · `add-outstanding` ·
   `resolve-outstanding` · `set-decision` · `set-team` · `finalise-artifacts` ·
   `set-footprint` · `log-note` · `add-ratification` · `ratify` · `set-active` ·
   `record-consent-outcome` · `set-runtime`), each of which re-validates
@@ -77,7 +77,9 @@ happens - state must be visible **between** gates.
   re-renders the `.md` + `.html`), the ⚠️-outstanding list kept current, verdict + footprint
   filled at close. It is never "written last": a stalled engagement must still show its true
   state to whoever opens the folder. Mechanically checked (`MISSING-INDEX`, `INDEX-NO-STATUS`,
-  `STALE-INDEX`).
+  `STALE-INDEX`). **A rename/retirement is two calls, not one**: `add-artifact <new-path>` records
+  the new row, then `remove-artifact <old-path>` drops the old one - `add-artifact` alone leaves the
+  superseded row in place, which is exactly what `STALE-INDEX` later catches (found 2026-09-15).
 - **Atomicity - the index must LEAD reality, never trail it (survives compaction).** Writing an
   artifact and appending its START-HERE row are **one unit of work**: append the row (and set the
   status) in the **same turn** as the artifact, **before ending the turn** - never end a turn with

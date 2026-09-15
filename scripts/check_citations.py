@@ -71,14 +71,14 @@ def _load_register(path: str | Path = _REGISTER) -> dict:
         import yaml
     except ImportError:  # pragma: no cover - exercised only without pyyaml
         raise RuntimeError("pyyaml is required: pip install -r requirements-dev.txt")
-    base = yaml.safe_load(Path(path).read_text()) or {}
+    base = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     overlay_path = Path.cwd() / "config" / "regulatory-register.yaml"
     try:
         same = overlay_path.resolve() == Path(path).resolve()
     except OSError:
         same = True
     if not same and overlay_path.is_file():
-        overlay = yaml.safe_load(overlay_path.read_text()) or {}
+        overlay = yaml.safe_load(overlay_path.read_text(encoding="utf-8")) or {}
         merged = {ob.get("id"): ob for ob in (base.get("obligations") or [])}
         for ob in overlay.get("obligations") or []:
             merged[ob.get("id")] = ob
@@ -176,7 +176,7 @@ def _main(argv: list[str] | None = None) -> int:
     if not args.artifact:
         ap.error("provide an artifact to scan, or --typology to retrieve")
 
-    result = check_text(args.artifact.read_text(), register)
+    result = check_text(args.artifact.read_text(encoding="utf-8"), register)
     for c in result["verified"]:
         print(f"[VERIFIED]  {c}")
     for c in result["unverified"]:

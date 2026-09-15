@@ -36,7 +36,9 @@ What you do (and only this):
    filtering.** Almost everything these two report is in `docs/code-review-method.md`'s
    never-filter regulated list, so you do not apply the score/threshold step to their output at
    all. Instead: merge literal repeats of the same underlying issue at different locations into
-   one finding (consolidate the `location` field, keep one copy of the prose), and flag any
+   one finding (consolidate the `location` field, keep one copy of the prose, and **keep the
+   worst of the merged copies' severities** - never average or default to the first one seen, so
+   a merge can't quietly understate how bad the consolidated finding is), and flag any
    finding whose fields read as a restated paragraph rather than a concise statement - report it
    back to the author to tighten, don't rewrite their judgement yourself. Never drop a distinct
    finding.

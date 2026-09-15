@@ -1723,8 +1723,9 @@ def project_root_for(target_dir) -> pathlib.Path:
 
 # What an unattended run does when spend reaches the cap. The attended flow offers a degrade
 # ladder through the question tool (orchestration guide) - which an unattended run has nobody
-# to ask, and which `--permission-mode dontAsk` denies outright. So the human picks a rung
-# ONCE at the pre-flight screen and the run applies it silently.
+# to ask. (NOT enforced by `--permission-mode dontAsk` - tried and reverted 2026-08-25, it also
+# silently denied Write/Bash; enforcement is prompt-level, persona_anchor.py reading `auto`.)
+# So the human picks a rung ONCE at the pre-flight screen and the run applies it silently.
 # Four rungs since 2026-08-25. The first three are ADVISORY - the ceiling is a threshold the
 # run reports against and can pass. "stop" is ENFORCED by the CLI's own --max-budget-usd,
 # which a run cannot talk its way past because it is the process that refuses. Both kept
@@ -1875,8 +1876,8 @@ def _cmd_init(args: argparse.Namespace) -> int:
         # depend on the unattended session remembering to declare itself.
         "auto": bool(_handoff),
         # Pre-answered at the pre-flight screen, because the attended degrade ladder is a
-        # question and an unattended run has nobody to ask (and dontAsk denies the question
-        # tool outright). Absent for an attended run, which keeps the ladder.
+        # question and an unattended run has nobody to ask. Absent for an attended run, which
+        # keeps the ladder. (Not `dontAsk`-enforced - see the AUTO_ON_BUDGET comment above.)
         "auto_on_budget": (
             _handoff.get("on_budget")
             if _handoff.get("on_budget") in AUTO_ON_BUDGET
@@ -2307,7 +2308,14 @@ def _cmd_record_dispatch(args: argparse.Namespace) -> int:
 
     Deliberately dumb and append-only: one row per dispatch, never a running total that
     could be rewritten. budget-status reports dispatched-vs-budget and the DoD gate reports
-    DISPATCH-OVER-BUDGET, so the ledger is read at the two places a decision is made."""
+    DISPATCH-OVER-BUDGET, so the ledger is read at the two places a decision is made.
+
+    `--outcome` (ISRT 2026-09-15): before this, a stalled/retried dispatch left only bare
+    {agent, at} rows in the ledger - the retry COUNT was inferable from repeated rows, but
+    nothing recorded WHY, so a specialist needing 3 attempts to complete during a fan-out
+    had no diagnosable trail beyond the count. Optional and best-effort: the caller (the
+    PostToolUse Task hook) fills it in only when the tool_response carries a recognisable
+    error signal; an unrecognised shape leaves it unset rather than guessing."""
     agent = str(args.agent or "").strip()
     if not agent:
         print("record-dispatch needs --agent <name>", file=sys.stderr)
@@ -2321,6 +2329,9 @@ def _cmd_record_dispatch(args: argparse.Namespace) -> int:
         note = str(getattr(args, "note", None) or "").strip()
         if note:
             row["note"] = note
+        outcome = str(getattr(args, "outcome", None) or "").strip()
+        if outcome:
+            row["outcome"] = outcome
         state.setdefault("dispatches", []).append(row)
 
     return _mutate(args, fn)
@@ -2392,6 +2403,28 @@ def _cmd_add_artifact(args: argparse.Namespace) -> int:
                 arts[i] = entry
                 return
         arts.append(entry)
+
+    return _mutate(args, fn)
+
+
+def _cmd_remove_artifact(args: argparse.Namespace) -> int:
+    """Drop an artifact row by exact path - the counterpart `add-artifact` never had.
+
+    Without this, a renamed/retired artifact leaves its old row in place: STALE-INDEX
+    catches the dead link eventually, but nothing could clear it short of a manual JSON
+    edit (found 2026-09-15). Usage after a rename: `add-artifact <new-path> --title ...`
+    then `remove-artifact <old-path>`."""
+
+    def fn(state: dict) -> None:
+        arts = state.setdefault("artifacts", [])
+        kept = [a for a in arts if a.get("path") != args.path]
+        if len(kept) == len(arts):
+            print(
+                f"warning: no artifact row matched path {args.path!r} - nothing removed",
+                file=sys.stderr,
+            )
+            return
+        state["artifacts"] = kept
 
     return _mutate(args, fn)
 
@@ -3181,6 +3214,7 @@ _MUTATING_CMDS = {
     _cmd_set_qa_depth,
     _cmd_mark_auto,
     _cmd_add_artifact,
+    _cmd_remove_artifact,
     _cmd_add_outstanding,
     _cmd_resolve_outstanding,
     _cmd_set_decision,
@@ -3331,6 +3365,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--agent", required=True, help="the agent/subagent type dispatched")
     p.add_argument("--model", default=None, help="model tier, e.g. opus|sonnet|haiku")
     p.add_argument("--note", default=None, help="optional short context for the dispatch")
+    p.add_argument(
+        "--outcome",
+        default=None,
+        help="optional short outcome tag, e.g. 'error' - best-effort, from a recognised "
+        "tool_response error signal only, never guessed",
+    )
     p.set_defaults(fn=_cmd_record_dispatch)
 
     p = sub.add_parser(
@@ -3348,6 +3388,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--title", required=True)
     p.add_argument("--final", action="store_true", help="mark final (default interim)")
     p.set_defaults(fn=_cmd_add_artifact)
+
+    p = sub.add_parser(
+        "remove-artifact",
+        parents=[common],
+        help="drop an artifact row by exact path - clears a stale row after a rename (renders)",
+    )
+    p.add_argument("path")
+    p.set_defaults(fn=_cmd_remove_artifact)
 
     p = sub.add_parser(
         "add-outstanding", parents=[common], help="append an outstanding item (renders)"

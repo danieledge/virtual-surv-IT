@@ -40,6 +40,16 @@ good enough and a borderline return is never falsely flagged.
     then applies the DEFAULT cap. A corrupt config never disables the cap - the failure
     direction is "still capped, and say so", never "silently uncapped".
 
+2026-09-15 (ISRT): the dispatch ledger row was `{agent, at}` plus optional `model`/`note` -
+a stalled or retried dispatch (e.g. compliance-reviewer needing 3 attempts during a 5-specialist
+fan-out) showed up as that many bare timestamped rows, with the COUNT inferable but no
+recorded REASON - nothing to diagnose beyond "it happened N times". `_extract_outcome` below
+reads a recognisable error signal off `tool_response` (mirroring `_extract_text`'s multi-shape
+tolerance for the same undocumented schema) and, when found, is passed through as
+`record-dispatch --outcome error`. Best-effort by design: an unrecognised response shape
+records no outcome at all rather than guessing one - a ledger that invents failures it cannot
+evidence is worse than one that stays silent on what it cannot see.
+
 Payload-shape caveat (documented plainly, not glossed over): Claude Code's exact
 PostToolUse `tool_response` schema for the Task tool is NOT documented anywhere in this
 repo, and this hook was written without a live sample to verify against. It therefore
@@ -207,6 +217,29 @@ def _extract_text(tool_response) -> str:
     return ""
 
 
+def _extract_outcome(tool_response) -> str:
+    """Best-effort error signal off a Task `tool_response` (ISRT 2026-09-15) - "" (never
+    "error") on anything unrecognized, mirroring `_extract_text`'s tolerance for the same
+    undocumented schema (see the module docstring's payload-shape caveat). Checked shapes,
+    all plausible for an Anthropic tool_result: a top-level `is_error: true`; the same flag
+    on a content block (the public tool_result content-block schema carries `is_error` per
+    block); a non-empty string `error` field. A ledger that cannot evidence a failure must
+    never invent one - unrecognised stays unset, not "error"."""
+    if not isinstance(tool_response, dict):
+        return ""
+    if tool_response.get("is_error") is True:
+        return "error"
+    content = tool_response.get("content")
+    if isinstance(content, list):
+        for block in content:
+            if isinstance(block, dict) and block.get("is_error") is True:
+                return "error"
+    err = tool_response.get("error")
+    if isinstance(err, str) and err.strip():
+        return "error"
+    return ""
+
+
 def _token_budget(project_root: Path) -> int:
     """The per-return token cap, raised by preferences if the project asked for it.
 
@@ -326,11 +359,16 @@ def _quiet_state_call(argv: list) -> int | None:
         return None
 
 
-def _record_dispatch(pack: Path, agent: str, model: str | None) -> bool:
-    """W-5: append this dispatch to the engagement's ledger. True if it was recorded."""
+def _record_dispatch(pack: Path, agent: str, model: str | None, outcome: str | None = None) -> bool:
+    """W-5: append this dispatch to the engagement's ledger. True if it was recorded.
+
+    `outcome` (ISRT 2026-09-15): passed through to `--outcome` only when the caller found a
+    recognisable error signal (`_extract_outcome`) - never guessed here."""
     argv = ["record-dispatch", "--agent", agent, "--dir", str(pack)]
     if model:
         argv += ["--model", model]
+    if outcome:
+        argv += ["--outcome", outcome]
     return _quiet_state_call(argv) == 0
 
 
@@ -392,7 +430,8 @@ def main() -> int:
     agent = str(tool_input.get("subagent_type") or "").strip()
     notices: list[str] = []
     if agent:
-        if _record_dispatch(pack, agent, str(tool_input.get("model") or "") or None):
+        outcome = _extract_outcome(data.get("tool_response"))
+        if _record_dispatch(pack, agent, str(tool_input.get("model") or "") or None, outcome or None):
             if _over_dispatch_budget(pack):
                 notices.append(
                     f"DISPATCH OVER BUDGET: recording '{agent}' put this engagement past the "
