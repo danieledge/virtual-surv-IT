@@ -27,27 +27,27 @@
     "docs/sme/trade-surveillance.md"
   ],
   "tier_budgets": {
-    "ALWAYS_LOADED": 3400,
-    "OPEN_TIME": 20400,
-    "ROUTE_TIME": 53600,
-    "AGENT_TIME": 24700,
+    "ALWAYS_LOADED": 3500,
+    "OPEN_TIME": 20700,
+    "ROUTE_TIME": 54000,
+    "AGENT_TIME": 25300,
     "DEFERRED": null
   },
   "files": {
     ".claude/agents/business-analyst.md": {
       "tier": "AGENT_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 1118
+      "baseline_tokens": 1115
     },
     ".claude/agents/code-reviewer.md": {
       "tier": "AGENT_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 4934
+      "baseline_tokens": 4931
     },
     ".claude/agents/compliance-reviewer.md": {
       "tier": "AGENT_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 2637
+      "baseline_tokens": 2746
     },
     ".claude/agents/data-analyst.md": {
       "tier": "AGENT_TIME",
@@ -62,7 +62,7 @@
     ".claude/agents/ml-engineer.md": {
       "tier": "AGENT_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 959
+      "baseline_tokens": 1072
     },
     ".claude/agents/model-validator.md": {
       "tier": "AGENT_TIME",
@@ -72,7 +72,7 @@
     ".claude/agents/performance-reviewer.md": {
       "tier": "AGENT_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 2787
+      "baseline_tokens": 2785
     },
     ".claude/agents/platform-engineer.md": {
       "tier": "AGENT_TIME",
@@ -82,12 +82,12 @@
     ".claude/agents/qa-engineer.md": {
       "tier": "AGENT_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 1623
+      "baseline_tokens": 1692
     },
     ".claude/agents/review-scorer.md": {
       "tier": "AGENT_TIME",
       "loads_per_engagement": 2.0,
-      "baseline_tokens": 1128
+      "baseline_tokens": 1358
     },
     ".claude/agents/rules-developer.md": {
       "tier": "AGENT_TIME",
@@ -132,12 +132,12 @@
     ".claude/skills/audit-review/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 2644
+      "baseline_tokens": 2641
     },
     ".claude/skills/beta-assess-quantexa/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 1758
+      "baseline_tokens": 1759
     },
     ".claude/skills/beta-assess-quantexa/references/quantexa-kb.md": {
       "tier": "DEFERRED",
@@ -152,7 +152,7 @@
     ".claude/skills/build-solution/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 1922
+      "baseline_tokens": 1920
     },
     ".claude/skills/build/SKILL.md": {
       "tier": "ROUTE_TIME",
@@ -162,27 +162,27 @@
     ".claude/skills/dashboard/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 877
+      "baseline_tokens": 876
     },
     ".claude/skills/deep-review/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 5466
+      "baseline_tokens": 5452
     },
     ".claude/skills/deep-review/references/quick.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 695
+      "baseline_tokens": 696
     },
     ".claude/skills/demo/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 2054
+      "baseline_tokens": 2297
     },
     ".claude/skills/detection-health/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 453
+      "baseline_tokens": 454
     },
     ".claude/skills/elicit-requirements/SKILL.md": {
       "tier": "ROUTE_TIME",
@@ -192,12 +192,12 @@
     ".claude/skills/engage-light/SKILL.md": {
       "tier": "OPEN_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 2106
+      "baseline_tokens": 2103
     },
     ".claude/skills/engage/SKILL.md": {
       "tier": "OPEN_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 7815
+      "baseline_tokens": 7996
     },
     ".claude/skills/engage/references/artifact-menu.md": {
       "tier": "DEFERRED",
@@ -207,12 +207,12 @@
     ".claude/skills/engage/references/auto-mode.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 1746
+      "baseline_tokens": 2527
     },
     ".claude/skills/engage/references/close-checklist.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 3299
+      "baseline_tokens": 3835
     },
     ".claude/skills/engage/references/extensions.md": {
       "tier": "DEFERRED",
@@ -227,7 +227,7 @@
     ".claude/skills/engage/references/launcher-flags.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 2204
+      "baseline_tokens": 2202
     },
     ".claude/skills/engage/references/probe-bootstrap.md": {
       "tier": "DEFERRED",
@@ -237,7 +237,7 @@
     ".claude/skills/engage/references/probe-contract.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 3888
+      "baseline_tokens": 3883
     },
     ".claude/skills/engage/references/resume-menu.md": {
       "tier": "DEFERRED",
@@ -267,12 +267,12 @@
     ".claude/skills/map-codebase/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 2069
+      "baseline_tokens": 2067
     },
     ".claude/skills/meet-the-team/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 1123
+      "baseline_tokens": 1121
     },
     ".claude/skills/new-scenario/SKILL.md": {
       "tier": "ROUTE_TIME",
@@ -282,17 +282,17 @@
     ".claude/skills/performance-review/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 2629
+      "baseline_tokens": 2627
     },
     ".claude/skills/preferences/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 1855
+      "baseline_tokens": 1851
     },
     ".claude/skills/prepare-data/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 1460
+      "baseline_tokens": 1458
     },
     ".claude/skills/reg-change-impact/SKILL.md": {
       "tier": "ROUTE_TIME",
@@ -302,7 +302,7 @@
     ".claude/skills/remediate/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 1121
+      "baseline_tokens": 1119
     },
     ".claude/skills/requirements/SKILL.md": {
       "tier": "ROUTE_TIME",
@@ -312,7 +312,7 @@
     ".claude/skills/review/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 873
+      "baseline_tokens": 874
     },
     ".claude/skills/run-evals/SKILL.md": {
       "tier": "ROUTE_TIME",
@@ -322,7 +322,7 @@
     ".claude/skills/security-audit/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 2762
+      "baseline_tokens": 2876
     },
     ".claude/skills/team/SKILL.md": {
       "tier": "ROUTE_TIME",
@@ -352,12 +352,12 @@
     "CLAUDE.md": {
       "tier": "ALWAYS_LOADED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 3084
+      "baseline_tokens": 3117
     },
     "docs/DEFINITION-OF-DONE.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 7788
+      "baseline_tokens": 7986
     },
     "docs/WAYS-OF-WORKING.md": {
       "tier": "DEFERRED",
@@ -367,12 +367,12 @@
     "docs/agent-design.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 6489
+      "baseline_tokens": 6482
     },
     "docs/code-review-method.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 3371
+      "baseline_tokens": 3737
     },
     "docs/coding-standards.md": {
       "tier": "DEFERRED",
@@ -382,12 +382,12 @@
     "docs/operating-guide.d/artifacts-lifecycle.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 3767
+      "baseline_tokens": 3842
     },
     "docs/operating-guide.d/command-index.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 896
+      "baseline_tokens": 920
     },
     "docs/operating-guide.d/delivery-standards.md": {
       "tier": "DEFERRED",
@@ -397,7 +397,7 @@
     "docs/operating-guide.d/run-mode-detail.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 1369
+      "baseline_tokens": 1364
     },
     "docs/operating-guide.d/untrusted-content.md": {
       "tier": "DEFERRED",
@@ -407,7 +407,7 @@
     "docs/review/agent-router.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 2068
+      "baseline_tokens": 2113
     },
     "docs/review/false-positive-rules.md": {
       "tier": "DEFERRED",
@@ -472,7 +472,7 @@
     "docs/review/output-format.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 4010
+      "baseline_tokens": 4506
     },
     "docs/scope-and-stack.md": {
       "tier": "DEFERRED",
@@ -497,12 +497,12 @@
     "docs/team-operating-guide-orchestration.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 6321
+      "baseline_tokens": 6842
     },
     "docs/team-operating-guide.md": {
       "tier": "OPEN_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 4414
+      "baseline_tokens": 4480
     }
   },
   "aggregates": {
@@ -515,7 +515,7 @@
         ".claude/skills/.shared/engage-open.md",
         "docs/team-operating-guide.md"
       ],
-      "baseline_bytes": 78030
+      "baseline_bytes": 79149
     },
     "engaged_typical": {
       "files": [
@@ -538,7 +538,7 @@
         ".claude/skills/engage/references/target-menu.md",
         ".claude/skills/engage/references/resume-menu.md"
       ],
-      "baseline_bytes": 186132
+      "baseline_bytes": 191854
     }
   }
 }

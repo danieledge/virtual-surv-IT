@@ -592,6 +592,11 @@ def test_launch_command_mode_prints_configured_command(tmp_path, monkeypatch, ca
         json.dumps({"claude_launch_command": "cc --resume"}), encoding="utf-8"
     )
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    # --launch-command resolves the orchestrator model against Path.cwd()'s project settings,
+    # then the real machine's ~/.claude/settings.json (test isolation, 2026-09-16: a dev box
+    # with a model pinned in its own home settings silently appended --model to every run of
+    # this test, same class of leak as conftest's session-id fixture).
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path / "isolated-home"))
     mod = _load()
     monkeypatch.setattr(_sys, "argv", ["virt_team_launcher.py", "--launch-command"])
     rc = mod.main()
@@ -605,6 +610,9 @@ def test_launch_command_mode_defaults_to_claude(tmp_path, monkeypatch, capsys):
     import sys as _sys
 
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "empty"))
+    # Same isolation as above - a real home settings.json with a pinned model must not leak
+    # a --model flag into this "no config at all" case.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path / "isolated-home"))
     mod = _load()
     monkeypatch.setattr(_sys, "argv", ["virt_team_launcher.py", "--launch-command"])
     rc = mod.main()

@@ -400,6 +400,11 @@ def test_the_windowed_launch_uses_the_same_command_the_wrapper_would(tmp_path, m
         lt, "open_in_new_window", lambda cmd, cwd: seen.update(cmd=cmd, cwd=cwd) or True
     )
     monkeypatch.setattr(mod, "_configured_launch_command", lambda: "cc --resume")
+    # _launch_in_window resolves the command through _configured_orchestrator_model, which
+    # checks the real machine's ~/.claude/settings.json when the project has no override - a
+    # dev box with a model pinned there silently appended --model to this "verbatim" case
+    # (test isolation, 2026-09-16; same class of leak as conftest's session-id fixture).
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path / "isolated-home"))
     try:
         import launcher_app
 

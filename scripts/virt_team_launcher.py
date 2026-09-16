@@ -5061,7 +5061,14 @@ def _configured_orchestrator_model(project_dir: Path):
     """The Morgan model EXPLICITLY set (this project's, else this machine's user default), or
     None when unset. Unlike `_headless_model`, it does NOT fall back to a default: an
     interactive session with no configured model keeps the CLI's own default, and only an
-    explicit, well-formed choice forces `--model`."""
+    explicit, well-formed choice forces `--model`.
+
+    A settings file that sets `model` to something malformed is REJECTED, not skipped: the
+    loop stops at that file rather than falling through to the next one. Falling through
+    would mean a garbage project-level value silently picks up the machine's own home
+    default instead - the project's explicit (if broken) choice getting silently overridden
+    by whatever happens to be in the developer's home dotfile is exactly the kind of quiet
+    surprise this module's docstrings elsewhere call out (see `_headless_model`)."""
     for settings in (
         project_dir / ".claude" / "settings.json",
         Path.home() / ".claude" / "settings.json",
@@ -5070,9 +5077,12 @@ def _configured_orchestrator_model(project_dir: Path):
             data = json.loads(settings.read_text(encoding="utf-8-sig"))
         except (OSError, ValueError):
             continue
-        model = data.get("model") if isinstance(data, dict) else None
+        if not isinstance(data, dict) or "model" not in data:
+            continue
+        model = data.get("model")
         if isinstance(model, str) and _MODEL_TOKEN_RE.match(model.strip()):
             return model.strip()
+        return None  # the key was set here, just not to something usable - stop, don't cascade
     return None
 
 
