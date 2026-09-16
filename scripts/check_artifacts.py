@@ -2979,12 +2979,32 @@ def check_registry(artifacts_dir: Path) -> list[str]:
     return []
 
 
-_KNOWN_FLAGS = frozenset({"--fix"})
+_KNOWN_FLAGS = frozenset({"--fix", "--help", "-h"})
+
+_USAGE = (
+    "usage: check_artifacts.py [--fix] [--slug <workspace>] [artifacts_dir] [map_path]\n\n"
+    "Mechanical DoD gate: scans an engagement's artifacts and flags defects (a missing HTML\n"
+    "sibling, a stale index entry, an unmarked persona attribution, and the rest of this\n"
+    "module's own docstring). Exit 0: clean. Exit 1: findings, none fixed. Exit 2: usage error.\n\n"
+    "  --fix              auto-fix the deterministic defects, then re-check\n"
+    "  --slug <workspace> check only <artifacts_dir>/<workspace>\n"
+    "  artifacts_dir      defaults to ./artifacts\n"
+    "  map_path           defaults to the discovered codebase map, if any\n"
+)
 
 
 def main(argv: list[str]) -> int:
     _force_utf8_output()
     rest = argv[1:]
+    # -h/--help (ISRT 2026-09-16 live report): every other flag-shaped argument this script
+    # doesn't recognise is a usage ERROR (exit 2, see the unknown-flags check below) - --help
+    # fell into that same bucket, inconsistent with engagement_state.py's argparse subcommands
+    # (which get -h/--help for free) and surprising for the one flag a human reaches for first
+    # when unsure what a script accepts. Checked before --slug/--fix parsing, so it wins over
+    # any other argument on the line.
+    if "--help" in rest or "-h" in rest:
+        print(_USAGE, end="")
+        return 0
     # --slug <workspace> (2026-08-17 live report: a session reached twice for the same
     # `--slug` shape every OTHER team script accepts, got a usage error both times, and
     # burned a retry each): sugar for targeting one workspace, equivalent to passing

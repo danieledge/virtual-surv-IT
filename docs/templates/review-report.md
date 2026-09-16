@@ -63,7 +63,7 @@ filtered counts below).
 **Disposition summary:** _N_ fixed · _N_ open · _N_ accepted · _N_ deferred - so it's
 never ambiguous what was actioned. A not-yet verdict must list the Open items explicitly.
 
-### Critical (must fix)
+### 🔴 Critical (must fix)
 | # | File:line | Issue | Conf. | Basis | Standard / rule | Status |
 |---|-----------|-------|-------|-------|-----------------|--------|
 | 1 | `path:42` | ... | 97 | 📊 measured / 🧠 inferred | CWE-89 / OWASP ASVS V5 | Fixed (commit abc123) / Open |
@@ -75,11 +75,11 @@ never ambiguous what was actioned. A not-yet verdict must list the Open items ex
 > ```
 > *Why this works:* ...
 
-### Warnings (should fix)
+### 🟠 Warnings (should fix)
 | # | File:line | Issue | Conf. | Basis | Standard / rule | Recommended fix |
 |---|-----------|-------|-------|-------|-----------------|-----------------|
 
-### Medium *(deep review only)*
+### 🟡 Medium *(deep review only)*
 | # | File:line | Issue | Conf. | Basis | Standard / rule | Recommended fix |
 |---|-----------|-------|-------|-------|-----------------|-----------------|
 

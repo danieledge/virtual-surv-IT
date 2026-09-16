@@ -137,8 +137,8 @@ at the end regardless.
 
 | ID | Sev | File:line | Issue | Impact | Conf. | Basis | Standard | Status |
 |----|-----|-----------|-------|--------|-------|-------|----------|--------|
-| <a id="cr-01"></a>CR-01 | Critical | | | | | 📊 measured / 🧠 inferred | CWE-... | Fixed / Open / Accepted |
-| <a id="cr-02"></a>CR-02 | Warning | | | | | | |
+| <a id="cr-01"></a>CR-01 | 🔴 Critical | | | | | 📊 measured / 🧠 inferred | CWE-... | Fixed / Open / Accepted |
+| <a id="cr-02"></a>CR-02 | 🟠 Warning | | | | | | |
 
 **Disposition:** _N_ fixed · _N_ open · _N_ accepted · _N_ deferred. A not-yet verdict lists
 the Open items. **No straightforward fix - mark Open (needs human developer review)** with the

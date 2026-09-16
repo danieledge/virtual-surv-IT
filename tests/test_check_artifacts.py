@@ -2552,6 +2552,22 @@ def test_main_accepts_slug_flag(tmp_path, monkeypatch, capsys):
     assert rc_flag == rc_positional
 
 
+def test_main_supports_help_flag(tmp_path, monkeypatch, capsys):
+    """ISRT 2026-09-16 live report: --help fell into the unrecognized-flag bucket (exit 2,
+    the "did you mean --fix or --slug" message) like any other typo - inconsistent with
+    engagement_state.py's argparse subcommands, which get -h/--help for free, and surprising
+    for the one flag a human reaches for first when unsure what a script accepts. Both
+    spellings exit 0 and print usage, checked before any other argument on the line."""
+    from scripts.check_artifacts import main as ca_main
+
+    monkeypatch.chdir(tmp_path)
+    for flag in ("--help", "-h"):
+        rc = ca_main(["check_artifacts", flag])
+        out = capsys.readouterr().out
+        assert rc == 0
+        assert "--fix" in out and "--slug" in out
+
+
 def test_fix_removes_ghost_artifact_row_when_true_row_resolves(tmp_path):
     """The exact live shape: a pre-heal row with a mis-rooted path plus the
     added_before_file_existed flag, alongside the correct row for the same file -
@@ -3074,6 +3090,61 @@ def test_project_relative_path_is_not_flagged():
 
     text = "| **Version / commit** | sml_prodtrunk/ @ a1b2c3d |"
     assert check_local_path_leak(text, Path("delivery-report.md")) == []
+
+
+# ------------------------------- SEVERITY-ICON-MISSING (ISRT 2026-09-16 live report) ------
+# A live delivery report hit CLOSE-REFUSED on its first attempt with 146 bare severity
+# labels - traced back to the shipped templates' own skeleton rows (delivery-report.md's
+# per-finding row, review-report.md's section headings) teaching every drafting pass the
+# bare word. The check itself had no test coverage at all until this incident.
+
+
+def test_bare_severity_table_cell_is_flagged():
+    from scripts.check_artifacts import check_severity_iconography
+
+    text = "## Findings\n\n| ID | Sev |\n|----|-----|\n| CR-01 | Critical |\n"
+    findings = check_severity_iconography(text, Path("delivery-report.md"))
+    assert len(findings) == 1
+    assert "SEVERITY-ICON-MISSING" in findings[0] and "1 severity label" in findings[0]
+
+
+def test_bare_severity_heading_is_flagged():
+    from scripts.check_artifacts import check_severity_iconography
+
+    text = "## Findings\n\n### Critical (must fix)\n"
+    findings = check_severity_iconography(text, Path("review-report.md"))
+    assert len(findings) == 1
+
+
+def test_paired_emoji_and_word_is_not_flagged():
+    from scripts.check_artifacts import check_severity_iconography
+
+    text = "## Findings\n\n| ID | Sev |\n|----|-----|\n| CR-01 | 🔴 Critical |\n"
+    assert check_severity_iconography(text, Path("delivery-report.md")) == []
+
+
+def test_non_findings_bearing_doc_is_not_scanned():
+    """A bare 'Critical' in an unrelated doc (no ## Findings heading, no findings-shaped
+    filename, no 'Severity:' text) is not this check's business - _is_findings_bearing
+    gates it, same convention as every other findings-scoped check in this module."""
+    from scripts.check_artifacts import check_severity_iconography
+
+    text = "# Notes\n\nThis is a Critical dependency for the release.\n"
+    assert check_severity_iconography(text, Path("notes.md")) == []
+
+
+def test_shipped_delivery_report_template_is_clean():
+    """Regression pin for the 146-instance root cause: the skeleton row itself was bare.
+    Runs against the real shipped template, not a copy, so a future edit that reintroduces
+    a bare severity label in the skeleton fails here before it ever reaches a live drafted
+    report."""
+    from scripts.check_artifacts import check_severity_iconography
+
+    root = Path(__file__).resolve().parents[1]
+    for name in ("delivery-report.md", "review-report.md"):
+        path = root / "docs" / "templates" / name
+        text = path.read_text(encoding="utf-8")
+        assert check_severity_iconography(text, path) == [], name
 
 
 # ----------------------------- REPORT-PACK-NOT-REPRESENTED (ISRT 2026-09-16) --------------
