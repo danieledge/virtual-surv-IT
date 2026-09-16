@@ -65,6 +65,14 @@ the one-command check the PM runs at the gate instead (docs/DEFINITION-OF-DONE.m
      its matching legend emoji, not bare text (`SEVERITY-ICON-MISSING`) -
      docs/WAYS-OF-WORKING.md already defines the single canonical legend; nothing
      mechanically enforced it (ISRT 2026-09-15).
+ 14. no human-readable `.md` file sits under `artifacts/data/` (`DATA-DIR-MISPLACED-DOC`) - that
+     subtree is machine-readable source only and is deliberately EXEMPT from MISSING-HTML/
+     STALE-INDEX for exactly that reason; a doc placed there silently inherits an exemption
+     meant for something else (ISRT 2026-09-16 defect log, item #6).
+ 15. a scored-kind pack that recorded its review-scorer pass still carries a `confidence`
+     value on every finding (`FINDING-NO-CONFIDENCE`) - a pack can pass `PACK-UNSCORED` at
+     the envelope level while individual findings still shipped with no confidence number
+     (ISRT 2026-09-16 defect log, item #28).
 
 Exit 0 = gate satisfied; exit 1 = findings printed (one line each, machine-readable prefix).
 No third-party dependencies. Output is forced to UTF-8 so the emoji basis tags don't crash a
@@ -1755,6 +1763,50 @@ def check_findings_scoring(artifacts_dir: Path) -> list[str]:
     return findings
 
 
+def check_findings_confidence(artifacts_dir: Path) -> list[str]:
+    """FINDING-NO-CONFIDENCE: a scored-kind pack that HAS recorded a review-scorer pass
+    (i.e. passed PACK-UNSCORED) must carry a `confidence` value on every finding - that
+    number is the whole point of running the scorer. Distinct from PACK-UNSCORED: a pack can
+    correctly record 'scored by review-scorer: Found N...' at the envelope level while one or
+    more individual findings still carry no `confidence`, which PACK-UNSCORED's envelope-only
+    check cannot see (ISRT 2026-09-16 defect log #28 - a performance pack shipped with
+    `confidence` missing on all 8 findings, caught only downstream after the pack was already
+    returned). Judgement item, never auto-fixed - re-dispatch review-scorer over the
+    affected findings."""
+    findings: list[str] = []
+    data_dir = artifacts_dir / "data"
+    if not data_dir.is_dir():
+        return findings
+    fp_io = _load_findings_pack_io_module()
+    if fp_io is None:
+        return findings
+    for pack_path in sorted(data_dir.rglob("findings-*.jsonl")):
+        try:
+            pack = fp_io.read_pack(pack_path)
+        except (OSError, ValueError):
+            continue
+        except Exception:  # nosec B112
+            continue
+        if not isinstance(pack, dict) or pack.get("kind", "review") not in _SCORED_PACK_KINDS:
+            continue
+        scoring = pack.get("scoring")
+        if not (isinstance(scoring, str) and _SCORER_ATTEST_RE.search(scoring)):
+            continue  # PACK-UNSCORED already owns this case
+        missing = sum(
+            1
+            for f in pack.get("findings") or []
+            if isinstance(f, dict) and not isinstance(f.get("confidence"), int)
+        )
+        if missing:
+            findings.append(
+                f"FINDING-NO-CONFIDENCE: {pack_path.name} records a review-scorer pass but "
+                f"{missing} finding(s) carry no `confidence` value - re-dispatch review-scorer "
+                "over the affected findings; a scored pack with no confidence numbers has not "
+                "actually been scored"
+            )
+    return findings
+
+
 _FINDING_ID_RE = re.compile(r"^###\s+\S+\s+(\S+)\s+—", re.M)
 _TALLY_LINE_RE = re.compile(r"^\*\*Disposition tally:\*\*\s*(.+)$", re.M)
 _KIND_PREFIX = {"review": "REVIEW", "security-audit": "SECURITY-AUDIT", "performance": "PERF"}
@@ -2122,6 +2174,7 @@ def check(artifacts_dir: Path) -> list[str]:
     findings.extend(check_findings_packs(artifacts_dir))
     findings.extend(check_findings_render_freshness(artifacts_dir))
     findings.extend(check_findings_scoring(artifacts_dir))
+    findings.extend(check_findings_confidence(artifacts_dir))
     findings.extend(check_state(artifacts_dir, _all_md=all_md))
     findings.extend(check_review_fingerprints(artifacts_dir))
     findings.extend(check_rtm(artifacts_dir, _all_md=all_md))
@@ -2131,6 +2184,21 @@ def check(artifacts_dir: Path) -> list[str]:
     md_files = [
         m for m in all_md if data_dir not in m.parents and not _under_archive(m, artifacts_dir)
     ]
+    # DATA-DIR-MISPLACED-DOC (ISRT 2026-09-16): data/ is meant to hold ONLY findings-*.jsonl - the
+    # exclusion above exists so that machine-only content never has to satisfy MISSING-HTML/
+    # STALE-INDEX. A live run placed two human-readable analysis memos under data/ instead of the
+    # artifacts root, which silently exploited that exclusion: MISSING-HTML never fired for them,
+    # and the reader only found the dead link by hand. A .md file under data/ is the wrong kind of
+    # content in that subtree - flag it rather than exempt it.
+    for misplaced in all_md:
+        if data_dir in misplaced.parents and not _under_archive(misplaced, artifacts_dir):
+            findings.append(
+                f"DATA-DIR-MISPLACED-DOC: {misplaced} is a human-readable .md file under "
+                "data/ - that subtree is machine-readable source only (findings-*.jsonl) and "
+                "is EXEMPT from MISSING-HTML/STALE-INDEX for exactly that reason; move this "
+                "file to the artifacts root (or its engagement workspace) so it gets the same "
+                "hygiene checks every other document does"
+            )
     for md in md_files:
         # The summary email must be a .txt; a .md copy is the wrong type, not a missing render -
         # flag it and do NOT demand an .html sibling for it (that would be the wrong fix).

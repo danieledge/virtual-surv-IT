@@ -118,7 +118,12 @@ directly to `VSIT/engagements/<slug>/data/findings-<slug>.jsonl` with **`"kind":
 finding the five named fields - `standard` = the CWE/OWASP ASVS ref - + severity/basis/disposition -
 it holds a Write grant scoped to exactly this path, mechanically enforced); `compliance-reviewer`
 (step 3) writes its own alongside it (`findings-compliance-<slug>.jsonl`). **Read both back and
-consolidate** - merge `compliance-reviewer`'s `findings[]` into the security pack - then run
+consolidate** - merge `compliance-reviewer`'s `findings[]` into the security pack, appending to its
+`findings` array. **The envelope's `kind` stays `"security-audit"` - never rename it to describe the
+merge** (`"merged"` is not in the schema's `kind` enum and `FINDINGS-INVALID` rejects it; ISRT
+2026-09-15/16: a live run improvised exactly this, plausibly because combining two different-`kind`
+packs into one file reads as if it needs a new label - it doesn't. `kind` names which *renderer/
+prefix* the pack drives, not what happened to produce it). Then run
 **`<python> -m scripts.check_artifacts --fix`** (allow-listed): it validates the pack
 (`FINDINGS-INVALID` → fix and re-run) and renders the workspace's `VSIT/engagements/<slug>/SECURITY-AUDIT-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status closing` first)
 (the `kind` drives the `SECURITY-AUDIT-` prefix). Don't hand-author or hand-edit the report.

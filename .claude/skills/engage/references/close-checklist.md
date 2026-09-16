@@ -153,6 +153,15 @@ section).
 The close window opens with `engagement_state set-status closing` (above). Everything else runs
 **last, in this order**:
 
+0. **Diagnose everything first, once** (ISRT 2026-09-16 defect log #30 - a live close needed 3
+   full `set-status closed` attempts to surface 8 distinct findings, each attempt re-running the
+   identical full mechanical gate over the whole engagement directory - roughly two-thirds of
+   that gate-run cost was avoidable). Run `<python> -m scripts.check_artifacts --fix` standalone
+   **before** the first `set-status closed` call, not after a refusal: it auto-fixes what it
+   can and reports the rest as one list. Fix everything it names, re-run it until clean, **then**
+   proceed to steps 1-4. `set-status closed` still runs the same gate itself and still refuses on
+   anything left - this step is what keeps that from being how findings get discovered one
+   refusal at a time.
 1. `set-team "Name (role)" ...` - the roster that actually delivered.
 2. `finalise-artifacts` - every artifact row interim → final.
 3. `set-footprint` - agents + tokens.
@@ -160,7 +169,8 @@ The close window opens with `engagement_state set-status closing` (above). Every
 
 The close **refuses** while the team is empty or any artifact row is still interim, and it **runs
 the full mechanical DoD gate itself, refusing and rolling back on findings** (register R6). Fix
-what it lists (or run `check_artifacts --fix`) and re-run: never work around a refused close.
+what it lists (or run `check_artifacts --fix`) and re-run: never work around a refused close -
+step 0 above is what keeps this from being the *first* time the gate runs.
 
 Before it, remove the interim banners from artifacts that became final, and keep the 📊/🧠
 evidence tags on every data claim in the delivery report and the summary email as well as in the

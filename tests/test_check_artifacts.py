@@ -99,7 +99,41 @@ def test_md_without_html_is_flagged(tmp_path):
     findings = check(art)
     assert len(findings) == 1
     assert "MISSING-HTML" in findings[0]
-    assert "REVIEW-foo.md" in findings[0]
+
+
+def test_md_under_data_dir_is_misplaced_not_exempt(tmp_path):
+    """ISRT 2026-09-16 defect log #6: a human-readable .md placed under data/ silently
+    inherited that subtree's MISSING-HTML/STALE-INDEX exemption (meant for findings-*.jsonl
+    only) - the exact failure mode was two analysis memos landing there and going unchecked
+    until a reader hit a dead link by hand."""
+    art = tmp_path / "artifacts"
+    _touch(art / "data" / "analysis-detection-logic.md", "# Analysis\n")
+    _index(art, listed=["data/analysis-detection-logic.md"])
+    findings = check(art)
+    codes = [f.split(":", 1)[0] for f in findings]
+    assert "DATA-DIR-MISPLACED-DOC" in codes
+    assert "MISSING-HTML" not in codes  # still exempt from this one - it's flagged instead
+
+
+def test_jsonl_under_data_dir_is_not_misplaced(tmp_path):
+    data = tmp_path / "artifacts" / "data"
+    data.mkdir(parents=True)
+    (data / "findings-foo.jsonl").write_text(
+        json.dumps(
+            {
+                "kind": "review",
+                "slug": "foo",
+                "scope": "x",
+                "mode": "quick",
+                "verdict": "ready",
+                "findings": [],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    findings = check(tmp_path / "artifacts")
+    assert "DATA-DIR-MISPLACED-DOC" not in "".join(findings)
 
 
 def test_missing_summary_email_is_flagged(tmp_path):
@@ -1643,6 +1677,47 @@ def test_pack_unscored_surfaces_via_check(tmp_path):
     assert any("PACK-UNSCORED" in f for f in check(art))
 
 
+# ------------------------------- review-scorer confidence (FINDING-NO-CONFIDENCE) -------
+#
+# ISRT 2026-09-16 defect log #28: a performance pack recorded its review-scorer pass at the
+# envelope level (passing PACK-UNSCORED) while every finding still carried no `confidence` -
+# a distinct gap PACK-UNSCORED's envelope-only check can't see.
+
+
+def test_scored_pack_missing_confidence_is_flagged(tmp_path):
+    from scripts.check_artifacts import check_findings_confidence
+
+    art = tmp_path / "artifacts"
+    scored = copy.deepcopy(_VALID_PACK)
+    scored["scoring"] = "scored by review-scorer: Found 1 · Reported 1 · Filtered 0"
+    # _VALID_PACK's one finding has no "confidence" key at all.
+    _pack(art, scored)
+    findings = check_findings_confidence(art)
+    assert len(findings) == 1
+    assert "FINDING-NO-CONFIDENCE" in findings[0] and "1 finding" in findings[0]
+
+
+def test_scored_pack_with_confidence_is_silent(tmp_path):
+    from scripts.check_artifacts import check_findings_confidence
+
+    art = tmp_path / "artifacts"
+    scored = copy.deepcopy(_VALID_PACK)
+    scored["scoring"] = "scored by review-scorer: Found 1 · Reported 1 · Filtered 0"
+    scored["findings"][0]["confidence"] = 85
+    _pack(art, scored)
+    assert check_findings_confidence(art) == []
+
+
+def test_unscored_pack_is_pack_unscoreds_job_not_this_ones(tmp_path):
+    """A pack that never recorded a scoring pass at all is PACK-UNSCORED's territory -
+    FINDING-NO-CONFIDENCE only fires once a scoring pass IS recorded."""
+    from scripts.check_artifacts import check_findings_confidence
+
+    art = tmp_path / "artifacts"
+    _pack(art, _VALID_PACK)  # no "scoring" field
+    assert check_findings_confidence(art) == []
+
+
 def test_data_subfolder_pack_not_treated_as_deliverable(tmp_path):
     # A .json pack under data/ must not trip MISSING-HTML or STALE-INDEX (it's machine source).
     art = tmp_path / "artifacts"
@@ -1650,6 +1725,7 @@ def test_data_subfolder_pack_not_treated_as_deliverable(tmp_path):
     _touch(art / "engagement-summary-t.txt", "Hi,\n\nMorgan\n")
     scored = copy.deepcopy(_VALID_PACK)  # scored, so PACK-UNSCORED can't name the file either
     scored["scoring"] = "scored by review-scorer: Found 1 · Reported 1 · Filtered 0"
+    scored["findings"][0]["confidence"] = 90  # so FINDING-NO-CONFIDENCE can't name it either
     _pack(art, scored)
     joined = "\n".join(check(art))
     assert "findings-t.jsonl" not in joined  # never named by MISSING-HTML / STALE-INDEX

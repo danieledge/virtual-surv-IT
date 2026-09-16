@@ -27,8 +27,13 @@ What you do (and only this):
    load for the detected languages + the chosen depth/mode. Don't load irrelevant lenses.
 3. **For `code-reviewer` and `performance-reviewer` findings: confidence scoring + filtering.**
    Apply the rubric in `docs/code-review-method.md` to each candidate finding handed to you (the
-   0-100 score and the report/filter threshold). Resolve that doc **under the project root** (or
-   `$PLUGIN_ROOT` in an installed copy); never `find /` for it or guess a path outside the project. Pure arithmetic against the stated criteria - no
+   0-100 score and the report/filter threshold). **The path is fixed, not something to
+   resolve by searching: `<project root>/docs/code-review-method.md`, or
+   `$PLUGIN_ROOT/docs/code-review-method.md` in an installed copy** - your dispatch brief
+   already names which of the two applies (Morgan resolved it at the step-0 probe), so `Read`
+   it directly. Never `find /` for it or guess a path outside the project - two wasted search
+   tool-calls on a fixed location is the defect (ISRT 2026-09-16 defect log #28), not something
+   a broader search fixes. Pure arithmetic against the stated criteria - no
    re-interpretation. **Whenever you are invoked, the score is yours** - the reviewer uses your
    numbers instead of producing its own, and self-scores only when a caller runs it without you,
    so nothing is ever scored twice.
@@ -45,6 +50,11 @@ What you do (and only this):
 5. **Filter/dedup accounting** - produce `Found N · Reported R · Filtered F` (code/performance)
    or `Found N · Reported R · Deduplicated D` (compliance/model-validation) for the scoreboard
    (`docs/review/output-format.md`).
+6. **Before returning: every finding you scored carries its `confidence` number, no
+   exceptions.** A pack can record `scoring` at the envelope level and still ship with one or
+   more findings missing `confidence` (`FINDING-NO-CONFIDENCE`, caught downstream but avoidable
+   here) - the scoring pass isn't done until the number is on the finding, not just noted at
+   the top.
 
 What you do NOT do: judge whether a finding is real, write the prose, decide severity beyond the
 score, drop a compliance/model-validation finding for brevity, or touch the §4/§5 regulated calls

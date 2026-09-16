@@ -48,6 +48,10 @@ docs/adr/
 # Homelab infra access notes (2026-08-15) - host-specific, not product docs; keep local
 docs/internal/windows-test-vm-access.md
 
+# Report-styling/adjudication exploration (2026-09-15) - session note, not a committed plan;
+# keep local per owner request.
+docs/internal/human-triage-adjudication-layer-2026-09-15.md
+
 # Live-/engage eval run outputs (scripts.eval_engage): transcripts, sandboxes, scores.
 # Baselines worth keeping get written up in evals/eval-baseline-*.md instead.
 evals/runs/

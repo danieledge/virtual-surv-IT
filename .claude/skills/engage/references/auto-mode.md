@@ -103,6 +103,20 @@ walk the filesystem looking for it, and never list anything above the project di
 (live report 2026-09-12: an unattended run enumerated the user's whole home workspace on
 the way to parking).
 
+**Parked, then a human starts typing: the one rule that decides what happens next** (ISRT
+2026-09-16 defect log #1 - a `--jira ... --auto` run parked on a fetch failure, the user then
+typed directly in chat, and the session improvised its way back into the attended question
+flow with no documented rule saying that was the right call). The rule: **a direct message
+from the user, while parked, is a human choosing to be present** - proceed attended from that
+turn on, the same as any other engage session, including asking questions normally. This is
+not a silent resume: say so in the same reply (e.g. "🎩 auto-mode was parked on `<reason>` -
+you're here now, so I'll proceed attended from here") and record it with `log-note`
+("auto-to-attended: <reason>"). What this rule does **not** license: don't retroactively
+un-park past decisions the auto run already made and logged, and don't treat a single
+incidental message (the user pasting unrelated content, a system notification) as presence
+if nothing in it responds to what the park was waiting on - use judgement on THAT distinction,
+but never on whether presence itself converts the mode.
+
 **Guessing the deliverable is the one failure this mode must never produce.** An agent that
 quietly invents requirements is worse than one that stops.
 
