@@ -890,6 +890,61 @@ def test_sql_declaration_types_match_the_shipped_grammar():
     assert "create_table_statement" not in rs._TS_DECL_TYPES, "the wrong grammar's names"
 
 
+# ----------------------- Informatica PowerCenter XML (ISRT 2026-09-16 live report) --------
+#
+# .XML had zero symbol extraction in any tier - a live session exploring an ETL codebase's
+# workflow XML fell back to a raw `find | sort` filename dump for exactly that reason, the
+# anti-pattern this whole tool exists to replace. Regex tier only: XML has no tree-sitter
+# entry here, so this is the one and only path a .xml file can get real symbols from.
+
+
+def test_informatica_xml_elements_are_extracted(tmp_path):
+    src = tmp_path / "wf_Load.XML"
+    src.write_text(
+        '<WORKFLOW NAME="wf_Load_Takara" ISVALID="YES">\n'
+        '  <TASK NAME="s_m_Load" TASKTYPE="Session">\n'
+        '    <SESSION NAME="s_m_Load" MAPPINGNAME="m_Load">\n'
+        "    </SESSION>\n"
+        "  </TASK>\n"
+        "</WORKFLOW>\n"
+        '<MAPPING NAME="m_Load" ISVALID="YES">\n'
+        '  <TRANSFORMATION NAME="SQ_Source" TYPE="Source Qualifier">\n'
+        "  </TRANSFORMATION>\n"
+        '  <SOURCE NAME="Takara_Raw" DBDNAME="ORCL">\n'
+        "  </SOURCE>\n"
+        '  <TARGET NAME="Takara_Mirror" DBDNAME="ORCL">\n'
+        "  </TARGET>\n"
+        "</MAPPING>\n",
+        encoding="utf-8",
+    )
+    found = rs._symbols_regex(src)
+    assert found == [
+        "workflow wf_Load_Takara",
+        "task s_m_Load",
+        "session s_m_Load",
+        "mapping m_Load",
+        "transformation SQ_Source",
+        "source Takara_Raw",
+        "target Takara_Mirror",
+    ]
+
+
+def test_xml_extension_is_matched_case_insensitively(tmp_path):
+    """The live report's own files were `.XML`, uppercase - Informatica's own export
+    convention, and the exact case the raw `find -iname "*.XML"` fallback had to handle."""
+    src = tmp_path / "wf_Load.XML"
+    src.write_text('<WORKFLOW NAME="wf_Load_Takara" ISVALID="YES">\n', encoding="utf-8")
+    assert rs._symbols_regex(src) == ["workflow wf_Load_Takara"]
+
+
+def test_unrelated_xml_gets_nothing_not_noise(tmp_path):
+    """Deliberately tag-specific, not a generic XML grabber - an unrelated config file
+    honestly gets no symbols rather than a wall of every NAME-shaped attribute."""
+    src = tmp_path / "pom.xml"
+    src.write_text('<project><artifactId name="foo"/></project>\n', encoding="utf-8")
+    assert rs._symbols_regex(src) == []
+
+
 # ------------- the runtime must never reach the network (2026-08-27, unpinned)
 
 

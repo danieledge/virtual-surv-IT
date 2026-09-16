@@ -652,6 +652,20 @@ _REGEX_RULES: dict[str, tuple[tuple[str, str], ...]] = {
             "sql",
         ),
     ),
+    # Informatica PowerCenter workflow/mapping XML (ISRT 2026-09-16 live report: an ETL
+    # codebase's .XML exports got zero symbol extraction - a live session fell back to a raw
+    # `find | sort` filename dump for exactly this reason, the same anti-pattern this whole
+    # tier exists to replace). Deliberately case-sensitive and tag-specific (PowerCenter's
+    # own export convention is uppercase element names) rather than a generic XML tag
+    # grabber - an unrelated XML file gets nothing from this rule, honestly, rather than a
+    # wall of noise from every element with a NAME-shaped attribute.
+    ".xml": (
+        (
+            r'^\s*<(WORKFLOW|SESSION|MAPPING|TRANSFORMATION|TASK|SOURCE|TARGET)\b'
+            r'[^>]*\bNAME="([^"]+)"',
+            "xml",
+        ),
+    ),
 }
 # JS/TS share a ruleset - common in surveillance dashboards and tooling.
 _REGEX_RULES[".ts"] = _REGEX_RULES[".tsx"] = _REGEX_RULES[".js"] = _REGEX_RULES[".jsx"] = (
@@ -700,10 +714,11 @@ def _symbols_regex(path: Path) -> list[str] | None:
             name = groups[-1].strip('"`[]')
             if name.lower() in _REGEX_SKIP_NAMES:
                 continue
-            # SQL's rule captures the object type too - report "table orders", not "sql
-            # orders". Knowing a name is a VIEW rather than a PROCEDURE is most of the value
-            # of seeing it at all in a surveillance schema.
-            shown = groups[0].lower() if kind == "sql" and len(groups) > 1 else kind
+            # SQL's and XML's rules both capture the object/element type too - report "table
+            # orders" or "workflow wf_load", not "sql orders" / "xml wf_load". Knowing a name
+            # is a VIEW rather than a PROCEDURE (or a SESSION rather than a MAPPING) is most
+            # of the value of seeing it at all.
+            shown = groups[0].lower() if kind in ("sql", "xml") and len(groups) > 1 else kind
             label = f"{shown} {name}"
             if label not in seen:
                 seen.add(label)
