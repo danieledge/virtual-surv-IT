@@ -8,6 +8,22 @@
 > only once START-HERE says ✅ closed (`FINAL-BEFORE-CLOSE`) - interim output takes a
 > pass-scoped name (`review-pass-N`, `qa-cycle-N`, `interim-*`) instead.
 
+> **This document must stand alone** (ISRT 2026-09-16 live report - read end to end with the
+> lens "if this is handed over with nothing else, no `data/` folder, no companion memos, does
+> it hold up?"). Two rules that follow from that:
+> - **Every pack that was merged in is fully represented, not just its worst findings** -
+>   when §1a/§2 says findings were merged from N packs, all N are reflected in the header's
+>   disposition count and the exec summary's severity counts, with **no pack reduced to a
+>   single summary sentence elsewhere while its findings are absent from every count and
+>   index** (a live report undercounted its own Criticals this way - a whole specialist's
+>   pack, 2 of them, never itemized anywhere).
+> - **A finding that's rolled up ("+N more, see pack") still gets one line in the Appendix
+>   findings index** (end of document) - ID, severity, one-line summary, minimum. Rolling up
+>   the detail in §4-§6 is good scanning; rolling a finding out of the document ENTIRELY is
+>   not standalone. If full detail can only be had by opening `data/findings-*.jsonl`, say so
+>   explicitly where the rollup happens - never let "see pack" imply detail this document
+>   doesn't actually contain when handed over alone.
+
 > **Document control** · ID `DLVR-001` · Version `0.1` · Status `Draft | In review | Approved`
 > · Classification `Internal | Confidential` · Owner `<name / role>` · As-of `<YYYY-MM-DD>`
 >
@@ -19,7 +35,7 @@
 |---|---|
 | **Deliverable** | <name> |
 | **Type** | review / build / remediation |
-| **Version / commit** | <...> |
+| **Version / commit** | <project-relative path or repo name + commit SHA - never a local absolute filesystem path (`LOCAL-PATH-LEAK`: `C:/Users/<name>/...` leaks an OS username into a doc classified for external distribution)> |
 | **Date** | <YYYY-MM-DD> |
 | **Classification / distribution** | Internal - restricted to `<named recipients / role group>` |
 | **Overall verdict** | ready / ready with conditions / not yet |
@@ -30,11 +46,16 @@ each; the same "scannable list before the detail" GitHub code scanning / SonarQu
 lead with, and `REVIEW-<slug>.md`'s own summary table already does - ISRT 2026-09-15: without
 this the report had per-section tables but no single place answering "what are ALL the
 findings". Populate from the underlying `id` each finding already carries in its source
-findings pack - never invent a new numbering scheme.)_
+findings pack - never invent a new numbering scheme.)_ **The ID is a link, not just a label**
+(ISRT 2026-09-16 - "navigable" means a reader can actually jump there, not just read a table of
+labels that don't go anywhere): `[CR-01](#cr-01)`, pointing at the matching anchor on that
+finding's row in its own section below (`` <a id="cr-01"></a> `` right before the row's ID
+cell - plain markdown links/anchors, nothing the sanitiser strips). Lowercase the anchor;
+`render_html` doesn't case-fold ids.
 
-| ID | Sev | Section | Location | Status |
-|----|-----|---------|----------|--------|
-| CR-01 | 🔴 Critical | §4 Code review | `path/file.py:12` | Open |
+| ID | Sev | Section | Location | Impact | Status |
+|----|-----|---------|----------|--------|--------|
+| [CR-01](#cr-01) | 🔴 Critical | §4 Code review | `path/file.py:12` | one line - what happens if this ships unfixed | Open |
 
 **Contents** _(keep for a large multi-section report - `[TOC]` renders a clickable, internal-link
 section index in the `.html` via `render_html`; omit on a short report)_
@@ -101,12 +122,23 @@ pass, clarification round) - not per tool call. First-pass-clean is one strip an
 `Found N · Reported R · Filtered F` (depth, mode - see `docs/code-review-method.md`).
 Each finding gets a `diff`-style fix + "why it works" **and a Status**; if none: *no
 significant issues*. **ID** carries the finding's own id from its source findings pack (never
-renumbered here) - it's what the Findings at a glance table above and the exec summary cite.
+renumbered here) - it's what the Findings at a glance table above and the exec summary cite,
+and it's an anchor target: `` <a id="cr-01"></a> `` immediately before the cell, lowercased, so
+the master index's link actually lands here. **Impact is its own column, not buried in prose
+below** (ISRT 2026-09-16: "detail the impact of issues" means at the row a reader scans, not
+only in an optional block three sections later) - one line, what happens if this ships unfixed,
+not a restatement of the issue itself. **Basis icons defined here, at their first use, not in
+§5** (ISRT 2026-09-16: a live report used them in this table before defining them three
+sections later) - **📊 measured** (profiler/analyser ran) · **📄 coded** (an explicit value
+read from source, nothing run) · **🧠 inferred** (reasoned from structure). Standard codes
+(CWE, OWASP ASVS, ...) get a one-line meaning on first appearance too, or a footnote - never
+assume the reader already knows CWE-670 by number; the full catalogue lives in the Glossary
+at the end regardless.
 
-| ID | Sev | File:line | Issue | Conf. | Basis | Standard | Status |
-|----|-----|-----------|-------|-------|-------|----------|--------|
-| CR-01 | Critical | | | | 📊 measured / 🧠 inferred | CWE-... | Fixed / Open / Accepted |
-| CR-02 | Warning | | | | | | |
+| ID | Sev | File:line | Issue | Impact | Conf. | Basis | Standard | Status |
+|----|-----|-----------|-------|--------|-------|-------|----------|--------|
+| <a id="cr-01"></a>CR-01 | Critical | | | | | 📊 measured / 🧠 inferred | CWE-... | Fixed / Open / Accepted |
+| <a id="cr-02"></a>CR-02 | Warning | | | | | | |
 
 **Disposition:** _N_ fixed · _N_ open · _N_ accepted · _N_ deferred. A not-yet verdict lists
 the Open items. **No straightforward fix - mark Open (needs human developer review)** with the
@@ -136,7 +168,7 @@ scale as measured.
 
 | ID | Location | Issue | Basis | Evidence | Impact at target | Sev | Fix |
 |----|----------|-------|-------|----------|------------------|-----|-----|
-| PR-01 | | | | | | | |
+| <a id="pr-01"></a>PR-01 | | | | | | | |
 
 > **Table shape varies deliberately by section** (ISRT 2026-09-15) - §4/§5/§6 hold different
 > kinds of data (a code finding's `File:line` isn't a performance finding's `Location at
@@ -169,6 +201,25 @@ debt, how to extend.
 
 > The team **drafts** §9; **your IT team approves, deploys and signs off** - it does not
 > self-certify these controls.
+
+## Appendix: Full findings index *(generated last, after every section is final)*
+
+> Every finding minted anywhere in this engagement, one row - **including ones rolled up as
+> "+N more, see pack" above**. The Findings at a glance table near the top is a curated
+> highlights view for a 30-second orientation; this is the complete one, and it's what makes
+> the "stands alone with no `data/` folder" promise true rather than aspirational
+> (ISRT 2026-09-16). Same anchor convention as §4/§5: link the ID to `#<id>` when the finding
+> has its own row/block above, otherwise the ID is unlinked (it exists only here).
+
+| ID | Section | Sev | One-line summary | Status |
+|----|---------|-----|-------------------|--------|
+| [CR-01](#cr-01) | §4 | 🔴 Critical | one line, enough to know what it is without opening the pack | Open |
+
+**Glossary** *(define on first use in the body too, where it lands harder - this is the
+catch-all, ISRT 2026-09-16: CWE codes, "sargable," and the 📊/📄/🧠 basis icons appeared
+unexplained through a live report, for an audience that isn't only engineers)*. Name every
+standard/code family used (CWE, OWASP ASVS, ...) and every jargon term a compliance or
+model-risk reader wouldn't already know, one line each.
 
 > **Run provenance & non-determinism** *(standing statement - keep it in the rendered artifact)*
 > · Model `<model id>` · Framework `compliance-surveillance-team <version>` · Run `<YYYY-MM-DD>`

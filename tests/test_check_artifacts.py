@@ -3044,3 +3044,79 @@ def test_evidence_room_missing_does_not_fire_when_no_setting_is_recorded(tmp_pat
     _closed_pack_with_deliverable(art / "rev-default")
     findings = run_check(art)
     assert not any("EVIDENCE-ROOM-MISSING" in f for f in findings), findings
+
+
+# ------------------------------------------------ LOCAL-PATH-LEAK (ISRT 2026-09-16) -----
+# A live delivery report's "Version / commit" row named C:/Users/<name>/... - an OS username
+# leaking into a document classified for external-facing distribution.
+
+
+def test_windows_user_path_is_flagged():
+    from scripts.check_artifacts import check_local_path_leak
+
+    text = "| **Version / commit** | C:/Users/daedge/claude/TS-HomeGrown-Models/sml_prodtrunk |"
+    findings = check_local_path_leak(text, Path("delivery-report.md"))
+    assert len(findings) == 1
+    assert "LOCAL-PATH-LEAK" in findings[0] and "daedge" in findings[0]
+
+
+def test_unix_home_path_is_flagged():
+    from scripts.check_artifacts import check_local_path_leak
+
+    findings = check_local_path_leak(
+        "ran from /home/daniel/www/virt-survtecb", Path("notes.md")
+    )
+    assert len(findings) == 1 and "LOCAL-PATH-LEAK" in findings[0]
+
+
+def test_project_relative_path_is_not_flagged():
+    from scripts.check_artifacts import check_local_path_leak
+
+    text = "| **Version / commit** | sml_prodtrunk/ @ a1b2c3d |"
+    assert check_local_path_leak(text, Path("delivery-report.md")) == []
+
+
+# ----------------------------- REPORT-PACK-NOT-REPRESENTED (ISRT 2026-09-16) --------------
+# A live delivery report merged 3 specialist packs but a 4th, 12-finding pack (2 Critical)
+# was never itemized, counted or indexed anywhere - it surfaced as one summary sentence
+# naming no finding by id. The whole pack was invisible to a reader of the report alone.
+
+
+def test_pack_with_no_id_mentioned_in_report_is_flagged(tmp_path):
+    from scripts.check_artifacts import check_report_pack_coverage
+
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    (art / "delivery-report.md").write_text(
+        "# Delivery Report\n\nRavi found some issues. See the ETL pack for details.\n",
+        encoding="utf-8",
+    )
+    pack = copy.deepcopy(_VALID_PACK)
+    pack["findings"][0]["id"] = "ETL-01"
+    _pack(art, pack, name="findings-etl.jsonl")
+    findings = check_report_pack_coverage(art)
+    assert len(findings) == 1
+    assert "REPORT-PACK-NOT-REPRESENTED" in findings[0]
+    assert "findings-etl.jsonl" in findings[0]
+
+
+def test_pack_with_id_mentioned_is_not_flagged(tmp_path):
+    from scripts.check_artifacts import check_report_pack_coverage
+
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    (art / "delivery-report.md").write_text(
+        "# Delivery Report\n\n| ETL-01 | Critical | ... |\n", encoding="utf-8"
+    )
+    pack = copy.deepcopy(_VALID_PACK)
+    pack["findings"][0]["id"] = "ETL-01"
+    _pack(art, pack, name="findings-etl.jsonl")
+    assert check_report_pack_coverage(art) == []
+
+
+def test_no_delivery_report_means_nothing_to_check(tmp_path):
+    from scripts.check_artifacts import check_report_pack_coverage
+
+    art = tmp_path / "artifacts"
+    _pack(art, _VALID_PACK, name="findings-etl.jsonl")
+    assert check_report_pack_coverage(art) == []

@@ -73,6 +73,14 @@ the one-command check the PM runs at the gate instead (docs/DEFINITION-OF-DONE.m
      value on every finding (`FINDING-NO-CONFIDENCE`) - a pack can pass `PACK-UNSCORED` at
      the envelope level while individual findings still shipped with no confidence number
      (ISRT 2026-09-16 defect log, item #28).
+ 16. no artifact names a local filesystem path carrying the operator's OS username
+     (`LOCAL-PATH-LEAK`, e.g. `C:/Users/<name>/...`) - a live delivery report's own
+     "Version / commit" row leaked one into a document classified for external-facing
+     distribution (ISRT 2026-09-16 live report).
+ 17. a delivery report that sits alongside a findings pack actually represents it -
+     (`REPORT-PACK-NOT-REPRESENTED`) at least one of the pack's finding ids appears in the
+     report text, so a whole specialist's pack can't go silently uncounted and unindexed
+     while surfacing as one summary sentence naming no finding (ISRT 2026-09-16 live report).
 
 Exit 0 = gate satisfied; exit 1 = findings printed (one line each, machine-readable prefix).
 No third-party dependencies. Output is forced to UTF-8 so the emoji basis tags don't crash a
@@ -324,6 +332,38 @@ def check_severity_iconography(text: str, md: Path) -> list[str]:
         "🟠 High/Warning · 🟡 Medium · 🔵 Low/Style · 🔇 Filtered, docs/WAYS-OF-WORKING.md) "
         "consistently, word AND emoji together"
     ]
+
+
+# LOCAL-PATH-LEAK (ISRT 2026-09-16 live report): a delivery report's own "Version / commit"
+# row named a Windows home-directory path with the operator's OS username
+# (C:/Users/<name>/...) - harmless internally, but the document was classified for
+# external-facing distribution to model owners. close-checklist.md already tells the model to
+# relativise "a non-portable absolute source path" - this is the check that makes that
+# mechanical instead of relying on the model to remember to look for it.
+_LOCAL_PATH_LEAK_RE = re.compile(
+    r"[A-Za-z]:[\\/]Users[\\/](?!Public[\\/]|Default[\\/])[^\\/\"'\s]+"  # Windows
+    r"|/home/(?!\.)[^/\"'\s]+/"  # Linux: /home/<name>/... - excludes dot-dirs like .local,
+    # .cache (found live: a synthetic sandbox path .../home/.local/bin false-positived here
+    # before this exclusion - .local is a pip user-install dir, not a username)
+    r"|/Users/(?!Shared[\\/])[^/\"'\s]+/"  # macOS
+)
+
+
+def check_local_path_leak(text: str, md: Path) -> list[str]:
+    """LOCAL-PATH-LEAK: an OS home-directory path (carrying the operator's username) found in
+    an artifact - relativise it (project-relative path, or the repo name only)."""
+    hits = sorted(set(_LOCAL_PATH_LEAK_RE.findall(text)))
+    if not hits:
+        return []
+    shown = ", ".join(f"`{h}`" for h in hits[:3])
+    more = f" (+{len(hits) - 3} more)" if len(hits) > 3 else ""
+    return [
+        f"LOCAL-PATH-LEAK: {md} names a local filesystem path carrying an OS username - "
+        f"{shown}{more} - relativise it (project-relative path, or the repo name only); a "
+        "username has no place in a document that may go to an external-facing distribution "
+        "list"
+    ]
+
 
 # Roster gate: an artifact must not attribute work to a persona who is not on the team, or to
 # the wrong role. A live delivery report (2026-07-23) invented "Chidi (code-reviewer)" and
@@ -1807,6 +1847,69 @@ def check_findings_confidence(artifacts_dir: Path) -> list[str]:
     return findings
 
 
+def check_report_pack_coverage(
+    artifacts_dir: Path, _all_md: list[Path] | None = None
+) -> list[str]:
+    """REPORT-PACK-NOT-REPRESENTED: a close-only delivery report exists alongside a
+    findings-*.jsonl pack, but NONE of that pack's finding ids appear anywhere in the
+    report's text - the whole pack is invisible to a reader of the report (ISRT 2026-09-16
+    live report: a specialist's 12-finding pack, including 2 Critical, was merged into
+    neither the report's counts nor its index - it surfaced only as one summary sentence
+    naming no finding by id, and the header's own disposition count silently undercounted
+    its own scope). Scoped to reports that exist (a missing report is a different, already-
+    covered gap) and correlates by directory - a pack next to a report that never claims it,
+    not pack content vs. report content in general.
+
+    `_all_md` (see check_state()'s docstring): an optional pre-walked file list, shared by
+    every check in one `check()` pass so the directory is walked once, not once per check
+    (2026-08-03 perf audit; test_check_walks_for_md_files_exactly_once pins it)."""
+    findings: list[str] = []
+    md_source = _all_md if _all_md is not None else sorted(artifacts_dir.rglob("*.md"))
+    reports = sorted(
+        p
+        for p in md_source
+        if _CLOSE_ONLY_MD_RE.match(p.name) and not _under_archive(p, artifacts_dir)
+    )
+    if not reports:
+        return findings
+    fp_io = _load_findings_pack_io_module()
+    if fp_io is None:
+        return findings
+    for report in reports:
+        try:
+            report_text = report.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        data_dir = report.parent / "data"
+        if not data_dir.is_dir():
+            continue
+        for pack_path in sorted(data_dir.rglob("findings-*.jsonl")):
+            try:
+                pack = fp_io.read_pack(pack_path)
+            except (OSError, ValueError):
+                continue  # FINDINGS-INVALID already covers unreadable/malformed packs
+            except Exception:  # nosec B112
+                continue
+            if not isinstance(pack, dict):
+                continue
+            ids = [
+                f.get("id")
+                for f in (pack.get("findings") or [])
+                if isinstance(f, dict) and f.get("id")
+            ]
+            if not ids:
+                continue
+            if not any(str(fid) in report_text for fid in ids):
+                findings.append(
+                    f"REPORT-PACK-NOT-REPRESENTED: {report.name} exists alongside "
+                    f"{pack_path.name} ({len(ids)} finding(s)) but none of that pack's "
+                    "finding ids appear anywhere in the report - the whole pack is invisible "
+                    "to a reader; represent it in the header's disposition count and the "
+                    "Appendix findings index, even if every finding there is rolled up"
+                )
+    return findings
+
+
 _FINDING_ID_RE = re.compile(r"^###\s+\S+\s+(\S+)\s+—", re.M)
 _TALLY_LINE_RE = re.compile(r"^\*\*Disposition tally:\*\*\s*(.+)$", re.M)
 _KIND_PREFIX = {"review": "REVIEW", "security-audit": "SECURITY-AUDIT", "performance": "PERF"}
@@ -2175,6 +2278,7 @@ def check(artifacts_dir: Path) -> list[str]:
     findings.extend(check_findings_render_freshness(artifacts_dir))
     findings.extend(check_findings_scoring(artifacts_dir))
     findings.extend(check_findings_confidence(artifacts_dir))
+    findings.extend(check_report_pack_coverage(artifacts_dir, _all_md=all_md))
     findings.extend(check_state(artifacts_dir, _all_md=all_md))
     findings.extend(check_review_fingerprints(artifacts_dir))
     findings.extend(check_rtm(artifacts_dir, _all_md=all_md))
@@ -2277,6 +2381,7 @@ def check(artifacts_dir: Path) -> list[str]:
         findings.extend(check_roster(text, md))
         findings.extend(check_agent_identity(text, md))
         findings.extend(check_severity_iconography(text, md))
+        findings.extend(check_local_path_leak(text, md))
 
     # A wrongly-rendered email copy - the summary email is a .txt only, never an .html.
     for stray in sorted(artifacts_dir.rglob("engagement-summary-*.html")):
