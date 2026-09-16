@@ -110,13 +110,13 @@ never mentions a live gate leaves the user believing the default (blocked) while
 **`--auto` SKIPS THIS ENTIRE STEP - ask nothing, not even one question.** Execution consent
 and the data attestation were answered by the human at the launcher's pre-flight, before this
 session existed, and an unattended run has nobody to ask. Read `references/auto-mode.md` and
-go to 0b. Live report 2026-09-11: a `--jira ... --auto` run asked for both, because this rule
-was written only in the flags section above and not here, where the asking happens - and a
-second, deeper instance (ISRT 2026-09-15): the persona-anchor hook re-injected "ask EVERY
-clarification" on every turn regardless of `--auto`, so even a run that correctly skipped this
-step got told to ask again the moment it hit a later, unrelated pause. Both are prompt-level
-now - **`--permission-mode dontAsk` does NOT block the question tool** (tried and reverted
-2026-08-25, it also silently denied Write/Bash).
+go to 0b. Stated here too, not only in the flags section above, because a `--jira ... --auto`
+run once asked for both anyway (live report 2026-09-11) precisely because it was written only
+there - **`--permission-mode dontAsk` does NOT block the question tool** (tried and reverted
+2026-08-25, it also silently denied Write/Bash), so this text is the only defense. The
+persona-anchor hook used to re-fight this rule mid-run (ISRT 2026-09-15); fixed at the hook
+itself now (`scripts/persona_anchor.py`, `_is_auto`) - if that regresses, this is the symptom
+to watch for.
 
 With the target known: show both disclaimers (text) at startup, then ask in a **single
 `AskUserQuestion` call**, including **only** the questions whose gate is met:
@@ -225,8 +225,7 @@ When the user asks for "a review" in plain English, read `references/review-menu
 its **LOCKED** four-question construction (Q1 `Depth` · Q2 `Performance` · Q3 `Fix-cycle` ·
 Q4 `Origin`) **exactly as specified, in ONE `AskUserQuestion` call** - do not improvise, merge
 or reword the options; `locked_menu_guard.py` enforces exactly those four headers in that
-order (this said "three-question" until 2026-08-20, describing a menu that had been four since
-Origin joined on 2026-08-17). Q1 = None + Q2 = No → nothing to run: say so, and ask via the
+order. Q1 = None + Q2 = No → nothing to run: say so, and ask via the
 question tool what the user wants instead. **Q3 (fix-cycle) captured here is the single source
 of truth - the review skill must NOT re-ask it.** The **scope** (what's changed vs the whole
 target) is not a question: it is stated in the priced message beside the menu and corrected in
@@ -293,22 +292,11 @@ not the record): the intake gate answers from step 0a (`set-decision` + `record-
 wording there) and the step-0 probe result, `set-runtime --mode repo|plugin [--plugin-root <path>]
 --interpreter <python>`.
 
-**Budget and day pacing (assessment rec 1+2, 2026-08-17).** If the user has named a spend cap
-(now or at intake - many corporate users run under a daily limit), record it the same moment:
-`set-budget --daily-usd <N> [--engagement-usd <N>]`. Never invent one, and don't ask a
-dedicated question when no cap was hinted at - budgetless engagements skip all of this at zero
-cost. When a budget IS recorded: (a) the brief's estimate is compared against the DAILY cap,
-and when the estimate exceeds it the plan section proposes a **day plan with gates falling at
-day boundaries** (e.g. day 1 spec + build, day 2 QA + reviews, day 3 close) rather than
-pretending it fits one day; (b) `budget-status` runs at every gate and its DAILY/HEADROOM line
-is stated beside the team-sizing line (degrade ladder on approaching/exceeded: orchestration
-guide); (c) `HEADROOM=unknown` means the box has no spend telemetry: say so once, pace on the
-`DISPATCHES` line against the agents cap, and ask the user whether to continue on that basis
-(auto mode proceeds and records it - `references/auto-mode.md`); (d) an approaching cap near a
-natural gate means **park cleanly, not push on**: advance
-the state file, keep the index current, write the outstanding list, and end the turn saying
-plainly "NOT closed - resuming tomorrow at <next gate>". The resume machinery makes tomorrow's
-pickup cheap; a hard org-side stop mid-review does not.
+**Budget and day pacing.** If the user has named a spend cap (now or at intake), record it the
+same moment: `set-budget --daily-usd <N> [--engagement-usd <N>]`. Never invent one - budgetless
+engagements skip this at zero cost. When a budget IS recorded, read `references/budget-pacing.md`
+and follow it exactly (day-plan proposals, `budget-status` at every gate, the no-telemetry case,
+parking near a cap).
 
 **Get the go-ahead via the question tool** (header `Go-ahead`,
 `multiSelect: false`): **Proceed as briefed** · **Adjust something first** · **Stop here** - never

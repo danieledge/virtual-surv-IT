@@ -28,7 +28,7 @@
   ],
   "tier_budgets": {
     "ALWAYS_LOADED": 3500,
-    "OPEN_TIME": 20700,
+    "OPEN_TIME": 20400,
     "ROUTE_TIME": 54000,
     "AGENT_TIME": 25300,
     "DEFERRED": null
@@ -197,7 +197,7 @@
     ".claude/skills/engage/SKILL.md": {
       "tier": "OPEN_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 7996
+      "baseline_tokens": 7705
     },
     ".claude/skills/engage/references/artifact-menu.md": {
       "tier": "DEFERRED",
@@ -208,6 +208,11 @@
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
       "baseline_tokens": 2527
+    },
+    ".claude/skills/engage/references/budget-pacing.md": {
+      "tier": "DEFERRED",
+      "loads_per_engagement": 1.0,
+      "baseline_tokens": 401
     },
     ".claude/skills/engage/references/close-checklist.md": {
       "tier": "DEFERRED",
@@ -515,7 +520,7 @@
         ".claude/skills/.shared/engage-open.md",
         "docs/team-operating-guide.md"
       ],
-      "baseline_bytes": 79149
+      "baseline_bytes": 77987
     },
     "engaged_typical": {
       "files": [
@@ -538,7 +543,7 @@
         ".claude/skills/engage/references/target-menu.md",
         ".claude/skills/engage/references/resume-menu.md"
       ],
-      "baseline_bytes": 191854
+      "baseline_bytes": 190692
     }
   }
 }
