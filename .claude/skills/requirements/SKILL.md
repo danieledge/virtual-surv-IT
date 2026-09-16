@@ -1,6 +1,6 @@
 ---
 description: Requirements work - elicit them, write a BRD, turn a BRD into an FSD, or assess a regulatory change's impact
-argument-hint: [--elicit|--brd|--fsd|--impact] <the need, the BRD path, or the regulatory change>
+argument-hint: "[--elicit|--brd|--fsd|--impact] <the need, the BRD path, or the regulatory change>"
 disable-model-invocation: true
 ---
 

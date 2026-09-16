@@ -1,6 +1,6 @@
 ---
 description: Detection health - surveillance coverage assessment, threshold calibration, or a periodic TM model validation pack
-argument-hint: [--coverage|--tune|--validate] <the area, scenario or TM system, and where the data is>
+argument-hint: "[--coverage|--tune|--validate] <the area, scenario or TM system, and where the data is>"
 disable-model-invocation: true
 ---
 

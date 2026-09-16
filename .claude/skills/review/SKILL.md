@@ -1,6 +1,6 @@
 ---
 description: Review code at a chosen depth and focus - quick, deep or audit; security, performance or a Quantexa estate; with or without a fix loop (the one review front door)
-argument-hint: [--depth quick|deep|audit] [--focus security|performance|quantexa] [--fix] <path/glob, commit range, or nothing for the working diff>
+argument-hint: "[--depth quick|deep|audit] [--focus security|performance|quantexa] [--fix] <path/glob, commit range, or nothing for the working diff>"
 disable-model-invocation: true
 ---
 

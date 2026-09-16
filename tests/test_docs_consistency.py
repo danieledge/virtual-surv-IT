@@ -14,6 +14,8 @@ import json
 import re
 from pathlib import Path
 
+import yaml
+
 _ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -765,3 +767,32 @@ def test_the_utility_skills_declare_allowed_tools_and_nothing_else_does():
         "map-codebase",
         "team",
     }
+
+
+# --- skill frontmatter actually parses as YAML (2026-09-16 live report via /debug) -------
+#
+# Every existing frontmatter test in this file (above) splits on "---" and regexes the
+# result - never a real yaml.safe_load. That blind spot let 4 skills ship an unquoted
+# `argument-hint: [...] <...>` - the leading `[` makes YAML try to parse a flow sequence,
+# then chokes on the trailing unquoted `<...>` text, and the WHOLE frontmatter block fails to
+# parse silently (caught only by /debug reading the harness's own [WARN] log, not by
+# anything in this suite). The stakes are real: every dormant-by-default skill's
+# `disable-model-invocation: true` lives in that same block - a parse failure risks that
+# guarantee silently not applying. This test is the mechanical gate the others weren't.
+
+
+def test_every_skill_and_agent_frontmatter_is_valid_yaml():
+    bad = []
+    paths = sorted((_ROOT / ".claude" / "skills").rglob("*.md")) + sorted(
+        (_ROOT / ".claude" / "agents").glob("*.md")
+    )
+    for path in paths:
+        text = path.read_text(encoding="utf-8")
+        m = re.match(r"^---\n(.*?)\n---\n", text, re.S)
+        if not m:
+            continue
+        try:
+            yaml.safe_load(m.group(1))
+        except yaml.YAMLError as exc:
+            bad.append(f"{path.relative_to(_ROOT)}: {str(exc).splitlines()[0]}")
+    assert not bad, "frontmatter fails to parse as YAML:\n" + "\n".join(bad)

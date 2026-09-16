@@ -1,6 +1,6 @@
 ---
 description: Build from requirements - an end-to-end solution from a requirements pack, or a single detection scenario spec to sign-off
-argument-hint: [--scenario] <path to requirements pack / BRD+FSD, or the scenario name / obligation>
+argument-hint: "[--scenario] <path to requirements pack / BRD+FSD, or the scenario name / obligation>"
 disable-model-invocation: true
 ---
 
