@@ -885,10 +885,21 @@ def _preflight_source():
 
 def test_the_spend_ceiling_defaults_to_35():
     src = _preflight_source()
-    assert "CAPS = (0, 10, 25, 35, 50, 100)" in src, "$35 must be an offered rung"
+    assert "CAPS = (10, 25, 35, 50, 100)" in src, "$35 must be an offered rung"
     body = src.split("_PREFLIGHT_CAPS = ", 1)[1]
     state = body.split("state = {", 1)[1].split("}", 1)[0]
-    assert '"cap": 3' in state, "index 3 of CAPS is $35"
+    assert '"cap": 2' in state, "index 2 of CAPS is $35"
+
+
+def test_no_ceiling_is_not_offered_in_the_preflight():
+    """ISRT 2026-09-16 live report: "no ceiling" was offered here, picked, and then refused
+    at launch anyway - the TUI's choice was never wired to what actually gates an unattended
+    start (_uncapped_run_allowed only ever checks a --no-budget-cap CLI flag passed before
+    this screen runs). Removed rather than plumbed through: never offer a choice this screen
+    cannot honour. Uncapped is still reachable via --no-budget-cap, just not from here."""
+    src = _preflight_source()
+    assert "_PREFLIGHT_CAPS = (10, 25, 35, 50, 100)" in src, "0 must not be an offered rung"
+    assert "no ceiling" not in src
 
 
 def test_at_the_ceiling_it_defaults_to_parking():

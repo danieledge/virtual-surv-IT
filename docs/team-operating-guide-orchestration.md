@@ -69,6 +69,24 @@
   deliverables. Numeric
   heuristic: simple fact-finding → 1 agent, 3-10 tool calls; direct comparison → 2-4 agents,
   10-15 calls each; full delivery → the minimal sufficient chain.
+- **The scope-routing decision is drafted once, not narrated then revised at length**
+  (ISRT 2026-09-16 live report: an auto-mode 7-model effectiveness review reached 3% context
+  headroom - auto-compact about to fire - at the exact moment its 3 specialists were
+  dispatched and still `Initializing…`, zero tool uses. The condensed-return budget already
+  governs what comes back FROM a specialist; nothing governed what Morgan writes deciding to
+  dispatch one - a routing table drafted, found over-scoped (a build/fix stage that had no
+  business being there - the ask was "assess", not "fix"), and rewritten in place cost the
+  planning pass twice over, before any actual review work began). State the routing decision
+  in the right-sizing line's own shape - who, why, which lane per the routing table - and
+  correct it there if it's wrong; a full second draft of the routing prose is the smell that
+  the first read of the ask was rushed, not a normal planning step.
+  - **In auto mode specifically, check headroom before a fan-out that size, not after.**
+    Nobody is there to notice auto-compact landing mid-dispatch and summarizing away the
+    scoping reasoning right when reconciling the specialists' returns will need it most. If
+    context is already tight before a multi-agent dispatch, the auto-mode park rule applies
+    here too (`.claude/skills/engage/references/auto-mode.md`, "Park, never guess") - park
+    cleanly at the gate rather than
+    dispatch into a compaction.
 - **Dispatch independent calls concurrently.** Right-sizing
   decides *who* to engage; this rule decides *how to issue the calls once that's decided* - and
   the right-sizing bullet above now requires naming that mechanism in the SAME statement as the

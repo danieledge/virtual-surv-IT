@@ -1705,7 +1705,15 @@ _WALL_HEADROOM = 1.25
 _PREFLIGHT_KEYS = "Space/Enter toggle · Ctrl-D or F2 START unattended · Esc/q cancel"
 
 
-_PREFLIGHT_CAPS = (0, 10, 25, 35, 50, 100)
+# "No ceiling" (0) was offered here until a live run picked it and was then refused at
+# launch - the TUI's cap choice was never wired to what actually gates an unattended start
+# (_uncapped_run_allowed, virt_team_launcher.py), which only ever checks a SEPARATE
+# --no-budget-cap command-line flag passed before this screen even runs. Rather than plumb
+# the TUI's choice through to that gate, the simpler fix: never offer a choice this screen
+# cannot honour (ISRT 2026-09-16). Uncapped is still possible - `--no-budget-cap` at launch,
+# same as before - just not from inside this screen, where picking it looked authoritative
+# and was not.
+_PREFLIGHT_CAPS = (10, 25, 35, 50, 100)
 # Four rungs, because the choice at a ceiling is two different choices and
 # collapsing them loses one (owner, 2026-08-25: "we can either say continue and notify or
 # choose a hard cap, why don't we keep flexibility"). park/light/continue are ADVISORY -
@@ -1759,7 +1767,7 @@ def _preflight_model() -> dict:
         "data": False,
         "exec": False,
         "web": False,
-        "cap": 3,
+        "cap": 2,  # index 2 of (10, 25, 35, 50, 100) is $35 - unchanged default, reindexed
         "on_budget": 0,
         "mode": 0,
         "confirmed": False,
@@ -1767,7 +1775,7 @@ def _preflight_model() -> dict:
 
     def value_of(key):
         if key == "cap":
-            return "no ceiling" if caps[state["cap"]] == 0 else f"${caps[state['cap']]}"
+            return f"${caps[state['cap']]}"
         if key == "mode":
             return {
                 "window": "in its own window",
