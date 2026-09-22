@@ -1,11 +1,13 @@
-# Command index (canonical - 13 front doors, 32 skills on disk)
+# Command index (canonical - 14 front doors, 33 skills on disk)
 
 > Deferred from `docs/team-operating-guide.md` (open-core split, token plan Phase 1,
 > 2026-08-18). **Read when** composing workflow options for the user beyond the routing
 > table, or when unsure whether a command exists. The routing table in the operating guide
 > answers "who does this work"; this file answers "which command runs it". Since 2026-09-13
-> (framework review, step 4.5) the team has **13 front doors**; the older names are engines
-> behind them and still work for one release.
+> (framework review, step 4.5) the team had **13 front doors**; `/status-email` (2026-09-22)
+> is the first addition since, for a command with no natural home as a flag on an existing
+> one (it acts mid-engagement, on any engagement, not a fixed workflow stage) - 14 now; the
+> older names below are engines behind the other 13 and still work for one release.
 
 ## Command index
 
@@ -33,6 +35,10 @@
   `--dashboard` (the local cross-project dashboard); quick utilities, no engagement opened
 - `/run-evals` - the team-quality eval harness against the golden cases (spends tokens; kept
   separate so its narrow Bash grant stays narrow)
+- `/status-email` - optional interim progress-update email for an ongoing engagement, on
+  request or at Morgan's judgement (confirmed first); `--report` also produces a fuller
+  interim status report, always paired with its email; never the close-only summary
+  email/delivery report
 
 ### Engines and aliases (type the front door instead; kept for one release)
 

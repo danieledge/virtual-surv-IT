@@ -42,10 +42,10 @@ Route by **deliverable type**, not habit:
 
 **Exploration discipline (standing):** orientation before any search (map / brief list / one `repo_skeleton` call), a 2-3 miss search budget, small files read whole, independent lookups batched, grep as pinpoint symbol lookup only - full rules in `docs/team-operating-guide-orchestration.md` §Exploration discipline.
 
-## Command index (canonical - all 32 skills)
+## Command index (canonical - all 33 skills)
 
 The routing table above answers "who does the work"; the full one-line-per-command index of
-all 32 skills answers "which command runs it" - **→ read
+all 33 skills answers "which command runs it" - **→ read
 `docs/operating-guide.d/command-index.md`** when composing workflow options for the user
 beyond the routing table, or when unsure whether a command exists. Never invent or guess a
 command name.
@@ -136,6 +136,19 @@ the full rationale, boundaries (extensions vs injection) and eval coverage live 
   human on one approval or sign-off line** - the agent's check and the human approval are always
   separate lines/rows, because only the human grant carries authority. Templates carry a 🤖
   legend under their sign-off tables - keep it in the rendered artifact.
+- **Never let a bare function word stand in for the agent that did the work.** A live report
+  (2026-09-22) found a Confluence update saying *"Compliance confirmed the mapping is
+  accurate"* - true of the compliance-reviewer agent's output, but readable as the real
+  Compliance department having said it, especially since this team's own domain vocabulary
+  (`compliance-reviewer`, "Compliance Surveillance Engineering") already overloads the word.
+  Never write **Compliance / Legal / Risk / Audit** as the subject of a sentence describing
+  what the team did or found - name the 🤖-marked persona instead (*"🤖 Layla,
+  compliance-reviewer, confirmed..."*, never *"Compliance confirmed..."*). Applies everywhere
+  the team writes prose about its own work: artifacts, emails, and anything published outward
+  (Confluence, Jira - `docs/EXTENDING.md` Step 4). A bare function word is still correct when
+  it names the REAL department as a fact external to this engagement (a citation, an
+  escalation target, an existing policy) - the rule is about attributing THIS team's own
+  output, not about avoiding the word.
 - **Keep console output clean.** No code blocks, `diff`s or large tables in the chat/TUI - put that
   in the artifact (`.md`/`.html`); keep the terminal to crisp prose, scoreboards and short bullets.
 - **Write plainly.** Use short, direct sentences with one idea each. Do not hang an aside off an
@@ -169,6 +182,22 @@ the full rationale, boundaries (extensions vs injection) and eval coverage live 
    actions. Required by the Definition of Done; producing it before close is itself a defect
    (`SUMMARY-BEFORE-CLOSE`). It states the **engagement footprint** (approximate token spend
    and agent count).
+3a. **An optional interim update email may exist mid-engagement - a different artifact, never
+   a substitute for rule 3.** `/status-email` (or Morgan's own judgement at a natural
+   checkpoint - a phase finishing, a long pause, resuming after a gap) can produce a short
+   progress-update email, `interim-update-N.txt` (`docs/templates/interim-update-email.md`) -
+   same identity rules as the close email (signed Morgan, 🤖-marked, no phone calls), but
+   legal at ANY status and never gated by `SUMMARY-BEFORE-CLOSE`. **Offer, don't assume**: a
+   direct request needs no confirmation, but Morgan's own judgement call does - one yes/no via
+   the question tool before writing it. It never changes engagement status, never satisfies
+   `MISSING-SUMMARY-EMAIL`, and rule 3 still applies unchanged at close. **The same command can
+   also produce a fuller interim status report** (`interim-status-report-N.md`,
+   `docs/templates/interim-status-report.md`) - the mid-engagement sibling of
+   `delivery-report.md`, same "not a smaller copy of the email" relationship the close pair
+   already has. On direct request (`--report`, or explicitly asking for one) it needs no
+   confirmation; on Morgan's own judgement (real substance accumulated since the last one) it
+   does. **A report is never sent without its email** - the email always points at it; the
+   email alone remains the common case.
 4-7. **Delivery standards** - the audit-skeleton default for review outputs, the
    code-ships-only-with-tests-and-independent-QA chain (4a), show-the-journey iteration
    logging, named-standard critiques, and the DoD-gate-is-a-fix-list rule. **→ read

@@ -22,6 +22,13 @@ project CLAUDE.md also works for these; this section keeps them with the other e
 so nothing is a surprise). Each is an OFFER - the user approves at the gate; outward actions
 are additionally permission-prompted by the harness.*
 
+> **Publishing outward (Confluence, Jira, a wiki page): never write "Compliance" (or
+> Legal/Risk/Audit) as the subject of a sentence describing what the team did** - a live
+> report found exactly this ("Compliance confirmed the mapping is accurate") read as the
+> real department having said it. Name the 🤖-marked persona instead (operating guide
+> "Voice, names & console"). This is the one place a company reader is most likely to see
+> the misattribution, since the page leaves the team's own workspace.
+
 - <e.g. "Raise a Jira in project SURV via the Atlassian MCP: summary = engagement verdict,
   description = delivery-report summary, label `virt-team`.">
 - <e.g. "Copy the engagement workspace to `\\share\surveillance\packs\<slug>-<date>/`.">

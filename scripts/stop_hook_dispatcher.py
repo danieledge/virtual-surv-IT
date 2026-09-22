@@ -12,6 +12,13 @@ gated packs via `ca.engagement_packs()` / `ca.pack_status()`. This dispatcher ru
 two checks - unmodified, imported by file path, not reimplemented - in ONE process instead
 of two.
 
+(2026-09-22: `engagement_readiness_nudge.py` joined the registry below as a third check -
+added after this consolidation rather than migrated into it, same as `guard_findings_pack_write`
+joining `bash_hook_dispatcher.py`'s registry after ITS own consolidation. The "two" above is
+the historical count from the original migration, not a ceiling - new Stop-hook nudges
+register the same way: an entry in `_CHECKS` below, nothing else to wire since `hooks/hooks.json`
+already points `Stop` at this one dispatcher process.)
+
 Design constraints, mirroring bash_hook_dispatcher.py's own (see that file for the fuller
 rationale on why each point matters):
   - Each hook's own main() is called directly, never re-executed via its own
@@ -50,14 +57,30 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
-_HOOKS_DIR = Path(__file__).resolve().parent.parent / ".claude" / "hooks"
-_SCRIPTS_DIR = Path(__file__).resolve().parent
+def _resolve_scripts_dir() -> Path:
+    """The real scripts/ directory, whether this file is running from its live location
+    (scripts/stop_hook_dispatcher.py) or a staged copy (scripts/staged_hooks/...) - bare
+    `Path(__file__).resolve().parent` is only correct for the live location, and a
+    subprocess-fidelity test running the STAGED copy directly (2026-09-22, found live: it
+    silently resolved dod_stop_gate.py as "missing", fail-open, empty output) hits exactly
+    the staged case. Same one-level-up correction `_vsit_paths()`'s multi-candidate search
+    uses elsewhere in this hook family, applied here since this file's own hooks are
+    resolved directly by path rather than imported as a package."""
+    here = Path(__file__).resolve().parent
+    return here.parent if here.name == "staged_hooks" else here
+
+
+_SCRIPTS_DIR = _resolve_scripts_dir()
+_HOOKS_DIR = _SCRIPTS_DIR.parent / ".claude" / "hooks"
 
 # name -> path to that hook's (unmodified) source, tried by file path so the dispatcher
 # never re-implements either hook's own logic.
 _CHECKS = (
     ("dod_stop_gate", _SCRIPTS_DIR / "dod_stop_gate.py"),
     ("todo_panel_nudge", _SCRIPTS_DIR / "todo_panel_nudge.py"),
+    # 2026-09-22: "this looks ready to close" - see its own module docstring for why it
+    # is a separate file rather than folded into dod_stop_gate.py.
+    ("engagement_readiness_nudge", _SCRIPTS_DIR / "engagement_readiness_nudge.py"),
 )
 
 
@@ -124,7 +147,9 @@ def main() -> int:
     # class persona_anchor.py's own sys.path fix, and this daemon's restart-not-reload
     # design, both exist to avoid). Repo mode (package import succeeds) is completely
     # unaffected: `_CHECK_ARTIFACTS_MODULE_CACHE` is never even touched on that path,
-    # so there is nothing to propagate and this is a pure no-op there.
+    # so there is nothing to propagate and this is a pure no-op there. The same
+    # propagation now also covers `engagement_readiness_nudge`, which carries the
+    # identical loader for the identical reason.
     _shared_checker = None
     for name, path in _CHECKS:
         try:

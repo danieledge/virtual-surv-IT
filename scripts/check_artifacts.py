@@ -766,11 +766,14 @@ def check_agent_identity(text: str, where: Path) -> list[str]:
     return findings
 
 
-def check_summary_email(text: str, where: Path) -> list[str]:
+def check_summary_email(text: str, where: Path, *, kind: str = "close") -> list[str]:
     """The engagement-summary email is Morgan's cover note to an outside reader - the
     artifact most likely to be forwarded with no context, so identity is enforced
     harder here than in reports (template + user rule 2026-07-30, after a live email
-    went out signed by the human requester).
+    went out signed by the human requester). `kind="interim"` runs the identical checks
+    against the optional mid-engagement interim update (/status-email) instead - same
+    identity rules, different template/rule pointer in the finding text so a fix points
+    the reader at the artifact they actually have.
 
     EMAIL-NOT-MORGAN - a `From:` line that does not name Morgan, or a sign-off tail
       (last non-empty lines) with no Morgan in it: the email is always FROM Morgan;
@@ -780,23 +783,31 @@ def check_summary_email(text: str, where: Path) -> list[str]:
       unmistakably an AI on at least its first marked mention (per-name, stricter
       than the file-level AGENT-UNMARKED used for reports).
     """
+    is_close = kind != "interim"
+    label = "summary email" if is_close else "interim update email"
+    template = (
+        "docs/templates/engagement-summary-email.md"
+        if is_close
+        else "docs/templates/interim-update-email.md"
+    )
+    rule = "DoD / operating guide rule 3" if is_close else "operating guide rule 3a"
     findings: list[str] = []
     lines = text.splitlines()
     for ln in lines:
         if re.match(r"(?i)^\s*From\s*:", ln):
             if "morgan" not in ln.lower():
                 findings.append(
-                    f"EMAIL-NOT-MORGAN: {where} From line does not name Morgan - the summary "
-                    "email is Morgan's cover note (docs/templates/engagement-summary-email.md): "
+                    f"EMAIL-NOT-MORGAN: {where} From line does not name Morgan - the {label} "
+                    f"is Morgan's cover note ({template}): "
                     "From: 🤖 Morgan - PM & Orchestrator, Virtual Surveillance IT"
                 )
             break
     tail = [ln.strip() for ln in lines if ln.strip()][-6:]
     if not any("morgan" in ln.lower() for ln in tail):
         findings.append(
-            f"EMAIL-NOT-MORGAN: {where} sign-off does not name Morgan - the summary email is "
-            "signed off as 🤖 Morgan, never the human requester (the human's sign-off lives "
-            "in the delivery report; DoD / operating guide rule 3)"
+            f"EMAIL-NOT-MORGAN: {where} sign-off does not name Morgan - the {label} is "
+            f"signed off as 🤖 Morgan, never the human requester (the human's sign-off lives "
+            f"in the delivery report; {rule})"
         )
     for name in sorted(_KNOWN_PERSONAS):
         cap = name.capitalize()
@@ -806,9 +817,63 @@ def check_summary_email(text: str, where: Path) -> list[str]:
         if not any(_AI_MARKER in ln and name_re.search(ln) for ln in lines):
             findings.append(
                 f"EMAIL-AGENT-UNMARKED: {where} mentions agent '{cap}' but no line marks "
-                f"'{cap}' with 🤖 - every roster name in the email must be unmistakably an "
+                f"'{cap}' with 🤖 - every roster name in the {label} must be unmistakably an "
                 "AI agent on at least one mention (add 🤖 at the first mention)"
             )
+    return findings
+
+
+# ADVISORY ONLY (2026-09-22, live report): a bare organisational-function word standing in
+# for the agent that actually did the work - "Compliance confirmed the mapping is accurate"
+# on a published Confluence page, read as the real Compliance department having said it,
+# aggravated by this team's own domain vocabulary already overloading the word
+# (`compliance-reviewer`, "Compliance Surveillance Engineering"). Deliberately NOT wired into
+# check()/the close gate: "Compliance reviewed this scenario historically" is a legitimate
+# sentence about the REAL department that this pattern cannot distinguish from the AI
+# misattribution with full confidence - a hard gate would occasionally block correct
+# regulatory writing. Surfaced only via `check_artifacts --advisory`, for a human to glance
+# at, never counted as a DoD defect and never blocks `set-status closed`.
+_FUNCTION_WORDS = ("Compliance", "Legal", "Risk", "Audit")
+_JUDGMENT_VERBS = (
+    "confirmed",
+    "reviewed",
+    "approved",
+    "flagged",
+    "said",
+    "stated",
+    "noted",
+    "determined",
+    "concluded",
+    "advised",
+    "verified",
+    "validated",
+    "found",
+    "recommended",
+)
+_FUNCTION_WORD_SUBJECT_RE = re.compile(
+    r"\b(" + "|".join(_FUNCTION_WORDS) + r")\s+(" + "|".join(_JUDGMENT_VERBS) + r")\b"
+)
+
+
+def check_function_word_attribution(text: str, where: Path) -> list[str]:
+    """ADVISORY: a bare function word (Compliance/Legal/Risk/Audit) as the subject of a
+    judgement verb, with no 🤖 marker on the same line - see the module comment above this
+    function for why it is advisory-only rather than a gated finding."""
+    findings: list[str] = []
+    for m in _FUNCTION_WORD_SUBJECT_RE.finditer(text):
+        line_start = text.rfind("\n", 0, m.start()) + 1
+        line_end = text.find("\n", m.end())
+        line = text[line_start : len(text) if line_end == -1 else line_end]
+        if _AI_MARKER in line:
+            continue
+        word = m.group(1)
+        findings.append(
+            f"ADVISORY FUNCTION-WORD-UNMARKED: {where} says {m.group(0)!r} - reads as the "
+            f"real {word} department having done this, not this team's {word.lower()}-reviewer "
+            "agent. If this is the team's OWN work, attribute it to the 🤖-marked persona "
+            "instead (operating guide 'Voice, names & console'); if this is actually the real "
+            f"{word} function, this is not a defect."
+        )
     return findings
 
 
@@ -878,6 +943,13 @@ _FILENAME_TOKEN_RE = re.compile(r"[\w.\-]+\.[A-Za-z0-9]+")
 # The engagement-summary email is a .txt by design (the one artifact never rendered to HTML). A
 # summary written as .md/.html is the wrong file type - SUMMARY-WRONG-EXT (auto-fixable).
 _SUMMARY_WRONG_EXT_RE = re.compile(r"(?i)^engagement-summary-.*\.(?:md|html)$")
+# The interim update email (/status-email, optional, mid-engagement) - same "never rendered
+# to HTML" rule and the same roster/identity checks as the close email, but a DIFFERENT name
+# on purpose: it must never match _SUMMARY_WRONG_EXT_RE or the engagement-summary-* globs
+# below, since that is exactly what keeps it outside SUMMARY-BEFORE-CLOSE (close-only) - an
+# interim update is legal at any engagement status.
+_INTERIM_UPDATE_RE = re.compile(r"(?i)^interim-update-\d+\.txt$")
+_INTERIM_WRONG_EXT_RE = re.compile(r"(?i)^interim-update-\d+\.(?:md|html)$")
 # A mutable engagement STATUS lives only in START-HERE (single source of truth). A stale
 # interim/in-progress banner left near the top of a content artifact after close is STALE-STATUS.
 _STALE_STATUS_RE = re.compile(
@@ -2366,6 +2438,13 @@ def check(artifacts_dir: Path) -> list[str]:
                 f"{md.with_suffix('.txt').name} (DoD / CLAUDE.md §6a)"
             )
             continue
+        if _INTERIM_WRONG_EXT_RE.match(md.name):
+            findings.append(
+                f"INTERIM-WRONG-EXT: {md.name} - the interim update email must be a .txt "
+                "(the one artifact never rendered to HTML, same as the close-only summary "
+                f"email); rename it to {md.with_suffix('.txt').name}"
+            )
+            continue
         html = md.with_suffix(".html")
         if not html.is_file():
             findings.append(
@@ -2447,6 +2526,13 @@ def check(artifacts_dir: Path) -> list[str]:
             f"SUMMARY-WRONG-EXT: {stray.name} - the engagement-summary email is a .txt, not "
             ".html; remove this rendered copy (the .txt is the deliverable)"
         )
+    for stray in sorted(artifacts_dir.rglob("interim-update-*.html")):
+        if _under_archive(stray, artifacts_dir):
+            continue
+        findings.append(
+            f"INTERIM-WRONG-EXT: {stray.name} - the interim update email is a .txt, not "
+            ".html; remove this rendered copy (the .txt is the deliverable)"
+        )
 
     # The email itself: always FROM Morgan, agents 🤖-marked, roster/identity rules apply
     # to it exactly as to reports (it is the most-forwarded artifact of the pack).
@@ -2454,7 +2540,17 @@ def check(artifacts_dir: Path) -> list[str]:
         if _under_archive(email, artifacts_dir):
             continue
         email_text = email.read_text(encoding="utf-8", errors="replace")
-        findings.extend(check_summary_email(email_text, email))
+        findings.extend(check_summary_email(email_text, email, kind="close"))
+        findings.extend(check_roster(email_text, email))
+        findings.extend(check_agent_identity(email_text, email))
+
+    # The optional interim update (/status-email): same identity rules, not close-only -
+    # legal at any engagement status, so nothing above gates its mere existence.
+    for email in sorted(artifacts_dir.rglob("interim-update-*.txt")):
+        if _under_archive(email, artifacts_dir):
+            continue
+        email_text = email.read_text(encoding="utf-8", errors="replace")
+        findings.extend(check_summary_email(email_text, email, kind="interim"))
         findings.extend(check_roster(email_text, email))
         findings.extend(check_agent_identity(email_text, email))
 
@@ -2556,6 +2652,7 @@ def check(artifacts_dir: Path) -> list[str]:
         listable = (
             [m for m in non_index_md]
             + sorted(artifacts_dir.rglob("engagement-summary-*.txt"))
+            + sorted(artifacts_dir.rglob("interim-update-*.txt"))
             + [
                 f
                 for f in artifacts_dir.rglob("*")
@@ -2652,6 +2749,27 @@ def check(artifacts_dir: Path) -> list[str]:
                     "act is the only gap (close checklist: reconciliation sweep)"
                 )
 
+    return findings
+
+
+def check_advisory(artifacts_dir: Path) -> list[str]:
+    """Non-gating checks: never part of `check()`, never counted by `set-status closed`,
+    surfaced only via `check_artifacts --advisory` for a human to glance at. Currently just
+    `check_function_word_attribution` - see its own module comment for why it stays advisory
+    rather than joining the gate."""
+    findings: list[str] = []
+    if not artifacts_dir.is_dir():
+        return findings
+    for md in sorted(artifacts_dir.rglob("*.md")):
+        if _under_archive(md, artifacts_dir):
+            continue
+        text = md.read_text(encoding="utf-8", errors="replace")
+        findings.extend(check_function_word_attribution(text, md))
+    for txt in sorted(artifacts_dir.rglob("*.txt")):
+        if _under_archive(txt, artifacts_dir):
+            continue
+        text = txt.read_text(encoding="utf-8", errors="replace")
+        findings.extend(check_function_word_attribution(text, txt))
     return findings
 
 
@@ -2785,6 +2903,53 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
             continue  # C7: archived is frozen - never delete a historical copy in there
         stray.unlink()
         fixed.append(f"FIXED SUMMARY-WRONG-EXT: removed rendered email copy {stray.name}")
+
+    # Same two fixes for the interim update email (/status-email) - identical mechanics,
+    # different name, so a mis-typed interim-update-N.md/.html gets the same auto-repair.
+    for bad in sorted(artifacts_dir.rglob("interim-update-*.md")):
+        if _under_archive(bad, artifacts_dir):
+            continue
+        target = bad.with_suffix(".txt")
+        if target.exists():
+            continue  # a correct .txt already exists - leave the duplicate for a human
+        bad.rename(target)
+        fixed.append(f"FIXED INTERIM-WRONG-EXT: renamed {bad.name} -> {target.name}")
+        es_sync = _load_engagement_state_module()
+        state_file = artifacts_dir / es_sync.STATE_FILENAME if es_sync is not None else None
+        if state_file is not None and state_file.is_file():
+            try:
+                state = json.loads(state_file.read_text(encoding="utf-8"))
+                for row in state.get("artifacts") or []:
+                    if isinstance(row, dict) and row.get("path") == bad.name:
+                        row["path"] = target.name
+                        problem = _write_state_through_engagement_state(artifacts_dir, state)
+                        if problem:
+                            fixed.append(f"COULD-NOT-SYNC state after email rename: {problem}")
+                        else:
+                            fixed.append(
+                                f"FIXED STALE-INDEX: updated state artifact row {bad.name} -> "
+                                f"{target.name} (index re-renders below)"
+                            )
+                        break
+            except Exception as exc:
+                fixed.append(f"COULD-NOT-SYNC state after email rename: {exc}")
+        else:
+            for idx in artifacts_dir.rglob("START-HERE.md"):
+                if _under_archive(idx, artifacts_dir):
+                    continue
+                itext = idx.read_text(encoding="utf-8", errors="replace")
+                if bad.name in itext:
+                    idx.write_text(itext.replace(bad.name, target.name), encoding="utf-8")
+                    idx.with_suffix(".html").unlink(missing_ok=True)
+                    fixed.append(
+                        f"FIXED STALE-INDEX: updated START-HERE reference {bad.name} -> "
+                        f"{target.name}"
+                    )
+    for stray in sorted(artifacts_dir.rglob("interim-update-*.html")):
+        if _under_archive(stray, artifacts_dir):
+            continue
+        stray.unlink()
+        fixed.append(f"FIXED INTERIM-WRONG-EXT: removed rendered email copy {stray.name}")
 
     # Duplicate ghost artifact rows (2026-08-17 live report): a row recorded before the
     # add-artifact path-healing fix carries a mis-rooted path ("artifacts/<slug>/x.md"
@@ -3035,14 +3200,17 @@ def check_registry(artifacts_dir: Path) -> list[str]:
     return []
 
 
-_KNOWN_FLAGS = frozenset({"--fix", "--help", "-h"})
+_KNOWN_FLAGS = frozenset({"--fix", "--help", "-h", "--advisory"})
 
 _USAGE = (
-    "usage: check_artifacts.py [--fix] [--slug <workspace>] [artifacts_dir] [map_path]\n\n"
+    "usage: check_artifacts.py [--fix] [--advisory] [--slug <workspace>] [artifacts_dir] "
+    "[map_path]\n\n"
     "Mechanical DoD gate: scans an engagement's artifacts and flags defects (a missing HTML\n"
     "sibling, a stale index entry, an unmarked persona attribution, and the rest of this\n"
     "module's own docstring). Exit 0: clean. Exit 1: findings, none fixed. Exit 2: usage error.\n\n"
     "  --fix              auto-fix the deterministic defects, then re-check\n"
+    "  --advisory         also print non-gating checks (never affects the exit code or\n"
+    "                     set-status closed - a human-facing heads-up only)\n"
     "  --slug <workspace> check only <artifacts_dir>/<workspace>\n"
     "  artifacts_dir      defaults to ./artifacts\n"
     "  map_path           defaults to the discovered codebase map, if any\n"
@@ -3089,6 +3257,8 @@ def main(argv: list[str]) -> int:
         )
         return 2
     do_fix = "--fix" in rest
+    do_advisory = "--advisory" in rest
+    rest = [a for a in rest if a != "--advisory"]
     positional = [a for a in rest if not a.startswith("-")]
     artifacts_dir = Path(positional[0]) if positional else Path("artifacts")
     if slug:
@@ -3199,6 +3369,17 @@ def main(argv: list[str]) -> int:
             "them (`python -m scripts.engagement_state archive --all-closed`) or re-close "
             "once to store a fingerprint; either ends the cost"
         )
+    if do_advisory:
+        advisory: list[str] = []
+        for pack in workspaces or [artifacts_dir]:
+            advisory.extend(f"[{pack.name}] {f}" for f in check_advisory(pack))
+        if advisory:
+            print(f"--advisory: {len(advisory)} non-gating finding(s) (never blocks close):")
+            for line in advisory:
+                print(f"  {line}")
+        else:
+            print("--advisory: clean")
+
     note_text = "; ".join(notes)
     if findings:
         for line in findings:

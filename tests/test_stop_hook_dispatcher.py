@@ -236,18 +236,25 @@ def test_neither_hook_fires_prints_nothing(monkeypatch):
 
 
 def test_one_hook_crashing_does_not_suppress_the_other(monkeypatch, capsys):
+    """One hook (the first registered) crashes; every OTHER registered hook still gets to
+    nudge, each with its own distinct reason, and all of them end up in the combined
+    output - hook-count-agnostic, so this stays correct as _CHECKS grows."""
     shd = _load_dispatcher_module()
+    crashing_name = shd._CHECKS[0][0]
+    other_names = [name for name, _ in shd._CHECKS[1:]]
 
     def fake_load(name, path):
-        if name == "dod_stop_gate":
+        if name == crashing_name:
             return _fake_module(raises=RuntimeError("boom"))
-        return _fake_module(prints=json.dumps({"decision": "block", "reason": "nudge"}))
+        return _fake_module(prints=json.dumps({"decision": "block", "reason": f"nudge-{name}"}))
 
     monkeypatch.setattr(shd, "_load", fake_load)
     monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({"cwd": "/tmp"})))
     assert shd.main() == 0
     out = capsys.readouterr().out
-    assert json.loads(out)["reason"] == "nudge"  # the crashed hook contributed nothing, not a crash
+    reason = json.loads(out)["reason"]
+    for name in other_names:
+        assert f"nudge-{name}" in reason  # the crashed hook contributed nothing, not a crash
 
 
 def test_missing_hook_file_skips_that_check_without_crashing(monkeypatch, tmp_path):
@@ -275,7 +282,8 @@ def test_both_hooks_see_the_full_original_payload(monkeypatch):
     monkeypatch.setattr(shd, "_load", fake_load)
     monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
     assert shd.main() == 0
-    assert seen == [payload, payload]  # both hooks got the full, unconsumed payload
+    # every registered hook got the full, unconsumed payload - hook-count-agnostic
+    assert seen == [payload] * len(shd._CHECKS)
 
 
 def test_check_artifacts_cache_propagates_from_first_hook_to_second(monkeypatch):
@@ -316,8 +324,11 @@ def test_check_artifacts_cache_propagates_from_first_hook_to_second(monkeypatch)
     assert exec_count["n"] == 1, (
         "check_artifacts fallback exec ran more than once for one Stop event"
     )
-    assert len(created) == 2
-    assert created[0]._CHECK_ARTIFACTS_MODULE_CACHE is created[1]._CHECK_ARTIFACTS_MODULE_CACHE
+    assert len(created) == len(shd._CHECKS)
+    assert all(
+        m._CHECK_ARTIFACTS_MODULE_CACHE is created[0]._CHECK_ARTIFACTS_MODULE_CACHE
+        for m in created
+    )
 
 
 def test_check_artifacts_cache_propagation_is_a_noop_in_repo_mode(monkeypatch):

@@ -59,7 +59,9 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 > **Finding codes (the full mechanical register):** `MISSING-HTML` · `MISSING-INDEX` ·
 > `INDEX-NO-STATUS` · `STALE-INDEX` · `INDEX-HAND-EDITED` · `FINAL-BEFORE-CLOSE` (incl. the
 > close-only `REVIEW-*.md`) · `SUMMARY-BEFORE-CLOSE` · `MISSING-SUMMARY-EMAIL` ·
-> `SUMMARY-WRONG-EXT` · `STALE-STATUS` · `STALE-DOCSTATUS` · `CODE-NO-QA` / `CODE-NO-TESTS`
+> `SUMMARY-WRONG-EXT` · `INTERIM-WRONG-EXT` (the optional `/status-email` interim update,
+> `interim-update-N.txt`, must be a `.txt` too - same rule as the close email, but never
+> close-gated) · `STALE-STATUS` · `STALE-DOCSTATUS` · `CODE-NO-QA` / `CODE-NO-TESTS`
 > (scoped per folder - a sibling engagement's QA never vouches) · `FINDING-NO-IMPACT` ·
 > `FINDINGS-CWORD-LABELS` · `FINDINGS-INVALID` · `FINDINGS-NO-DEV-GUIDANCE` (a review-shaped
 > artifact - has `## Findings` - missing or leaving empty the mandatory `## 🔵 Developer
@@ -94,6 +96,13 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 > `MAP-NO-ASOF` / `MAP-NO-ANCHOR` · `MAP-STALE-ANCHOR` / `MAP-STALE` (staleness budget) ·
 > `MAP-ENTRY-NO-ASOF` / `MAP-ENTRY-NO-ANCHOR` / `MAP-STALE-ENTRY-ANCHOR` · `MAP-NO-BASIS` ·
 > `MAP-SECRET`.
+>
+> **Advisory only, never gates close** (`check_artifacts --advisory`, printed separately,
+> never counted by `set-status closed`): `FUNCTION-WORD-UNMARKED` (a bare "Compliance" /
+> "Legal" / "Risk" / "Audit" as the subject of a judgement verb, with no 🤖 marker nearby -
+> could be the AI's own reviewer agent misattributed to the real department, or could just as
+> easily be a correct reference to the real department - the pattern cannot tell the two
+> apart with confidence, so it stays a human-facing heads-up rather than a gate).
 >
 > **Scan scope (0.33.2).** Directories carrying a `.archive` marker are excluded from
 > every scan (archive-in-place; `engagement_state archive <slug>` / `--all-closed`,

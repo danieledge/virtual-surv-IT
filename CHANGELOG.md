@@ -5,6 +5,37 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-09-22 - Mid-engagement communication, render-integrity checks, a new safety guard
+
+- **`/status-email` (new front door):** an optional, mid-engagement progress update - a short
+  email (`interim-update-N.txt`) on request or Morgan's own judgement (offered, never
+  auto-written), and `--report` (or an explicit ask) additionally produces a fuller **interim
+  status report** (`interim-status-report-N.md`/`.html`) - the mid-engagement sibling of
+  `delivery-report.md`, never a substitute for it. A report is never sent without its email.
+  Neither is ever the close-only summary email, never gated by `SUMMARY-BEFORE-CLOSE`, never
+  satisfies `MISSING-SUMMARY-EMAIL`.
+- **Readiness nudge:** a new one-time, self-suppressing Stop-hook signal
+  (`engagement_readiness_nudge.py`) for the gap the DoD gate itself can't cover - a fully
+  clean, delivery/close-phase engagement with nothing outstanding produced total silence
+  forever, with nothing ever suggesting it might be done. Requires all three signals
+  (phase, empty outstanding list, a clean `check_artifacts` pass) before it says anything, and
+  never fires on a paused or already-closing engagement.
+- **Render-integrity checks:** three previously hand-fixed, render-only defects are now
+  mechanical - a duplicate `[TOC]` marker rendering the table of contents twice
+  (`TOC-DUPLICATE-RENDER`), a markdown link to an anchor no heading produces
+  (`ANCHOR-BROKEN`), and a known reviewability-blocker placeholder ("UNABLE TO ASSESS")
+  surviving into a rendered artifact (`STALE-REVIEWABILITY-BLOCKER`, advisory).
+- **Plugin-root guard:** an engaged plugin-mode session can no longer `cd` into, or write
+  into, the plugin's own installed tree - the root cause of two prior live incidents (a `cd`
+  silently flipping mode detection to repo-as-project; a deliverable vanishing into the
+  plugin's own source tree instead of the working project).
+- **Function-word misattribution (advisory):** a live report found a Confluence update
+  saying "Compliance confirmed X" - correct about the compliance-reviewer agent's own work,
+  but readable as the real Compliance department having said it, especially since this
+  team's own domain vocabulary already overloads the word. `check_artifacts --advisory` now
+  flags a bare Compliance/Legal/Risk/Audit as the subject of a judgement verb with no
+  🤖 marker nearby - advisory only, since it can't reliably distinguish that from a
+  legitimate reference to the real department.
 - **Project setting "claude session debug":** `virt-surv go` starts the session with Claude
   Code's own `--debug` when this project's `claude_debug` preference is on, so hook timings and
   tool-call failures on a slow box are logged where they can be read. Off by default, project

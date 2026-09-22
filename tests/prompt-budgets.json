@@ -28,8 +28,8 @@
   ],
   "tier_budgets": {
     "ALWAYS_LOADED": 3500,
-    "OPEN_TIME": 20400,
-    "ROUTE_TIME": 54000,
+    "OPEN_TIME": 21100,
+    "ROUTE_TIME": 55600,
     "AGENT_TIME": 25300,
     "DEFERRED": null
   },
@@ -329,6 +329,11 @@
       "loads_per_engagement": 1.0,
       "baseline_tokens": 2876
     },
+    ".claude/skills/status-email/SKILL.md": {
+      "tier": "ROUTE_TIME",
+      "loads_per_engagement": 1.0,
+      "baseline_tokens": 1433
+    },
     ".claude/skills/team/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
@@ -362,7 +367,7 @@
     "docs/DEFINITION-OF-DONE.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 7986
+      "baseline_tokens": 8303
     },
     "docs/WAYS-OF-WORKING.md": {
       "tier": "DEFERRED",
@@ -392,7 +397,7 @@
     "docs/operating-guide.d/command-index.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 920
+      "baseline_tokens": 1047
     },
     "docs/operating-guide.d/delivery-standards.md": {
       "tier": "DEFERRED",
@@ -507,7 +512,7 @@
     "docs/team-operating-guide.md": {
       "tier": "OPEN_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 4480
+      "baseline_tokens": 5109
     }
   },
   "aggregates": {
@@ -520,7 +525,7 @@
         ".claude/skills/.shared/engage-open.md",
         "docs/team-operating-guide.md"
       ],
-      "baseline_bytes": 77987
+      "baseline_bytes": 80505
     },
     "engaged_typical": {
       "files": [
@@ -543,7 +548,7 @@
         ".claude/skills/engage/references/target-menu.md",
         ".claude/skills/engage/references/resume-menu.md"
       ],
-      "baseline_bytes": 190692
+      "baseline_bytes": 193717
     }
   }
 }

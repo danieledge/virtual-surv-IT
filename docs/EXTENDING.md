@@ -160,6 +160,13 @@ shows the harness permission prompt. Nothing runs silently, nothing runs mid-eng
 and publishing only ever touches the ✅ closed pack (no secrets, masked/synthetic rules
 travel with it).
 
+**Check the page content, not just that it published.** A live report (2026-09-22) found a
+Confluence update saying "Compliance confirmed X" - correct about the compliance-reviewer
+agent's own output, but readable as the real department having said it. Before approving the
+publish, confirm agent work is attributed to the 🤖-marked persona, never a bare
+Compliance/Legal/Risk/Audit subject (operating guide "Voice, names & console";
+`docs/templates/team-extensions.md` carries the same note where you configure this action).
+
 ## Step 5 - point agents at your reference sources
 
 - Files: check them into the project (`docs/vendor/xyz-kb/`) and add a standing

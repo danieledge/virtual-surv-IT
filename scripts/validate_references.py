@@ -130,6 +130,8 @@ _RUNTIME_PARTS = (
     "review-pass",
     "qa-cycle",
     "interim-findings",
+    "interim-update",
+    "interim-status-report",
     "delivery-report.md",
     "qa-handover",
     "engagement-brief",

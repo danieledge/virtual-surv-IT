@@ -60,7 +60,7 @@ so ±15%); the rest are estimates with no run behind them yet:
   them typeable/routable at all); what does **not** load is any skill or agent **body** (the
   multi-KB workflow instructions and agent prompts stay unread until something actually invokes
   that skill or dispatches that agent):
-  - `disable-model-invocation: true` on all 32 skills stops the model **auto-triggering** a skill
+  - `disable-model-invocation: true` on all 33 skills stops the model **auto-triggering** a skill
     on its own judgement - it does not remove the description from context; the description is
     exactly what needs to be resident for `/`-typing and routing to work at all;
   - measured 2026-09-12: the 27 skill descriptions sum to ~3.0k chars, the 13 agent descriptions
