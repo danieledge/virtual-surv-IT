@@ -91,15 +91,38 @@ Format: date · failure shape · the wasted-work loop · fix now in place (mecha
 18. **2026-08-17 · CHANGELOG body dumped into the transcript on every post-update open.**
     Fix (mechanical): probe prints `WHATS_NEW=` heading line only. Source: `.claude/skills/.shared/engage-open.md`.
 19. **2026-08-17 · a `cd` into the plugin repo silently flipped plugin-mode into
-    repo-as-project**, pointing engagement state at the wrong project. Fix: PROSE ONLY
-    ("never prepend cd"). Source: `.claude/skills/.shared/engage-open.md`.
+    repo-as-project**, pointing engagement state at the wrong project. Fix (prose, until
+    2026-09-20; PREVENTIVE MECHANICAL as of 2026-09-20, staged pending human apply):
+    `scripts/plugin_root_guard.py` blocks a leading `cd` into `CLAUDE_PLUGIN_ROOT` in an
+    engaged plugin-mode session, redirecting once per target. Re-examined 2026-09-20:
+    `find_plugin_root.py` separately grew a DETECTION-side breadcrumb
+    (`identity_warning`/`mode_flip_warning`, citing this incident by number) at some point
+    after this entry was written - but neither the live steady-state probe path nor the
+    cold-bootstrap heredoc twin in `probe-bootstrap.md` calls it, so that mechanism is
+    orphaned code, unreachable from a real session today. The new guard closes the gap from
+    the prevention side instead; the orphaned detector is a separate, smaller follow-up
+    (wire `mode_flip_warning` into a call site that actually runs, or remove it). Sources:
+    `.claude/skills/.shared/engage-open.md`, `scripts/find_plugin_root.py`,
+    `scripts/plugin_root_guard.py`, `tests/test_plugin_root_guard.py`.
 20. **2026-08-08 (twice) · deliverables written into the plugin's own source tree** instead
-    of the working project; recurred on the very next run after being documented. Fix: PROSE
-    ONLY (relative-path rule); Bash-less diagnostic mode explicitly "flagged, not addressed".
-    Sources: CHANGELOG 0.33.52-53, `.claude/skills/.shared/run-mode.md`.
+    of the working project; recurred on the very next run after being documented. Fix (prose,
+    until 2026-09-20; MECHANICAL as of 2026-09-20, staged pending human apply):
+    `scripts/plugin_root_guard.py` blocks a Write/Edit/MultiEdit/NotebookEdit targeting
+    `CLAUDE_PLUGIN_ROOT` in an engaged plugin-mode session, every time (no legitimate retry
+    case, unlike the cd redirect above). Bash-less diagnostic mode remains untouched by this
+    fix (still "flagged, not addressed" - the guard covers the write TOOLS, not a diagnostic
+    path with no Write call to catch). Sources: CHANGELOG 0.33.52-53,
+    `.claude/skills/.shared/run-mode.md`, `scripts/plugin_root_guard.py`,
+    `tests/test_plugin_root_guard.py`.
 21. **2026-08-16 · `.shared` sibling-path stumble** - Read the `skills/engage` directory,
     guessed `skills/engage/.shared`, "burned two failed calls on a corp box where every call
-    is seconds". Fix: PROSE ONLY. Source: `engage/SKILL.md`.
+    is seconds". Fix: PROSE ONLY when written; re-examined 2026-09-20 and found EFFECTIVELY
+    SUPERSEDED by a later, more general fix not originally linked to this entry - the
+    2026-09-12/13 open-path work (see the "three open-path incidents" section below) made
+    `engage_probe.py` print `REFERENCES_DIR=`/`SHARED_DIR=` directly at open, so a `.shared`
+    Read no longer needs a guess at all. Not a hard guard (nothing stops a hand-guessed path
+    if the model ignores the printed value), but the guessing that caused this incident has
+    no remaining reason to happen. Source: `engage/SKILL.md`, `scripts/engage_probe.py`.
 22. **2026-08-12 · STALE-INDEX fired on a session's first turn** (artifact row registered
     before the brief was written). Fix: detection mechanical (DoD backstop), prevention
     prose. Sources: `engage/SKILL.md`, `engage-light/SKILL.md`.
@@ -176,18 +199,56 @@ Format: date · failure shape · the wasted-work loop · fix now in place (mecha
 41. **2026-08-01 · eval pass rate unreadable** - infrastructure deaths folded into the same
     boolean as content failures (35% "pass rate" was really 47% over scorable runs). Fix
     (mechanical): pass/fail/unscorable classification. Source: CHANGELOG 0.33.6.
+42. **2026-09 · a stray leading `[TOC]` marker rendered the table of contents twice in the
+    HTML** - the marker was removed by hand; no gate caught duplicates, so it reached close
+    undetected (invisible in source, only visible on render). Fix (mechanical, 2026-09-18):
+    `check_render_integrity()` counts `[TOC]` markers in the markdown SOURCE (bleach strips
+    the rendered div's `class="toc"`, so a render-side check would never fire -
+    `TOC-DUPLICATE-RENDER`). Sources: `scripts/check_artifacts.py`, `tests/test_render_integrity.py`.
+43. **2026-09 · a "reviewability blocker resolved procedurally" note let stale "UNABLE TO
+    ASSESS" text ship across three artifacts** - source retrieved was mistaken for source
+    reviewed. Fix (mechanical, narrow, 2026-09-18): `check_render_integrity()` flags literal
+    survival of the placeholder into a rendered artifact (`STALE-REVIEWABILITY-BLOCKER`) -
+    an exact-string check only; it does not judge whether an assessment is still stale (no
+    machine-readable marker exists for that yet, same limit
+    `check_findings_render_freshness()` notes for struck citations). Source:
+    `scripts/check_artifacts.py`.
+44. **2026-09 · markdown links pointed at anchors that were never written**, from three
+    unrelated causes (a duplicate TOC's id suffix, a `&`-slug double-hyphen mismatch, 17
+    findings linked but never given an individual write-up) - anchors were added by hand,
+    no anchor-integrity check existed. Fix (mechanical, 2026-09-18): `check_render_integrity()`
+    diffs every rendered `href="#..."` against the render's actual `id="..."` set
+    (`ANCHOR-BROKEN`) - catches all three causes generically, since each one is just a link
+    with no matching id. Sources: `scripts/check_artifacts.py`, `tests/test_render_integrity.py`.
+
+The three items above (42-44) share a signature: all were invisible in source, detectable
+only by rendering and diffing, and all previously reached close undetected. They are the
+newest entries in this catalogue and were not yet in it as of the 2026-08-18 Track E audit.
 
 ## Loops with NO mechanical fix yet (prose-only)
 
-`cd` wrong-mode flip (19) · plugin-root deliverable-write leak (20, explicitly "flagged, not
-addressed" for Bash-less mode) · Pip's Bash `ls`/`cat` habit (6) · `.shared` sibling-path
-stumble (21) · STALE-INDEX prevention ordering (22) · sequential dispatch on the Task-batch
+`cd` wrong-mode flip (19) and the plugin-root deliverable-write leak (20) moved OUT of this
+list 2026-09-20 - `scripts/plugin_root_guard.py`, staged pending human apply (§ above). The
+Bash-less diagnostic-mode half of 20 stays here ("flagged, not addressed": no Write call for
+a guard to catch). `.shared` sibling-path stumble (21) also moved out, effectively
+superseded rather than directly fixed (§ above) - kept in the numbered catalogue entry, not
+repeated here. Remaining: Pip's Bash `ls`/`cat` habit (6, re-examined 2026-09-20: still
+open - the 2026-09-14 Bash whole-file-read redirect covers a large `cat`, not the
+small-file/`ls` browsing habit this entry actually describes, and deliberately does not:
+extending it risks the same rule-fatigue the redirect family's own design notes warn
+against) · STALE-INDEX prevention ordering (22, re-examined 2026-09-20: still open - "the
+brief already exists" has no single reliable file-pattern to check against across
+deliverable types without risking false blocks on legitimate orderings) · DoD-criteria
+absolute paths in briefs (36, re-examined 2026-09-20: still open - a brief is free text, and
+distinguishing "a relative path that will break" from "prose that happens to name a file"
+without false positives needs a stronger convention than exists today) · sequential dispatch
+on the Task-batch
 FALLBACK path (0.33.49 investigated and declined a mechanical check: "no reliable mechanical
 check today") · Pip context-step delegation (8's 2026-08-10 half; PACK-UNSCORED covers
 scoring only) · chunked consolidation above ~8 findings (Write cap is opt-in) · subagent
 return budget (advisory, fires after the cost lands) · probe-block retry compliance (12; the
 exec guard blocks `python -c` but "retry the exact block" is prose) · slow-`.bashrc`
-snapshot SIGTERM (host-side) · DoD-criteria absolute paths in briefs (36) · model-identity
+snapshot SIGTERM (host-side) · model-identity
 banner · Windows permission-rule spelling (37).
 
 ## Classes that recurred AFTER a prose fix (prose alone demonstrably failed)

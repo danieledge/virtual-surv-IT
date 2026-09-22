@@ -80,7 +80,13 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 > `COUNT-MISMATCH` (the rendered `REVIEW-<slug>.md`'s finding IDs and disposition tally no
 > longer match the current `data/findings-<slug>.jsonl` pack - "one authoritative number
 > everywhere," mechanised where a marker exists to check it; audit finding #3, 2026-07-30) ·
-> `NESTED-PACK` (a pack
+> `TOC-DUPLICATE-RENDER` (more than one `[TOC]` marker in the source - the toc extension
+> renders a full contents block per marker) · `ANCHOR-BROKEN` (a markdown link's `#anchor`
+> has no matching heading `id` in the render - a duplicate-TOC id suffix, a hand-guessed
+> slug, or a section that was never written) · `STALE-REVIEWABILITY-BLOCKER` (a known
+> placeholder like "UNABLE TO ASSESS" survives into the rendered artifact; incident log
+> #42-#44, 2026-09 - all three were previously caught only by a human rendering the page
+> and eyeballing it) · `NESTED-PACK` (a pack
 > initialised inside another workspace; init now refuses the shape) · `ARCHIVED-OPEN`
 > (a `.archive` marker on a pack that never passed the close gate - warned, never a
 > silent skip; 0.33.2) · `FLAT-PACK-UNMIGRATED` · `ORPHAN-ARTIFACT` (workspace-mode root files;

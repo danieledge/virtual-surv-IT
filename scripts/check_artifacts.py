@@ -1987,6 +1987,59 @@ def check_findings_render_freshness(artifacts_dir: Path) -> list[str]:
     return findings
 
 
+_STALE_BLOCKER_PHRASES = ("UNABLE TO ASSESS",)
+
+
+def check_render_integrity(html_text: str, md_text: str, where: Path) -> list[str]:
+    """Render-only defects, invisible in source (incident log #42/#44, 2026-09): a
+    duplicate `[TOC]` marker renders the table of contents twice, and a markdown link can
+    point at an anchor no heading in the render actually produces - a duplicate-TOC id
+    suffix, a hand-guessed slug that doesn't match the toc extension's real slugify output,
+    or a link to a section that was never written. All three were previously caught only by
+    a human rendering the page and eyeballing it; this makes them mechanical. Also flags
+    literal survival of a known reviewability-blocker placeholder (#43) into the rendered
+    artifact - a narrow, exact-string check: it catches the placeholder shipping unchanged,
+    not whether the underlying assessment is still stale (that judgement call has no
+    machine-readable marker yet, same limit check_findings_render_freshness notes for
+    struck citations).
+
+    The `[TOC]` count is read from the MARKDOWN SOURCE, not the rendered HTML: bleach's
+    allow-list (render_html._ALLOWED_ATTRS) has no `class` entry for `div`, so the toc
+    extension's `<div class="toc">` wrapper loses its class in the sanitised output - the
+    div itself survives (indistinguishable from any other div) but a class-based render
+    check would silently never fire. The id/href check below is unaffected: `id` and `a
+    href` ARE in the allow-list, which is the whole reason headings keep working anchors."""
+    findings: list[str] = []
+    html_name = where.with_suffix(".html").name
+    toc_marker_count = md_text.count("[TOC]")
+    if toc_marker_count > 1:
+        findings.append(
+            f"TOC-DUPLICATE-RENDER: {where.name} has {toc_marker_count} `[TOC]` markers - "
+            f"the toc extension renders one full table of contents per marker, so "
+            f"{html_name} shows the contents {toc_marker_count} times over; keep exactly "
+            f"one, then re-render (python -m scripts.render_html {where})"
+        )
+    ids = set(re.findall(r'\sid="([^"]+)"', html_text))
+    hrefs = {h for h in re.findall(r'href="#([^"]*)"', html_text) if h}
+    broken = sorted(h for h in hrefs if h not in ids)
+    if broken:
+        findings.append(
+            f"ANCHOR-BROKEN: {html_name} links to anchor(s) {', '.join(broken)} that no "
+            "heading in the render produces - a duplicate-TOC id suffix, a hand-written "
+            "slug guess, or a link to a section never written (fix the source, then "
+            f"re-render: python -m scripts.render_html {where})"
+        )
+    for phrase in _STALE_BLOCKER_PHRASES:
+        if phrase in md_text:
+            findings.append(
+                f'STALE-REVIEWABILITY-BLOCKER: {where.name} still contains the literal '
+                f'placeholder "{phrase}" - noting a blocker resolved elsewhere does not '
+                "clear the placeholder text itself; replace it with the actual assessment "
+                "before this artifact is treated as final"
+            )
+    return findings
+
+
 _ENGAGEMENT_STATE_MODULE_CACHE = None
 
 
@@ -2382,6 +2435,9 @@ def check(artifacts_dir: Path) -> list[str]:
         findings.extend(check_agent_identity(text, md))
         findings.extend(check_severity_iconography(text, md))
         findings.extend(check_local_path_leak(text, md))
+        if html.is_file():
+            html_text = html.read_text(encoding="utf-8", errors="replace")
+            findings.extend(check_render_integrity(html_text, text, md))
 
     # A wrongly-rendered email copy - the summary email is a .txt only, never an .html.
     for stray in sorted(artifacts_dir.rglob("engagement-summary-*.html")):

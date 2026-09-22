@@ -173,6 +173,10 @@ _PRECOMMIT_RE = re.compile(r"\.pre-commit-config\.ya?ml\b", re.IGNORECASE)
 # `todo_panel_nudge.py` all run on a hook event. `vsit_paths.py` is imported by several of
 # them. Every one was model-writable.
 #
+# WIDENED AGAIN 2026-09-20: `plugin_root_guard.py` joined the dispatcher's `_CHECKS` registry
+# (incident log #19/#20, staged in the same change) - same class as every entry above, a
+# script that runs on a hook event and was model-writable until named here.
+#
 # Named as an explicit alternation rather than derived from settings.json at runtime: the
 # wiring file is itself a thing this guard protects, so deriving the protected set FROM it
 # would make the protection only as trustworthy as the file it protects. The cost is that a
@@ -183,7 +187,7 @@ _HOOK_SCRIPT_NAMES = (
     r"|guard_daemon|guard_daemon_client|locked_menu_guard|post_edit_lint"
     r"|subagent_return_budget|document_input_redirect|module_form_redirect"
     r"|enumeration_redirect|exploration_redirect|session_resume_brief|persona_anchor"
-    r"|engage_probe_prefetch|dod_stop_gate|todo_panel_nudge|vsit_paths)"
+    r"|engage_probe_prefetch|dod_stop_gate|todo_panel_nudge|vsit_paths|plugin_root_guard)"
 )
 _HOOK_PATH_RE = re.compile(
     r"(\.claude[/\\]hooks[/\\]|(^|[/\\])hooks[/\\]hooks\.json$"

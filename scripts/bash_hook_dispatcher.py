@@ -142,6 +142,19 @@ _CHECKS = (
     # block a legitimate question. The human removes the standalone entry from both hook
     # files when applying this copy.
     ("locked_menu_guard", _SCRIPTS_DIR / "locked_menu_guard.py", {"AskUserQuestion"}, False),
+    # Plugin-root guard (2026-09-20, incident log #19/#20): keeps an engaged plugin-mode
+    # session out of the plugin's OWN installed tree - a `cd` there silently flips mode
+    # detection to repo-as-project (#19), and a deliverable written there vanishes on the
+    # next update or corrupts the shared install (#20). Both were "prose fix only" in the
+    # incident log; this makes them mechanical. Same advisory/redirect polarity as its
+    # siblings above (fail_open), engaged-sessions-only arming, redirects the cd case once
+    # per target and blocks the write case every time (no legitimate retry case for it).
+    (
+        "plugin_root_guard",
+        _SCRIPTS_DIR / "plugin_root_guard.py",
+        {"Bash", "Write", "Edit", "MultiEdit", "NotebookEdit"},
+        False,
+    ),
 )
 
 
