@@ -9,71 +9,28 @@
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 [![Quick start: one-page PDF](https://img.shields.io/badge/Quick%20start-one--page%20PDF-important)](docs/quick-start.pdf)
 
-<details><summary><b>What changed recently</b> (0.38.0 highlights; full history in the changelog)</summary>
+<details><summary><b>What changed recently</b> (0.39.0 highlights; full history in the changelog)</summary>
 
 <table>
 <tr><td>
 
-🏷️ **Current version: 0.38.0** (2026-09-14) · 📖 [0.38.0 working notes](docs/releases/0.38.0.md) · 📜 [Full changelog](CHANGELOG.md)
+🏷️ **Current version: 0.39.0** (2026-09-22) · 📖 [0.39.0 working notes](docs/releases/0.39.0.md) · 📜 [Full changelog](CHANGELOG.md)
 
-**0.38.0 in one paragraph.** The guard changes of the 2026-09-13 framework review are applied and
-ship under a new number (the version is what `claude plugin update` keys on; an unchanged number
-leaves every installed copy stale, which the installer now detects and refreshes). The plugin-mode
-open, the way the team is really installed, passed a live eval and its run is kept as the first
-golden replay and frozen as the shipped sample engagement (`virt-surv try --replay`). CI is green
-on Linux and Windows. One eval case is still failing and the baseline says so.
+**0.39.0 in one paragraph.** Morgan can now send a short progress update mid-engagement, on
+request or its own judgement, with an optional fuller status report attached - neither one
+is the close-only summary email, and neither counts toward it. A new Stop-hook nudge flags a
+clean, fully-delivered engagement that never got formally closed, since the DoD gate itself
+only ever speaks about defects. Three render-only defects (a duplicate table of contents, a
+broken anchor link, a stale placeholder) are caught mechanically now instead of found by eye.
+A plugin-mode session can no longer `cd` into or write into the plugin's own installed copy.
+And a live report of a Confluence page crediting "Compliance" for work the compliance-reviewer
+agent did led to a new advisory check for that exact pattern.
 
-**Biggest features of the 0.34 to 0.37 cycle: the front door became a launcher, and the token bill got engineered.**
-- 🛡️ **The safety gates were off in every new project, and now are not** (unreleased). The
-  `VSIT/` layout became the default for new projects on 2026-08-28 and the three guard hooks
-  were never told: they looked for the acting-session stamp under the old `artifacts/` path
-  only. So in any project created since, the execution gate never armed, an engaged session
-  could run the code under review with no human consent, settings were not write-protected,
-  and the four reviewers were blocked from writing their own findings pack and fell back to
-  prose. This repo is on the legacy layout, which is exactly why nothing surfaced it, and no
-  guard test carried a new-layout path. Found by an adversarial review, fixed in both layouts,
-  and the tests now cover both.
-- 🚪 **`virt-surv go` is the front door** (0.34.0). The resume-or-new decision, environment
-  probe and interpreter discovery are computed *outside* the LLM and pre-encoded into the
-  session's first prompt - no more burning turns rediscovering the machine. Engagements can
-  now be picked up straight from a Jira ticket (beta), delivered back to the ticket at close.
-- ⚡ **Corporate-box performance, measured.** A persistent guard daemon takes safety-hook
-  response from ~307ms cold start to ~12.6ms; one dispatcher process replaces five per Bash
-  call; a Git Bash fix cut shell-snapshot startup ~15x. Built against live reports from
-  locked-down Windows estates.
-- 📊 **The team can now interrogate data and documents, not just code** (0.37.0). Three
-  deterministic tools: temporal profiling of alert data (**calendar-aware** gaps, freshness,
-  cadence - a naive gap check flags every weekend and buries the real outage), FIBO-grounded
-  column meanings, and a token-budgeted documentation inventory. The first two emit
-  **aggregates only, never a record**, which makes them *safer* than the alternative of an
-  agent reading rows into context. `.eml` and `.msg` mail finally convert too - comms
-  surveillance is a pillar of this team, and `.msg` was being skipped silently.
-- ⏱️ **A performance pass that began by finding a hang** (0.37.0). The suite was not slow, it
-  was stuck - on an interactive screen waiting for keys a test harness never sends. Then the
-  measured wins: state mutations 0.38s → 0.10s, date parsing 29x, the codebase skeleton 15s →
-  6.5s, and both every-prompt hooks now share the persistent guard daemon, which is on by
-  default. Every figure here was measured before and after, not estimated.
-- 🤖 **Autonomy grew up** (0.36-0.37). Unattended runs are decided **per ticket, not per
-  project**, reachable from a typed request as well as a Jira, bounded by a spend ceiling
-  whose degrade ladder is answered up front - because an unattended run has nobody to ask.
-  Its Definition-of-Done gates turned out to be **dead code**, caught by an adversarial audit
-  and by writing the first test that drove the real entry point rather than the gate.
-- ⚡ **The probe prefetch actually fires now** (0.35.1). The hook that serves a pre-computed
-  engage probe read the submitted prompt from a field name Claude Code has never sent, so it
-  had never once fired: every `/engage` silently paid the full in-session probe, which is
-  minutes on a corp box. Found by following one user report about a slow open; the repo's own
-  tests had been feeding the same wrong field, so they agreed with the bug rather than
-  catching it. Two neighbouring cache bugs fell out of the same trace.
-- 💰 **Token economics overhauled against a measured audit** (0.35.0). A cold engagement open
-  now costs ~28% fewer standing tokens: the operating guide split into an open-core with
-  detail loaded on route, the probe bootstrap moved to its miss path, tool reports compacted
-  to what prompts actually consume, and review context forwarded once instead of re-derived
-  per agent. A prompt-budget check in CI fails the build if any prompt file quietly regrows,
-  and every eval run now records per-agent cost attribution.
-- 🧾 **Review flows tightened end to end** (0.34.0-0.35.0): one consolidated reviewer pass
-  runs all lenses (security is a lens, never a second fan-out), Quick reviews run in-session
-  from a ~1k-token recipe, and the Level 0-3 cost ladder (Answer/Quick/Deep/Audit) is the
-  stated cost model - independence bought deliberately, never by habit.
+**Last release: 0.38.0** (2026-09-14). The guard changes from an independent audit landed and
+shipped under a new number, since that's what `claude plugin update` keys on. The plugin-mode
+open passed a live eval and its run became the first golden replay and the shipped sample
+engagement (`virt-surv try --replay`). CI went green on Linux and Windows for the first time
+in a while.
 
 </td></tr>
 </table>
