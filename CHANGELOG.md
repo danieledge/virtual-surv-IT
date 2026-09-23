@@ -5,6 +5,13 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 
 ## [Unreleased]
 
+- **Installer: a way out when stashing itself fails.** A dirty clone was stashed and
+  restored around an update, but if the stash command itself failed (a stale git lock, a
+  permissions or antivirus lock on Windows, a corrupted index) the run just aborted with no
+  recovery path. `--force-overwrite` discards local changes and resets hard to match origin
+  instead - destructive, so it is never implied by `--yes` and only ever runs from an
+  explicit flag or an explicit "discard instead?" confirm after a stash failure.
+
 ## [0.39.0] - 2026-09-22 - Mid-engagement communication, render-integrity checks, a new safety guard
 
 - **`/status-email` (new front door):** an optional, mid-engagement progress update - a short

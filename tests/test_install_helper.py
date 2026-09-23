@@ -1204,6 +1204,7 @@ def _args(**overrides):
         enable_project=None,
         statusline=False,
         permissions=None,
+        force_overwrite=False,
     )
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -1617,6 +1618,87 @@ def test_sync_does_not_reexec_when_install_helper_unchanged(monkeypatch, tmp_pat
     inst.repo = clone
     inst.branch = "main"
     inst.sync_branch()  # no SystemExit, no assertion error
+
+
+def _dirty_status_runner(extra=None):
+    """A run_cmd stand-in that reports a dirty tree on `git status --porcelain`, fails
+    `git stash push`, and succeeds on everything else (fetch/checkout/reset/clean) -
+    the exact shape the force-overwrite / stash-failure paths need. `extra(argv)` can
+    override any call by returning a _FakeProc, or None to fall through to the default."""
+    calls = []
+
+    def runner(argv, cwd=None, timeout=300):
+        argv = [str(a) for a in argv]
+        calls.append(argv)
+        if extra is not None:
+            override = extra(argv)
+            if override is not None:
+                return override
+        if "status" in argv and "--porcelain" in argv:
+            return _FakeProc(0, stdout=" M some/file.py\n")
+        if "stash" in argv and "push" in argv:
+            return _FakeProc(1, stderr="error: could not write new index file")
+        return _FakeProc(0, stdout="")
+
+    return runner, calls
+
+
+def test_force_overwrite_skips_stash_and_resets_hard(monkeypatch, tmp_path):
+    """--force-overwrite on a dirty tree goes straight to reset --hard + clean -fd and
+    never even attempts git stash."""
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    runner, calls = _dirty_status_runner()
+    monkeypatch.setattr(ih, "run_cmd", runner)
+    inst = ih.Installer(_args(yes=True, force_overwrite=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.branch = "main"
+    inst.sync_branch()
+    joined = [" ".join(c) for c in calls]
+    assert not any("stash" in c for c in joined)
+    assert any("reset --hard HEAD" in c for c in joined)
+    assert any(c.startswith("git -C") and "clean -fd" in c for c in joined)
+    assert inst.stashed is False
+
+
+def test_stash_failure_offers_discard_and_discards_on_yes(monkeypatch, tmp_path):
+    """Stashing fails (e.g. a stale index lock); offered the discard path interactively
+    and says yes - resets hard instead of aborting."""
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    runner, calls = _dirty_status_runner()
+    monkeypatch.setattr(ih, "run_cmd", runner)
+    monkeypatch.setattr(ih.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: True)  # both prompts say yes
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.branch = "main"
+    inst.sync_branch()
+    joined = [" ".join(c) for c in calls]
+    assert any("stash" in c for c in joined)  # it did try first
+    assert any("reset --hard HEAD" in c for c in joined)  # then fell back
+    assert inst.stashed is False
+
+
+def test_stash_failure_noninteractive_fails_clearly_not_silently(monkeypatch, tmp_path):
+    """Under --yes / non-tty, a stash failure must not silently escalate to a
+    destructive discard - it stays fatal, naming --force-overwrite as the way out."""
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    runner, calls = _dirty_status_runner()
+    monkeypatch.setattr(ih, "run_cmd", runner)
+    monkeypatch.setattr(ih.sys.stdin, "isatty", lambda: False)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.branch = "main"
+    with pytest.raises(ih.InstallAbort) as exc_info:
+        inst.sync_branch()
+    assert "--force-overwrite" in str(exc_info.value)
+    joined = [" ".join(c) for c in calls]
+    assert not any("reset --hard HEAD" in c for c in joined)  # never silently discarded
 
 
 def test_sync_never_reexecs_in_demo_mode(monkeypatch, tmp_path):

@@ -2725,6 +2725,24 @@ class Installer:
                 "(menu option 1, or: python install_helper.py install)",
             )
 
+    def _discard_local_changes(self, repo: Path, reason: str) -> None:
+        """Match the clone to its current HEAD exactly, discarding tracked-file changes
+        (`git reset --hard`) and untracked stray files/dirs (`git clean -fd`, no `-x` -
+        gitignored runtime state like the guard-interpreter cache or VSIT/local/ is left
+        alone; this clears junk, not legitimate state). No attempt to preserve anything -
+        that is the whole point of choosing this over stashing. Irreversible, so it only
+        ever runs from an explicit choice: --force-overwrite, or the interactive "stash
+        failed, discard instead?" confirm - never a default, never implied by --yes."""
+        self.say(self.style.dim(f"  Discarding local changes ({reason})."))
+        proc = run_cmd(["git", "-C", str(repo), "reset", "--hard", "HEAD"])
+        if proc.returncode != 0:
+            self.step_fail("Reset working tree", proc.stderr.strip() or "git reset failed")
+        proc = run_cmd(["git", "-C", str(repo), "clean", "-fd"])
+        if proc.returncode != 0:
+            self.step_fail("Clean untracked files", proc.stderr.strip() or "git clean failed")
+        self.stashed = False  # nothing to restore later - this path preserves nothing
+        self.step_ok("Local changes discarded", "clone now matches HEAD exactly")
+
     def sync_branch(self) -> None:
         self.step_intro(
             "Bringing your clone up to date with the chosen channel - "
@@ -2772,6 +2790,16 @@ class Installer:
 
         if is_dirty(repo):
             self.say(self.style.yellow("  The clone has uncommitted local changes."))
+            # FORCE OVERWRITE, explicit opt-in (2026-09-23 user report): stashing itself can
+            # fail - a stale .git/index.lock, a permissions/AV lock on Windows, a corrupted
+            # index - and until now that left the update dead in the water: step_fail was
+            # fatal with no way to recover short of fixing the .git internals by hand. This
+            # path skips stashing (and the attempt to preserve anything) entirely and goes
+            # straight to matching origin. Gated on the explicit --force-overwrite flag, not
+            # --yes: --yes means "safe defaults, don't ask", and discarding local changes
+            # irreversibly is never a safe default (the file's own "never destructive" rule).
+            if self.args.force_overwrite:
+                self._discard_local_changes(repo, reason="--force-overwrite")
             # STASH, don't refuse (2026-09-10 user report). Users hit this having written
             # nothing: the tool dirties its own clone. `.claude/settings.json` and
             # `.claude/team-preferences.json` are TRACKED and every configure run, model
@@ -2783,7 +2811,7 @@ class Installer:
             # then broke. Under --yes (which is how the menu's own update runs) it did not
             # even ask; it just failed. Stashing is safe, reversible, and what was
             # promised. It is restored after the pull below.
-            if (
+            elif (
                 self.args.yes
                 or not sys.stdin.isatty()
                 or confirm(
@@ -2808,13 +2836,33 @@ class Installer:
                     ]
                 )
                 if proc.returncode != 0:
-                    self.step_fail("Stash changes", proc.stderr.strip() or "git stash failed")
-                self.stashed = True
-                self.step_ok("Local changes stashed", "restore later with: git stash pop")
+                    detail = proc.stderr.strip() or "git stash failed"
+                    self.say(self.style.yellow(f"  Stashing didn't work: {detail}"))
+                    # Interactive-only offer: --yes/non-tty already chose "carry on" above,
+                    # not "discard irreversibly" - staying fatal there is the safe
+                    # direction, and the message names the explicit flag as the way out.
+                    if sys.stdin.isatty() and confirm(
+                        "  I can discard your local changes and match origin exactly "
+                        "instead - this cannot be undone. Do that?",
+                        default=False,
+                        assume_yes=False,
+                        style=self.style,
+                    ):
+                        self._discard_local_changes(repo, reason="stash failed, user chose to discard")
+                    else:
+                        self.step_fail(
+                            "Stash changes",
+                            detail + " - re-run with --force-overwrite to discard local "
+                            "changes and match origin instead of stashing",
+                        )
+                else:
+                    self.stashed = True
+                    self.step_ok("Local changes stashed", "restore later with: git stash pop")
             else:
                 self.step_fail(
                     "Working tree",
-                    "dirty - refusing to reset; commit or stash your changes, then re-run",
+                    "dirty - refusing to reset; commit or stash your changes, then re-run "
+                    "(or re-run with --force-overwrite to discard them)",
                 )
 
         ahead = commits_ahead(repo, self.branch)
@@ -12547,6 +12595,14 @@ def parse_args(argv=None) -> argparse.Namespace:
     )
     parser.add_argument("--repo", help="path to the clone (overrides the saved location)")
     parser.add_argument("--yes", action="store_true", help="non-interactive, safe defaults")
+    parser.add_argument(
+        "--force-overwrite",
+        action="store_true",
+        help="update: if the clone has local changes that stashing can't handle (or you "
+        "just want a clean match to origin), discard them and reset hard instead of "
+        "stashing - destructive and irreversible, so it is never implied by --yes alone; "
+        "pass it explicitly when you mean it",
+    )
     parser.add_argument(
         "--no-downloads",
         action="store_true",

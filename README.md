@@ -267,12 +267,16 @@ One-page reference: [`docs/quick-start.md`](docs/quick-start.md), also rendered 
 
 The helper walks the whole flow: preflight (git / claude CLI / network), a persisted
 release-channel pick (**`main`** is the **stable** line; bigger, in-progress changes land first
-on **`dev`** and are promoted to `main` at a release), clone or safe update (it refuses to
-reset a dirty tree), optional `pip install -r requirements-dev.txt`, then the real
+on **`dev`** and are promoted to `main` at a release), clone or safe update (a dirty tree gets
+stashed and restored around the pull, never just refused), optional
+`pip install -r requirements-dev.txt`, then the real
 `claude plugin marketplace add` / `claude plugin install compliance-surveillance-team@virtual-surv-it`
 commands - and it closes by listing what stays manual (per-project enablement below, the
 restart; hooks ship pre-wired). Re-runnable; `install`/`update` auto-detect
-from `~/.config/virt-surv-it/installer.json`; `--yes` for non-interactive defaults.
+from `~/.config/virt-surv-it/installer.json`; `--yes` for non-interactive defaults. If stashing
+itself fails (a stale git lock, a permissions issue) or you just want a clean match to origin,
+`--force-overwrite` discards local changes and resets hard instead - destructive, so it is
+never on by default and never implied by `--yes`.
 
 </details>
 
