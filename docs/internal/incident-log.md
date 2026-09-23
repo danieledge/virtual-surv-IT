@@ -225,6 +225,19 @@ The three items above (42-44) share a signature: all were invisible in source, d
 only by rendering and diffing, and all previously reached close undetected. They are the
 newest entries in this catalogue and were not yet in it as of the 2026-08-18 Track E audit.
 
+45. **2026-09-23 · installer update aborted with no recovery when `git stash` itself
+    failed** (a stale git lock, a permissions/antivirus lock on Windows, a corrupted
+    index) - the dirty-tree handling already stashed and restored a clone's local
+    changes around a pull, but a failure of the stash command itself was fatal
+    (`step_fail`), with nothing offered short of fixing the `.git` internals by hand.
+    Fix (mechanical): `--force-overwrite` resets hard and cleans untracked files to
+    match origin instead of stashing; on a stash failure specifically, offered as an
+    interactive confirm (default no) rather than run automatically. Deliberately not
+    folded into `--yes` - discarding local changes is irreversible, and `--yes` means
+    "safe defaults," not "destructive by default." A non-interactive stash failure still
+    fails cleanly, naming the flag as the way out. Sources: `install_helper.py`,
+    `tests/test_install_helper.py`.
+
 ## Loops with NO mechanical fix yet (prose-only)
 
 `cd` wrong-mode flip (19) and the plugin-root deliverable-write leak (20) moved OUT of this
