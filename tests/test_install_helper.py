@@ -11084,6 +11084,26 @@ def test_preflight_demo_downgrades_a_missing_shell_to_a_skip(monkeypatch):
     assert len(skips) == 1
 
 
+def test_preflight_warns_not_aborts_when_claude_not_found(monkeypatch):
+    """2026-10-06 user report: a corporate wrapper/launcher can provide `claude` under a
+    name or mechanism find_claude() never sees, while still being exactly what the user
+    launches Claude Code with - "not found by us" must not abort the whole install. Warns
+    (skip, not fail) and falls through to the direct-registration path instead."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: "/usr/bin/git" if name == "git" else None)
+    monkeypatch.setattr(ih, "_resolve_sh", lambda: "/bin/sh")
+    monkeypatch.setattr(ih, "find_claude", lambda refresh=True: (None, ""))
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0, stdout=""))
+    inst = ih.Installer(_args(yes=True, demo=False), ih.Style(False), ih.marks())
+    inst.preflight()  # must NOT raise InstallAbort
+    assert inst.cli_runs is False
+    claude_steps = [s for s in inst.tracker.steps if s[0] == "claude CLI"]
+    assert len(claude_steps) == 1
+    assert claude_steps[0][1] == "skip"
+    assert "registering the plugin directly instead" in claude_steps[0][2]
+
+
 def test_resolve_sh_derives_the_shell_from_wherever_git_resolves(monkeypatch):
     """2026-09-14 live: the owner's corporate box has a per-user Git for Windows under
     %LOCALAPPDATA%\\Programs\\Git. Preflight found git, then declared sh missing, because

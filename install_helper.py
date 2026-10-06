@@ -2562,17 +2562,30 @@ class Installer:
         elif self.demo:
             self.step_skip("claude CLI", f"not found - a real run needs it: {CLAUDE_DOCS_URL}")
         else:
-            self.step_fail(
+            # WARN, don't abort (2026-10-06 user report): a corporate wrapper/launcher can
+            # provide `claude` under a name or mechanism this discovery never finds, while
+            # still being exactly what the user launches Claude Code with - "not found by
+            # us" is not the same claim as "not installed". `claude_path` stays falsy here,
+            # which is what the `cli_runs = bool(claude_path)` line just below reads - the
+            # same `cli_runs = False` fallback already used a few lines down for "found but
+            # cannot be executed": marketplace() registers the plugin directly into
+            # ~/.claude/... instead of shelling out, and the interactive app picks it up
+            # from there on its own next launch regardless of how that launch is wrapped.
+            self.step_skip(
                 "claude CLI",
-                "not on PATH and not in the usual install locations - install it first"
-                f" ({CLAUDE_DOCS_URL}), then open a NEW terminal and re-run me",
+                "not on PATH and not in the usual install locations - registering the "
+                f"plugin directly instead (if you run Claude Code via your own wrapper, "
+                f"this still gets picked up; otherwise install it first: {CLAUDE_DOCS_URL})",
             )
         # FOUND is not the same as WORKS. A package-manager shim stays on PATH after the
         # binary it points at has gone, so discovery reports a tick and the first real
         # call fails - which is how a run reached "Add marketplace" before finding out
         # (live report 2026-08-28). One cheap call settles it here, where the answer can
         # still change the plan, instead of three steps later where it read as an error.
-        self.cli_runs = True
+        # bool(claude_path): assume it works only when something was actually found - the
+        # "not found at all" branch above warns and falls through to here rather than
+        # aborting, and must not have its False silently reset to True by this line.
+        self.cli_runs = bool(claude_path)
         if claude_path:
             first = self._claude_version_error(["claude", "--version"])
             if first:
