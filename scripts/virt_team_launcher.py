@@ -244,10 +244,13 @@ def _configured_launch_command() -> str:
 
 
 # Pinned to install_helper._ALIAS_VERSION by a sync test - bump both together.
+# v9: the PowerShell function's temp-file line no longer calls a static .NET method
+# ([System.IO.Path]::GetTempFileName()), which Constrained Language Mode blocks - a Join-Path/
+# Get-Random cmdlet pair replaces it.
 # v8: the POSIX wrapper no longer glob-expands the configured launch command (L-33).
 # v7 brought the cd handshake for the project explorer and the Esc exit code, which is the
 # behaviour _warn_if_abort_will_be_ignored still describes.
-_EXPECTED_ALIAS_VERSION = 8
+_EXPECTED_ALIAS_VERSION = 9
 # Exit code that means "the human backed out - do NOT launch" (2026-08-20 user report:
 # "when exiting the tui it launches claude code, it shouldn't"). Esc used to be folded
 # into the same empty decision as 'just launch', so backing out of the menu still

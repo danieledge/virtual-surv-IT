@@ -7051,7 +7051,12 @@ _ALIAS_MARKER = "virt-surv"
 # /engage in-session). heal_stale_aliases rewrites v5 definitions at the next launch.
 # v8 (2026-09-12, audit L-33): the POSIX wrapper turns pathname expansion off around the
 # one deliberately-unquoted expansion of the configured launch command.
-_ALIAS_VERSION = 8
+# v9 (2026-10-07, corp live report): the PowerShell function's temp-file line used
+# [System.IO.Path]::GetTempFileName(), a static .NET method call Constrained Language Mode
+# blocks ("Cannot invoke method. Method invocation is supported only on core types in this
+# language mode") - replaced with Join-Path/Get-Random, which are cmdlets and work in every
+# language mode.
+_ALIAS_VERSION = 9
 _ALIAS_STAMP = f"# {_ALIAS_MARKER}-alias-v{_ALIAS_VERSION}"
 
 # Any version's stamp - the removal marker for _strip_stamped_definitions.
@@ -7075,7 +7080,15 @@ def _alias_line_for(rc_path: Path, interpreter: str, launcher_path, script_path)
             f'$__vtCmd = @((& "{interpreter}" "{launcher_path}" --launch-command) -split " +"); '
             f'if (-not $__vtCmd) {{ $__vtCmd = @("claude") }}; '
             f"$__vtCmdArgs = @($__vtCmd | Select-Object -Skip 1); "
-            f"$__vtF = [System.IO.Path]::GetTempFileName(); "
+            # v9 (2026-10-07, corp live report): [System.IO.Path]::GetTempFileName() is a
+            # static .NET method call, which Constrained Language Mode (a common corporate
+            # WDAC/AppLocker/Device Guard policy) blocks outright - "Cannot invoke method.
+            # Method invocation is supported only on core types in this language mode."
+            # Not universal across corp boxes (CLM is tied to the account's policy tier, not
+            # the machine), which is why this did not reproduce on a similarly-locked-down
+            # box. Join-Path/Get-Random are cmdlets, not .NET method calls, so they work in
+            # every language mode including CLM.
+            f'$__vtF = Join-Path $env:TEMP ("virt-surv-cd-" + (Get-Random) + ".tmp"); '
             f"$env:VIRT_SURV_CD_FILE = $__vtF; "
             f'$__vtDecision = & "{interpreter}" "{launcher_path}"; '
             f"$__vtRc = $LASTEXITCODE; "
